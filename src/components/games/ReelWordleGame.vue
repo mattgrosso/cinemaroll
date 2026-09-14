@@ -106,7 +106,7 @@
 <script>
 import BackLink from './BackLink.vue';
 import gameDataMixin from '../../mixins/gameData.js';
-import { entryKey, matchesAllTokens } from '../../assets/javascript/games/gameUtils.js';
+import { entryKey, rankTitleMatches } from '../../assets/javascript/games/gameUtils.js';
 import { compareGuessToTarget } from '../../assets/javascript/games/wordleClues.js';
 import reelWordleBanner from '../../assets/images/games/reel-wordle-banner.jpg';
 
@@ -182,16 +182,14 @@ export default {
       const date = entry?.movie?.release_date;
       return date ? new Date(date).getFullYear() : 'Unknown';
     },
+    // Shared ranking (gameUtils.rankTitleMatches): one character is enough,
+    // and titles starting with what was typed come first.
     onInput () {
-      const term = this.guessInput.trim().toLowerCase();
-      if (term.length < 2) {
-        this.suggestions = [];
-        return;
-      }
       const guessedKeys = new Set(this.guesses.map((clue) => clue.entryKey));
-      this.suggestions = this.eligibleGameEntries
-        .filter((entry) => !guessedKeys.has(entryKey(entry)) && matchesAllTokens(entry.movie.title, term))
-        .slice(0, 8);
+      this.suggestions = rankTitleMatches(
+        this.eligibleGameEntries.filter((entry) => !guessedKeys.has(entryKey(entry))),
+        this.guessInput
+      );
     },
     submitGuess (entry) {
       if (this.status !== 'playing' || !this.target) return;

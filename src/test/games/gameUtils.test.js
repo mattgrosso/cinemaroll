@@ -3,7 +3,7 @@ import {
   getEligibleEntries, ratingFor, hashString, makeSeededRng, shuffle, pickRandomDistinct,
   movieYear, movieDecade, movieDirectors, movieCastNames, movieGenreNames,
   movieWriters, movieComposers, movieCinematographers, movieEditors, movieProducers,
-  entryKey, compareNumber, matchesAllTokens
+  entryKey, compareNumber, matchesAllTokens, rankTitleMatches, typeaheadText
 } from '@/assets/javascript/games/gameUtils.js';
 
 function entry (overrides = {}) {
@@ -226,5 +226,53 @@ describe('matchesAllTokens (bug report: "if I type man space gun it\'s not findi
     expect(matchesAllTokens('Anything', '')).toBe(false);
     expect(matchesAllTokens('Anything', '   ')).toBe(false);
     expect(matchesAllTokens(null, 'man')).toBe(false);
+  });
+});
+
+// Report -P1Px9lCmg (2026-09-13): "In poster zoom the poster was the movie
+// 8 1/2 which is stylized with the numerals and when I type an eight it
+// didn't come up in the auto complete so I wasn't able to find it."
+describe('rankTitleMatches (report -P1Px9lCmg: "8" could not find 8½)', () => {
+  const titled = (...titles) => titles.map((title, i) => ({ dbKey: `k${i}`, movie: { id: i, title } }));
+  const names = (rows) => rows.map((row) => row.movie.title);
+
+  it('finds 8½ from a single typed character', () => {
+    const entries = titled('Heat', '8½', '8 Mile', 'Ocean\'s Eight');
+    expect(names(rankTitleMatches(entries, '8'))).toEqual(['8½', '8 Mile']);
+  });
+
+  it('finds 8½ typed as 8 1/2, the way the keyboard offers it', () => {
+    const entries = titled('Heat', '8½', '8 Mile');
+    expect(names(rankTitleMatches(entries, '8 1/2'))).toEqual(['8½']);
+  });
+
+  it('puts titles that start with the term first, then words that start with it, then the rest', () => {
+    const entries = titled('Human Nature', 'The Man Who Knew Too Much', 'Batman', 'Manhattan');
+    expect(names(rankTitleMatches(entries, 'man'))).toEqual(['Manhattan', 'The Man Who Knew Too Much', 'Human Nature', 'Batman']);
+  });
+
+  it('still requires every token, in any order', () => {
+    const entries = titled('The Old Man and the Gun', 'Top Gun', 'Old Yeller');
+    expect(names(rankTitleMatches(entries, 'gun man'))).toEqual(['The Old Man and the Gun']);
+  });
+
+  it('caps the list and offers nothing for an empty term', () => {
+    const entries = titled(...Array.from({ length: 20 }, (_, i) => `Movie ${i}`));
+    expect(rankTitleMatches(entries, 'm')).toHaveLength(8);
+    expect(rankTitleMatches(entries, 'm', { limit: 3 })).toHaveLength(3);
+    expect(rankTitleMatches(entries, '   ')).toEqual([]);
+  });
+
+  it('ignores accents on both sides', () => {
+    const entries = titled('Amélie', 'Léon');
+    expect(names(rankTitleMatches(entries, 'amelie'))).toEqual(['Amélie']);
+    expect(names(rankTitleMatches(entries, 'Léon'))).toEqual(['Léon']);
+  });
+});
+
+describe('typeaheadText', () => {
+  it('spells out fractions and drops accents', () => {
+    expect(typeaheadText('8½')).toBe('81/2');
+    expect(typeaheadText('Amélie')).toBe('amelie');
   });
 });

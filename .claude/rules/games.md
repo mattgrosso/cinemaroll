@@ -104,3 +104,16 @@ game should do the same. Keep records small: settings ride along on every launch
    setting `gameOver = true`, or nothing renders.
 7. `recordGameWin` derives its key from `this.$route`, which most game tests don't mock —
    it silently no-ops there.
+
+## Game typeaheads: one character is enough, and order does the work
+
+Every guess dropdown goes through `rankTitleMatches` (`gameUtils.js`), never a bare
+`matchesAllTokens` + `slice(0, 8)`. It exists because of report -P1Px9lCmg (2026-09-13):
+the typeaheads demanded two characters, so "8" found nothing and **8½ could not be
+guessed at all** — same shape as "M", "Us", "Pi", "9". A one-character term matches most
+of the library, so the fix is ranking, not a lower threshold alone: titles that START
+with the term, then titles with a word starting with it, then the rest, ties in library
+order. Both sides are folded with `typeaheadText` — NFKD, so "½" spells out and "8 1/2"
+(what the keyboard offers) finds "8½" too. Add any new title-guessing game to the
+`rankTitleMatches` callers, and add the report's literal keystrokes to
+`PosterZoomGame.test.js` / `gameUtils.test.js` when one comes in.

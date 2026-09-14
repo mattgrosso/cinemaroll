@@ -89,7 +89,7 @@ import axios from 'axios';
 import BackLink from './BackLink.vue';
 import NewRatingSearch from '../NewRatingSearch.vue';
 import gameDataMixin from '../../mixins/gameData.js';
-import { entryKey, matchesAllTokens } from '../../assets/javascript/games/gameUtils.js';
+import { entryKey, rankTitleMatches } from '../../assets/javascript/games/gameUtils.js';
 import { buildClueDeck, STARTING_BUDGET } from '../../assets/javascript/games/clueBudget.js';
 import clueBudgetBanner from '../../assets/images/games/clue-budget-banner.jpg';
 
@@ -179,14 +179,9 @@ export default {
       // a new one, so it can't linger past the guess it was about (same as
       // Connections clears its feedback on the next tile tap).
       this.lastGuessFeedback = null;
-      const term = this.guessInput.trim().toLowerCase();
-      if (term.length < 2) {
-        this.suggestions = [];
-        return;
-      }
-      this.suggestions = this.eligibleGameEntries
-        .filter((entry) => matchesAllTokens(entry.movie.title, term))
-        .slice(0, 8);
+      // Shared ranking (gameUtils.rankTitleMatches): one character is
+      // enough, and titles starting with what was typed come first.
+      this.suggestions = rankTitleMatches(this.eligibleGameEntries, this.guessInput);
     },
     // A guess is always picked from the player's own library (via the
     // suggestions dropdown, never free text), so it's always a real movie

@@ -177,6 +177,31 @@ describe('PosterZoomGame', () => {
     });
   });
 
+  // Report -P1Px9lCmg (2026-09-13): typing "8" found nothing, so 8½ could
+  // not be guessed at all. Driven through the input, the way the thumb did.
+  describe('guess typeahead (report -P1Px9lCmg: "8" could not find 8½)', () => {
+    it('offers 8½ after a single typed character', async () => {
+      const movies = tenMovies();
+      movies[3].movie.title = '8½';
+      const { wrapper } = factory(movies);
+
+      const input = wrapper.find('.game-input');
+      await input.setValue('8');
+
+      expect(wrapper.findAll('.suggestion-item').map((item) => item.text())).toContain('8½ (1994)');
+    });
+
+    it('offers 8½ typed as 8 1/2', async () => {
+      const movies = tenMovies();
+      movies[3].movie.title = '8½';
+      const { wrapper } = factory(movies);
+
+      await wrapper.find('.game-input').setValue('8 1/2');
+
+      expect(wrapper.findAll('.suggestion-item').map((item) => item.text())).toEqual(['8½ (1994)']);
+    });
+  });
+
   describe('guessing', () => {
     it('wins on the right movie and records the score', async () => {
       const dispatch = vi.fn();

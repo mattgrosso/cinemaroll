@@ -133,10 +133,58 @@ export function movieGenreNames (entry) {
 // what needs correcting is word order and partial recall, not spelling).
 // Used by every game typeahead.
 export function matchesAllTokens (text, term) {
-  const haystack = String(text || '').toLowerCase();
-  const tokens = String(term || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const haystack = typeaheadText(text);
+  const tokens = typeaheadText(term).split(/\s+/).filter(Boolean);
   if (!tokens.length) return false;
   return tokens.every((token) => haystack.includes(token));
+}
+
+// The combining-marks block, as escapes (the literal characters are
+// invisible in an editor).
+const COMBINING_MARKS = /[\u0300-\u036f]/g;
+
+// What the game typeaheads compare: lowercased, accents dropped, and
+// typographic compatibility characters spelled out. NFKD (not NFD) is the
+// point: it turns "½" into "1⁄2", so "8½" — TMDB's title for Fellini's film
+// — can be found by typing "8 1/2" as well as "8" (report -P1Px9lCmg, 2026-
+// 09-13: "the movie 8 1/2 ... when I type an eight it didn't come up"). The
+// fraction slash it produces is folded to a plain one, which is the key
+// people have.
+export function typeaheadText (value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(COMBINING_MARKS, '')
+    .replace(/\u2044/g, '/')
+    .toLowerCase();
+}
+
+/**
+ * The game typeaheads' shared ranking: every entry whose title matches
+ * every typed token, best matches first, capped.
+ *
+ * A one-character term is allowed. The typeaheads used to demand two, which
+ * made any title that IS one character unreachable — "8½" was the report,
+ * and "M", "Us", "Pi" and "9" are the same shape. With one character the
+ * list would be nearly everything, so order does the work instead: titles
+ * that START with the term come first, then titles with a word starting
+ * with it, then anything containing it. Ties keep library order.
+ */
+export function rankTitleMatches (entries, term, { textOf = (entry) => entry?.movie?.title, limit = 8 } = {}) {
+  const needle = typeaheadText(term).trim();
+  if (!needle) return [];
+  const tier = (text) => {
+    const title = typeaheadText(text);
+    if (title.startsWith(needle)) return 0;
+    if (title.split(/\s+/).some((word) => word.startsWith(needle))) return 1;
+    return 2;
+  };
+  return (entries || [])
+    .map((entry, index) => ({ entry, index, text: textOf(entry) }))
+    .filter(({ text }) => matchesAllTokens(text, needle))
+    .map((row) => ({ ...row, tier: tier(row.text) }))
+    .sort((a, b) => (a.tier - b.tier) || (a.index - b.index))
+    .slice(0, limit)
+    .map(({ entry }) => entry);
 }
 
 // Stable identity for a db entry across the games modules — prefers the

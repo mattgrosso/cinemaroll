@@ -100,7 +100,7 @@
 import BackLink from './BackLink.vue';
 import NewRatingSearch from '../NewRatingSearch.vue';
 import gameDataMixin from '../../mixins/gameData.js';
-import { entryKey, matchesAllTokens } from '../../assets/javascript/games/gameUtils.js';
+import { entryKey, rankTitleMatches } from '../../assets/javascript/games/gameUtils.js';
 import {
   ZOOM_LEVELS,
   pickZoomOrigin,
@@ -368,15 +368,10 @@ export default {
       const date = entry?.movie?.release_date;
       return date ? new Date(date).getFullYear() : 'Unknown';
     },
+    // Shared ranking (gameUtils.rankTitleMatches): one character is enough,
+    // and titles starting with what was typed come first.
     onInput () {
-      const term = this.guessInput.trim().toLowerCase();
-      if (term.length < 2) {
-        this.suggestions = [];
-        return;
-      }
-      this.suggestions = this.eligibleGameEntries
-        .filter((entry) => matchesAllTokens(entry.movie.title, term))
-        .slice(0, 8);
+      this.suggestions = rankTitleMatches(this.eligibleGameEntries, this.guessInput);
     },
     // Guesses always come from the player's own library via the dropdown,
     // never free text, so comparing identity beats fuzzy title matching —
