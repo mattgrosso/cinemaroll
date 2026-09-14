@@ -19,11 +19,12 @@ function entry (id, title, { rating = 8.5, watched = yearsAgo(6), crew = [], cas
   };
 }
 
-// Two loved movies each from one director and one actor, so both people
-// clear favoritePeople's minMovies threshold.
+// Two loved movies each from two directors and two actors, so all four
+// clear favoritePeople's minMovies threshold — and each people row clears
+// MIN_PEOPLE_PER_SECTION (a row built on one name doesn't render).
 function library () {
-  const dir = [{ job: 'Director', name: 'Fave Director' }];
-  const cast = [{ name: 'Fave Actor' }];
+  const dir = [{ job: 'Director', name: 'Fave Director' }, { job: 'Director', name: 'Second Director' }];
+  const cast = [{ name: 'Fave Actor' }, { name: 'Second Actor' }];
   return [
     entry(1, 'Old Favorite A', { crew: dir, cast }),
     entry(2, 'Old Favorite B', { crew: dir, cast }),
@@ -297,7 +298,88 @@ describe('WatchlistScreen performer sections', () => {
     // have let a broken split through.
     expect(wrapper.vm.actressNames.map((p) => p.name)).toEqual(['Fave Actor']);
     expect(wrapper.vm.actressNames.every((p) => p.gender === 1)).toBe(true);
-    expect(wrapper.vm.actorNames).toEqual([]);
+    expect(wrapper.vm.actorNames.map((p) => p.name)).toEqual(['Second Actor']);
+  });
+
+  // Bug report (2026-09-13): "the actresses you loved one is just based
+  // entirely on [Julianne] Moore. That's not enough information to build a
+  // whole list out of." One name is a filmography, not a watchlist.
+  it('does not show a people row built on a single name', async () => {
+    axios.get.mockImplementation((url) => {
+      if (url.includes('/search/person')) {
+        const female = url.includes('Fave%20Actor');
+        return Promise.resolve({ data: { results: [{ id: 777, gender: female ? 1 : 2 }] } });
+      }
+      return tmdbImpl(url);
+    });
+
+    const { wrapper } = factory();
+    await flushPromises();
+
+    expect(wrapper.vm.actressNames).toHaveLength(1);
+    expect(wrapper.text()).not.toContain('From actresses you love');
+    expect(wrapper.text()).not.toContain('From actors you love');
+  });
+
+  // "...let's rethink these so they are more broadly applicable or derived
+  // from a broader base of information." The top of the performer list was
+  // twelve names, split by gender — a library whose top twelve held one
+  // woman got a one-woman row. Now the list is walked, in rank order, until
+  // both rows are full.
+  it('keeps walking down the performer list until both rows have five names', async () => {
+    // Twelve actors ranked above the first actress, all with enough films.
+    const cast = Array.from({ length: 12 }, (_, i) => ({ name: `Man ${i}` }))
+      .concat(Array.from({ length: 5 }, (_, i) => ({ name: `Woman ${i}` })));
+    // castDepth is 5 per film, so spread the names over several films.
+    const films = [];
+    for (let i = 0; i < cast.length; i += 5) {
+      const slice = cast.slice(i, i + 5);
+      films.push(entry(100 + i, `Film ${i} A`, { cast: slice }));
+      films.push(entry(200 + i, `Film ${i} B`, { cast: slice }));
+    }
+    axios.get.mockImplementation((url) => {
+      if (url.includes('/search/person')) {
+        const female = url.includes('Woman');
+        return Promise.resolve({ data: { results: [{ id: 777, gender: female ? 1 : 2 }] } });
+      }
+      return tmdbImpl(url);
+    });
+
+    const { wrapper } = factory({ movies: films });
+    await flushPromises();
+
+    expect(wrapper.vm.actorNames).toHaveLength(5);
+    expect(wrapper.vm.actressNames).toHaveLength(5);
+    expect(wrapper.vm.actressNames.every((p) => p.name.startsWith('Woman'))).toBe(true);
+    expect(wrapper.text()).toContain('From actresses you love');
+  });
+
+  it('stops looking people up once both rows are full', async () => {
+    // Twenty performers, alternating, so the first batch of eight already
+    // holds four of each — the second batch fills both rows and the rest
+    // are never looked up.
+    const cast = Array.from({ length: 20 }, (_, i) => ({ name: i % 2 ? `Woman ${i}` : `Man ${i}` }));
+    const films = [];
+    for (let i = 0; i < cast.length; i += 5) {
+      const slice = cast.slice(i, i + 5);
+      films.push(entry(100 + i, `Film ${i} A`, { cast: slice }));
+      films.push(entry(200 + i, `Film ${i} B`, { cast: slice }));
+    }
+    axios.get.mockImplementation((url) => {
+      if (url.includes('/search/person')) {
+        return Promise.resolve({ data: { results: [{ id: 777, gender: url.includes('Woman') ? 1 : 2 }] } });
+      }
+      return tmdbImpl(url);
+    });
+
+    factory({ movies: films });
+    await flushPromises();
+
+    const lookedUp = axios.get.mock.calls
+      .map(([url]) => url)
+      .filter((url) => url.includes('/search/person') && (url.includes('Man') || url.includes('Woman')));
+    // Two batches of eight, not all twenty.
+    expect(lookedUp).toHaveLength(16);
   });
 
   // TMDB reports 0 for "not specified", and such a person belongs in neither
@@ -664,6 +746,7 @@ describe('WatchlistScreen — the filmography box autocompletes people from your
     const rows = wrapper.findAll('.person-section .typeahead-row');
     // Same ranking as the search bar: within a tier, alphabetical.
     expect(rows.map((r) => r.find('.typeahead-term').text())).toEqual(['Fave Actor', 'Fave Director']);
+    expect(rows).toHaveLength(2);
     expect(rows[0].find('.typeahead-meta').text()).toBe('cast · 2 films');
     expect(rows[1].find('.typeahead-meta').text()).toBe('director · 2 films');
   });

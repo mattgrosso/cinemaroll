@@ -279,7 +279,7 @@ import MoviePreview from './MoviePreview.vue';
 import { getRating } from '../assets/javascript/GetRating.js';
 import { friendsLoveUnseen } from '../assets/javascript/social.js';
 import { rankSections, sourceSummary } from '../assets/javascript/recommendationStats.js';
-import { rewatchCandidates, anotherShotCandidates, nearThresholdYears, favoritePeople, peopleYouRateHigher, rankWatchlistCandidates, ratedTmdbIds, topRatedSeeds, tasteProfile, puntKeyFor, nextPunt, isPunted } from '../assets/javascript/discover.js';
+import { rewatchCandidates, anotherShotCandidates, nearThresholdYears, favoritePeople, peopleYouRateHigher, rankWatchlistCandidates, ratedTmdbIds, topRatedSeeds, tasteProfile, puntKeyFor, nextPunt, isPunted, PEOPLE_PER_SECTION, MIN_PEOPLE_PER_SECTION } from '../assets/javascript/discover.js';
 import { awardsYearThreshold } from '../assets/javascript/personalAwards.js';
 import { formatScore } from '../assets/javascript/formatScore.js';
 import { tasteSummary, pickTmdbMatch, buildPromptedList } from '../assets/javascript/promptedWatchlist.js';
@@ -291,6 +291,20 @@ import { postToAi } from '../utils/aiRequest.js';
 // Long enough to read the "added to <hat>" confirmation before the card that
 // owns it leaves the list.
 const PUNT_AFTER_HAT_MS = 4000;
+
+// The performer pool is resolved against TMDB (for gender and id) in rank
+// order, this many names at a time, until both the actors and the
+// actresses row have PEOPLE_PER_SECTION names or the pool runs out. A
+// library that leans one way — a top twelve with one woman in it is what
+// produced the one-name actresses row — keeps walking down its list
+// instead of settling for whoever happened to be near the top.
+const PERFORMER_LOOKUP_BATCH = 8;
+// How deep that walk is allowed to go. Fifty names is ~7 batches at worst,
+// and well past where a person still has enough loved films to matter.
+const PERFORMER_POOL_CAP = 50;
+// The rows built on people rather than films or genres — the ones that need
+// MIN_PEOPLE_PER_SECTION names before they're worth showing.
+const PEOPLE_SECTION_KEYS = new Set(['directors', 'actresses', 'actors', 'underrated']);
 
 export default {
   name: 'WatchlistScreen',
@@ -451,7 +465,8 @@ export default {
     anotherShotList () {
       return anotherShotCandidates(this.library, getRating, Date.now(), { exclude: this.skipFromSuggestions });
     },
-    // Your two strongest genre affinities, named (for Hidden Gems).
+    // Your three strongest genre affinities, named (for Hidden Gems). Two
+    // until 2026-09-13 — the same "broader base" ask as the people rows.
     topTasteGenres () {
       const nameById = new Map();
       this.library.forEach((entry) => (entry.movie?.genres || []).forEach((g) => {
@@ -460,7 +475,7 @@ export default {
       return Object.entries(this.taste)
         .filter(([id]) => nameById.has(Number(id)))
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 2)
+        .slice(0, 3)
         .map(([id]) => ({ id: Number(id), name: nameById.get(Number(id)) }));
     },
     // Every started-but-unfinished year, closest to done first. No longer
@@ -491,10 +506,11 @@ export default {
     favoriteActors () {
       return favoritePeople(this.library, getRating, { role: 'actor' });
     },
-    // Wide, because the top three overall could be three actors and leave
-    // the actresses row empty. Split down to three each after gender lands.
+    // Wide, because the top of the list could be all actors and leave the
+    // actresses row with one name (or none). Walked in rank order by
+    // resolvePerformersUntil, which stops once each row is full.
     favoritePerformerPool () {
-      return favoritePeople(this.library, getRating, { role: 'actor', cap: 12 });
+      return favoritePeople(this.library, getRating, { role: 'actor', cap: PERFORMER_POOL_CAP });
     },
     underratedPerformers () {
       return peopleYouRateHigher(this.library, getRating, { role: 'actor' });
@@ -569,7 +585,7 @@ export default {
           movies: this.gemMovies,
           loading: this.gemsLoading
         }
-      ].filter((section) => section.names.length);
+      ].filter((section) => section.names.length >= (PEOPLE_SECTION_KEYS.has(section.key) ? MIN_PEOPLE_PER_SECTION : 1));
     },
     // Order by what has actually earned watches (recommendationStats.js).
     // Sources with no history sit at the neutral prior, so a new section
@@ -895,12 +911,12 @@ export default {
       if (this.selectedYear == null) this.selectedYear = this.defaultYear;
       const yearLoaded = this.loadSelectedYear();
 
-      // Resolve gender first so the performer list can be split three ways.
-      // A wide pool goes in, since taking the top three overall could turn
-      // out to be three actors and leave the actresses row empty.
-      const performers = await this.resolvePerformers(this.favoritePerformerPool);
-      this.actressNames = performers.filter((p) => p.gender === 1).slice(0, 3);
-      this.actorNames = performers.filter((p) => p.gender === 2).slice(0, 3);
+      // Resolve gender first so the performer list can be split. The pool
+      // is walked in rank order until each row has its full complement, so
+      // a library whose top names skew one way still fills both rows.
+      const performers = await this.resolvePerformersUntil(this.favoritePerformerPool, PEOPLE_PER_SECTION);
+      this.actressNames = performers.filter((p) => p.gender === 1).slice(0, PEOPLE_PER_SECTION);
+      this.actorNames = performers.filter((p) => p.gender === 2).slice(0, PEOPLE_PER_SECTION);
       this.underratedNames = await this.resolvePerformers(this.underratedPerformers);
 
       const [directorMovies, actressMovies, actorMovies, underratedMovies, similarMovies, gemMovies] = await Promise.all([
@@ -1067,6 +1083,22 @@ export default {
      * it. The id that comes back is kept and handed to moviesFromPeople, so
      * this costs no extra requests overall.
      */
+    /**
+     * resolvePerformers, a batch at a time down the ranked pool, stopping
+     * as soon as both the actors and the actresses row have `quota` names.
+     * Usually that's one or two batches; a lopsided library walks further
+     * rather than shipping a one-name row.
+     */
+    async resolvePerformersUntil (pool, quota) {
+      const resolved = [];
+      const enough = () => resolved.filter((p) => p.gender === 1).length >= quota &&
+        resolved.filter((p) => p.gender === 2).length >= quota;
+      for (let start = 0; start < pool.length && !enough(); start += PERFORMER_LOOKUP_BATCH) {
+        const batch = pool.slice(start, start + PERFORMER_LOOKUP_BATCH);
+        resolved.push(...await this.resolvePerformers(batch));
+      }
+      return resolved;
+    },
     async resolvePerformers (people) {
       const apiKey = process.env.VUE_APP_TMDB_API_KEY;
 

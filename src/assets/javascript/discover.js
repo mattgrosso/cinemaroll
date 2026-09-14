@@ -114,11 +114,24 @@ export function anotherShotCandidates (entries, getRatingFn, now = Date.now(), {
     .slice(0, cap);
 }
 
+// How many people a "from people you love" row draws on. Three, until
+// 2026-09-13: "these categories always seem kind of narrow... let's rethink
+// these so they are more broadly applicable or derived from a broader base
+// of information." Five names pool five filmographies, so the row is a
+// blend rather than one person's back catalogue.
+export const PEOPLE_PER_SECTION = 5;
+
+// A row built on a single person isn't a watchlist, it's that person's
+// filmography — "the actresses you loved one is just based entirely on
+// [Julianne] Moore. That's not enough information to build a whole list out
+// of." Below this many names, the section doesn't render at all.
+export const MIN_PEOPLE_PER_SECTION = 2;
+
 // The people your ratings actually favor: average score of their movies in
 // YOUR library, weighted by how many there are (avg * log2(count + 1)) so
 // one great movie doesn't beat a consistently-loved filmography. role is
 // 'director' (crew job === 'Director') or 'actor' (top-billed cast).
-export function favoritePeople (entries, getRatingFn, { role = 'director', minMovies = 2, cap = 3, castDepth = 5 } = {}) {
+export function favoritePeople (entries, getRatingFn, { role = 'director', minMovies = 2, cap = PEOPLE_PER_SECTION, castDepth = 5 } = {}) {
   const byName = new Map();
 
   (entries || []).forEach((entry) => {
@@ -162,7 +175,7 @@ export function favoritePeople (entries, getRatingFn, { role = 'director', minMo
  * Both scales are 0-10 already. Ratings without a usable vote_average are
  * skipped rather than treated as a zero, which would invent a huge lift.
  */
-export function peopleYouRateHigher (entries, getRatingFn, { role = 'actor', minMovies = 3, cap = 3, castDepth = 5 } = {}) {
+export function peopleYouRateHigher (entries, getRatingFn, { role = 'actor', minMovies = 3, cap = PEOPLE_PER_SECTION, castDepth = 5 } = {}) {
   const byName = new Map();
 
   (entries || []).forEach((entry) => {
