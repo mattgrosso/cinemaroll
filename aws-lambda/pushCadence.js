@@ -253,9 +253,16 @@ function stickinessLead (digest, now) {
  * by news, since that's the part they haven't heard. The film named is the
  * one the prompt will put in front of them - see stickinessLead.
  */
+// Which chore the headline is about, so the app can open THAT prompt when
+// the notification is tapped (bug report, 2026-09-13: "it would be nice if
+// when I tapped on a notification, it didn't just take me to the home
+// screen, but took me to the home screen with the applicable notification
+// already opened"). `kinds` runs parallel to `parts`; the first is the one
+// the title names and the one Home's own priority order would show first.
 function composeMessage (due, digest, news, now = Date.now()) {
   const leadWithNew = Boolean(news?.any);
   const parts = [];
+  const kinds = [];
 
   if (due.stickinessCount > 0) {
     const title = stickinessLead(digest, now);
@@ -272,10 +279,12 @@ function composeMessage (due, digest, news, now = Date.now()) {
         ? 'A film is ready for its stickiness rating'
         : `${due.stickinessCount} films are ready for a stickiness check`);
     }
+    kinds.push('stickiness');
   }
 
   if (due.tiebreak) {
     parts.push(due.tiebreak.count >= 2 ? `${due.tiebreak.count} films are tied` : 'A tiebreak is waiting');
+    kinds.push('tiebreak');
   }
 
   // Always NAME a year, never count them. Bug report (Matt, 2026-08-28):
@@ -292,12 +301,14 @@ function composeMessage (due, digest, news, now = Date.now()) {
   // now names that and says nothing about the queue behind it.
   if (due.awardYears.length) {
     parts.push(`${due.awardYears[0]} needs its personal awards`);
+    kinds.push('awards');
   }
 
   if (!parts.length) return null;
   return {
     title: parts[0],
-    body: parts.length > 1 ? parts.slice(1).join(' · ') : 'Tap to knock it out.'
+    body: parts.length > 1 ? parts.slice(1).join(' · ') : 'Tap to knock it out.',
+    open: kinds[0]
   };
 }
 

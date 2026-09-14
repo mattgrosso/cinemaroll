@@ -221,6 +221,18 @@ with everything played sends nothing. Once a day at the chosen hour, `state/game
 tag `games` (never replaces a chores notification), no badge. All decisions in
 `pushCadence.js`, tested alongside the chores.
 
+**Tapping a chore notification opens that prompt** (2026-09-13: "took me to the home
+screen with the applicable notification already opened and ready to go").
+`composeMessage` returns `open` — the chore its headline names, `stickiness` /
+`tiebreak` / `awards`, in the same priority order Home uses — and the Lambda sends
+`navigate: /?open=<kind>`. Home reads `?open=` once in `mounted()` into
+`openChoreRequested`, strips it from the URL (a refresh must not re-open), and every
+chore card takes it as `autoOpen`: `StickinessInline`/`TweakInline` expand themselves
+the moment their prompt has something to show (two immediate watchers, because the
+request and the library can arrive in either order), and `PersonalAwardsModal` reuses
+its existing `autoOpen`. Any value of `open` counts — Home's own order decides which
+prompt is on screen. `homeNotices.test.js` pins the wiring at source level.
+
 Infra (all `--profile personal`, us-east-1): Lambda `cinemaroll-push` (nodejs22.x,
 role `cinemaroll-push-role`), HTTP API `8rptihkn0l` ($default → Lambda, throttle 5/10),
 env vars `FIREBASE_SA`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. The
@@ -228,10 +240,20 @@ VAPID private key's only copies are the Lambda env and `.env.local`; the public 
 committed in `.env` (`VUE_APP_VAPID_PUBLIC_KEY`, with `VUE_APP_PUSH_API_URL`). Redeploy:
 
 ```
-cd aws-lambda && cp push-notify.js /tmp/push/index.js   # zip index.js + web-push in node_modules
+# The bundle is index.js (= push-notify.js) + pushCadence.js + node_modules (web-push and
+# its deps — NOT the aws-lambda/node_modules on disk, which is the AI Lambda's). Start from
+# the deployed bundle so the dependencies stay exactly as they are:
+URL=$(aws lambda get-function --function-name cinemaroll-push --profile personal \
+  --region us-east-1 --query 'Code.Location' --output text)
+curl -s -o current.zip "$URL" && mkdir -p bundle && (cd bundle && unzip -q -o ../current.zip)
+cp aws-lambda/push-notify.js bundle/index.js && cp aws-lambda/pushCadence.js bundle/
+(cd bundle && zip -q -r ../function.zip .)
 aws lambda update-function-code --function-name cinemaroll-push \
   --zip-file fileb://function.zip --profile personal --region us-east-1
 ```
+
+Run `aws` from the repo root — `.tool-versions` pins the awscli version there and a
+scratch directory has none.
 
 Client pieces: `public/push-sw.js` (declarative-payload fallback renderer, pulled in via
 `workboxOptions.importScripts`), `src/utils/push.js` (subscribe from a USER TAP only —

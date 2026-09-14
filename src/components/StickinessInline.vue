@@ -113,6 +113,13 @@ export default {
     showStickinessModal: {
       type: Boolean,
       required: true
+    },
+    // Open the form as soon as the prompt has something to show, instead of
+    // waiting for a tap on the card — Home sets it when the app was opened
+    // from a chore notification.
+    autoOpen: {
+      type: Boolean,
+      default: false
     }
   },
   emits: ['stickiness-updated'],
@@ -123,7 +130,18 @@ export default {
       submittingStickiness: false
     }
   },
+  watch: {
+    // Both immediate: the request usually arrives before the library does
+    // (autoOpen is set in Home's mounted, the films land from Firebase
+    // later), but a hash navigation from another screen has them the other
+    // way round.
+    autoOpen: { immediate: true, handler: 'maybeAutoOpen' },
+    promptOnScreen: { immediate: true, handler: 'maybeAutoOpen' }
+  },
   computed: {
+    promptOnScreen () {
+      return this.showStickinessModal && this.resultsThatNeedStickiness.length > 0;
+    },
     currentLogIsTVLog () {
       return this.$store.state.currentLog === "tvLog";
     },
@@ -217,6 +235,9 @@ export default {
     }
   },
   methods: {
+    maybeAutoOpen () {
+      if (this.autoOpen && this.promptOnScreen) this.showStickinessInline = true;
+    },
     toggleStickinessInline () {
       this.showStickinessInline = true;
     },

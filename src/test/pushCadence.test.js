@@ -317,6 +317,19 @@ describe('composeMessage', () => {
     expect(message.title).not.toMatch(/\d+ years/);
   });
 
+  // Bug report (2026-09-13): tapping a notification should land on Home
+  // with "the applicable notification already opened and ready to go". The
+  // message says which chore its headline is about; the Lambda turns that
+  // into `?open=`.
+  it('says which chore the headline is about, in the order the app shows them', () => {
+    const both = { stickinessCount: 2, tiebreak: { due: true, count: 4 }, awardYears: [1997] };
+    expect(composeMessage(both, digestWith({ count: 2 }), { any: false, newAwardYears: [] }).open).toBe('stickiness');
+    const tie = { stickinessCount: 0, tiebreak: { due: true, count: 2 }, awardYears: [1997] };
+    expect(composeMessage(tie, digestWith({ count: 0 }), { any: false, newAwardYears: [] }).open).toBe('tiebreak');
+    const awards = { stickinessCount: 0, tiebreak: null, awardYears: [1997] };
+    expect(composeMessage(awards, digestWith({ count: 0 }), { any: false, newAwardYears: [] }).open).toBe('awards');
+  });
+
   it('names the earliest year, which is the one the app hands you first', () => {
     // yearsMeetingAwardsThreshold sorts ascending and the awards modal works
     // the earliest first, so [0] is the year actually about to be offered.

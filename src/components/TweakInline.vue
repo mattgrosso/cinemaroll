@@ -185,6 +185,13 @@ export default {
     showTweakModal: {
       type: Boolean,
       required: true
+    },
+    // Open the tournament as soon as the prompt has a tie to show, instead
+    // of waiting for a tap on the card — Home sets it when the app was
+    // opened from a chore notification.
+    autoOpen: {
+      type: Boolean,
+      default: false
     }
   },
   emits: ['tweak-updated'],
@@ -218,6 +225,9 @@ export default {
     }
   },
   computed: {
+    promptOnScreen () {
+      return this.showTweakModal && (Boolean(this.currentTournament) || this.tiedGroupDbKeys.length >= 2);
+    },
     currentLogIsTVLog () {
       return this.$store.state.currentLog === "tvLog";
     },
@@ -347,6 +357,10 @@ export default {
     if (this.currentTournament) this.prefetchTournamentPosters(this.currentTournament);
   },
   watch: {
+    // Both immediate — see StickinessInline for why the order of the two
+    // can go either way.
+    autoOpen: { immediate: true, handler: 'maybeAutoOpen' },
+    promptOnScreen: { immediate: true, handler: 'maybeAutoOpen' },
     // Every new matchup re-closes the loading gate, then re-opens it as each
     // poster reports in. `immediate` covers the first match of a tournament
     // and a resumed mid-tournament mount alike.
@@ -381,6 +395,9 @@ export default {
     }
   },
   methods: {
+    maybeAutoOpen () {
+      if (this.autoOpen && this.promptOnScreen) this.showTweakInline = true;
+    },
     toggleTweakInline () {
       this.showTweakInline = true;
     },

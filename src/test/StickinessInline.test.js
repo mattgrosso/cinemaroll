@@ -150,3 +150,43 @@ describe('StickinessInline', () => {
     expect(rechecked.vm.resultsThatNeedStickiness).toHaveLength(0);
   });
 });
+
+// Bug report (2026-09-13): opened from a chore notification, the prompt
+// should already be the form, not the card that asks for a tap.
+describe('StickinessInline autoOpen', () => {
+  function mountWith (entries, props) {
+    return mount(StickinessInline, {
+      global: {
+        mocks: {
+          $store: { state: { currentLog: 'movieLog', settings: {} }, getters: { allMoviesAsArray: entries }, dispatch: vi.fn() }
+        }
+      },
+      props: { allEntriesWithFlatKeywordsAdded: entries, showStickinessModal: true, ...props }
+    });
+  }
+
+  it('opens the form straight away when asked to and there is something to rate', () => {
+    const wrapper = mountWith([staleEntry(1)], { autoOpen: true });
+    expect(wrapper.find('.stickiness-container').exists()).toBe(true);
+    expect(wrapper.find('.prompt-card').exists()).toBe(false);
+  });
+
+  it('still shows the card first when not asked to', () => {
+    const wrapper = mountWith([staleEntry(1)], {});
+    expect(wrapper.find('.prompt-card').exists()).toBe(true);
+    expect(wrapper.find('.stickiness-container').exists()).toBe(false);
+  });
+
+  it('opens when the request arrives after the prompt is already on screen', async () => {
+    const wrapper = mountWith([staleEntry(1)], {});
+    await wrapper.setProps({ autoOpen: true });
+    expect(wrapper.find('.stickiness-container').exists()).toBe(true);
+  });
+
+  it('opens once the films arrive, when the request came first', async () => {
+    const wrapper = mountWith([], { autoOpen: true });
+    expect(wrapper.find('.stickiness-container').exists()).toBe(false);
+    await wrapper.setProps({ allEntriesWithFlatKeywordsAdded: [staleEntry(1)] });
+    expect(wrapper.find('.stickiness-container').exists()).toBe(true);
+  });
+});

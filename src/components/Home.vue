@@ -558,11 +558,13 @@
       <StickinessInline
         :allEntriesWithFlatKeywordsAdded="allEntriesWithFlatKeywordsAdded"
         :showStickinessModal="showStickinessModal"
+        :autoOpen="openChoreRequested"
         @stickiness-updated="onStickinessUpdated"
       />
       <TweakInline
         :allEntriesWithFlatKeywordsAdded="allEntriesWithFlatKeywordsAdded"
         :showTweakModal="showTweakModal"
+        :autoOpen="openChoreRequested"
         @tweak-updated="onTweakUpdated"
       />
       <!-- Banner-only on Home: tapping the "year is ready" notice navigates
@@ -577,7 +579,7 @@
         :personalAwardName="personalAwardName"
         :awardNameWithThe="getAwardNameWithThe()"
         :awardNameSingular="getAwardNameSingular()"
-        :autoOpen="awardsPromptState === 'forced'"
+        :autoOpen="awardsPromptState === 'forced' || openChoreRequested"
         :navigateOnOpen="true"
       />
     </section>
@@ -1705,6 +1707,13 @@ export default {
   },
   data () {
     return {
+      // True when the app was opened from a chore notification (`?open=`,
+      // set by the push Lambda). The prompt cards read it and expand
+      // themselves instead of waiting for a tap — bug report, 2026-09-13:
+      // "took me to the home screen with the applicable notification
+      // already opened and ready to go." Read once in mounted() and the
+      // query stripped, so a refresh doesn't re-open anything.
+      openChoreRequested: false,
       // True once the library has taken long enough to load that a spinner
       // is worth showing. See the loading-screen comment in the template.
       libraryLoadIsSlow: false,
@@ -1981,6 +1990,15 @@ export default {
     // whatever sort is already set. Set by the rank badge on MovieDetail.
     if (this.$route?.query?.revealMovie) {
       this.revealMovieInList(String(this.$route.query.revealMovie));
+    }
+
+    // Opened from a chore notification: expand the prompt rather than just
+    // showing its card. Any value counts — the Lambda names the chore, but
+    // Home's own priority order decides which prompt is on screen, and the
+    // notification's headline follows the same order.
+    if (this.$route?.query?.open) {
+      this.openChoreRequested = true;
+      this.$router.replace({ query: { ...this.$route.query, open: undefined } });
     }
 
     const hatToken = this.$route?.query?.hatToken;

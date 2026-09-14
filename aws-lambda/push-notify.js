@@ -286,7 +286,10 @@ const runSweep = async () => {
         const message = composeMessage(due, push.digest, decision.news, now);
         if (message) {
           const appBadge = due.stickinessCount + (due.tiebreak ? 1 : 0) + due.awardYears.length;
-          const payload = buildPayload({ ...message, navigate: '/', tag: 'chores', appBadge });
+          // `?open=<chore>` lands on Home with that prompt already expanded
+          // (Home.vue reads it once and strips it from the URL).
+          const navigate = message.open ? `/?open=${message.open}` : '/';
+          const payload = buildPayload({ ...message, navigate, tag: 'chores', appBadge });
           delivered = await sendToAccount(topKey, push.subscriptions, payload);
         }
       }

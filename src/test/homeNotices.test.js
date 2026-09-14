@@ -65,3 +65,27 @@ describe('the unified notification space', () => {
     expect(app).toContain('<LibraryAccessBanner');
   });
 });
+
+// Bug report (2026-09-13): "it would be nice if when I tapped on a
+// notification... took me to the home screen with the applicable
+// notification already opened and ready to go." The push Lambda sends
+// `?open=<chore>`; Home reads it once into `openChoreRequested` and every
+// chore card takes it as `autoOpen`. Source-level, like the rest of this
+// file — a card that stops receiving the flag would silently go back to
+// needing a tap.
+describe('opening a chore from a notification', () => {
+  it('reads ?open= once and strips it from the URL', () => {
+    expect(home).toContain('this.$route?.query?.open');
+    expect(home).toContain("this.$router.replace({ query: { ...this.$route.query, open: undefined } })");
+  });
+
+  it('hands the request to every chore card', () => {
+    const section = noticesSection();
+    const stickiness = section.slice(section.indexOf('<StickinessInline'), section.indexOf('/>', section.indexOf('<StickinessInline')));
+    const tweak = section.slice(section.indexOf('<TweakInline'), section.indexOf('/>', section.indexOf('<TweakInline')));
+    const awards = section.slice(section.indexOf('<PersonalAwardsModal'), section.indexOf('/>', section.indexOf('<PersonalAwardsModal')));
+    expect(stickiness).toContain(':autoOpen="openChoreRequested"');
+    expect(tweak).toContain(':autoOpen="openChoreRequested"');
+    expect(awards).toMatch(/:autoOpen="[^"]*openChoreRequested[^"]*"/);
+  });
+});

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { reactive } from 'vue'
 import TweakInline from '@/components/TweakInline.vue'
 
 vi.mock('@/assets/javascript/GetRating.js', () => ({
@@ -629,5 +630,51 @@ describe('TweakInline', () => {
       expect(writes).toHaveLength(1)
       expect(writes[0][1].value).toBeNull()
     })
+  })
+})
+
+// Bug report (2026-09-13): opened from a chore notification, the prompt
+// should already be the tournament, not the card that asks for a tap.
+describe('TweakInline autoOpen', () => {
+  const tied = () => [movie('a', 'A', 8), movie('b', 'B', 8), movie('c', 'C', 6)]
+
+  function mountWith (movies, props) {
+    return mount(TweakInline, {
+      global: { mocks: { $store: { state: { currentLog: 'movieLog', settings: { tieBreakTournament: null, tieBreakPromptState: 'auto' } }, getters: { allMoviesAsArray: movies }, dispatch: vi.fn() } } },
+      props: { allEntriesWithFlatKeywordsAdded: movies, showTweakModal: true, ...props }
+    })
+  }
+
+  it('opens the tournament straight away when asked to and a tie is waiting', async () => {
+    const wrapper = mountWith(tied(), { autoOpen: true })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.prompt-card').exists()).toBe(false)
+    expect(wrapper.find('.tweak-container').exists()).toBe(true)
+  })
+
+  it('still shows the card first when not asked to', () => {
+    const wrapper = mountWith(tied(), {})
+    expect(wrapper.find('.prompt-card').exists()).toBe(true)
+  })
+
+  // The tie scan reads the STORE getter, not the prop (see tiedGroupDbKeys),
+  // so the films have to land there — a reactive mock stands in for
+  // Firebase filling the library after the request arrived.
+  it('opens once the films arrive, when the request came first', async () => {
+    const store = reactive({
+      state: { currentLog: 'movieLog', settings: { tieBreakTournament: null, tieBreakPromptState: 'auto' } },
+      getters: { allMoviesAsArray: [] },
+      dispatch: vi.fn()
+    })
+    const wrapper = mount(TweakInline, {
+      global: { mocks: { $store: store } },
+      props: { allEntriesWithFlatKeywordsAdded: [], showTweakModal: true, autoOpen: true }
+    })
+    expect(wrapper.find('.tweak-container').exists()).toBe(false)
+
+    store.getters.allMoviesAsArray = tied()
+    await wrapper.setProps({ allEntriesWithFlatKeywordsAdded: tied() })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.tweak-container').exists()).toBe(true)
   })
 })
