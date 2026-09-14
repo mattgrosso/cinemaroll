@@ -46,7 +46,7 @@ export default {
         dayCellContent: (args) => {
           return args.date.getDate();
         },
-        datesSet: (info) => {
+        datesSet: () => {
           this.setClassesForDates();
         }
       }

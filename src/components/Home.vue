@@ -2743,9 +2743,7 @@ export default {
       const years = {};
 
       this.allEntriesWithFlatKeywordsAdded.forEach((result) => {
-        let year;
-
-        year = new Date(result.movie.release_date).getFullYear();
+        const year = new Date(result.movie.release_date).getFullYear();
 
         if (!years[year]) {
           years[year] = result;
@@ -5822,7 +5820,7 @@ export default {
         const id = pickResolvedId(response.data?.results, name, normalizeSearchText);
         tmdbIdCache.set(key, id);
         return id;
-      } catch (error) {
+      } catch {
         return null;
       }
     },
@@ -6154,7 +6152,7 @@ export default {
         const logText = ErrorLogService.getLogsAsText();
         await navigator.clipboard.writeText(logText);
         this.showCopySuccess();
-      } catch (error) {
+      } catch {
         // Fallback for older browsers
         this.fallbackCopyToClipboard(ErrorLogService.getLogsAsText());
       }

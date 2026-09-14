@@ -594,7 +594,6 @@ import { findOtherAwardsForMovie } from '../assets/javascript/otherAwards.js';
 import { sortByAcademyCategoryOrder } from '../assets/javascript/academyAwards.js';
 import { awardNameWithThe } from '../assets/javascript/personalAwards.js';
 import { warmImageCache, posterUrl, backdropUrl } from '../assets/javascript/offlinePosterCache.js';
-import { entryForStorage } from '../assets/javascript/storedEntry.js';
 import { countDirectors, countCastCrew, countGenres, countKeywords, countStudios, countPlaces } from '../assets/javascript/entityCounts.js';
 import { placeNames, PLACE_TYPES } from '../assets/javascript/places.js';
 import { genreIdFor } from '../assets/javascript/tmdbGenres.js';

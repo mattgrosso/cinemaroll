@@ -109,10 +109,9 @@ const mountHome = (settings = {}) => {
 
 describe('Fuzzy "Did you mean?" suggestions', () => {
   let wrapper
-  let mockStore
 
   beforeEach(async () => {
-    ({ wrapper, mockStore } = mountHome())
+    ({ wrapper } = mountHome())
   })
 
   describe('the searchable index', () => {

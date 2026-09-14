@@ -41,8 +41,6 @@ describe('Quick Links Filtering System', () => {
     const currentYear = new Date().getFullYear()
     const currentMonth = new Date().getMonth()
     const lastYear = currentYear - 1
-    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1
-    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear
 
     mockMovies = [
       {

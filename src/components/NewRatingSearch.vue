@@ -115,7 +115,7 @@ export default {
           this.suggestions = filtered.slice(0, 3);
           this.suggestionsPage = this.suggestionsPage >= resp.data.total_pages ? 1 : this.suggestionsPage + 1;
         }
-      } catch (e) {
+      } catch {
         this.suggestions = [];
       }
     },
@@ -126,7 +126,7 @@ export default {
       let resp;
       try {
         resp = await axios.get(`https://api.themoviedb.org/3/search/movie?api_key=${process.env.VUE_APP_TMDB_API_KEY}&language=en-US&query=${this.value}`);
-      } catch (error) {
+      } catch {
         // Covers both a hard offline drop mid-request and any other network
         // failure - either way TMDB can't be reached right now, so offer the
         // same "rate from memory" recovery rather than hanging on the spinner.

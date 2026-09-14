@@ -191,7 +191,7 @@ let socialPublishTimer = null;
 const stampSocialPublish = () => {
   try {
     localStorage.setItem('cinemaRoll.social.lastPublish', String(Date.now()));
-  } catch (error) {
+  } catch {
     // Private mode / storage full: the publish itself still happened.
   }
 };

@@ -24,7 +24,7 @@ export default defineConfig({
     },
     // Suppress console warnings in tests
     silent: false,
-    onConsoleLog: (log, type) => {
+    onConsoleLog: (log) => {
       // Suppress Sass deprecation warnings
       if (log.includes('DEPRECATION WARNING: The legacy JS API is deprecated')) {
         return false

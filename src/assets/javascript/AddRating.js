@@ -36,24 +36,6 @@ const getTMDBData = async (rating) => {
   }
 }
 
-const findKeyForTVShowInDatabase = (id) => {
-  const keys = Object.keys(store.state.tvLog);
-  const entries = keys.map((key) => {
-    return {
-      ...store.state.tvLog[key],
-      key
-    }
-  })
-
-  const entry = entries.find((entry) => entry.tvShow.id === id);
-
-  if (entry) {
-    return entry.key;
-  } else {
-    return false;
-  }
-}
-
 const findKeyForMovieInDatabase = (id) => {
   const keys = Object.keys(store.state.movieLog);
   const movies = keys.map((key) => {
@@ -71,58 +53,6 @@ const findKeyForMovieInDatabase = (id) => {
     return false;
   }
 }
-
-const getDirectorsFilmography = async (director) => {
-  // Guarded: this rides the save path, which is otherwise carefully
-  // offline-hardened — a filmography fetch failure must degrade to "no
-  // filmography stored", never break the save (2026-08-15 offline audit).
-  let filmography;
-  try {
-    filmography = await axios.get(`https://api.themoviedb.org/3/person/${director.id}/movie_credits?api_key=${process.env.VUE_APP_TMDB_API_KEY}`);
-  } catch {
-    return [];
-  }
-  const directingCredits = filmography.data.crew.filter((credit) => credit.job === "Director");
-
-  const minimizedCredits = directingCredits.map((credit) => {
-    return {
-      id: credit.id,
-      popularity: credit.popularity,
-      release_date: credit.release_date,
-      title: credit.title
-    }
-  });
-
-  return minimizedCredits;
-}
-
-const createTVShowRatingFromEpisodeRatings = (ratings) => {
-  if (!ratings.episodes || ratings.episodes.length === 0) {
-    return {};
-  }
-
-  const keys = Object.keys(ratings.episodes[0]);
-  const keysToRemove = ["date", "episode", "medium", "season", "tags", "title", "year", "tvShowId"];
-  const filteredKeys = keys.filter((key) => !keysToRemove.includes(key));
-
-  const previousIndex = store.getters.allMediaSortedByRating.findIndex((tvShow) => {
-    return tvShow.tvShow.id === ratings.episodes[0].tvShowId;
-  });
-
-  const averages = {
-    date: new Date().getTime(),
-    tvShowId: ratings.episodes[0].tvShowId,
-    previousRanking: previousIndex + 1
-  };
-
-  filteredKeys.forEach((key) => {
-    const sum = ratings.episodes.reduce((total, rating) => total + parseFloat(rating[key]), 0);
-    const average = sum / ratings.episodes.length;
-    averages[key] = parseFloat(average.toPrecision(2));
-  });
-
-  return averages;
-};
 
 const collectChatGPTKeywords = (ratings) => {
   const chatGPTKeywords = [];

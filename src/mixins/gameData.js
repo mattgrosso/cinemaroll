@@ -24,7 +24,7 @@ export function lastPlayedGamePath (router) {
   let stored = null;
   try {
     stored = window.localStorage.getItem(LAST_PLAYED_KEY);
-  } catch (error) {
+  } catch {
     // localStorage can throw in private-browsing/quota-exceeded situations.
   }
 
@@ -35,7 +35,7 @@ export function lastPlayedGamePath (router) {
 
   try {
     window.localStorage.removeItem(LAST_PLAYED_KEY);
-  } catch (error) {
+  } catch {
     // Nothing to do — the caller falls back to the hub either way.
   }
   return null;
@@ -109,7 +109,7 @@ export default {
     if (this.$route?.path && this.$route.path !== '/games') {
       try {
         window.localStorage.setItem(LAST_PLAYED_KEY, this.$route.path);
-      } catch (error) {
+      } catch {
         // localStorage can throw in private-browsing/quota-exceeded situations;
         // harmless to skip, it just means goToGames falls back to the hub.
       }

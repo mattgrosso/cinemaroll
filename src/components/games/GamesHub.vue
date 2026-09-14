@@ -78,7 +78,7 @@ export default {
   created () {
     try {
       window.localStorage.removeItem(LAST_PLAYED_KEY);
-    } catch (error) {
+    } catch {
       // localStorage can throw in private-browsing/quota-exceeded situations.
     }
   },

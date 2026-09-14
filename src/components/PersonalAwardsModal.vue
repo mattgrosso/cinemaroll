@@ -1464,7 +1464,6 @@ export default {
 
       if (category.type === 'movie') {
         // For movie categories, use simple array (like old system)
-        const sortCriteria = this.getCategorySortKey(this.selectedCategory);
         const sortedMovies = this.sortOptionsByRelevantRating(moviesForYear, this.selectedCategory);
 
         // Cache and return simple array
@@ -1511,7 +1510,6 @@ export default {
     },
     async extractAndGroupPeopleByMovie (movies, categoryKey) {
       const isActress = categoryKey.includes('Actress');
-      const isSupporting = categoryKey.includes('Supporting');
       const movieGroups = {};
 
       // Group cast members by movie
@@ -1934,7 +1932,7 @@ export default {
                   keysToRemove.push(key);
                 }
               }
-            } catch (parseError) {
+            } catch {
               // Invalid entry, mark for removal
               keysToRemove.push(key);
             }

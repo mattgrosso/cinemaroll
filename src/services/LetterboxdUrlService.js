@@ -8,7 +8,7 @@ class LetterboxdUrlService {
    * "The Dark Knight" → "dark-knight"
    * "Pulp Fiction" → "pulp-fiction"
    */
-  static generateMovieSlug (title, year) {
+  static generateMovieSlug (title) {
     if (!title) return null;
 
     // Convert to lowercase and replace spaces with hyphens

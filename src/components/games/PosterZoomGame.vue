@@ -301,7 +301,7 @@ export default {
         const sample = this.buildVarianceSampler(image);
         if (!sample) return candidates[0];
         return pickMostInterestingOrigin(candidates, sample);
-      } catch (error) {
+      } catch {
         // Most likely a CORS-mode cache miss against an entry stored by an
         // earlier no-cors request. Not worth surfacing — the fallback is fine.
         return candidates[0];

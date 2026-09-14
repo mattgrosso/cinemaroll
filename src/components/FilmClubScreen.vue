@@ -294,7 +294,6 @@ export default {
       return this.$store.state.federatedDirectoryLoading;
     },
     visibleDirectory () {
-      const friends = this.$store.getters.filmClubFriends || [];
       const known = Object.values(this.$store.state.settings?.externalFriends || {}).map((f) => f?.feedUrl);
       const asked = Object.keys(this.$store.state.settings?.clubRequestsSent || {});
       return filterDirectory(this.$store.state.federatedDirectory, {

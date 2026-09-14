@@ -6,8 +6,7 @@ import {
   movieWriters,
   movieYear,
   movieComposers,
-  movieCinematographers,
-  movieProducers
+  movieCinematographers
 } from './gameUtils.js';
 
 // Pure, store-free rules for the Clue Budget game: spend a fixed starting

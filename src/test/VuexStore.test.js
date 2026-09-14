@@ -88,7 +88,7 @@ describe('Vuex Store - Movie Data Processing', () => {
             return media.ratings?.[0]?.calculatedTotal || 0;
           });
         },
-        databaseTopKey (state, getters) {
+        databaseTopKey (state) {
           const devMode = localStorage.getItem('devMode') === 'true';
           return devMode ? state.devModeTopKey : state.databaseTopKey;
         },

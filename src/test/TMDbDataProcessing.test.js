@@ -175,7 +175,7 @@ describe('TMDb Data Processing & Movie Rating Addition', () => {
 
   describe('TMDb API Data Fetching', () => {
     it('should fetch movie data, credits, and keywords from TMDb API', async () => {
-      const result = await addRating(mockRatings)
+      await addRating(mockRatings)
 
       expect(axios.get).toHaveBeenCalledTimes(3)
       expect(axios.get).toHaveBeenCalledWith(expect.stringContaining('/movie/550?'))

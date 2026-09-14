@@ -83,7 +83,7 @@ class LetterboxdScrapingService {
               break;
             }
           }
-        } catch (error) {
+        } catch {
           continue;
         }
       }
@@ -144,7 +144,7 @@ class LetterboxdScrapingService {
           // Small delay between pages to be respectful
           await new Promise(resolve => setTimeout(resolve, 1000));
           page++;
-        } catch (error) {
+        } catch {
           break; // Stop pagination on error
         }
       }
@@ -171,7 +171,7 @@ class LetterboxdScrapingService {
   /**
    * Parse Letterboxd films page HTML to extract movie data
    */
-  static parseLetterboxdFilmsHTML (html, username, page = 1) {
+  static parseLetterboxdFilmsHTML (html) {
     try {
       // Create a temporary DOM element to parse HTML
       const parser = new DOMParser();
@@ -205,7 +205,7 @@ class LetterboxdScrapingService {
         return [];
       }
 
-      filmElements.forEach((element, index) => {
+      filmElements.forEach((element) => {
         try {
           // Try multiple ways to extract movie title
           let title = null;
@@ -262,7 +262,7 @@ class LetterboxdScrapingService {
             year: null,
             rating: null
           });
-        } catch (filmError) {
+        } catch {
           // Silent error handling
         }
       });
@@ -319,7 +319,7 @@ class LetterboxdScrapingService {
           const textData = await response.text();
           try {
             jsonData = JSON.parse(textData);
-          } catch (e) {
+          } catch {
             console.log(`❌ Invalid JSON for "${film.title}"`);
             enrichedFilms.push(film);
             continue;
@@ -393,7 +393,7 @@ class LetterboxdScrapingService {
           if (!isNaN(date.getTime())) {
             return date.toISOString().split('T')[0];
           }
-        } catch (e) {
+        } catch {
           continue;
         }
       }
@@ -462,7 +462,7 @@ class LetterboxdScrapingService {
       // Target the specific diary table structure
       const diaryRows = doc.querySelectorAll('#diary-table .diary-entry-row');
 
-      diaryRows.forEach((row, index) => {
+      diaryRows.forEach((row) => {
         try {
           // Extract movie title from data attribute
           const filmName = row.getAttribute('data-film-name') ||
@@ -482,7 +482,7 @@ class LetterboxdScrapingService {
             const dateMatch = dayUrl.match(/\/diary\/for\/(\d{4})\/(\d{2})\/(\d{2})\//);
 
             if (dateMatch) {
-              const [_, year, month, day] = dateMatch;
+              const [, year, month, day] = dateMatch;
               watchedDate = `${year}-${month}-${day}`; // ISO format: 2025-06-28
             }
           }
@@ -518,7 +518,7 @@ class LetterboxdScrapingService {
           };
 
           diaryEntries.push(entry);
-        } catch (entryError) {
+        } catch {
           // Silent error handling
         }
       });
@@ -734,7 +734,7 @@ class LetterboxdScrapingService {
           if (this.isCacheValid(parsedCache)) {
             return parsedCache;
           }
-        } catch (error) {
+        } catch {
           // Silent error handling
         }
       }

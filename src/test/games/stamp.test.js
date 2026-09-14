@@ -7,8 +7,7 @@ import {
   affinityScore,
   buildStampRound,
   resolveSwipe,
-  keywordChangeFor,
-  MIN_TAGGED_TO_PLAY
+  keywordChangeFor
 } from '../../assets/javascript/games/stamp.js';
 
 let nextId = 1;

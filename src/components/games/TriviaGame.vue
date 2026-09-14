@@ -319,7 +319,7 @@ export default {
           this.revealedCount = clampRevealedCount(this.revealedCount, facts.length);
           this.persistState();
         }
-      } catch (error) {
+      } catch {
         if (entryKey(this.target) !== roundKey) return;
         this.loadError = true;
       } finally {

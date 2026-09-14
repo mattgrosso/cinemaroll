@@ -35,8 +35,6 @@ function waitForKeypress (timeout = 20000) {
   }
 
   return new Promise((resolve) => {
-    let timeoutId;
-
     const cleanup = () => {
       process.stdin.setRawMode(false);
       process.stdin.pause();
@@ -44,7 +42,7 @@ function waitForKeypress (timeout = 20000) {
     };
 
     // Set up timeout
-    timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       cleanup();
       console.log('\n⏰ No input received, defaulting to PATCH increment...');
       resolve('1'); // Default to patch

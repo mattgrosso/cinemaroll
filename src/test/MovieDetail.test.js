@@ -347,9 +347,6 @@ describe('MovieDetail geography sections', () => {
     return w
   }
 
-  const paris = { name: 'Paris', lat: 48.85, lon: 2.35, type: 'filming', id: 'Q90' }
-  const tokyo = { name: 'Tokyo', lat: 35.68, lon: 139.69, type: 'narrative', id: 'Q1490' }
-
   describe('Country of Origin (production countries)', () => {
     it('lists production country names', async () => {
       wrapper = await mountWith({ production_countries: [{ name: 'France' }, { name: 'Ireland' }] })

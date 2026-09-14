@@ -174,7 +174,7 @@ function readStoredLayout () {
     const parsed = JSON.parse(raw);
     if (!parsed?.signature || !parsed?.xy) return null;
     return parsed;
-  } catch (error) {
+  } catch {
     return null;
   }
 }
@@ -184,7 +184,7 @@ function writeStoredLayout (signature, nodes) {
     const xy = {};
     nodes.forEach((node) => { xy[node.id] = [Math.round(node.x * 10) / 10, Math.round(node.y * 10) / 10]; });
     window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify({ signature, xy }));
-  } catch (error) {
+  } catch {
     // Quota or private mode: the layout is just recomputed next time.
   }
 }
@@ -429,7 +429,7 @@ export default {
       let worker;
       try {
         worker = new Worker(new URL('../assets/javascript/webLayout.worker.js', import.meta.url));
-      } catch (error) {
+      } catch {
         this.layoutOnMainThread(graph, dial);
         return;
       }

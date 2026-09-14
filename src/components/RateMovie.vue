@@ -308,7 +308,6 @@
 </template>
 
 <script>
-import axios from "axios";
 import { formatScore } from '../assets/javascript/formatScore.js';
 import addRating from "../assets/javascript/AddRating.js";
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
@@ -883,7 +882,7 @@ export default {
       try {
         const response = await postToAi('/context', { title: this.title, year: this.year });
         this.movieContext = response.data.context;
-      } catch (error) {
+      } catch {
         this.movieContext = 'Could not load context. Please try again.';
       } finally {
         this.movieContextLoading = false;

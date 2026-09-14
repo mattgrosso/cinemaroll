@@ -333,7 +333,7 @@ import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import { allViewings, calendarCoverage } from "../assets/javascript/yearInReview.js";
 
 import { Chart, registerables } from "chart.js";
-import { BarChart, DoughnutChart, ScatterChart, RadarChart, LineChart } from "vue-chart-3";
+import { ScatterChart, LineChart } from "vue-chart-3";
 import InsightsPane from "./InsightsPane.vue";
 import CoverageMap from "./CoverageMap.vue";
 import { placeRows, favouritePlaces, mostVisitedPlaces, placeSummary, countryCoverage } from "../assets/javascript/places.js";
@@ -2518,7 +2518,6 @@ export default {
     },
     calculatePolishedScale (movie) {
       let score = 0;
-      const genres = movie.genres || [];
       const keywords = movie.flatKeywords || [];
       const budget = movie.budget || 0;
       const companies = movie.production_companies || [];

@@ -65,7 +65,7 @@ export async function warmImageCache (urls, { concurrency = 6, onProgress, fetch
 
       try {
         await fetchFn(url, { mode: 'no-cors' });
-      } catch (error) {
+      } catch {
         failed += 1;
       }
 
