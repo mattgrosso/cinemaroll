@@ -89,6 +89,18 @@ opens — `world` is a required prop, never imported by the component. The set/f
 persists in `localStorage` (`cinemaRoll.insights.placeType`) — tests must clear it.
 Every tap on a place hands Home a real `place` chip (`searchPlace`), the MovieDetail way.
 
+## Years by box office (Ratings tab, 2026-09-13)
+
+`BoxOfficeYears.vue` sits directly under `YearlyAverage` and is its deliberate twin —
+same card, same rows, the other question: "a rank of years based on total box office
+for the movies that I brought in". Release years, summed **worldwide** gross
+(`movie.revenue`, TMDB's 0 = unknown, skipped and not counted), math in
+`boxOfficeYears.js` (pure, tested). The toggle is the point: **today's dollars** (the
+default, through `inflation.js`) or **as released**; a sum across eighty years in raw
+dollars quietly favours the recent decades. Choice persists in `localStorage`
+(`cinemaRoll.insights.boxOfficeDollars`) — tests must clear it. Tapping a year runs the
+same year search the best-years list does.
+
 ## Deep Stats
 
 `/stats` renders only; every section is a pure function in `deepStats.js` or

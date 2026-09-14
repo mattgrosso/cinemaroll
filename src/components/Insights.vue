@@ -74,6 +74,12 @@
       <YearlyAverage :resultsWithRatings="resultsWithRatings" @updateSearchValue="updateSearchValue"/>
     </InsightsPane>
 
+    <!-- The same years, ranked by money instead of score (bug report,
+         2026-09-13: "look at years from my financial perspective"). -->
+    <InsightsPane>
+      <BoxOfficeYears :resultsWithRatings="resultsWithRatings" @updateSearchValue="updateSearchValue"/>
+    </InsightsPane>
+
     <InsightsPane>
       <Outliers :resultsWithRatings="resultsWithRatings" :allCounts="allCounts" @updateSearchValue="updateSearchValue"/>
     </InsightsPane>
@@ -301,6 +307,7 @@
 <script>
 import Outliers from "./Outliers.vue";
 import YearlyAverage from "./YearlyAverage.vue";
+import BoxOfficeYears from "./BoxOfficeYears.vue";
 import FullCalendarView from "./FullCalendarView.vue";
 import FavoriteActresses from "./FavoriteActresses.vue";
 import FavoriteActors from "./FavoriteActors.vue";
@@ -349,6 +356,7 @@ export default {
     InsightsPane,
     Outliers,
     YearlyAverage,
+    BoxOfficeYears,
     FullCalendarView,
     FavoriteActresses,
     FavoriteActors,
