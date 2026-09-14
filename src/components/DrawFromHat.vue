@@ -129,6 +129,14 @@ import ErrorLogService from '../services/ErrorLogService.js';
 import { timeAgo } from '../assets/javascript/timeAgo.js';
 import WhereToWatch from './WhereToWatch.vue';
 
+// When a hat was last drawn from, or 0 for never (and for a hat whose
+// summary hasn't loaded or couldn't). History arrives newest-first from the
+// store, but this reads every entry rather than trusting the order.
+function lastDrawAt (card) {
+  const history = Array.isArray(card?.history) ? card.history : [];
+  return history.reduce((latest, drawn) => Math.max(latest, Number(drawn?.dateDrawn) || 0), 0);
+}
+
 export default {
   name: 'DrawFromHat',
   components: { WhereToWatch },
@@ -150,9 +158,20 @@ export default {
     },
     // The linked hats always render; their counts and last draw fill in when
     // the lookups land, so the section doesn't pop into existence late.
+    // Most recently drawn from at the top (bug report, 2026-09-13: "sorted
+    // by most recently drawn from so whichever one has a movie that was most
+    // recently drawn it should be at the top"). The hat you're actually
+    // using is the one you came here for. Hats that have never been drawn
+    // from sit below, in their linked order — and until the summaries land
+    // nothing has a draw date yet, so the linked order holds and the cards
+    // don't shuffle after they appear.
     cards () {
       const summaries = this.$store.state.movieHatSummaries || [];
-      return this.hats.map((hat) => summaries.find((summary) => summary.title === hat.title) || { ...hat, waiting: null });
+      const cards = this.hats.map((hat) => summaries.find((summary) => summary.title === hat.title) || { ...hat, waiting: null });
+      return cards
+        .map((card, index) => ({ card, index, drawnAt: lastDrawAt(card) }))
+        .sort((a, b) => (b.drawnAt - a.drawnAt) || (a.index - b.index))
+        .map(({ card }) => card);
     },
     accessError () {
       return this.$store.state.movieHatAccessError;

@@ -187,6 +187,56 @@ describe('DrawFromHat', () => {
 // displays where you're showing the history is all busted". The card is a
 // vertical block now, and the strip is a full-width sibling of the last-drawn
 // row rather than a third item beside it.
+// Bug report (2026-09-13): "The list of hats on my watchlist page should be
+// sorted by most recently drawn from so whichever one has a movie that was
+// most recently drawn it should be at the top."
+describe('DrawFromHat card order', () => {
+  const HOUR = 60 * 60 * 1000;
+  const hats = [
+    { title: 'Quiet hat', dbKey: 'q' },
+    { title: 'Busy hat', dbKey: 'b' },
+    { title: 'Never drawn', dbKey: 'n' }
+  ];
+
+  it('puts the hat drawn from most recently first, and never-drawn hats last', () => {
+    const summaries = [
+      // History is newest-first from the store, but the order shouldn't be
+      // trusted: the oldest draw is listed first here on purpose.
+      { title: 'Quiet hat', dbKey: 'q', waiting: 3, history: [
+        { id: 1, title: 'Old', dateDrawn: Date.now() - 500 * HOUR }
+      ] },
+      { title: 'Busy hat', dbKey: 'b', waiting: 9, history: [
+        { id: 2, title: 'Older', dateDrawn: Date.now() - 40 * HOUR },
+        { id: 3, title: 'Newest', dateDrawn: Date.now() - HOUR }
+      ] },
+      { title: 'Never drawn', dbKey: 'n', waiting: 4, history: [] }
+    ];
+    const { wrapper } = factory({ hats, summaries });
+
+    expect(wrapper.findAll('.hat-name').map((name) => name.text()))
+      .toEqual(['Busy hat', 'Quiet hat', 'Never drawn']);
+  });
+
+  it('keeps the linked order until the summaries arrive, so the cards do not shuffle twice', () => {
+    const { wrapper } = factory({ hats, summaries: [] });
+
+    expect(wrapper.findAll('.hat-name').map((name) => name.text()))
+      .toEqual(['Quiet hat', 'Busy hat', 'Never drawn']);
+  });
+
+  it('treats a hat that could not load like one never drawn from', () => {
+    const summaries = [
+      { title: 'Quiet hat', dbKey: 'q', error: true },
+      { title: 'Busy hat', dbKey: 'b', waiting: 9, history: [{ id: 3, title: 'Newest', dateDrawn: Date.now() - HOUR }] },
+      { title: 'Never drawn', dbKey: 'n', waiting: 4, history: [] }
+    ];
+    const { wrapper } = factory({ hats, summaries });
+
+    expect(wrapper.findAll('.hat-name').map((name) => name.text()))
+      .toEqual(['Busy hat', 'Quiet hat', 'Never drawn']);
+  });
+});
+
 describe('DrawFromHat history strip', () => {
   const HOUR = 60 * 60 * 1000;
 
