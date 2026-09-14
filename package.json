@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "update-version": "node src/assets/javascript/version.js",
-    "serve": "nodemon --watch .env --exec \"vue-cli-service serve\"",
-    "build": "vue-cli-service build",
+    "serve": "vite",
+    "build": "vite build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest",
@@ -25,7 +25,8 @@
     "link-qa-tester": "node scripts/link-qa-tester.mjs",
     "diverge-test-library": "node scripts/diverge-test-library.mjs",
     "link-tester-hat": "node scripts/link-tester-hat.mjs",
-    "generate-db-rules": "node scripts/generate-database-rules.mjs"
+    "generate-db-rules": "node scripts/generate-database-rules.mjs",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.15",
@@ -58,15 +59,11 @@
     "vuex": "^4.1.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.26.0",
     "@eslint/js": "^9",
-    "@vitejs/plugin-vue": "^5.0.0",
+    "@vitejs/plugin-vue": "5.2.4",
     "@vitest/coverage-v8": "1.6.0",
-    "@vue/cli-plugin-babel": "~5.0.0",
-    "@vue/cli-plugin-pwa": "~5.0.0",
-    "@vue/cli-plugin-vuex": "~5.0.0",
-    "@vue/cli-service": "~5.0.0",
     "@vue/test-utils": "^2.4.6",
+    "autoprefixer": "^10.4.20",
     "eslint": "^10",
     "eslint-plugin-promise": "^7",
     "eslint-plugin-vue": "^10.10.0",
@@ -74,9 +71,9 @@
     "firebase-admin": "^13",
     "globals": "^15",
     "jsdom": "^26.1.0",
-    "nodemon": "^3.1.9",
     "sass": "^1.83.0",
-    "sass-loader": "^16.0.4",
+    "vite": "5.4.21",
+    "vite-plugin-pwa": "1.3.0",
     "vitest": "1.6.0",
     "vue-eslint-parser": "^10.4.1"
   },

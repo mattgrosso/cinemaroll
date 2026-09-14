@@ -88,11 +88,11 @@ requirement).
 ESLint 10 needed `eslint-plugin-vue` **10** and an explicit `vue-eslint-parser`
 dependency: 10 removed `context.getSourceCode()`, which older plugin versions call.
 
-**`.yarnrc` sets `--ignore-engines`.** `@achrinza/node-ipc`, a transitive dependency of
-`@vue/cli-service`'s dev server, declares an `engines` range stopping at Node 19 and is
-unmaintained; it runs fine on 20. Delete that flag the day the Vue CLI dev server goes
-away or node-ipc is dropped upstream — don't let it quietly excuse a real
-incompatibility.
+**`.yarnrc` sets `--ignore-engines`.** It was there for `@achrinza/node-ipc`, a
+transitive dependency of `@vue/cli-service`'s dev server, which capped `engines` at
+Node 19. The Vue CLI dev server went away with the Vite move (2026-09-14), so that
+particular excuse is gone — the flag is now unexamined rather than justified. Try
+removing it, and don't let it quietly excuse a real incompatibility.
 
 ## Rating system
 
@@ -165,7 +165,8 @@ rather than only through component mounts. That's why `searchFiltering.js`,
 | `yarn test:run` | run tests (use this to verify) |
 | `yarn test:coverage` | coverage |
 | `yarn lint` / `yarn lint:fix` | `eslint .` (flat config, not vue-cli-service) |
-| `yarn build` / `yarn deploy` | build / deploy to AWS S3 + CloudFront |
+| `yarn build` / `yarn deploy` | build (Vite) / deploy to AWS S3 + CloudFront |
+| `yarn preview` | serve the built `dist/` locally — how a production build gets eyeballed |
 | `yarn generate-db-rules` | regenerate `database.rules.json` — never hand-edit it |
 | `yarn fetch-bug-reports` | unresolved in-app bug reports, newest first |
 | `yarn resolve-bug-report <id…>` | mark reports resolved |
@@ -189,9 +190,9 @@ new section, offline support); MAJOR only for a breaking change. When in doubt, 
 The version reaches the screen as the **house build stamp** (2026-08-22, a blanket
 policy across all of Matt's apps): one muted line reading
 `v1.96.4 · built Aug 22, 1:32 AM`, rendered in the footer — on screen everywhere — with
-the version half alone in the header's corner badge. `vue.config.js` sets
-`VUE_APP_BUILD_TIME` when the build starts, so the time is the BUILD's, never the page
-load's: a tab left open for a week keeps showing the build it's still running.
+the version half alone in the header's corner badge. `vite.config.mjs` sets
+`VUE_APP_BUILD_TIME` when the build starts (via `define`; `vue.config.js` did it before
+2026-09-14), so the time is the BUILD's, never the page load's: a tab left open for a week keeps showing the build it's still running.
 `src/assets/javascript/buildStamp.js` is the only formatter.
 
 ## Environment
@@ -199,7 +200,7 @@ load's: a tab left open for a week keeps showing the build it's still running.
 - `VUE_APP_GOOGLE_API_KEY` — Firebase/Google
 - `VUE_APP_TMDB_API_KEY` — The Movie Database
 - `VUE_APP_ENABLE_APPLE_SIGNIN` — leave unset until Apple sign-in is configured
-- `VUE_APP_BUILD_TIME` — not in `.env`; set by `vue.config.js` per build (see above)
+- `VUE_APP_BUILD_TIME` — not in `.env`; set by `vite.config.mjs` per build (see above)
 - `FIREBASE_ADMIN_KEY_PATH` in `.env.local` (gitignored) — for the triage scripts
 - `VUE_APP_PUSH_API_URL` / `VUE_APP_VAPID_PUBLIC_KEY` — push notifications
   (`aws-lambda/push-notify.js`; details in `.claude/rules/auth-and-db-rules.md`)
