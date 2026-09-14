@@ -94,6 +94,17 @@ first attempt at the games scroll-to-top do nothing at all.
   older screens still carry left-accent banners (Reel Wordle/Connections/Clue Budget
   result banners, target-clues) — sweep candidates, don't add new ones.
 
+## The Web is the one screen that hides the shared header
+
+`WebScreen.vue` commits `setShowHeader(false)` in `created` and `true` in
+`beforeUnmount` (2026-09-13: "it's hard to get it to use the whole screen... maybe just a
+redesign so that it uses more of the real estate"), and lays itself out as a
+`100dvh` flex column with the canvas taking everything between a compact head and a
+one-line foot. That `100dvh` on a routed root is deliberate and is NOT the phantom-scroll
+trap below — that trap is a full viewport stacked *under* the header. Games keep the
+header (with their own banner, see Six Degrees); don't hide it anywhere else without
+the same restore-on-unmount, or the next screen inherits a headerless app.
+
 ## Layout traps that have bitten here
 
 - **Don't put `min-height: 100vh` on a routed component's root.** `.cinema-roll` and

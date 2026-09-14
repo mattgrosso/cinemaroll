@@ -273,12 +273,21 @@ export default {
     entries: { immediate: true, handler: 'scheduleRebuild' },
     '$route.query': { handler: 'applyRoute' }
   },
+  // The whole screen is the picture (bug report, 2026-09-13: "it's hard to
+  // get it to use the whole screen... maybe just a redesign so that it uses
+  // more of the real estate"). The shared header comes down for the
+  // duration — the one screen in the app that does this — and goes back up
+  // on the way out, the way Six Degrees restores its banner.
+  created () {
+    this.$store.commit?.('setShowHeader', false);
+  },
   mounted () {
     window.addEventListener('resize', this.onResize);
     this.posters = new Map();
     this.$nextTick(this.onResize);
   },
   beforeUnmount () {
+    this.$store.commit?.('setShowHeader', true);
     if (this.rebuildTimer) clearTimeout(this.rebuildTimer);
     window.removeEventListener('resize', this.onResize);
     this.stopTracking();
@@ -882,21 +891,37 @@ export default {
 </script>
 
 <style lang="scss">
+/* A viewport-tall column: compact head, the stage taking every pixel left,
+   a one-line foot. The header is hidden while this screen is up (see
+   created), so 100dvh here IS the screen — not the "phantom scroll" the
+   vue-ui rule warns about, which comes from a full viewport stacked under
+   a header. dvh, so the iOS toolbars coming and going don't leave the foot
+   under them; vh is the fallback for engines without it. The footer still
+   sits below, reachable by dragging the head or foot strips — the canvas
+   itself is touch-action: none, so a finger on the picture only ever moves
+   the picture. */
 .web-screen {
   color: #fff;
-  padding: 0 0 24px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  padding: 0;
 
   .web-head {
-    padding: 16px 16px 8px;
+    /* Room on the left for BackLink, which sits in the top corner now that
+       there is no header above it. */
+    flex: 0 0 auto;
+    padding: 10px 16px 6px 56px;
   }
   .web-title {
-    font-size: 1.5rem;
+    font-size: 1.15rem;
     font-weight: 700;
-    margin: 0 0 4px;
+    margin: 0;
   }
   .web-subtitle {
     color: #ccc;
-    font-size: 0.85rem;
+    font-size: 0.78rem;
     margin: 0;
   }
   .web-empty {
@@ -906,8 +931,8 @@ export default {
 
   .web-stage {
     background: #111418;
-    height: min(72vh, 720px);
-    min-height: 380px;
+    flex: 1 1 auto;
+    min-height: 240px;
     overflow: hidden;
     position: relative;
     width: 100%;
