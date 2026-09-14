@@ -1,3 +1,18 @@
+// VENDOR CSS FIRST, AND IT HAS TO STAY THERE. Vite emits stylesheets in
+// module-graph order, so whatever is imported first ends up EARLIEST in
+// app.css — and between two rules of equal specificity, the later one wins.
+// These imports used to sit below `App.vue`, which put Bootstrap's own
+// `body { font-family: var(--bs-body-font-family) }` after App.vue's
+// `body { font-family: "Roboto Condensed" }` and silently reverted the whole
+// app to the system font stack. Bug report, 2026-09-14: "Did the font change
+// for some reason on our notifications... our alert banner looks different."
+// Vue CLI extracted vendor CSS into its own file and loaded it first, which
+// is why the order never had to be thought about before the Vite move; this
+// restores that arrangement explicitly. `cssImportOrder.test.js` guards it.
+import "bootstrap/dist/css/bootstrap.min.css";
+import 'bootstrap-icons/font/bootstrap-icons.css';
+import "bootstrap";
+
 import { createApp } from "vue";
 import App from "./App.vue";
 import store from "./store";
@@ -6,9 +21,6 @@ import VueClickAway from "vue3-click-away";
 import * as Sentry from "@sentry/vue";
 import { BrowserTracing } from "@sentry/tracing";
 import VueLazyLoad from 'vue3-lazyload';
-import "bootstrap/dist/css/bootstrap.min.css";
-import "bootstrap";
-import 'bootstrap-icons/font/bootstrap-icons.css';
 import './registerServiceWorker'
 
 const app = createApp(App);
