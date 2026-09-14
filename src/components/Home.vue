@@ -534,7 +534,7 @@
       </div>
     </div>
 
-    <section class="home-notices">
+    <section ref="homeNotices" class="home-notices">
       <!-- Friend requests: prominent ON PURPOSE. Bug report, 2026-08-19:
            "unless I think to look there I won't ever know that they're
            pending." -->
@@ -1820,6 +1820,22 @@ export default {
     }
   },
   watch: {
+    // Tapping a chore notification is NOT always a fresh launch. The push
+    // Lambda's navigate URL differs from the running app's only in the hash
+    // (`.../#/?open=tiebreak`), so an installed PWA that is already in
+    // memory does not reload: iOS focuses it, the hash changes, vue-router
+    // routes it in place, and Home — already mounted — never re-runs
+    // mounted(). Bug report, 2026-09-14: "I just tapped on a notification...
+    // It brought me to the app and then just show me the home screen.
+    // There's no indication that there actually is a stickiness rating I
+    // need to do." The giveaway was the URL he reported it from, still
+    // carrying `?open=tiebreak` — mounted() strips that, so mounted() had
+    // not run. Watching the query covers the warm case; mounted() still
+    // covers the cold one, where the watcher's first fire predates the
+    // router being usable.
+    '$route.query.open' () {
+      this.readChoreOpenRequest();
+    },
     // Report -P-HHWRf-WATy1lEwdYP: "We set up the default viewing order for
     // the homepage, but it doesn't seem to be respected. I chose to have it
     // be based on recent watch, but it's still showing me in order by
@@ -1992,14 +2008,9 @@ export default {
       this.revealMovieInList(String(this.$route.query.revealMovie));
     }
 
-    // Opened from a chore notification: expand the prompt rather than just
-    // showing its card. Any value counts — the Lambda names the chore, but
-    // Home's own priority order decides which prompt is on screen, and the
-    // notification's headline follows the same order.
-    if (this.$route?.query?.open) {
-      this.openChoreRequested = true;
-      this.$router.replace({ query: { ...this.$route.query, open: undefined } });
-    }
+    // Opened from a chore notification. Also watched, not only read here —
+    // see readChoreOpenRequest.
+    this.readChoreOpenRequest();
 
     const hatToken = this.$route?.query?.hatToken;
     if (hatToken) {
@@ -4054,6 +4065,52 @@ export default {
     },
   },
   methods: {
+    /**
+     * Opened from a chore notification (`?open=<chore>`, set by the push
+     * Lambda): expand the prompt rather than just showing its card, and put
+     * it where the eye is.
+     *
+     * Any value counts — the Lambda names the chore, but Home's own priority
+     * order decides which prompt is on screen, and the notification's
+     * headline follows the same order.
+     *
+     * Called from mounted() AND from a watcher on the query, because a
+     * notification tap only reloads the page when the app wasn't already
+     * running (see the watcher).
+     */
+    readChoreOpenRequest () {
+      if (!this.$route?.query?.open) return;
+
+      // Flip rather than assign. The cards open off a watcher on `autoOpen`,
+      // so a second notification in the same session — arriving while the
+      // flag is already true, after the user closed the card — would change
+      // nothing at all.
+      this.openChoreRequested = false;
+      this.$nextTick(() => {
+        this.openChoreRequested = true;
+        this.scrollChorePromptIntoView();
+      });
+
+      // Read once: a refresh, or a back navigation, must not re-open
+      // anything.
+      this.$router.replace({ query: { ...this.$route.query, open: undefined } });
+    },
+
+    /**
+     * A warm launch keeps whatever scroll position the app was left at, and
+     * the prompts live at the TOP of Home — so on the phone the expanded
+     * card can be several screens above the fold, which reads exactly like
+     * the notification having done nothing. A cold launch is already at the
+     * top and this is a no-op.
+     */
+    scrollChorePromptIntoView () {
+      this.$nextTick(() => {
+        const notices = this.$refs.homeNotices;
+        if (!notices?.scrollIntoView) return;
+        notices.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    },
+
     // The loading spinner only earns its place on a genuinely slow load.
     // Under this it stays hidden, so a warm launch goes straight from the
     // header to the library with nothing flashing in between.

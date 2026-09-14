@@ -20,8 +20,13 @@ const read = (path) => readFileSync(fileURLToPath(new URL(path, import.meta.url)
 const home = read('../components/Home.vue');
 const app = read('../App.vue');
 
+// Attribute-tolerant: the opening tag has picked up a `ref` since, and a
+// literal-string search for it silently turned three of these guards into
+// assertions about nothing.
+const noticesOpenTagIndex = () => home.search(/<section[^>]*class="home-notices"[^>]*>/);
+
 const noticesSection = () => {
-  const start = home.indexOf('<section class="home-notices">');
+  const start = noticesOpenTagIndex();
   const end = home.indexOf('</section>', start);
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
@@ -52,7 +57,7 @@ describe('the unified notification space', () => {
   it('sits directly below the rainbow bar', () => {
     expect(home.match(/class="results-actions /g)).toHaveLength(1);
     const rainbow = home.indexOf('class="results-actions ');
-    const notices = home.indexOf('<section class="home-notices">');
+    const notices = noticesOpenTagIndex();
     expect(rainbow).toBeGreaterThan(-1);
     expect(rainbow).toBeLessThan(notices);
   });
