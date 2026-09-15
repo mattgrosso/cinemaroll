@@ -14,6 +14,7 @@
 import { placeNames } from './places.js';
 // importers keep working unchanged.
 import { normalizeSearchText, looseSearchText } from './searchText.js';
+import { numeralTokens, numeralTokensMatch, titleMatchesValue } from './numberWords.js';
 import { FILTER_KINDS, getListOfYearsFromRange } from './filterKinds.js';
 import { adjustedMovieMoney } from './inflation.js';
 
@@ -39,6 +40,10 @@ export function buildSearchFields (movie) {
     places: placeNames(movie).map(normalizeSearchText),
     title: normalizeSearchText(movie.title),
     titleLoose: looseSearchText(movie.title),
+    // Number words folded to digits, as tokens — the bridge between a library
+    // that stored "Nine to Five" and a thumb that types "9 to 5". One extra
+    // small array per movie, title only: see numberWords.js.
+    titleNumerals: numeralTokens(movie.title),
     keywords: (movie.flatKeywords || []).filter(Boolean).map(normalizeSearchText),
     genres: (movie.genres || []).filter(g => g.name).map(g => normalizeSearchText(g.name)),
     cast: (movie.cast || []).filter(p => p.name).map(p => normalizeSearchText(p.name)),
@@ -310,8 +315,12 @@ export function termMatchesAnyTitle (term, entries) {
   const loose = looseSearchText(term);
   if (!loose) return false;
   return (entries || []).some((entry) => {
-    const titleLoose = entry?._search?.titleLoose ?? looseSearchText(entry?.movie?.title || '');
-    return titleLoose.includes(loose);
+    const title = entry?.movie?.title || '';
+    const fields = entry?._search ?? {
+      titleLoose: looseSearchText(title),
+      titleNumerals: numeralTokens(title)
+    };
+    return titleMatchesValue(fields, term);
   });
 }
 
@@ -352,11 +361,20 @@ export function titleNamedByFilters (result, filters) {
   if (!title) return false;
   const titleLoose = result?._search?.titleLoose ?? looseSearchText(title);
   const titleNamed = namedForm(title);
+  const titleNumerals = result?._search?.titleNumerals ?? numeralTokens(title);
+  const titleNumeralsNamed = numeralTokens(normalizeSearchText(title).replace(LEADING_ARTICLE, ''));
   return (filters || []).some((filter) => {
     if (filter?.type !== 'general') return false;
     const queryLoose = looseSearchText(filter.value);
     if (!queryLoose) return false;
-    return queryLoose === titleLoose || namedForm(filter.value) === titleNamed;
+    if (queryLoose === titleLoose || namedForm(filter.value) === titleNamed) return true;
+    // Asked for by name, in the other spelling of its number: "9 to 5" names
+    // the film stored as "Nine to Five" just as squarely. Whole name only —
+    // the rescue this feeds is about naming a short, not browsing for one.
+    const queryNumerals = numeralTokens(filter.value);
+    const queryNumeralsNamed = numeralTokens(normalizeSearchText(filter.value).replace(LEADING_ARTICLE, ''));
+    return (queryNumerals.length === titleNumerals.length && numeralTokensMatch(titleNumerals, queryNumerals)) ||
+      (queryNumeralsNamed.length === titleNumeralsNamed.length && numeralTokensMatch(titleNumeralsNamed, queryNumeralsNamed));
   });
 }
 

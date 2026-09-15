@@ -134,6 +134,27 @@ leading interpretation is asked of `/discover` as well, then the two are **union
 - A whole name outranks a surname; matching is loose about punctuation on both sides, so
   "warner bros pictures" still reaches "Warner Bros. Pictures".
 
+## Numbers spelled either way (2026-09-15)
+
+`numberWords.js` folds number WORDS to digits on both sides and compares the result as
+TOKENS — `buildSearchFields` precomputes `titleNumerals` (title only, one small array per
+movie), and `titleMatchesValue(s, value)` is the one title test every path calls:
+`FILTER_KINDS.general`, `FILTER_KINDS.title`, `groupedByAllCategories`'s title bucket,
+`termMatchesAnyTitle` and `titleNamedByFilters`. **Add a title match anywhere else
+through that helper**, not through a bare `titleLoose.includes`.
+
+Report -P1_JRO10YcGNAXX0zzk: "9 to 5" found nothing, because the library holds the film
+under the title TMDB had the day it was added — "Nine to Five". "9to5" and "ninetofive"
+share no characters, so normalization and the fuzzy fallback were both helpless. A
+library picks up whichever spelling TMDB held per entry, so this is general, not one
+film's problem.
+
+**Tokens, not substrings — this is the load-bearing part.** Fold "seven" to a bare "7"
+and ask whether the loose title contains it, and searching "seven" returns 1917. The
+price is that a numeral search names whole words ("fiv" won't reach "Five" this way),
+which costs nothing: ordinary substring matching already covers every case where both
+sides spell the number the same. This path only ever ADDS matches.
+
 ## Grouping and chips
 
 **Group order is also matching priority** — via `usedMovieIds`, a movie matching several

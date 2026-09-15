@@ -19,9 +19,11 @@
 // produced them: dueCount(at send) = count + dueTimes ≤ now.
 //
 // Mirrors, deliberately:
-//   - stickiness candidacy: StickinessInline.vue's resultsThatNeedStickiness
-//     (last-element rating, the favoriteTuning.js mixin's mostRecentRating —
-//     NOT GetRating.js's date-max version; the prompt uses the mixin).
+//   - stickiness candidacy: shared outright with the prompt, via
+//     stickinessCandidates.js — same boundaries, same choice of which
+//     rating counts. It used to be a private copy here that read the LAST
+//     element of `ratings` while the prompt read the latest-DATED one, so a
+//     rewatch logged out of order could be pushed about and then not shown.
 //   - tiebreak due-ness: Home.vue's shouldShowTieBreakModal (tournament
 //     record counts even when quota-paused; else a fresh adjacent-tie scan).
 //   - awards years: Home.vue's shouldShowAwardsModal eligibility core.
@@ -32,22 +34,18 @@ import { findTiedGroup, tiedContestantCount } from './tieBreakTournament.js';
 import { yearsMeetingAwardsThreshold } from './personalAwards.js';
 import { promptsPerDay, lastAwardsPromptAt, ONE_DAY_MS } from './promptQuota.js';
 import { GAME_NAMES, gameWinKey } from '../../mixins/gameData.js';
-
-const ONE_WEEK_MS = 604800000;
-// Same odd constant StickinessInline.vue uses (≈ half a Julian year).
-const SIX_MONTHS_MS = 15778476000;
+import {
+  ONE_WEEK_MS,
+  SIX_MONTHS_MS,
+  mostRecentRatingOf,
+  ratingDateOf
+} from './stickinessCandidates.js';
 
 // How far ahead the digest bothers projecting stickiness boundaries. The
 // Lambda sweeps daily and the app republishes on every open, so the horizon
 // only has to outlast a realistic stretch of not opening the app.
 const DUE_TIMES_HORIZON_MS = 90 * 24 * 60 * 60 * 1000;
 const DUE_TIMES_CAP = 60;
-
-// The prompt's own reading of "the rating": last element, not date-max.
-function lastRating (entry) {
-  const ratings = entry?.ratings;
-  return (ratings && ratings.length) ? ratings[ratings.length - 1] : null;
-}
 
 function entryTitle (entry) {
   return entry?.movie?.title || entry?.movie?.name || null;
@@ -102,10 +100,10 @@ export function stickinessDigest (entries, settings, now = Date.now()) {
   const upcoming = [];
 
   (entries || []).forEach((entry) => {
-    const rating = lastRating(entry);
+    const rating = mostRecentRatingOf(entry);
     if (!rating) return;
 
-    const ratedAt = new Date(rating.date || '1/1/2021').getTime();
+    const ratedAt = ratingDateOf(rating);
     if (!Number.isFinite(ratedAt)) return;
 
     const needsWeek = !rating.userAddedStickiness;

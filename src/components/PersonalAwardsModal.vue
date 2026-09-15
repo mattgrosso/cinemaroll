@@ -282,13 +282,21 @@
                       </button>
                     </div>
 
-                    <!-- Name below -->
-                    <div class="nominee-poster-name">
+                    <!-- Name below.
+                         Report -P1_WpzyTRahOiZTWLK2 (2026-09-15): "In the
+                         nominees pane we don't need the name of the movie
+                         below the poster." For a movie category the caption
+                         was the title the poster already says — and said it
+                         badly, truncated to nine characters plus an ellipsis.
+                         Acting categories keep theirs: that caption is the
+                         PERSON's name over a headshot, which no image states,
+                         plus the roles they were nominated for. -->
+                    <div v-if="isActingCategory(selectedCategory)" class="nominee-poster-name">
                       <div class="actor-name">
                         {{ getOptionTitle(nominee).length > 10 ? getOptionTitle(nominee).substring(0, 9) + '...' : getOptionTitle(nominee) }}
                       </div>
-                      <!-- Show all roles for acting categories -->
-                      <div v-if="isActingCategory(selectedCategory) && nominee.allRoles" class="all-roles">
+                      <!-- The roles they were nominated for -->
+                      <div v-if="nominee.allRoles" class="all-roles">
                         <div v-for="movieGroup in getGroupedRolesByMovie(nominee.allRoles)" :key="movieGroup.movieId" class="movie-group-entry">
                           <div class="role-movie">{{ movieGroup.movieTitle }}</div>
                           <div v-for="character in movieGroup.characters" :key="character" class="role-character">{{ character }}</div>

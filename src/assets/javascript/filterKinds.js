@@ -18,7 +18,8 @@
 // switch; the existing filtering tests (ChipFiltering, searchFiltering,
 // QuickLinksFiltering) hold the behaviour still while the shape changes.
 
-import { normalizeSearchText, looseSearchText } from './searchText.js';
+import { normalizeSearchText } from './searchText.js';
+import { titleMatchesValue } from './numberWords.js';
 
 /** Inclusive list of year strings between a {startYear, endYear} range. */
 export function getListOfYearsFromRange (yearRange) {
@@ -37,7 +38,7 @@ export const FILTER_KINDS = {
     discoverGroup: 'texts',
     matchLocal (result, filter, s) {
       const searchValue = normalizeSearchText(filter.value);
-      return s.titleLoose.includes(looseSearchText(filter.value)) ||
+      return titleMatchesValue(s, filter.value) ||
         s.keywords.some(keyword => keyword === searchValue) ||
         s.genres.some(genre => genre === searchValue) ||
         s.places.some(place => place === searchValue) ||
@@ -138,7 +139,7 @@ export const FILTER_KINDS = {
     matchLocal (result, filter, s) {
       // A value that normalizes to nothing leaves `includes('')` true, i.e. no
       // constraint — the whole library, not a blank screen (ChipFiltering).
-      return s.titleLoose.includes(looseSearchText(filter.value));
+      return titleMatchesValue(s, filter.value);
     }
   },
 

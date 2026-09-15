@@ -559,6 +559,7 @@
         :allEntriesWithFlatKeywordsAdded="allEntriesWithFlatKeywordsAdded"
         :showStickinessModal="showStickinessModal"
         :autoOpen="openChoreRequested"
+        :now="promptNow"
         @stickiness-updated="onStickinessUpdated"
       />
       <TweakInline
@@ -1603,6 +1604,8 @@ const tmdbIdCache = new Map();
 import { getRating } from "../assets/javascript/GetRating.js";
 import { awardsYearThreshold, yearsMeetingAwardsThreshold } from "../assets/javascript/personalAwards.js";
 import { promptsPerDay, dueForPrompt, lastAwardsPromptAt } from "../assets/javascript/promptQuota.js";
+import { stickinessCandidates } from "../assets/javascript/stickinessCandidates.js";
+import { titleMatchesValue } from "../assets/javascript/numberWords.js";
 import { pushApiConfigured, pushSupport, subscribeThisDevice, unsubscribeThisDevice, sendTestNotification } from "../utils/push.js";
 import { pushPrefsWithDefaults, gameReminderOn } from "../assets/javascript/pushPrefs.js";
 import { logScore, globalAverage, logScoreSettings } from "../assets/javascript/logScore.js";
@@ -1617,7 +1620,6 @@ import {
   sortResults as sortResultsUtil,
   countDidYouMeanSuggestionsThatFit,
   normalizeSearchText,
-  looseSearchText,
   titleNamedByFilters
 } from '../assets/javascript/searchFiltering.js';
 import {
@@ -1773,6 +1775,13 @@ export default {
       insetBrowserUrl: "",
       forceModalReevaluation: 0, // Dummy value to force modal computed properties to recalculate
       modalReevalInterval: null, // Timer for automatic modal re-evaluation
+      // The clock the chore prompts are judged against. A REACTIVE now, not
+      // Date.now() inside a computed: a film becomes due for its stickiness
+      // score purely because time passed, and Vue does not re-run a computed
+      // for that (see stickinessCandidates.js for the bug this caused).
+      // Refreshed by refreshPromptClock() — on the re-eval interval, when the
+      // app comes back to the foreground, and on a chore-notification tap.
+      promptNow: Date.now(),
       letterboxdOverrides: {},
       letterboxdUserData: null,
       loadMoreObserver: null, // IntersectionObserver for infinite-scroll result loading
@@ -2219,11 +2228,17 @@ export default {
     // allEntriesWithFlatKeywordsAdded watcher resolves it once the library lands.
     this.resolveBanner();
 
-    // Set up automatic modal re-evaluation every 30 minutes
-    // This keeps time-based modals (tie breaks, awards) responsive without manual refresh
-    this.modalReevalInterval = setInterval(() => {
-      this.forceModalReevaluation++;
-    }, 1800000); // 30 minutes (1800 seconds)
+    // Keep the time-based chore prompts honest as the clock moves.
+    //
+    // The interval alone used to be the whole mechanism, at 30 minutes, and
+    // that is not enough on this app's actual platform: an installed PWA
+    // sits in memory for days, and iOS suspends its timers the moment it is
+    // backgrounded — so the tick that should have noticed a film maturing
+    // never fires, and the one after it can be half an hour late. The
+    // foreground handler below is what actually carries this on a phone; the
+    // interval covers a session left open in the foreground.
+    this.modalReevalInterval = setInterval(this.refreshPromptClock, 300000); // 5 minutes
+    document.addEventListener('visibilitychange', this.refreshPromptClockIfVisible);
 
     // Wire infinite-scroll in case results are already present at mount (e.g.
     // restored navigation state). The canLoadMore watcher covers the later
@@ -2238,6 +2253,7 @@ export default {
   },
   beforeUnmount () {
     window.removeEventListener('resize', this.debouncedUpdateDidYouMeanFitCount);
+    document.removeEventListener('visibilitychange', this.refreshPromptClockIfVisible);
     clearTimeout(this.libraryLoadTimer);
 
     // Clean up error log refresh interval
@@ -3241,9 +3257,10 @@ export default {
       // so candidate sets are identical — GroupOrdering.test.js guards this.
       // Everything compares through the same normalization applyFilter uses:
       // `term` (accents and punctuation folded) for the exact-equality groups,
-      // `termLoose` (separators removed too) for the substring ones.
+      // and `titleMatchesValue` — the same helper FILTER_KINDS.general calls —
+      // for the title bucket, so the number-word bridge can't reach one and
+      // not the other.
       const term = normalizeSearchText(searchTerm);
-      const termLoose = looseSearchText(searchTerm);
       const titleBucket = candidatesByKey.title.movies;
       const directorBucket = candidatesByKey.director.movies;
       const castBucket = candidatesByKey.cast.movies;
@@ -3255,7 +3272,7 @@ export default {
       allResults.forEach(media => {
         const s = media._search || this.buildSearchFields(media.movie);
 
-        if (s.titleLoose.includes(termLoose)) titleBucket.push(media);
+        if (titleMatchesValue(s, searchTerm)) titleBucket.push(media);
         if (s.crew.some(p => p.job === 'Director' && p.name.includes(term))) directorBucket.push(media);
         if (s.cast.some(n => n.includes(term))) castBucket.push(media);
         if (s.crew.some(p => p.jobLower.includes('producer') && p.name.includes(term))) producerBucket.push(media);
@@ -3603,21 +3620,13 @@ export default {
     resultsAreFiltered () {
       return this.activeFilters.length > 0 || this.activeQuickLinkList !== 'title';
     },
+    // Judged against `promptNow`, never Date.now() — the clock has to be a
+    // reactive dependency or this list goes stale the moment the app is left
+    // open (stickinessCandidates.js has the full story).
     resultsThatNeedStickiness () {
-      return this.allEntriesWithFlatKeywordsAdded.filter((result) => {
-        const hasntReratedStickinessOneWeek = !this.mostRecentRating(result).userAddedStickiness;
-        const hasntReratedStickinessSixMonths = !this.mostRecentRating(result).userAddedSixMonthStickiness;
-        const ratingDate = this.mostRecentRating(result).date || "1/1/2021";
-        const moreThanAWeekAgo = new Date(ratingDate).getTime() < new Date().getTime() - (604800000);
-        const moreThanSixMonthsAgo = new Date(ratingDate).getTime() < new Date().getTime() - (15778476000);
-
-        return (hasntReratedStickinessOneWeek && moreThanAWeekAgo) || (hasntReratedStickinessSixMonths && moreThanSixMonthsAgo);
-      }).sort((a, b) => {
-        const ratingDateA = this.mostRecentRating(a).date || "1/1/2021";
-        const ratingDateB = this.mostRecentRating(b).date || "1/1/2021";
-        const dateA = new Date(ratingDateA);
-        const dateB = new Date(ratingDateB);
-        return dateB - dateA;
+      return stickinessCandidates(this.allEntriesWithFlatKeywordsAdded, {
+        ratingOf: this.mostRecentRating,
+        now: this.promptNow
       });
     },
     // Stickiness inline computed properties
@@ -4078,8 +4087,39 @@ export default {
      * notification tap only reloads the page when the app wasn't already
      * running (see the watcher).
      */
+    /**
+     * Move the chore prompts' clock forward.
+     *
+     * `promptNow` drives the stickiness queue; `forceModalReevaluation` is
+     * the older dummy dependency the tiebreak/awards/quota gates hang off,
+     * which read Date.now() directly. Both have to move together or the
+     * prompts disagree about what time it is.
+     */
+    refreshPromptClock () {
+      this.promptNow = Date.now();
+      this.forceModalReevaluation++;
+    },
+
+    /**
+     * The one that matters on a phone. An installed PWA is almost never
+     * cold-launched: tapping a notification focuses a process that has been
+     * suspended — with its timers — since the last time it was looked at.
+     * Coming back to the foreground is the honest moment to re-read the
+     * clock, and it is the moment a chore notification always produces.
+     */
+    refreshPromptClockIfVisible () {
+      if (document.visibilityState === 'visible') this.refreshPromptClock();
+    },
+
     readChoreOpenRequest () {
       if (!this.$route?.query?.open) return;
+
+      // The notification fires at the instant a film matures, so the queue
+      // this is about to open may be one the app has not yet noticed exists.
+      // Re-read the clock BEFORE the flag is set: `autoOpen` only opens a
+      // card whose prompt is on screen, and the prompt is only on screen if
+      // the queue is non-empty.
+      this.refreshPromptClock();
 
       // Flip rather than assign. The cards open off a watcher on `autoOpen`,
       // so a second notification in the same session — arriving while the

@@ -51,7 +51,7 @@ function factory (entries) {
         }
       }
     },
-    props: { allEntriesWithFlatKeywordsAdded: entries, showStickinessModal: true }
+    props: { allEntriesWithFlatKeywordsAdded: entries, showStickinessModal: true, now: Date.now() }
   });
   return { wrapper, dispatch };
 }
@@ -161,7 +161,7 @@ describe('StickinessInline autoOpen', () => {
           $store: { state: { currentLog: 'movieLog', settings: {} }, getters: { allMoviesAsArray: entries }, dispatch: vi.fn() }
         }
       },
-      props: { allEntriesWithFlatKeywordsAdded: entries, showStickinessModal: true, ...props }
+      props: { allEntriesWithFlatKeywordsAdded: entries, showStickinessModal: true, now: Date.now(), ...props }
     });
   }
 

@@ -63,6 +63,32 @@ match (2026-08-22).
 - The quota check lives OUTSIDE `shouldShowAwardsModal`'s settings-loaded branch. Nested
   inside it, someone who had never completed a year could not turn the prompt off.
 
+## The chore prompts are judged against a REACTIVE clock, never `Date.now()`
+
+`Home.promptNow` is that clock, refreshed by `refreshPromptClock()` — on a 5-minute
+interval, on `visibilitychange` back to the foreground, and on a chore-notification tap
+(`readChoreOpenRequest`). `stickinessCandidates.js` takes `now` as an ARGUMENT for the
+same reason, and Home hands the same value down to `StickinessInline` as its `now` prop
+so the card and the gate that renders it can never disagree.
+
+**Never write `new Date()` inside a computed that decides whether a prompt appears.**
+Vue caches a computed until a reactive dependency changes, and the wall clock is not
+one. `resultsThatNeedStickiness` did exactly that, with only the entries array as a
+dependency: on an installed PWA sitting in memory since before a film matured, the queue
+stayed frozen at the empty value it had when the library last changed. Reports
+-P1Xo9Blv0-axmB4zrWL and -P1_e7pw0t5rtO7vlFj4 (2026-09-15) are that bug — the push
+Lambda fires at the INSTANT a film matures, so the tap always arrives into the stalest
+possible state, and nothing short of a cold launch could dislodge it.
+
+The foreground handler is the one that matters on a phone: iOS suspends a backgrounded
+PWA's timers, so the interval is a fallback for a session left open on screen, not the
+mechanism. `StickinessPromptClock.test.js` moves time while holding the library still —
+if a test also changes the entries, it passes against the bug.
+
+Note the older `forceModalReevaluation` counter is still what the tiebreak/awards/quota
+gates hang off (they read `Date.now()` directly). `refreshPromptClock()` bumps both, and
+must keep doing so, or the prompts disagree about what time it is.
+
 ## Custom (honorary) awards
 
 Stored **per year**, beside that year's categories:

@@ -595,3 +595,67 @@ exact `calculatedTotal` equality at the fourth decimal (`findTiedGroup` is reuse
 the next-up group, so the two screens cannot disagree). Strip of four numbers, the next-up
 group as a poster row, then the biggest ties by size. Two films that merely display the
 same 7.16 are not tied, and `deepStats.test.js` says so — grouping at 2dp fails it.
+
+## 2026-09-15: a stale clock, a spelled-out number, and a redundant caption
+
+**"I just got a notification that said that District 9 was ready for its stickiness
+rating. I tapped on that notification on my lock screen and opened up Cinema Roll to the
+home screen but did not show me District 9 or any notification on there, any banner about
+stickiness."** (-P1_e7pw0t5rtO7vlFj4, and -P1Xo9Blv0-axmB4zrWL thirteen hours earlier.)
+
+The third report of this shape in three weeks, and the first two fixes were both correct
+and both aimed at something else — 2026-08-28 taught the digest to publish the quota gate
+so a push could not name work the app would refuse to show, and 2026-09-14 taught Home to
+read `?open=` on a warm launch as well as a cold one. Neither was the cause this time.
+
+Reproduced from production before touching anything, which is what made it findable.
+District 9 was rated 2026-03-17, had already answered its one-week prompt, and crossed its
+SIX-MONTH boundary at 15:19:36. The Lambda swept at 15:20:45 and named it correctly. Matt
+tapped 37 seconds later. Everything downstream checked out: the quota gate was open, no
+tournament was pinning the screen, and the URL he filed from had already been stripped of
+`?open=`, which is proof the previous fix was working.
+
+The cause was one line that had been there all along:
+
+```js
+const moreThanAWeekAgo = ratingDate < new Date().getTime() - ONE_WEEK
+```
+
+inside a computed whose only reactive dependency was the entries array. Vue re-runs a
+computed when a dependency changes; the wall clock is not a dependency. On an installed
+PWA that had been in memory since before the film matured, `resultsThatNeedStickiness`
+held the empty list it computed when the library last changed, and held it permanently.
+The push fires at the exact instant a film matures, so a notification tap is precisely the
+moment this is guaranteed to be stale — which is why it only ever showed up as "I tapped
+the notification and there was nothing there", never as ordinary use being broken.
+
+`stickinessCandidates.js` now takes `now` as an argument, `Home.promptNow` is a reactive
+clock, and `refreshPromptClock()` moves it on an interval, on `visibilitychange`, and on
+the notification tap itself. The foreground handler is the one that carries this on a
+phone — iOS suspends a backgrounded PWA's timers, so the interval never fires while the
+app is away and can be half an hour late when it returns.
+
+Two things fell out of putting the rule in one place. The candidate list existed three
+times over (Home, StickinessInline, and pushDigest in its own shape), and the copies had
+drifted: the digest picked the LAST rating in the array while both components picked the
+latest-DATED one, so a rewatch logged out of order could be pushed about and then not
+shown. And both component copies called `getRating` five times per entry across a filter
+and a sort comparator — the exact trap CLAUDE.md names — over the whole library.
+
+**"When I search for the movie 9 to 5, it doesn't come up even though I know I've rated
+it."** (-P1_JRO10YcGNAXX0zzk.) He had rated it forty seconds earlier. The library holds it
+as "Nine to Five", which is what TMDB called it that day; TMDB calls it "9 to 5" now.
+"9to5" and "ninetofive" share no characters, so neither normalization nor the fuzzy
+fallback could reach it, and a library picks up whichever spelling TMDB held per entry —
+so this is a coin toss every entry makes, not one film's problem.
+
+`numberWords.js` folds number words to digits on both sides. The design decision worth
+keeping is comparing TOKENS rather than substrings: fold "seven" to a bare "7" and ask
+whether the loose title contains it, and searching "seven" returns 1917. There is a test
+for that, and it fails against the substring version.
+
+**"In the nominees pane we don't need the name of the movie below the poster."**
+(-P1_WpzyTRahOiZTWLK2.) Each Current Nominees poster carried its own title beneath it,
+truncated at nine characters plus an ellipsis, so The Empire Strikes Back read "The
+Empir...". Gone for movie categories. Acting categories keep theirs — that caption is the
+person's name over a headshot, plus the roles, and no image says any of it.

@@ -101,6 +101,7 @@
 
 <script>
 import { getRating } from "../assets/javascript/GetRating.js";
+import { stickinessCandidates } from "../assets/javascript/stickinessCandidates.js";
 import cloneDeep from 'lodash/cloneDeep';
 
 export default {
@@ -120,6 +121,14 @@ export default {
     autoOpen: {
       type: Boolean,
       default: false
+    },
+    // The clock to judge candidacy against, owned by Home so this card and
+    // the gate that decides whether to render it can never disagree about
+    // what time it is. Never Date.now() in here: see
+    // stickinessCandidates.js.
+    now: {
+      type: Number,
+      required: true
     }
   },
   emits: ['stickiness-updated'],
@@ -161,20 +170,9 @@ export default {
       return movies.sort(this.sortByRating);
     },
     resultsThatNeedStickiness () {
-      return this.allEntriesWithFlatKeywordsAdded.filter((result) => {
-        const hasntReratedStickinessOneWeek = !this.mostRecentRating(result).userAddedStickiness;
-        const hasntReratedStickinessSixMonths = !this.mostRecentRating(result).userAddedSixMonthStickiness;
-        const ratingDate = this.mostRecentRating(result).date || "1/1/2021";
-        const moreThanAWeekAgo = new Date(ratingDate).getTime() < new Date().getTime() - (604800000);
-        const moreThanSixMonthsAgo = new Date(ratingDate).getTime() < new Date().getTime() - (15778476000);
-
-        return (hasntReratedStickinessOneWeek && moreThanAWeekAgo) || (hasntReratedStickinessSixMonths && moreThanSixMonthsAgo);
-      }).sort((a, b) => {
-        const ratingDateA = this.mostRecentRating(a).date || "1/1/2021";
-        const ratingDateB = this.mostRecentRating(b).date || "1/1/2021";
-        const dateA = new Date(ratingDateA);
-        const dateB = new Date(ratingDateB);
-        return dateB - dateA;
+      return stickinessCandidates(this.allEntriesWithFlatKeywordsAdded, {
+        ratingOf: this.mostRecentRating,
+        now: this.now
       });
     },
     firstStickinessResult () {

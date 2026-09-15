@@ -108,8 +108,61 @@ const moonstruck = {
   dbKey: 'movie-2029'
 }
 
+
+// Report -P1_JRO10YcGNAXX0zzk. `nineToFive` is stored under the spelling TMDB
+// held the day it was added; `nineteenSeventeen` is the false-positive guard —
+// fold "seven" to a bare "7" and ask whether "1917" contains it, and this film
+// answers yes.
+const nineToFive = {
+  movie: {
+    id: 19494,
+    title: 'Nine to Five',
+    release_date: '1980-12-18',
+    runtime: 109,
+    genres: [{ name: 'Comedy' }],
+    cast: [{ name: 'Dolly Parton' }, { name: 'Jane Fonda' }],
+    crew: [{ name: 'Colin Higgins', job: 'Director' }],
+    production_companies: [{ name: 'Twentieth Century Fox' }],
+    keywords: [{ name: 'office' }]
+  },
+  ratings: [{ calculatedTotal: 7.4, date: '2026-09-15' }],
+  dbKey: 'movie-19494'
+}
+
+const nineteenSeventeen = {
+  movie: {
+    id: 530915,
+    title: '1917',
+    release_date: '2019-12-25',
+    runtime: 119,
+    genres: [{ name: 'War' }],
+    cast: [],
+    crew: [{ name: 'Sam Mendes', job: 'Director' }],
+    production_companies: [],
+    keywords: [{ name: 'world war i' }]
+  },
+  ratings: [{ calculatedTotal: 8.2, date: '2025-02-01' }],
+  dbKey: 'movie-530915'
+}
+
+const oceansEleven = {
+  movie: {
+    id: 161,
+    title: "Ocean's Eleven",
+    release_date: '2001-12-07',
+    runtime: 116,
+    genres: [{ name: 'Thriller' }],
+    cast: [],
+    crew: [{ name: 'Steven Soderbergh', job: 'Director' }],
+    production_companies: [],
+    keywords: [{ name: 'heist' }]
+  },
+  ratings: [{ calculatedTotal: 7.7, date: '2024-06-01' }],
+  dbKey: 'movie-161'
+}
+
 function mountHome ({ includeShorts = false } = {}) {
-  const movies = [vengeanceMostFowl, loafAndDeath, tripToTheMoon, grandDayOut, moonstruck]
+  const movies = [vengeanceMostFowl, loafAndDeath, tripToTheMoon, grandDayOut, moonstruck, nineToFive, nineteenSeventeen, oceansEleven]
   const mockStore = {
     state: {
       dbLoaded: true,
@@ -285,5 +338,61 @@ describe('follow-up 2026-08-31: "moon" must respect the toggle', () => {
     await typeSearch(wrapper, 'a trip to the moon')
 
     expect(renderedTitles(wrapper)).toContain('A Trip to the Moon')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Report -P1_JRO10YcGNAXX0zzk (2026-09-15): "When I search for the movie 9 to
+// 5, it doesn't come up even though I know I've rated it because it's if I
+// just sort by recent watches I can see that it's there."
+//
+// He had rated it forty seconds earlier. TMDB's title for it at the time was
+// "Nine to Five", so that is what the library holds; TMDB calls the same film
+// "9 to 5" today, and so does everyone. "9to5" and "ninetofive" share no
+// characters, so no amount of normalizing or fuzzy-matching could bridge it —
+// the number itself had to become comparable (numberWords.js).
+describe('report -P1_JRO10YcGNAXX0zzk: numbers spelled either way', () => {
+  it('finds it typed the way he typed it: "9 to 5"', async () => {
+    const wrapper = mountHome()
+    await wrapper.vm.$nextTick()
+    await typeSearch(wrapper, '9 to 5')
+
+    expect(renderedTitles(wrapper)).toContain('Nine to Five')
+  })
+
+  it('still finds it typed the way it is stored: "nine to five"', async () => {
+    const wrapper = mountHome()
+    await wrapper.vm.$nextTick()
+    await typeSearch(wrapper, 'nine to five')
+
+    expect(renderedTitles(wrapper)).toContain('Nine to Five')
+  })
+
+  it('works the other direction too: "Ocean\'s 11" reaches Ocean\'s Eleven', async () => {
+    const wrapper = mountHome()
+    await wrapper.vm.$nextTick()
+    await typeSearch(wrapper, "ocean's 11")
+
+    expect(renderedTitles(wrapper)).toContain("Ocean's Eleven")
+  })
+
+  // The guard that shapes the whole implementation. Comparing folded numbers
+  // as SUBSTRINGS would make "seven" find 1917, because "1917" contains a 7.
+  // Tokens are what stop that, and this is the test that says so.
+  it('does not turn "seven" into a bare 7 loose in every other number', async () => {
+    const wrapper = mountHome()
+    await wrapper.vm.$nextTick()
+    await typeSearch(wrapper, 'seven')
+
+    expect(renderedTitles(wrapper)).not.toContain('1917')
+  })
+
+  // Ordinary words that happen to contain a number word must not be chopped up.
+  it('leaves words like "moonstruck" and "someone" alone', async () => {
+    const wrapper = mountHome()
+    await wrapper.vm.$nextTick()
+    await typeSearch(wrapper, 'moonstruck')
+
+    expect(renderedTitles(wrapper)).toContain('Moonstruck')
   })
 })
