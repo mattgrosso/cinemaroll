@@ -42,6 +42,11 @@ export const FILTER_KINDS = {
         s.keywords.some(keyword => keyword === searchValue) ||
         s.genres.some(genre => genre === searchValue) ||
         s.places.some(place => place === searchValue) ||
+        // Tags are the user's own words, typed from memory, so a part of one
+        // ("focus" for "back focus") should reach it the way a surname
+        // reaches a cast name — unlike keywords and genres, which are TMDB's
+        // vocabulary and have the typeahead to complete them.
+        s.tags.some(tag => tag.includes(searchValue)) ||
         // A name-part (split on space) is always a substring of the full name,
         // so checking the full name covers part matches too.
         s.cast.some(name => name.includes(searchValue)) ||

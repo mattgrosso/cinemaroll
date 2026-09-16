@@ -1662,6 +1662,7 @@ const DEFAULT_GROUP_ORDER = [
   'company',
   'keyword-genre',
   'place',
+  'tag',
   'writer',
   'music',
   'editor',
@@ -1680,6 +1681,7 @@ const GROUP_DISPLAY_NAMES = {
   company: 'Production Companies',
   'keyword-genre': 'Keywords & Genres',
   place: 'Places',
+  tag: 'Tags',
   writer: 'Writer',
   music: 'Music',
   editor: 'Editor',
@@ -2692,7 +2694,7 @@ export default {
         return {
           ...result,
           movie,
-          _search: this.buildSearchFields(movie)
+          _search: this.buildSearchFields(movie, result.ratings)
         }
       });
     },
@@ -3249,6 +3251,7 @@ export default {
       });
       candidatesByKey['keyword-genre'] = { displayName: 'Keywords & Genres', movies: [] };
       candidatesByKey.place = { displayName: 'Set or Filmed There', movies: [] };
+      candidatesByKey.tag = { displayName: 'Tags', movies: [] };
 
       // Inlined matcher (perf): instead of 7 dispatched applyFilter calls per
       // movie (each re-reading/re-deriving the same data), read each movie's
@@ -3268,9 +3271,10 @@ export default {
       const companyBucket = candidatesByKey.company.movies;
       const keywordGenreBucket = candidatesByKey['keyword-genre'].movies;
       const placeBucket = candidatesByKey.place.movies;
+      const tagBucket = candidatesByKey.tag.movies;
 
       allResults.forEach(media => {
-        const s = media._search || this.buildSearchFields(media.movie);
+        const s = media._search || this.buildSearchFields(media.movie, media.ratings);
 
         if (titleMatchesValue(s, searchTerm)) titleBucket.push(media);
         if (s.crew.some(p => p.job === 'Director' && p.name.includes(term))) directorBucket.push(media);
@@ -3288,6 +3292,11 @@ export default {
         // name), so "Paris" typed gets its own section — the ask behind the
         // whole feature: "see what movies are set where".
         if (s.places.some(p => p === term)) placeBucket.push(media);
+
+        // Mirrors the tag clause of FILTER_KINDS.general (substring, since
+        // tags are the user's own words), so a typed "back focus" gets a
+        // Tags section instead of no films at all.
+        if (s.tags.some(t => t.includes(term))) tagBucket.push(media);
       });
 
       // Step 2: Walk groupOrder and claim movies in priority order. A movie claimed
@@ -3479,6 +3488,10 @@ export default {
         );
         if (hasKeywordOrGenre) {
           fixedCandidateKeys.add('keyword-genre');
+        }
+        const term = normalizeSearchText(searchTerm);
+        if (allResults.some(media => (media._search || this.buildSearchFields(media.movie, media.ratings)).tags.some(t => t.includes(term)))) {
+          fixedCandidateKeys.add('tag');
         }
       }
 
@@ -4332,8 +4345,8 @@ export default {
 
     // Search/filter/sort logic lives in ../assets/javascript/searchFiltering.js
     // (pure, unit-tested in isolation). These thin wrappers feed it component state.
-    buildSearchFields (movie) {
-      return buildSearchFieldsUtil(movie);
+    buildSearchFields (movie, ratings) {
+      return buildSearchFieldsUtil(movie, ratings);
     },
     applyFilter (result, filter) {
       return applyFilterUtil(result, filter);

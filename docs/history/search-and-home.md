@@ -119,3 +119,15 @@ Bug report: "I've seen inconsistencies in how [the parenthetical (N) badges next
 - **This also fixes the same two bugs in Home.vue's "Add Filter" dropdown counts** (`allDirectors`/`allCastCrew`/`allGenres`/`allKeywords`/`allCounts`, which read off these same maps) and the fuzzy "Did you mean?" suggestion index (`searchableTerms`, which also reads `countDirectors`/`countCastCrew`) — not just MovieDetail's badges, since all of them shared the exact same buggy source maps.
 
 Tests: `src/test/entityCounts.test.js` (direct unit tests of the pure module — co-director credit, composer/editor/cinematographer counted regardless of crew-array position, no double-count for someone credited as both cast and crew, director excluded from the cast/crew bucket, shorts inclusion/exclusion), `src/test/MovieDetail.test.js`'s new "badge counts (entityCounts.js wiring)" describe block, `src/test/EntityCountsWiring.test.js` (the same wiring guard mounted on `Home.vue`).
+
+## Tags in the search bar (2026-09-16)
+
+Matt: "I have a tag that's called back focus, and when I search for it in the search
+bar, no films come up. I would like the tags to be searchable just like everything
+else." Tags are stored per rating, and `buildSearchFields` only ever received the
+movie, so neither the general text match nor the grouped view could see them; only a
+tag chip (which reads the ratings directly) could. Fixed by passing the entry's ratings
+into `buildSearchFields`, matching `_search.tags` by substring in `general`, and
+mirroring that into a new "Tags" group. Substring rather than the exact match keywords
+and genres use: tags have no typeahead, and they are Matt's own words, so "focus"
+should reach "back focus" the way a surname reaches a cast name.

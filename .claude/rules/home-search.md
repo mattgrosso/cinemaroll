@@ -134,6 +134,17 @@ leading interpretation is asked of `/discover` as well, then the two are **union
 - A whole name outranks a surname; matching is loose about punctuation on both sides, so
   "warner bros pictures" still reaches "Warner Bros. Pictures".
 
+## Viewing tags are searchable text (2026-09-16)
+
+Tags live on the RATINGS, not the movie, so `buildSearchFields(movie, ratings)` takes
+the whole entry's ratings and precomputes `_search.tags` (unique titles, normalized).
+`FILTER_KINDS.general` matches them by SUBSTRING — tags are the user's own words typed
+from memory, and there is no typeahead to complete them — and `groupedByAllCategories`
+mirrors that clause into a `tag` group ("Tags", after `place` in
+`DEFAULT_GROUP_ORDER`). The tag CHIP is unchanged: exact match, read off the ratings.
+Report -P1eOh1r2mx2H6QAwzS7: a typed "back focus" found nothing because every text
+path only ever looked at the movie. `TagsInGeneralSearch.test.js` guards it.
+
 ## Numbers spelled either way (2026-09-15)
 
 `numberWords.js` folds number WORDS to digits on both sides and compares the result as

@@ -12,6 +12,7 @@
 // The text primitives live in searchText.js (Phase 3: the kind registry
 // needs them without an import cycle); re-exported here so the many existing
 import { placeNames } from './places.js';
+import { uniqueViewingTags } from '../../utils/tags.js';
 // importers keep working unchanged.
 import { normalizeSearchText, looseSearchText } from './searchText.js';
 import { numeralTokens, numeralTokensMatch, titleMatchesValue } from './numberWords.js';
@@ -32,8 +33,14 @@ export { normalizeSearchText, looseSearchText, getListOfYearsFromRange };
  * hyphens to spaces; only the title, one string per movie, also keeps a loose
  * form, and that's where run-together spellings ("spiderman") actually come up.
  */
-export function buildSearchFields (movie) {
+export function buildSearchFields (movie, ratings = []) {
   return {
+    // Viewing tags live on the RATINGS, not the movie — the one searchable
+    // field that needs the whole library entry. Matt, 2026-09-16: "I have a
+    // tag that's called back focus, and when I search for it in the search
+    // bar, no films come up." Normalized like everything else; the tag chip
+    // (FILTER_KINDS.tag) keeps reading the ratings directly.
+    tags: uniqueViewingTags(ratings).map(normalizeSearchText),
     // Filming and story locations from Wikidata (places.js). Both types in
     // one list: a chip for "Paris" means films that touch Paris either way,
     // and the movie page says which.
@@ -69,7 +76,7 @@ export function applyFilter (result, filter) {
   const kind = FILTER_KINDS[filter.type];
   if (!kind) return false;
 
-  return kind.matchLocal(result, filter, result._search || buildSearchFields(result.movie));
+  return kind.matchLocal(result, filter, result._search || buildSearchFields(result.movie, result.ratings));
 }
 
 /**

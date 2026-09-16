@@ -129,9 +129,10 @@ describe('a tag chip', () => {
     expect(titles).not.toContain('The Dark Knight');
   });
 
-  it('does not fall into the grouped view, which has no tag group', () => {
+  it('does not fall into the grouped view, which a chip has no need of', () => {
     // Grouping answers "where did this WORD match?" — a question a tag chip
-    // has already answered. There is no group it could put a tag's movies in.
+    // has already answered. (Typed text gets a Tags section since 2026-09-16;
+    // a chip still bypasses grouping like every other typed chip.)
     expect(wrapper.vm.groupedByAllCategories).toBe(null);
   });
 
