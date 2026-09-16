@@ -80,6 +80,12 @@
       <BoxOfficeYears :resultsWithRatings="resultsWithRatings" @updateSearchValue="updateSearchValue"/>
     </InsightsPane>
 
+    <!-- And the people behind that money (bug report, 2026-09-15: "highest
+         grossing directors and highest grossing performers... maybe even crew"). -->
+    <InsightsPane>
+      <BoxOfficePeople :resultsWithRatings="resultsWithRatings" @updateSearchValue="updateSearchValue"/>
+    </InsightsPane>
+
     <InsightsPane>
       <Outliers :resultsWithRatings="resultsWithRatings" :allCounts="allCounts" @updateSearchValue="updateSearchValue"/>
     </InsightsPane>
@@ -308,6 +314,7 @@
 import Outliers from "./Outliers.vue";
 import YearlyAverage from "./YearlyAverage.vue";
 import BoxOfficeYears from "./BoxOfficeYears.vue";
+import BoxOfficePeople from "./BoxOfficePeople.vue";
 import FullCalendarView from "./FullCalendarView.vue";
 import FavoriteActresses from "./FavoriteActresses.vue";
 import FavoriteActors from "./FavoriteActors.vue";
@@ -357,6 +364,7 @@ export default {
     Outliers,
     YearlyAverage,
     BoxOfficeYears,
+    BoxOfficePeople,
     FullCalendarView,
     FavoriteActresses,
     FavoriteActors,

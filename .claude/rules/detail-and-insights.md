@@ -101,6 +101,17 @@ dollars quietly favours the recent decades. Choice persists in `localStorage`
 (`cinemaRoll.insights.boxOfficeDollars`) — tests must clear it. Tapping a year runs the
 same year search the best-years list does.
 
+## People by box office (Ratings tab, 2026-09-16)
+
+`BoxOfficePeople.vue` sits directly under `BoxOfficeYears` and is its twin one more time
+("highest grossing directors and highest grossing performers, and maybe even crew"):
+same card, same dollars toggle (and the same `localStorage` key, so both cards open in
+the same dollars), plus a sideways row of role pills persisted at
+`cinemaRoll.insights.boxOfficeRole`. Math in `boxOfficePeople.js` (pure, tested): crew
+matched by JOB the way `deepStats.js` does, performers by `TOP_BILLING` (5) only, one
+credit per person per film. Tapping a name runs a plain search for it, so the sections
+answer which roles the money came from.
+
 ## Deep Stats
 
 `/stats` renders only; every section is a pure function in `deepStats.js` or

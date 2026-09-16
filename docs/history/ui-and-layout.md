@@ -405,3 +405,16 @@ Two reports from Matt, 2026-09-02 and 2026-09-05.
 **"Tap a notification on my phone and it opens up Cinema Roll. It always shows me Cinema Roll and then immediately flashes to the loading screen and then shows it again."** The reload itself is iOS's: a declarative web push payload carries a mandatory `navigate` URL, and tapping the notification navigates the Home Screen web app to it — a full document load, whether or not the app was already alive (and a killed app shows its launch snapshot first, which reads the same way). What was ours: the reloaded page sat on Home's spinner for the Firebase auth restore **plus** the IndexedDB snapshot read, back to back, because `initializeDB` awaited `authReady` before starting a read that never needed a token. Two changes: (1) `initializeDB` starts the movieLog snapshot read *before* awaiting auth (`startSnapshotRead` at module scope, cached per key so the router guard re-dispatching mid-wait can't fan out into duplicate multi-megabyte reads; the promise is still the one the delta-sync shadow check consumes, and it still predates this launch's re-persist). (2) Home's spinner waits `LOADING_SPINNER_DELAY_MS` (700ms) before rendering, so a warm launch goes header → library with nothing flashing between. Tests: `EarlySnapshotBoot.test.js` keeps `onAuthStateChanged` permanently silent and asserts the library still paints (the old code hangs there); `LoadingSpinnerDelay.test.js` drives the timer. Both verified by reverting the fix.
 
 **"When I click a year here in the decade championships, it should take me back to the left edge of the scroll."** `DeepStats.vue`'s winners row is a horizontally scrolling `.ds-poster-row`; changing decade replaced its cards but kept `scrollLeft`. The `championship` watcher now resets every `.ds-poster-row` in the section to 0 on the next tick (the pill strip keeps its scroll — the tapped pill is there). Test in `DeepStatsDecades.test.js` stubs `scrollLeft` as a writable value, since jsdom has no layout.
+
+## Highest grossing people (2026-09-16)
+
+Matt, 2026-09-15: "It would be cool to be able to see box office returns by person, so
+like we could have a list of highest grossing directors and highest grossing
+performers, and I don't know, maybe even crew, and show those lists based on my
+database." Built as the twin of the two-day-old years card rather than a new shape:
+`boxOfficePeople.js` is `boxOfficeYears.js` grouped by name instead of year, with
+the role list borrowed from Deep Stats' facet matching (jobs, not positions; top five
+billing for performers so a crowd scene doesn't hand every extra a billion dollars).
+Seven roles: directors, performers, producers, writers, composers, cinematographers,
+editors. Writers are the one role where a person routinely holds two credits on one
+film (Screenplay + Novel), so names are deduped per film before summing.
