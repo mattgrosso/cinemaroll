@@ -1,0 +1,20 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by akka.util.Unsafe (file:/Users/mjg/.cache/firebase/emulators/firebase-database-emulator-v4.11.2.jar)
+WARNING: Please consider reporting this to the maintainers of class akka.util.Unsafe
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+15:38:39.534 [NamespaceSystem-akka.actor.default-dispatcher-5] INFO akka.event.slf4j.Slf4jLogger - Slf4jLogger started
+15:38:39.623 [main] INFO com.firebase.server.forge.App$ - Listening at 127.0.0.1:9000
+15:38:39.941 [NamespaceSystem-akka.actor.default-dispatcher-5] INFO com.firebase.core.namespace.NamespaceActor - movie-log-8c4d5-default-rtdb successfully activated FBKV (SurveyIdle(0)) wait: 64ms, init: 0ms
+15:38:40.058 [NamespaceSystem-blocking-namespace-operation-dispatcher-7] INFO com.firebase.core.namespace.StateManager - Namespace movie-log-8c4d5-default-rtdb status Active to Active
+15:38:41.304 [FirebaseWorkerPool-1-3] WARN com.firebase.core.persistence.backend.dummy.EmulatorMetadataPersistence - Multiple projectIds are not recommended in single project mode. Requested 
+namespace movie-log-8c4d5, but the emulator is configured for movie-log-8c4d5-default-rtdb. To 
+opt-out of single project mode add/set the singleProjectMode: false property in 
+the firebase.json emulators config. 
+15:38:41.308 [NamespaceSystem-akka.actor.default-dispatcher-5] INFO com.firebase.core.namespace.NamespaceActor - movie-log-8c4d5 successfully activated FBKV (SurveyIdle(0)) wait: 2ms, init: 0ms
+15:38:41.333 [NamespaceSystem-blocking-namespace-operation-dispatcher-7] INFO com.firebase.core.namespace.StateManager - Namespace movie-log-8c4d5 status Active to Active
+15:38:41.347 [FirebaseWorkerPool-1-4] WARN com.firebase.server.forge.App$ - Received service account token eyJh...fX0., assuming ownership.
+15:38:42.060 [Thread-0] INFO com.firebase.server.forge.App$ - Attempting graceful shutdown.
+15:38:42.067 [NamespaceSystem-akka.actor.default-dispatcher-6] INFO com.firebase.core.namespace.Terminator$Terminator - 2 actors left to terminate: movie-log-8c4d5-default-rtdb, movie-log-8c4d5
+15:38:42.071 [NamespaceSystem-akka.actor.default-dispatcher-5] INFO com.firebase.core.namespace.NamespaceActor - stopped namespace actor for movie-log-8c4d5
+15:38:42.071 [NamespaceSystem-akka.actor.default-dispatcher-8] INFO com.firebase.core.namespace.NamespaceActor - stopped namespace actor for movie-log-8c4d5-default-rtdb
+15:38:42.074 [Thread-0] INFO com.firebase.server.forge.App$ - Graceful shutdown complete.

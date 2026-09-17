@@ -26,7 +26,8 @@
     "diverge-test-library": "node scripts/diverge-test-library.mjs",
     "link-tester-hat": "node scripts/link-tester-hat.mjs",
     "generate-db-rules": "node scripts/generate-database-rules.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:emulated": "PATH=\"/opt/homebrew/opt/openjdk/bin:$PATH\" firebase emulators:exec --only database --project movie-log-8c4d5 \"yarn vitest run --config vitest.integration.config.js\""
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.15",
@@ -60,6 +61,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9",
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@vitejs/plugin-vue": "5.2.4",
     "@vitest/coverage-v8": "1.6.0",
     "@vue/test-utils": "^2.4.6",

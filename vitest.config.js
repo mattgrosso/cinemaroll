@@ -7,6 +7,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    // src/test/emulated needs the Firebase emulator around it (yarn
+    // test:emulated), so it is not part of a plain `yarn test:run`.
+    exclude: ['**/node_modules/**', '**/dist/**', 'src/test/emulated/**'],
     setupFiles: ['./src/test/setup.js'],
     coverage: {
       provider: 'v8',
