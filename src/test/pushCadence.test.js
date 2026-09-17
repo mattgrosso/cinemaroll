@@ -12,7 +12,9 @@ import {
   localDateKey,
   gamesDue,
   shouldSendGames,
-  composeGamesMessage
+  composeGamesMessage,
+  externalWatches,
+  externalLogsDue
 } from '../../aws-lambda/pushCadence.js';
 
 // Matt, 2026-08-28: notify "as the prompts come in", not once a day. The
@@ -520,5 +522,128 @@ describe('composeGamesMessage', () => {
       body: 'Higher or Lower, Reel Wordle and Connections.',
       navigate: '/games'
     });
+  });
+});
+
+// Matt, report -P1jvQ2VY03wwbsTEwD-: "I don't get notifications when friends
+// of mine that are on movie log instead of cinema roll log new movies. They
+// show up in my film club, but I don't get a notification like I do if a
+// cinema roll user logs a movie." A Cinema Roll friend's own client announces
+// the log; an external friend has no client of ours, so the sweep reads their
+// feed. The risk of reading a whole library on a timer is a flood, so these
+// tests are mostly about the times it must stay quiet.
+describe('friends on other apps', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const NOW = Date.UTC(2026, 8, 17, 18, 0, 0);
+
+  const interchangeFeed = (movies) => ({
+    format: 'film-club/1',
+    source: 'cinemaroll',
+    name: 'Brian',
+    marker: NOW,
+    movieCount: movies.length,
+    movies
+  });
+
+  it('reads the newest viewing out of an interchange feed, newest first', () => {
+    const watches = externalWatches(interchangeFeed([
+      { tmdbId: 11, title: 'Alien', rating: 8.5, viewings: [{ watchedAt: NOW - DAY }] },
+      { tmdbId: 22, title: 'Heat', rating: 9.1, viewings: [{ watchedAt: NOW - 60000 }, { watchedAt: NOW - 5 * DAY }] }
+    ]));
+    expect(watches.map((w) => w.title)).toEqual(['Heat', 'Alien']);
+    expect(watches[0]).toEqual({ tmdbId: 22, title: 'Heat', watchedAt: NOW - 60000, score: 9.1 });
+  });
+
+  // The raw Movie Log shape: nested under movie.tmdb, viewings keyed by date
+  // strings, and the id on the record rather than the movie.
+  it('reads a raw Movie Log feed too, in either container shape', () => {
+    const record = {
+      movieId: 33,
+      movie: {
+        title: 'Ronin',
+        tmdb: { id: 33, poster_path: '/x.jpg' },
+        viewings: [{ date: '2026-09-16T10:00:00.000Z', rating: 7.25 }]
+      }
+    };
+    const fromArray = externalWatches([record]);
+    const fromMap = externalWatches({ '-Nabc': record });
+    expect(fromArray).toEqual(fromMap);
+    expect(fromArray[0]).toEqual({
+      tmdbId: 33,
+      title: 'Ronin',
+      watchedAt: Date.UTC(2026, 8, 16, 10, 0, 0),
+      score: 7.25
+    });
+  });
+
+  it('ignores junk rather than throwing', () => {
+    expect(externalWatches(null)).toEqual([]);
+    expect(externalWatches({ format: 'film-club/1', movies: [{ tmdbId: 1, title: 'No viewings' }] })).toEqual([]);
+    expect(externalWatches({ nothing: 'useful' })).toEqual([]);
+  });
+
+  it('says NOTHING the first time it sees a friend, and records where they were', () => {
+    const watches = externalWatches(interchangeFeed([
+      { tmdbId: 11, title: 'Alien', rating: 8.5, viewings: [{ watchedAt: NOW - DAY }] }
+    ]));
+    const due = externalLogsDue({ watches, seenAt: 0, now: NOW });
+    expect(due.announce).toEqual([]);
+    expect(due.seeded).toBe(true);
+    expect(due.nextSeenAt).toBe(NOW - DAY);
+  });
+
+  it('announces only what is newer than the marker', () => {
+    const watches = externalWatches(interchangeFeed([
+      { tmdbId: 11, title: 'Alien', rating: 8.5, viewings: [{ watchedAt: NOW - 3 * DAY }] },
+      { tmdbId: 22, title: 'Heat', rating: 9.1, viewings: [{ watchedAt: NOW - 60000 }] }
+    ]));
+    const due = externalLogsDue({ watches, seenAt: NOW - DAY, now: NOW });
+    expect(due.announce.map((w) => w.title)).toEqual(['Heat']);
+    expect(due.nextSeenAt).toBe(NOW - 60000);
+  });
+
+  it('stays silent when the feed has not moved', () => {
+    const watches = externalWatches(interchangeFeed([
+      { tmdbId: 22, title: 'Heat', rating: 9.1, viewings: [{ watchedAt: NOW - 60000 }] }
+    ]));
+    const first = externalLogsDue({ watches, seenAt: NOW - DAY, now: NOW });
+    expect(first.announce).toHaveLength(1);
+    // The next sweep, fifteen minutes later, same feed.
+    const second = externalLogsDue({ watches, seenAt: first.nextSeenAt, now: NOW + 900000 });
+    expect(second.announce).toEqual([]);
+    expect(second.nextSeenAt).toBe(first.nextSeenAt);
+  });
+
+  it('does not announce a backfill, but does absorb it', () => {
+    const watches = externalWatches(interchangeFeed([
+      { tmdbId: 11, title: 'An old favourite', rating: 8.5, viewings: [{ watchedAt: NOW - 400 * DAY }] }
+    ]));
+    // Newer than the marker, but far too old to be news.
+    const due = externalLogsDue({ watches, seenAt: NOW - 500 * DAY, now: NOW });
+    expect(due.announce).toEqual([]);
+    expect(due.nextSeenAt).toBe(NOW - 400 * DAY);
+  });
+
+  it('caps a burst at three, newest first', () => {
+    const watches = externalWatches(interchangeFeed(
+      [1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({
+        tmdbId: n,
+        title: `Film ${n}`,
+        rating: 7,
+        viewings: [{ watchedAt: NOW - n * 60000 }]
+      }))
+    ));
+    const due = externalLogsDue({ watches, seenAt: NOW - DAY, now: NOW });
+    expect(due.announce.map((w) => w.title)).toEqual(['Film 1', 'Film 2', 'Film 3']);
+    // The marker still jumps past ALL of them - the other five are not news later.
+    expect(due.nextSeenAt).toBe(NOW - 60000);
+  });
+
+  it('reuses friendLogBody, so the recipient still controls the score line', () => {
+    const watch = { tmdbId: 22, title: 'Heat', watchedAt: NOW, score: 9.1 };
+    const scoreLine = `They gave it a ${watch.score.toFixed(2)}.`;
+    expect(friendLogBody(scoreLine, {})).toBe('They gave it a 9.10.');
+    expect(friendLogBody(scoreLine, { friendLogScores: false })).toBe('Tap to see it in their library.');
+    expect(friendLogBody(null, {})).toBe('Tap to see it in their library.');
   });
 });

@@ -33,7 +33,8 @@ const crypto = require('crypto');
 const webpush = require('web-push');
 const {
   dueFromDigest, nextBaseline, shouldSend, composeMessage, friendLogBody, EMPTY_BASELINE,
-  gamesDue, shouldSendGames, composeGamesMessage
+  gamesDue, shouldSendGames, composeGamesMessage,
+  externalWatches, externalLogsDue
 } = require('./pushCadence');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
@@ -320,12 +321,87 @@ const runSweep = async () => {
           results.push({ topKey, delivered: gamesDelivered, reason: games.reason });
         }
       }
+
+      // Friends on other apps: same opt-outs as the native friend-log push,
+      // because to the recipient it is the same notification.
+      if (prefs.enabled !== false && prefs.friendLogs !== false) {
+        const extDelivered = await notifyExternalLogs(topKey, push, prefs);
+        if (extDelivered > 0) results.push({ topKey, delivered: extDelivered, reason: "external-friend-log" });
+      }
     } catch (error) {
       console.error(`Sweep failed for ${topKey}:`, error.message);
     }
   }
   console.log('Sweep:', JSON.stringify(results));
   return results;
+};
+
+// --- Friends on other apps --------------------------------------------------
+//
+// The native fan-out above is driven by the LOGGER's client. A friend on Movie
+// Log has no client of ours to announce anything, so their new viewings are
+// only ever discovered by reading their published feed - which, until now,
+// only happened while Matt's app was open, and never produced a notification
+// (report -P1jvQ2VY03wwbsTEwD-: "they show up in my film club, but I don't get
+// a notification like I do if a cinema roll user logs a movie").
+//
+// The sweep already visits every account every 15 minutes, so it reads the
+// feeds too. All of the quiet-keeping is in pushCadence's externalLogsDue,
+// where the tests are; this function fetches, sends and records.
+const notifyExternalLogs = async (topKey, push, prefs) => {
+  const friends = (await dbGet(`${topKey}/settings/externalFriends`)) || {};
+  const entries = Object.entries(friends).filter(([, friend]) => friend && friend.feedUrl);
+  if (!entries.length) return 0;
+
+  const seen = (push.state && push.state.externalSeen) || {};
+  let delivered = 0;
+  let seeded = 0;
+
+  for (const [id, friend] of entries) {
+    try {
+      const response = await fetch(friend.feedUrl, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`feed responded ${response.status}`);
+      const watches = externalWatches(await response.json());
+      const { announce, nextSeenAt } = externalLogsDue({
+        watches,
+        seenAt: Number(seen[id]) || 0,
+        now: Date.now()
+      });
+
+      for (const watch of announce) {
+        const scoreLine = Number.isFinite(watch.score) ? `They gave it a ${watch.score.toFixed(2)}.` : null;
+        // Same badge arithmetic as the native fan-out: the recipient's own
+        // chores plus this log, which the app clears when it opens.
+        const due = dueFromDigest(push.digest, prefs, Date.now());
+        const payload = buildPayload({
+          title: `${friend.name || 'A friend'} logged ${watch.title}`,
+          body: friendLogBody(scoreLine, prefs),
+          // An external friend's film may not be in Matt's library at all, so
+          // the movie page is still the right landing - FriendsWhoSaw fetches
+          // its own club data (see the 2026-08-29 cold-start fix).
+          navigate: watch.tmdbId ? `/movie/${watch.tmdbId}` : '/',
+          tag: `friend-log-ext-${id}-${watch.tmdbId || 'x'}`,
+          appBadge: due.stickinessCount + (due.tiebreak ? 1 : 0) + due.awardYears.length + 1
+        });
+        delivered += await sendToAccount(topKey, push.subscriptions, payload);
+      }
+
+      // Record the marker even when nothing was sent - that is what makes the
+      // first sight silent and an unchanged feed silent afterwards.
+      if (nextSeenAt && nextSeenAt !== Number(seen[id])) {
+        await dbSet(`${topKey}/push/state/externalSeen/${id}`, nextSeenAt);
+        seeded += 1;
+      }
+    } catch (error) {
+      console.error(`External-friend sweep for ${topKey}/${id} failed:`, error.message);
+    }
+  }
+
+  // One line per account that has any, so a silent sweep is still legible:
+  // "3 feed(s), 0 sent" is working as designed; no line at all means the
+  // account has no friends on other apps.
+  console.log(`External friends for ${topKey}: ${entries.length} feed(s), ${delivered} sent, ${seeded} marker(s) moved`);
+  return delivered;
 };
 
 // --- Friend-log fan-out -----------------------------------------------------

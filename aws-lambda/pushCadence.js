@@ -394,8 +394,114 @@ function friendLogBody (scoreLine, prefs) {
   return prefs && prefs.friendLogScores === false ? quiet : scoreLine;
 }
 
+// --- Friends on other apps --------------------------------------------------
+//
+// A Cinema Roll friend's log reaches you because THEIR client announces it
+// (POST /push/friend-logged). A Movie Log friend has no Cinema Roll client to
+// do that - their library arrives as a published feed that our app only reads
+// while it is open, which is exactly why Matt got the club entry but never the
+// notification (report -P1jvQ2VY03wwbsTEwD-). So for external friends the
+// sweep has to notice the new viewing itself.
+//
+// Everything below is pure: the Lambda fetches, these functions decide.
+
+const EXTERNAL_MAX_AGE_MS = 7 * ONE_DAY_MS;
+const EXTERNAL_MAX_PER_FRIEND = 3;
+
+function externalMs (value) {
+  const ms = new Date(value == null ? NaN : value).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function externalNum (value) {
+  const parsed = typeof value === 'string' ? parseFloat(value) : value;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Newest-first viewings from either feed format, reduced to just what a push
+ * needs. Mirrors `detectFormat` in src/assets/javascript/interchange.js - the
+ * Lambda cannot import that ES module, and a full port would be the "prompt
+ * logic in the Lambda" this file exists to prevent, so only the two shapes are
+ * read here and the client stays the source of truth for rendering.
+ */
+function externalWatches (payload) {
+  if (!payload || typeof payload !== 'object') return [];
+
+  const out = [];
+  const add = (tmdbId, title, watchedAt, score) => {
+    if (!title || typeof title !== 'string' || watchedAt === null) return;
+    out.push({
+      tmdbId: Number.isFinite(tmdbId) ? tmdbId : null,
+      title,
+      watchedAt,
+      score: score === undefined ? null : score
+    });
+  };
+
+  if (typeof payload.format === 'string' && payload.format.startsWith('film-club/')) {
+    (payload.movies || []).forEach((movie) => {
+      const viewings = (movie && movie.viewings) || [];
+      // toInterchange already sorts viewings newest-first.
+      const watchedAt = viewings.length ? externalMs(viewings[0].watchedAt) : null;
+      add(Number(movie && movie.tmdbId), movie && movie.title, watchedAt, externalNum(movie && movie.rating));
+    });
+  } else {
+    const records = Array.isArray(payload)
+      ? payload
+      : Object.values(payload).filter((value) => value && typeof value === 'object');
+    records.forEach((record) => {
+      const inner = (record && record.movie) || record;
+      if (!inner || !Array.isArray(inner.viewings)) return;
+      const viewings = inner.viewings
+        .map((viewing) => ({ at: externalMs(viewing && viewing.date), raw: viewing }))
+        .filter((viewing) => viewing.at !== null)
+        .sort((a, b) => b.at - a.at);
+      if (!viewings.length) return;
+      const rawId = (record && record.movieId) != null ? record.movieId : inner.tmdb && inner.tmdb.id;
+      add(Number(rawId), inner.title, viewings[0].at, externalNum(viewings[0].raw && viewings[0].raw.rating));
+    });
+  }
+
+  return out.sort((a, b) => b.watchedAt - a.watchedAt);
+}
+
+/**
+ * What to announce for ONE external friend, and the marker to store next.
+ *
+ * News, not state, the same as every other stream here:
+ *  - the FIRST sight of a friend announces nothing and just records where
+ *    their feed had got to. Subscribing to someone with a decade of viewings
+ *    must not fire a decade of notifications.
+ *  - only viewings newer than the stored marker count, so re-reading an
+ *    unchanged feed every 15 minutes is silent.
+ *  - a viewing older than maxAgeMs is never announced: a friend backfilling
+ *    their history is not news. It DOES move the marker, so the backfill
+ *    stays silent on later sweeps too.
+ *  - at most EXTERNAL_MAX_PER_FRIEND per sweep, newest first - a friend who
+ *    logs eight films at once gets three notifications, not eight.
+ */
+function externalLogsDue ({ watches, seenAt = 0, now = Date.now(), maxAgeMs = EXTERNAL_MAX_AGE_MS }) {
+  const all = (watches || []).filter((watch) => watch && Number.isFinite(watch.watchedAt));
+  const newest = all.reduce((max, watch) => Math.max(max, watch.watchedAt), 0);
+  const marker = Number(seenAt) || 0;
+
+  // Never seen this friend before: seed the marker, say nothing.
+  if (!marker) return { announce: [], nextSeenAt: newest, seeded: true };
+
+  const announce = all
+    .filter((watch) => watch.watchedAt > marker && now - watch.watchedAt <= maxAgeMs)
+    .slice(0, EXTERNAL_MAX_PER_FRIEND);
+
+  return { announce, nextSeenAt: Math.max(marker, newest), seeded: false };
+}
+
 module.exports = {
   friendLogBody,
+  EXTERNAL_MAX_AGE_MS,
+  EXTERNAL_MAX_PER_FRIEND,
+  externalWatches,
+  externalLogsDue,
   ONE_DAY_MS,
   ACTIVE_IN_APP_MS,
   STALE_REMINDER_MS,
