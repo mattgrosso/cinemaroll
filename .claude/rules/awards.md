@@ -136,6 +136,28 @@ rather than needing a parallel path.
   award history walks every year at once. `PERSONAL_AWARD_CATEGORY_NAMES` alone renders a
   custom award as its raw storage key.
 
+## A person's saved `id` is not stable — compare with `samePersonNominee`
+
+`extractAndGroupPeopleByMovie` builds a cast option as `id: person.id || person.name`,
+so what gets SAVED is whatever the film's cached TMDB cast happened to carry that day.
+Matt's 1993 record holds all three shapes at once: `'Liam Neeson-424'` (the cast entry's
+own synthetic id), `1524` (a real TMDB person id), `'Julia Roberts'` (the name fallback).
+Re-fetching a film's cast changes the shape a FRESH grid option gets while the saved
+nominee keeps the old one, so `nom.id === option.id` silently stops matching.
+
+**Never compare people by `id`.** `samePersonNominee` / `personNomineeKey` /
+`samePersonRole` in `personalAwards.js` are the only answer — name first (the one field
+every shape carries), id as the fallback. `actingSiblingConflict` always did this; the
+rest of the modal didn't, which is report -P1oV4wiVPs-5rAyJ9AN (2026-09-18): saved
+nominees had no lit tile, no crown, and their × did nothing.
+
+**Removal must never depend on the grid.** `toggleActorNomination` used to decide "is
+this person nominated?" by re-finding their roles in `eligibleOptionsByMovie`. An empty
+scan — their film dropped out of the year, or the grid hadn't loaded — skipped the remove
+branch and then pushed the empty list, so the × was a permanent no-op with no way around
+it. The nominee LIST answers that question; the grid scan only supplies the extra roles
+when ADDING, and falls back to the tapped option itself.
+
 ## Acting-category gender eligibility
 
 **One source: `genderEligibility.js`'s `isEligibleForActingCategory`.** Two copies had

@@ -207,3 +207,136 @@ describe('PersonalAwardsModal — surfacing deep acting nominees', () => {
     expect(group.loadedCast).toHaveLength(3)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Report -P1oV4wiVPs-5rAyJ9AN (2026-09-18, /awards?year=1993): "The X on
+// nominees in the awards medal isn't actually removing them. Also, I think
+// that the nominated people aren't being highlighted down below as they ought
+// to be."
+//
+// Root cause: a person's saved `id` is whatever the film's cached TMDB cast
+// carried the day they were nominated. Real 1993 data holds three shapes in
+// one year — 'Liam Neeson-424', 1524, 'Julia Roberts'. Re-fetching a film's
+// cast changes the shape a FRESH option gets while the saved nominee keeps the
+// old one, so every `nom.id === option.id` comparison quietly stops matching.
+// See samePersonNominee in personalAwards.js.
+// ---------------------------------------------------------------------------
+describe('PersonalAwardsModal — acting nominees whose saved id shape has drifted', () => {
+  let wrapper
+
+  // The saved nominee: id is the old 'Name-movieId' synthetic string.
+  const savedNominee = {
+    type: 'person',
+    id: 'Liam Neeson-424',
+    name: 'Liam Neeson',
+    movieId: 424,
+    character: 'Oskar Schindler'
+  }
+
+  // The same actor as the grid builds him TODAY: a real TMDB person id.
+  const freshOption = {
+    id: 3896,
+    name: 'Liam Neeson',
+    character: 'Oskar Schindler',
+    movieId: 424,
+    movie: { id: 424, title: "Schindler's List" },
+    castPosition: 0
+  }
+
+  beforeEach(() => {
+    const mockStore = {
+      state: {
+        settings: { personalAwards: {} },
+        databaseTopKey: 'mattgrosso-gmail-com',
+        weights: []
+      },
+      dispatch: vi.fn(),
+      commit: vi.fn()
+    }
+
+    wrapper = mount(PersonalAwardsModal, {
+      props: { allEntriesWithFlatKeywordsAdded: [] },
+      global: {
+        mocks: { $store: mockStore },
+        stubs: { Modal: true }
+      }
+    })
+    wrapper.vm.currentYear = 1993
+    wrapper.vm.selectedCategory = 'bestActor'
+  })
+
+  it('highlights the grid tile for a nominee saved under a different id shape', () => {
+    wrapper.vm.awardsData = {
+      bestActor: { nominees: [savedNominee], winner: savedNominee, noNominees: false }
+    }
+
+    expect(wrapper.vm.isNominee(freshOption)).toBe(true)
+    expect(wrapper.vm.isWinner(freshOption)).toBe(true)
+  })
+
+  it('removes a nominee via the × even when the grid holds no tile for them', () => {
+    // The film has dropped out of the year's eligible list, so
+    // eligibleOptionsByMovie has nothing to find. The × on the nominee's
+    // poster in the top gallery must still work — this is the reported bug.
+    wrapper.vm.optionsCache = { 'bestActor-1993': [] }
+    wrapper.vm.awardsData = {
+      bestActor: { nominees: [savedNominee], winner: savedNominee, noNominees: false }
+    }
+
+    wrapper.vm.toggleNominee(savedNominee)
+
+    expect(wrapper.vm.awardsData.bestActor.nominees).toEqual([])
+    expect(wrapper.vm.awardsData.bestActor.winner).toBe(null)
+  })
+
+  it('removes the nominee when the × is tapped on a drifted-id grid tile too', () => {
+    wrapper.vm.optionsCache = { 'bestActor-1993': [] }
+    wrapper.vm.awardsData = {
+      bestActor: { nominees: [savedNominee], winner: null, noNominees: false }
+    }
+
+    wrapper.vm.toggleNominee(freshOption)
+
+    expect(wrapper.vm.awardsData.bestActor.nominees).toEqual([])
+  })
+
+  it('still adds a nominee the grid cannot enumerate, rather than doing nothing', () => {
+    wrapper.vm.optionsCache = { 'bestActor-1993': [] }
+    wrapper.vm.awardsData = { bestActor: { nominees: [], winner: null, noNominees: false } }
+
+    wrapper.vm.toggleNominee(freshOption)
+
+    expect(wrapper.vm.awardsData.bestActor.nominees).toHaveLength(1)
+    expect(wrapper.vm.awardsData.bestActor.nominees[0].name).toBe('Liam Neeson')
+  })
+
+  it('does not merge two different actors in the same film', () => {
+    wrapper.vm.optionsCache = { 'bestActor-1993': [] }
+    wrapper.vm.awardsData = {
+      bestActor: { nominees: [savedNominee], winner: savedNominee, noNominees: false }
+    }
+
+    const otherActor = { id: 4756, name: 'Ben Kingsley', movieId: 424, movie: { id: 424 } }
+    expect(wrapper.vm.isNominee(otherActor)).toBe(false)
+    expect(wrapper.vm.isWinner(otherActor)).toBe(false)
+  })
+
+  it('groups an actor nominated twice into one gallery poster despite mixed id shapes', () => {
+    // Real 1993 data: Holly Hunter saved twice, once per film.
+    wrapper.vm.selectedCategory = 'bestSupportingActress'
+    wrapper.vm.awardsData = {
+      bestSupportingActress: {
+        nominees: [
+          { type: 'person', id: 'Holly Hunter', name: 'Holly Hunter', movieId: 37233, character: 'Tammy Hemphill', movie: { id: 37233, title: 'The Firm' } },
+          { type: 'person', id: 1234, name: 'Holly Hunter', movieId: 713, character: 'Ada McGrath', movie: { id: 713, title: 'The Piano' } }
+        ],
+        winner: null,
+        noNominees: false
+      }
+    }
+
+    const gallery = wrapper.vm.getCurrentNominees()
+    expect(gallery).toHaveLength(1)
+    expect(gallery[0].allRoles).toHaveLength(2)
+  })
+})

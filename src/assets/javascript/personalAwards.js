@@ -129,24 +129,67 @@ export const ACTING_SIBLING_CATEGORIES = {
 };
 
 /**
+ * ONE answer to "are these two records the same person?", used by every
+ * awards comparison. Do not re-derive it inline.
+ *
+ * A person's stored `id` is NOT stable. `extractAndGroupPeopleByMovie`
+ * builds cast options as `id: person.id || person.name`, so what got saved
+ * depends entirely on what the movie's cached TMDB cast looked like on the
+ * day the nomination was made. One real year (1993, report
+ * -P1oV4wiVPs-5rAyJ9AN) holds all three shapes at once:
+ *
+ *   { id: 'Liam Neeson-424' }   ← cast entry whose own id was name-movieId
+ *   { id: 1524 }                ← a real TMDB person id
+ *   { id: 'Julia Roberts' }     ← the name fallback, cast had no id
+ *
+ * Re-fetching a film's cast changes which shape a FRESH grid option gets,
+ * while the saved nominee keeps the old one — so `nom.id === option.id`
+ * silently stops matching. The visible damage: the saved nominee has no lit
+ * tile in the grid, no crown if they won, and the × on their poster does
+ * nothing at all, because removal used to go looking for their grid tile.
+ *
+ * The name is the one field every shape carries and every shape agrees on,
+ * so it is the primary key here, with the id as the fallback for a record
+ * that somehow has no name. Two DIFFERENT people sharing a name inside a
+ * single year would collapse together — `distinctNomineeCount` already
+ * accepts that trade for the same reason, and a wrongly-merged namesake is
+ * recoverable where an unremovable nominee is not.
+ */
+export function samePersonNominee (a, b) {
+  if (!a || !b) return false;
+  if (a.name && b.name) return a.name === b.name;
+  if (a.id != null && b.id != null) return String(a.id) === String(b.id);
+  return false;
+}
+
+/**
+ * The same identity as a string, for grouping/Set membership. Two records
+ * produce the same key exactly when `samePersonNominee` says they match.
+ */
+export function personNomineeKey (person) {
+  if (!person) return 'unknown';
+  if (person.name) return `name:${person.name}`;
+  return `id:${person.id != null ? String(person.id) : 'unknown'}`;
+}
+
+/** Person identity AND the same film — a specific nominated role. */
+export function samePersonRole (a, b) {
+  if (!samePersonNominee(a, b)) return false;
+  if (a.movieId == null || b.movieId == null) return false;
+  return String(a.movieId) === String(b.movieId);
+}
+
+/**
  * The sibling category key that already holds this person for this movie,
  * or null. `person` needs { name?, id?, movieId }; nominees are the modal's
- * minimal shapes. Matched on movieId plus name (primary — ids can be
- * name-fallbacks on cast entries) or id.
+ * minimal shapes.
  */
 export function actingSiblingConflict (categoryKey, person, awardsData) {
   const sibling = ACTING_SIBLING_CATEGORIES[categoryKey];
   if (!sibling || !person || person.movieId == null) return null;
 
   const nominees = awardsData?.[sibling]?.nominees || [];
-  const samePerson = (nominee) => {
-    if (!nominee || nominee.movieId !== person.movieId) return false;
-    if (nominee.name && person.name) return nominee.name === person.name;
-    if (nominee.id != null && person.id != null) return String(nominee.id) === String(person.id);
-    return false;
-  };
-
-  return nominees.some(samePerson) ? sibling : null;
+  return nominees.some((nominee) => samePersonRole(nominee, person)) ? sibling : null;
 }
 
 // The minimum rated movies a year needs before the awards flow offers it.

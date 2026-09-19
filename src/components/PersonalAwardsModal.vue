@@ -500,7 +500,7 @@ import { pickEligibleAwardsYear } from '../utils/awards.js';
 import { yearsMeetingAwardsThreshold, awardsPromptCopy, distinctNomineeCount } from '../assets/javascript/personalAwards.js';
 import { PERSONAL_AWARD_CATEGORIES, categoriesForYear, customAwardKey, isCustomAwardKey } from '../assets/javascript/personalAwardsCategories.js';
 import { isEligibleForActingCategory } from '../assets/javascript/genderEligibility.js';
-import { expandNomineeFromMinimal as expandNomineeFromMinimalShared, actingSiblingConflict } from '../assets/javascript/personalAwards.js';
+import { expandNomineeFromMinimal as expandNomineeFromMinimalShared, actingSiblingConflict, samePersonNominee, personNomineeKey } from '../assets/javascript/personalAwards.js';
 
 // Top-billed cast offered for a person-type custom award, per film. Cast is
 // stored untrimmed (Six Degrees walks the full billing list on purpose), so
@@ -1619,9 +1619,10 @@ export default {
       // fetch details for the profile image. Without this a saved nominee shows in
       // the top "Current Nominees" gallery but has no tile in the grid to light up.
       const categoryData = this.awardsData[categoryKey];
+      const roleKeyFor = (person) => `${personNomineeKey(person)}-${person.movieId}`;
       const nominatedKeys = new Set(
         (categoryData && categoryData.nominees ? categoryData.nominees : [])
-          .map(nom => `${nom.id}-${nom.movieId}`)
+          .map(roleKeyFor)
       );
 
       if (nominatedKeys.size > 0) {
@@ -1631,7 +1632,7 @@ export default {
 
           for (const person of movieGroup.allCast) {
             if (loadedIds.has(person.id)) continue;
-            if (!nominatedKeys.has(`${person.id}-${person.movieId}`)) continue;
+            if (!nominatedKeys.has(roleKeyFor(person))) continue;
 
             const details = await this.getDetailsForCastMember(person.name);
             movieGroup.loadedCast.push({ ...person, details, needsGenderCheck: false });
@@ -2005,8 +2006,11 @@ export default {
           // This is a movie option
           return `movie-${option.movie.id || 'unknown'}`;
         } else {
-          // This is a person option
-          return `person-${option.id || 'unknown'}-${option.movieId || 'unknown'}`;
+          // This is a person option. Keyed through personNomineeKey, not the
+          // raw id: a saved nominee and a freshly-computed grid option for
+          // the same actor routinely carry DIFFERENT ids (see
+          // samePersonNominee), and an id-keyed string made them two people.
+          return `person-${personNomineeKey(option)}-${option.movieId || 'unknown'}`;
         }
       } catch (error) {
         console.error('Error getting option ID:', option, error);
@@ -2106,32 +2110,33 @@ export default {
     },
 
     toggleActorNomination (option, categoryData) {
-      const actorId = option.id; // The person's TMDb ID
-
-      // Find all roles for this actor in the current year
-      const allActorRoles = this.getAllActorRolesInYear(actorId);
-
-      // Check if any role for this actor is already nominated
-      const hasAnyNomination = allActorRoles.some(role =>
-        categoryData.nominees.some(nom => this.getOptionId(nom) === this.getOptionId(role))
-      );
+      // Whether this person is already nominated is answered by the NOMINEE
+      // LIST, never by whether we can still find them in the grid. It used
+      // to be the latter: `getAllActorRolesInYear` scans the loaded grid,
+      // and if it came back empty — their film is no longer among the year's
+      // eligible movies, or the grid hadn't finished loading — the removal
+      // branch was skipped and the add branch then pushed the empty list.
+      // The × on a saved nominee's poster did nothing whatsoever, forever
+      // (report -P1oV4wiVPs-5rAyJ9AN). Removal must not depend on the grid;
+      // it is the one action a user can't work around.
+      const hasAnyNomination = categoryData.nominees.some(nom => samePersonNominee(nom, option));
 
       if (hasAnyNomination) {
         // Remove all roles for this actor
-        categoryData.nominees = categoryData.nominees.filter(nom => {
-          const nomPersonId = nom.id;
-          return nomPersonId !== actorId;
-        });
+        categoryData.nominees = categoryData.nominees.filter(nom => !samePersonNominee(nom, option));
 
         // If any of their roles was the winner, clear winner
-        if (categoryData.winner && categoryData.winner.id === actorId) {
+        if (categoryData.winner && samePersonNominee(categoryData.winner, option)) {
           categoryData.winner = null;
         }
       } else {
-        // Add all roles for this actor
+        // Add all roles for this actor. Falling back to the tapped option
+        // itself keeps a tap meaningful if the grid scan finds nothing.
+        const allActorRoles = this.getAllActorRolesInYear(option);
+        const rolesToAdd = allActorRoles.length > 0 ? allActorRoles : [option];
         const wasEmpty = categoryData.nominees.length === 0;
 
-        allActorRoles.forEach(role => {
+        rolesToAdd.forEach(role => {
           categoryData.nominees.push(role);
         });
 
@@ -2178,38 +2183,28 @@ export default {
       }
     },
 
-    getAllActorRolesInYear (actorId) {
-      // Find all roles for this actor across all movies in the current year
+    getAllActorRolesInYear (actor) {
+      // Find all roles for this actor across all movies in the current year.
+      // Takes the whole person, not an id — see samePersonNominee for why an
+      // id alone doesn't identify anyone here.
       const allRoles = [];
       const seenRoles = new Set(); // Prevent duplicates
 
       if (this.isActingCategory(this.selectedCategory)) {
         // Search through the movie-grouped data
         this.eligibleOptionsByMovie.forEach(movieGroup => {
-          // Check allCast (unloaded cast members) - this is where Steve Jobs cast likely is
-          if (movieGroup.allCast) {
-            movieGroup.allCast.forEach(person => {
-              if (person.id === actorId) {
-                const roleKey = `${person.movie.id}-${person.character || 'unknown'}`;
-                if (!seenRoles.has(roleKey)) {
-                  allRoles.push(person);
-                  seenRoles.add(roleKey);
-                }
-              }
+          const collect = (people) => {
+            (people || []).forEach(person => {
+              if (!samePersonNominee(person, actor)) return;
+              const roleKey = `${person.movie.id}-${person.character || 'unknown'}`;
+              if (seenRoles.has(roleKey)) return;
+              allRoles.push(person);
+              seenRoles.add(roleKey);
             });
-          }
-          // Check loadedCast (visible cast members) - this is where The Martian cast is
-          if (movieGroup.loadedCast) {
-            movieGroup.loadedCast.forEach(person => {
-              if (person.id === actorId) {
-                const roleKey = `${person.movie.id}-${person.character || 'unknown'}`;
-                if (!seenRoles.has(roleKey)) {
-                  allRoles.push(person);
-                  seenRoles.add(roleKey);
-                }
-              }
-            });
-          }
+          };
+          // allCast holds cast we haven't surfaced yet; loadedCast the visible three.
+          collect(movieGroup.allCast);
+          collect(movieGroup.loadedCast);
         });
       }
 
@@ -2239,8 +2234,7 @@ export default {
 
       if (this.isActingCategory(this.selectedCategory)) {
         // For acting categories, check if any role for this actor is nominated
-        const actorId = option.id;
-        return categoryData.nominees.some(nom => nom.id === actorId);
+        return categoryData.nominees.some(nom => samePersonNominee(nom, option));
       } else {
         // For non-acting categories, check exact match
         const optionId = this.getOptionId(option);
@@ -2253,8 +2247,7 @@ export default {
 
       if (this.isActingCategory(this.selectedCategory)) {
         // For acting categories, check if this actor is the winner (any role)
-        const actorId = option.id;
-        return categoryData.winner.id === actorId;
+        return samePersonNominee(categoryData.winner, option);
       } else {
         // For non-acting categories, check exact match
         return this.getOptionId(categoryData.winner) === this.getOptionId(option);
@@ -2278,7 +2271,7 @@ export default {
       const groupedByActor = {};
 
       nominees.forEach(nominee => {
-        const actorId = nominee.id;
+        const actorId = personNomineeKey(nominee);
 
         // Try to find profile image from grid data if nominee doesn't have one
         if (!nominee.details || !nominee.details.profile_path) {
