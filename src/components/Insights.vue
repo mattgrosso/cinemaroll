@@ -67,7 +67,11 @@
     <!-- RATINGS: how you rate. -->
     <template v-else-if="activeTab === 'ratings'">
     <InsightsPane>
-      <LineChart :chartData="ratingsCountData" :options="ratingsCountOptions"/>
+      <RatingCurvePlayback
+        :chartData="ratingsCountData"
+        :options="ratingsCountOptions"
+        :entries="resultsWithRatings"
+      />
     </InsightsPane>
 
     <InsightsPane>
@@ -340,8 +344,9 @@ import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import { allViewings, calendarCoverage } from "../assets/javascript/yearInReview.js";
 
 import { Chart, registerables } from "chart.js";
-import { ScatterChart, LineChart } from "vue-chart-3";
+import { ScatterChart } from "vue-chart-3";
 import InsightsPane from "./InsightsPane.vue";
+import RatingCurvePlayback from "./RatingCurvePlayback.vue";
 import CoverageMap from "./CoverageMap.vue";
 import { placeRows, favouritePlaces, mostVisitedPlaces, placeSummary, countryCoverage } from "../assets/javascript/places.js";
 import { formatScore } from "../assets/javascript/formatScore.js";
@@ -358,9 +363,9 @@ export default {
   components: {
     CoverageMap,
     FunFactsRow,
-    LineChart,
     ScatterChart,
     InsightsPane,
+    RatingCurvePlayback,
     Outliers,
     YearlyAverage,
     BoxOfficeYears,
