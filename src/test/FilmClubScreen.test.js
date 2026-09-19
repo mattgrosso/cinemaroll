@@ -323,3 +323,72 @@ describe("a friend's recent-poster strip", () => {
     expect(wrapper.findAll('.cs-friend-poster')).toHaveLength(2);
   });
 });
+
+// Report -P1lQnAdARMxUpPScybv (2026-09-17): "It would be cool to be able to
+// search my film club to see if anybody has watched a specific movie... have
+// it filter to show me who's seen it and who hasn't."
+describe('FilmClubScreen — "Has anybody seen…"', () => {
+  const SEARCH_PROFILES = {
+    brian: {
+      name: 'Brian',
+      counts: { titles: 2 },
+      // Shares his whole library, so silence from him is evidence.
+      ratings: { 1: { r: 9, s: 4.5 }, 2: { r: 3 } },
+      recent: []
+    },
+    seth: {
+      name: 'Seth',
+      counts: { titles: 1 },
+      // Shelf only: no `ratings` map at all.
+      recent: [{ id: 2, t: 'Cats', p: '/2.jpg', r: 7, at: Date.now() - HOUR }],
+      topShelf: []
+    }
+  };
+
+  const mountWithClub = () => factory({
+    profiles: SEARCH_PROFILES,
+    myEntries: [myMovie(1, 'Heat', 8), myMovie(2, 'Cats', 9)]
+  });
+
+  it('searches every title the club knows about, not just mine', async () => {
+    const wrapper = mountWithClub();
+    expect(wrapper.vm.clubTitles.map((t) => t.title)).toEqual(['Cats', 'Heat']);
+
+    await wrapper.setData({ seenSearch: 'hea' });
+    expect(wrapper.vm.seenMatches.map((t) => t.title)).toEqual(['Heat']);
+  });
+
+  it('splits the club into seen, hasn\'t seen, and no way to tell', async () => {
+    const wrapper = mountWithClub();
+    await wrapper.setData({ seenPick: { id: '1', title: 'Heat' } });
+
+    const { seen, notSeen, unknown, youveSeen } = wrapper.vm.seenBreakdown;
+    expect(seen.map((p) => p.name)).toEqual(['Brian']);
+    expect(seen[0].stars).toBe(4.5);
+    // Seth publishes no ratings map, so his silence is NOT "hasn't seen it".
+    expect(notSeen).toEqual([]);
+    expect(unknown.map((p) => p.name)).toEqual(['Seth']);
+    expect(youveSeen).toBe(true);
+  });
+
+  it('will say a full sharer hasn\'t seen something', async () => {
+    const wrapper = mountWithClub();
+    await wrapper.setData({ seenPick: { id: '99', title: 'Solaris' } });
+    expect(wrapper.vm.seenBreakdown.notSeen.map((p) => p.name)).toEqual(['Brian']);
+    expect(wrapper.vm.seenBreakdown.youveSeen).toBe(false);
+  });
+
+  it('takes a shelf-only friend\'s own feed as proof they have seen it', async () => {
+    const wrapper = mountWithClub();
+    await wrapper.setData({ seenPick: { id: '2', title: 'Cats' } });
+    expect(wrapper.vm.seenBreakdown.seen.map((p) => p.name)).toEqual(['Brian', 'Seth']);
+  });
+
+  it('clears the box along with the pick', async () => {
+    const wrapper = mountWithClub();
+    await wrapper.setData({ seenSearch: 'heat', seenPick: { id: '1', title: 'Heat' } });
+    wrapper.vm.clearSeenPick();
+    expect(wrapper.vm.seenPick).toBe(null);
+    expect(wrapper.vm.seenSearch).toBe('');
+  });
+});

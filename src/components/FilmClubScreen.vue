@@ -66,6 +66,75 @@
         </div>
       </section>
 
+      <!-- "Has anybody seen this?" — report -P1lQnAdARMxUpPScybv. -->
+      <section v-if="friendRows.length" class="cs-section">
+        <h2 class="cs-section-title">Has anybody seen…</h2>
+        <p class="cs-caption">Anything you or a friend has logged.</p>
+        <input
+          v-model="seenSearch"
+          type="search"
+          class="form-control form-control-sm cs-input"
+          placeholder="Search a title"
+          aria-label="Search the club for a movie"
+        >
+
+        <!-- Results, until one is picked. -->
+        <div v-if="!seenPick && seenMatches.length" class="cs-seen-matches">
+          <button
+            v-for="match in seenMatches"
+            :key="match.id"
+            type="button"
+            class="cs-seen-match"
+            @click="seenPick = match"
+          >
+            <img v-if="match.poster" :src="poster(match.poster)" :alt="''" class="cs-seen-thumb">
+            <span v-else class="cs-seen-thumb cs-seen-thumb--blank" aria-hidden="true"></span>
+            <span class="cs-seen-match-title">{{ match.title }}</span>
+          </button>
+        </div>
+        <p v-else-if="!seenPick && seenSearch.trim().length >= 2" class="cs-empty">
+          Nobody in the club has logged anything called “{{ seenSearch.trim() }}”.
+        </p>
+
+        <div v-if="seenPick" class="cs-seen-answer">
+          <div class="cs-seen-head">
+            <span class="cs-seen-picked">{{ seenPick.title }}</span>
+            <button type="button" class="cs-seen-clear" @click="clearSeenPick">Clear</button>
+          </div>
+
+          <p class="cs-seen-you">
+            {{ seenBreakdown.youveSeen ? 'It’s in your library.' : 'You haven’t logged it.' }}
+          </p>
+
+          <p v-if="seenBreakdown.seen.length" class="cs-subhead">Seen it</p>
+          <div v-for="person in seenBreakdown.seen" :key="`seen-${person.key}`" class="cs-row">
+            <span class="cs-row-name">{{ person.name }}</span>
+            <span class="cs-row-detail">
+              <span v-if="person.stars !== null" :aria-label="`${person.stars} out of 5`">
+                <i v-for="i in fullStars(person.stars)" :key="`s${i}`" class="bi bi-star-fill"/>
+                <i v-if="hasHalfStar(person.stars)" class="bi bi-star-half"/>
+              </span>
+              <span v-else-if="person.score !== null">{{ formatScore(person.score) }}</span>
+              <span v-else>on their shelf</span>
+            </span>
+          </div>
+
+          <p v-if="seenBreakdown.notSeen.length" class="cs-subhead">Hasn’t seen it</p>
+          <div v-for="person in seenBreakdown.notSeen" :key="`unseen-${person.key}`" class="cs-row">
+            <span class="cs-row-name">{{ person.name }}</span>
+          </div>
+
+          <!-- Said plainly rather than folded into "hasn't seen it": a
+               shelf-only sharer may have loved it last week and simply not
+               published the fact. See clubTitleSearch.js. -->
+          <p v-if="seenBreakdown.unknown.length" class="cs-subhead">No way to tell</p>
+          <div v-for="person in seenBreakdown.unknown" :key="`unknown-${person.key}`" class="cs-row">
+            <span class="cs-row-name">{{ person.name }}</span>
+            <span class="cs-row-detail">{{ person.why }}</span>
+          </div>
+        </div>
+      </section>
+
       <!-- Friends sit high on the page now: picking one was several screens
            down ("I have to scroll pretty far down before I can, like, select
            a friend and look at what they've got going on"). -->
@@ -249,6 +318,7 @@ import { timeAgo } from '../assets/javascript/timeAgo.js';
 import { getRating } from '../assets/javascript/GetRating.js';
 import { filmClubSummary, friendSnapshot, myRatingsById } from '../assets/javascript/social.js';
 import { filterDirectory } from '../assets/javascript/interchange.js';
+import { clubTitleIndex, searchClubTitles, clubSeenBreakdown } from '../assets/javascript/clubTitleSearch.js';
 import { omitQaAccounts, isQaAccountKey } from '../assets/javascript/databaseKey.js';
 import { formatScore, formatScoreGap } from '../assets/javascript/formatScore.js';
 
@@ -275,7 +345,11 @@ export default {
       // Was never declared, so `v-model` on the "Search people on other apps"
       // box had nothing to write to and the filter never applied. Noticed
       // while adding `previewing`; the component had no data() at all.
-      directorySearch: ''
+      directorySearch: '',
+      // "Has anybody seen…": what's typed, and the title picked out of the
+      // results (report -P1lQnAdARMxUpPScybv).
+      seenSearch: '',
+      seenPick: null
     };
   },
   computed: {
@@ -286,6 +360,31 @@ export default {
     },
     socialSettings () {
       return this.$store.getters.socialSettings;
+    },
+    /**
+     * Every title the club knows about — mine plus everything any friend has
+     * published. Built once per library/profile change, not per keystroke:
+     * ~1,400 of my own films plus a few friends' maps is real work, and the
+     * search itself is then a walk over a flat array.
+     */
+    clubTitles () {
+      return clubTitleIndex(this.$store.getters.allMoviesAsArray, this.$store.getters.filmClubFriends);
+    },
+    seenMatches () {
+      return searchClubTitles(this.clubTitles, this.seenSearch);
+    },
+    // Ids as STRINGS, which is what the breakdown compares against — a
+    // published ratings map is keyed by Firebase, so its keys are strings
+    // while a movie's own id is a number.
+    myTmdbIdStrings () {
+      return new Set([...this.myTmdbIds].map(String));
+    },
+    seenBreakdown () {
+      return clubSeenBreakdown(
+        this.$store.getters.filmClubFriends,
+        this.seenPick?.id,
+        { myRatedIds: this.myTmdbIdStrings }
+      );
     },
     crossAppDiscovery () {
       return this.$store.getters.crossAppDiscoveryEnabled;
@@ -451,6 +550,10 @@ export default {
     },
     poster (path) {
       return `https://image.tmdb.org/t/p/w185${path}`;
+    },
+    clearSeenPick () {
+      this.seenPick = null;
+      this.seenSearch = '';
     },
     visibleRecent (friend) {
       return friend.recent.slice(0, this.friendPosterCounts[friend.key] || FRIEND_POSTERS_INITIAL);
@@ -686,6 +789,61 @@ export default {
 .cs-row-detail { color: #ccc; font-size: 0.8rem; white-space: nowrap; }
 .cs-row-error { color: #e88; }
 .cs-row-actions { display: flex; gap: 0.4rem; }
+
+.cs-seen-matches { display: flex; flex-direction: column; margin-top: 0.5rem; }
+
+.cs-seen-match {
+  align-items: center;
+  background: none;
+  border: none;
+  border-top: 1px solid #2e2e2e;
+  color: white;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  text-align: left;
+  width: 100%;
+
+  &:first-of-type { border-top: none; }
+  // Mobile-first: :active, never :hover — a tapped row on an installed PWA
+  // keeps a hover state with no mouse to leave it.
+  &:active { background: #222; }
+}
+
+.cs-seen-thumb {
+  border-radius: 3px;
+  flex: 0 0 auto;
+  height: 42px;
+  object-fit: cover;
+  width: 28px;
+}
+
+.cs-seen-thumb--blank { background: #2e2e2e; display: block; }
+.cs-seen-match-title { font-size: 0.85rem; min-width: 0; overflow-wrap: anywhere; }
+
+.cs-seen-answer { margin-top: 0.5rem; }
+
+.cs-seen-head {
+  align-items: baseline;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.cs-seen-picked { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+
+.cs-seen-clear {
+  background: none;
+  border: none;
+  color: #9ec5fe;
+  flex: none;
+  font-size: 0.75rem;
+  padding: 0;
+  text-decoration: underline;
+}
+
+// #ccc, not .text-muted — Bootstrap's muted grey fails against these panels.
+.cs-seen-you { color: #ccc; font-size: 0.8rem; margin: 0.15rem 0 0; }
 
 .cs-poster-row {
   display: flex;

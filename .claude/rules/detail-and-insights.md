@@ -10,6 +10,10 @@ paths:
   - "src/components/StickinessInline.vue"
   - "src/mixins/favoriteTuning.js"
   - "src/services/**"
+  - "src/components/RatingCurvePlayback.vue"
+  - "src/assets/javascript/ratingCurvePlayback.js"
+  - "src/components/FilmClubScreen.vue"
+  - "src/assets/javascript/clubTitleSearch.js"
 ---
 
 # MovieDetail, Insights & Favorites rules
@@ -223,3 +227,45 @@ Things learned laying out 3,600 nodes, all measured on Matt's real library:
   the library streams in.
 - Label budgets are dials at the top of `WebScreen.vue`; a phone-width focus web names
   only the centre and its first hop until you zoom.
+
+## The ratings-curve replay
+
+`RatingCurvePlayback.vue` + `ratingCurvePlayback.js` (report
+-P1mlsyZlwk2RTeYxOit, 2026-09-18). Two invariants, both load-bearing:
+
+- **A film MOVES between buckets; it does not accumulate in them.** The static
+  chart counts each film once, at its most recent rating. If a replay dropped
+  each rating into a bucket as it happened, the final frame would count a
+  re-rated film twice — a different chart wearing the same axes. Each rating
+  places its film and removes it from wherever it was, so the last frame is
+  the static curve *by construction*, and the tests assert exactly that.
+- **The component never recomputes the static curve.** It takes the live
+  chart's `chartData` and `options` as props and substitutes only the
+  dataset's numbers. A second implementation of the thing the animation lands
+  on would drift from the first.
+
+Frames are sliced by count of ratings, not elapsed time — a library is lumpy,
+and a time-sliced replay watches a finished chart for most of its run. The y
+axis is pinned to the eventual peak so bars grow into a fixed frame.
+
+## "Has anybody seen this?" — the three-way answer
+
+`clubTitleSearch.js`, from the Film Club screen (report
+-P1lQnAdARMxUpPScybv, 2026-09-17: "search my film club to see if anybody has
+watched a specific movie... show me who's seen it and who hasn't").
+
+**There is no two-way answer to give.** Sharing ratings is its own opt-in tier
+(`social.js`): a shelf-only sharer publishes no `ratings` map at all, just a
+top ten and a recent forty. `friendsWhoRated` is careful to make no claim
+about anyone it omits, for precisely this reason. So the split is **seen /
+hasn't seen / no way to tell**, and only someone publishing a whole `ratings`
+map can land in the middle bucket. Collapsing the third into the second would
+tell Matt a friend hasn't seen a film they rated five stars last week.
+
+A shelf-only friend's `recent`/`topShelf` still counts as proof they HAVE seen
+it — absence proves nothing, presence proves something.
+
+The search is over the club's own titles (mine + everything any friend has
+published), not TMDB. Every film the club has an answer for is in that set by
+construction; a film nobody has logged has one possible answer, and the empty
+state says it in a sentence rather than costing a round trip.
