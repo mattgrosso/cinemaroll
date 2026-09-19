@@ -71,3 +71,34 @@ export function buildStamp () {
 export function versionLabel () {
   return buildStampText({ version: appVersion() });
 }
+
+// TAPPING THE STAMP RELOADS THE APP. Matt, 2026-09-19: "when we were
+// building Space Base ages ago, we built in a thing where I could tap on the
+// version number and it would force a refresh... it would be nice if tapping
+// on a version number on any of our apps would refresh the app. Because you
+// can't really refresh when you're in an installed app on the iPhone."
+//
+// That last sentence is the whole reason this exists: a home-screen PWA has
+// no URL bar and no reload button, so when the update check has not yet
+// noticed a deploy - or is waiting for a quiet moment - there is no way to
+// ask for the new code by hand.
+//
+// A plain location.reload() is not enough there: the service worker will
+// happily serve the same precached bundle back. So the caches go first, and
+// any worker that is sitting in `waiting` is told to take over. Every step
+// is best-effort - whatever fails, the reload still happens, because a tap
+// that does nothing at all is the one outcome that must not be possible.
+export const forceRefresh = async () => {
+  try {
+    const regs = (await navigator.serviceWorker?.getRegistrations?.()) || [];
+    await Promise.all(regs.map((r) => r.update().catch(() => {})));
+    regs.forEach((r) => r.waiting?.postMessage?.({ type: 'SKIP_WAITING' }));
+    if (window.caches?.keys) {
+      const keys = await window.caches.keys();
+      await Promise.all(keys.map((k) => window.caches.delete(k).catch(() => {})));
+    }
+  } catch {
+    // Never let the housekeeping cost us the reload.
+  }
+  window.location.reload();
+};

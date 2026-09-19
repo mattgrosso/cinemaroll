@@ -5,7 +5,7 @@
     </span>
     <!-- The house build stamp: "v1.96.4 · built Aug 22, 1:32 AM". The footer
          renders on every screen, so this is always on screen — no taps. -->
-    <span class="build-stamp">{{buildStamp}}</span>
+    <span class="build-stamp" role="button" title="Tap to reload" @click="reloadApp">{{buildStamp}}</span>
     <div>
       <span class="dev-mode-switch mx-1" :class="$store.getters.devMode ? 'dev-mode-on' : 'dev-mode-off'" @click="toggleDevMode">
         <i class="bi bi-file-earmark-code-fill"/>
@@ -25,7 +25,7 @@
 </template>
 
 <script>
-import { buildStamp } from '../assets/javascript/buildStamp.js';
+import { buildStamp, forceRefresh } from '../assets/javascript/buildStamp.js';
 
 export default {
   name: 'AppFooter',
@@ -35,6 +35,10 @@ export default {
     }
   },
   methods: {
+    // The stamp is the reload button: an installed PWA has no other one.
+    reloadApp () {
+      forceRefresh();
+    },
     async toggleDevMode () {
       this.$store.commit('setDevMode', !this.$store.getters.devMode);
       // Switching accounts means re-fetching movieLog/settings from a
