@@ -57,7 +57,8 @@ const {
   issueDue
 } = require('./newsletterCompose.js');
 const {
-  discoverReleases, enrichCandidate, anniversaryPool, trendingThisWeek, filmCard
+  discoverReleases, enrichCandidate, anniversaryPool, trendingThisWeek, filmCard,
+  personWithSignatureFilm, olderNamesake
 } = require('./newsletterSources.js');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
@@ -303,14 +304,27 @@ NEW RELEASES AVAILABLE THIS WEEK (facts; pick from these and nothing else)
 ${JSON.stringify(brief.releases, null, 1)}
 
 FILMS WITH A CLAIM ON THIS WEEK (pick exactly one to write about)
-Each carries a "reason" field. "anniversary" means a round birthday falls
-inside the coming seven days, and "turning" is the number of years. "trending"
-means an older film is back in this week's most-watched list, which usually
-means something happened — a re-release, a death, an awards run, a new film
-that references it. "alsoTrendingNow" on an anniversary film means both at
-once.
-Pick the one you can write the most interesting piece about, not simply the
-largest number, and make the hook say plainly why THIS film THIS week.
+Each carries a "reason":
+  "anniversary" — a round birthday falls somewhere in the coming seven days;
+                  "turning" is the number of years.
+  "trending"    — an older film is back in this week's most-watched list,
+                  which usually means something happened: a re-release, a
+                  death, an awards run, a new film that references it.
+  "person"      — somebody central to the film has a round birth or death
+                  anniversary this week; "person" names them and says which.
+  "original"    — a new release this week is a remake of, or shares its title
+                  with, this older film. "relatedTo" names the new one. TREAT
+                  THIS AS UNVERIFIED: the match was made on title and year
+                  alone. If the two films are not actually related, do not
+                  write about it — pick something else.
+"alsoTrendingNow" means an anniversary film is ALSO back in circulation.
+
+THE WEEK IS THE UNIT. Do not favour a film because its anniversary lands on
+any particular day — you are not told which day, and it does not matter. A
+75th is a bigger occasion than a 40th; write about whichever gives you the
+better piece, and say plainly in the hook why THIS film THIS week.
+Prefer variety across issues: a straight birthday is the least interesting of
+these reasons, not the default.
 ${JSON.stringify(brief.features, null, 1)}
 
 Return ONLY valid JSON, no markdown fence, in exactly this shape:
@@ -378,7 +392,35 @@ const buildIssue = async ({ topKey, profile, now, alwaysOn }) => {
   // against each other is featureCandidates' job.
   const anniversaries = anniversariesThisWeek(await anniversaryPool(tmdbKey, now), now);
   const trending = await trendingThisWeek(tmdbKey).catch(() => []);
-  const features = featureCandidates({ anniversaries, trending, now });
+
+  // People from the reader's OWN profile, so this can only ever surface
+  // somebody whose work they already rate. Deduped, and bounded at twenty
+  // lookups a week — the odds of a round anniversary landing in any given
+  // week are low enough that a small pool is a dead branch.
+  const names = [...new Set([
+    ...(profile?.directors || []).slice(0, 12).map((d) => d.name),
+    ...(profile?.writers || []).slice(0, 8).map((w) => w.name)
+  ])];
+  const people = (await Promise.all(names.map((n) => personWithSignatureFilm(tmdbKey, n))))
+    .filter(Boolean);
+
+  // An older film sharing a title with one of this week's releases — usually
+  // the thing being remade, and a piece that ties the issue together. Across
+  // the whole shortlist, not the top few: MOANA sat eighth on a real week and
+  // a five-deep check missed the clearest remake on the list.
+  const originals = (await Promise.all(
+    shortlist.slice(0, 10).map(async (row) => {
+      const original = row.year ? await olderNamesake(tmdbKey, row.title, row.year) : null;
+      return original ? { original, newTitle: `${row.title} (${row.year})` } : null;
+    })
+  )).filter(Boolean);
+
+  // Ranked WITHOUT a limit so the tally below describes what was actually
+  // available this week, not what survived the cut — the point of having
+  // four kinds of claim is variety, and a tally of the top twelve would
+  // report "all anniversaries" forever.
+  const allFeatures = featureCandidates({ anniversaries, trending, people, originals, now, limit: 200 });
+  const features = allFeatures.slice(0, 12);
 
   if (!shortlist.length && !features.length) {
     return { empty: true, reason: 'nothing available and nothing worth featuring' };
@@ -442,10 +484,12 @@ const buildIssue = async ({ topKey, profile, now, alwaysOn }) => {
         // Why it was chosen, kept as DATA rather than left to the prose —
         // "how did you pick that movie?" should be answerable on the page.
         reason: chosen.reason,
-        turning: chosen.turning,
-        daysAway: chosen.daysAway,
+        turning: chosen.turning ?? null,
+        daysAway: chosen.daysAway ?? null,
         releaseDate: chosen.releaseDate,
-        alsoTrending: chosen.alsoTrending,
+        alsoTrending: Boolean(chosen.alsoTrending),
+        person: chosen.person || null,
+        relatedTo: chosen.relatedTo || null,
         headline: String(written.feature.headline || '').trim(),
         hook: String(written.feature.hook || '').trim(),
         article: String(written.feature.article || '').trim(),
@@ -460,7 +504,18 @@ const buildIssue = async ({ topKey, profile, now, alwaysOn }) => {
     intro: String(written.intro || '').trim(),
     picks,
     feature,
-    counts: { considered: candidates.length, shortlisted: shortlist.length, picked: picks.length }
+    counts: {
+      considered: candidates.length,
+      shortlisted: shortlist.length,
+      picked: picks.length,
+      // Which kinds of claim were even available this week. Worth storing:
+      // the whole point of having four is variety across issues, and without
+      // this there is no way to see whether three of them ever fire.
+      featureClaims: allFeatures.reduce((tally, f) => {
+        tally[f.reason] = (tally[f.reason] || 0) + 1;
+        return tally;
+      }, {})
+    }
   };
 };
 

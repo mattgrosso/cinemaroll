@@ -138,4 +138,93 @@ const filmCard = async (key, id) => {
   };
 };
 
-module.exports = { json, discoverReleases, enrichCandidate, anniversaryPool, trendingThisWeek, filmCard };
+/**
+ * A person's TMDB record and their best-known directing (or writing) credit.
+ *
+ * Looked up by name because that is all the taste profile carries. A miss is
+ * `null` rather than an error — one unfindable name must not cost the issue
+ * its feature.
+ */
+const personWithSignatureFilm = async (key, name) => {
+  try {
+    const found = await json(`${TMDB}/search/person?api_key=${key}&query=${encodeURIComponent(name)}`);
+    const hit = (found.results || [])[0];
+    if (!hit?.id) return null;
+
+    const [person, credits] = await Promise.all([
+      json(`${TMDB}/person/${hit.id}?api_key=${key}`),
+      json(`${TMDB}/person/${hit.id}/movie_credits?api_key=${key}`)
+    ]);
+    if (!person.birthday) return null;
+
+    // Their signature film: the most-voted thing they DIRECTED, falling back
+    // to writing, falling back to their most-voted credit of any kind. The
+    // article is about the person; the film is what carries the hat button.
+    const crew = credits.crew || [];
+    const pick = (jobs) => crew
+      .filter((c) => jobs.includes(c.job))
+      .sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0))[0];
+    const film = pick(['Director'])
+      || pick(['Writer', 'Screenplay', 'Story'])
+      || (credits.cast || []).sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0))[0];
+    if (!film?.id) return null;
+
+    return {
+      id: person.id,
+      name: person.name,
+      birthday: person.birthday,
+      deathday: person.deathday || null,
+      knownFor: person.known_for_department || null,
+      film: {
+        id: film.id,
+        title: film.title || '',
+        release_date: film.release_date || '',
+        vote_count: film.vote_count || 0,
+        overview: film.overview || ''
+      }
+    };
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * An older film sharing a title with one of this week's new releases —
+ * usually the thing being remade.
+ *
+ * Title-and-year matching only, so it is a LEAD, not a fact. The brief says
+ * as much and the model is told to drop it if the two are unrelated. The vote
+ * floor keeps it to films somebody has actually heard of, which is most of
+ * what stops a coincidence getting through.
+ *
+ * `minGap` is 8, not 12: measured against a real week, MOANA (2026) is ten
+ * years after MOANA (2016) and a twelve-year minimum threw away the clearest
+ * remake on the list.
+ */
+const olderNamesake = async (key, title, newYear, { minGap = 8, minVotes = 800 } = {}) => {
+  try {
+    const found = await json(`${TMDB}/search/movie?api_key=${key}&query=${encodeURIComponent(title)}`);
+    const norm = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const target = norm(title);
+    const older = (found.results || [])
+      .filter((m) => norm(m.title) === target)
+      .filter((m) => (m.vote_count || 0) >= minVotes)
+      .map((m) => ({ ...m, year: parseInt(String(m.release_date || '').slice(0, 4), 10) }))
+      .filter((m) => Number.isFinite(m.year) && newYear - m.year >= minGap)
+      .sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0));
+    return older[0] || null;
+  } catch {
+    return null;
+  }
+};
+
+module.exports = {
+  json,
+  discoverReleases,
+  enrichCandidate,
+  anniversaryPool,
+  trendingThisWeek,
+  filmCard,
+  personWithSignatureFilm,
+  olderNamesake
+};

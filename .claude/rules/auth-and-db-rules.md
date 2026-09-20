@@ -361,15 +361,39 @@ instead: a 45s cooldown (a double tap costs one model call, not two) and 20
 rebuilds per account per day. `yarn newsletter-e2e --double-tap` proves the
 cooldown.
 
-**The feature slot takes two kinds of claim**, ranked against each other by
-`featureCandidates`: a ROUND anniversary falling in the coming seven days
-(10/15/20/25/30/40/50/60/70/75/80/90/100, weighted so a 50th beats a 10th),
-or an old film back in TMDB's weekly trending list (`TRENDING_MIN_AGE_YEARS`
-= 8, weight 65 — above a 15th or 20th, below a 40th). A film with BOTH claims
-gets a bonus, because "it turns 40 this week AND people are watching it again"
-beats either alone. Note the trending signal is often EMPTY: TMDB's weekly
-list is dominated by new releases (on 2026-09-20 all 20 entries were 2026
-films), so anniversaries do nearly all the work in practice.
+**The feature slot takes FOUR kinds of claim**, ranked against each other by
+`featureCandidates`:
+
+| reason | what it is | weight |
+|---|---|---|
+| `anniversary` | a round birthday in the coming seven days (10/15/20/25/30/40/50/60/70/75/80/90/100) | 45–100, by roundness |
+| `person` | someone in the reader's own profile has a birth/death anniversary at a multiple of five, hung on their signature film | 55–95 |
+| `original` | an older film sharing a title with one of this week's releases — usually the thing being remade | 72 |
+| `trending` | an old film back in TMDB's weekly trending list, which means *something* happened | 65 |
+
+A film with two claims takes the louder one and a bonus. **Measured rarity
+matters here, and three of the four are thin**: on 2026-09-20 the tally was
+16 anniversaries, 1 original, 0 person, 0 trending. TMDB's trending list is
+dominated by new releases (all 20 entries were 2026 films), and a person's
+round anniversary landing in a given week is a ~2% event per person — which
+is why `personAnniversaries` takes every multiple of five rather than only
+decades and quarters, and why the people pool is 20 names rather than 12. The
+issue stores `counts.featureClaims`, tallied BEFORE the top-12 cut, so the mix
+is visible over time rather than guessed at.
+
+**`daysAway` is deliberately absent from the brief.** It was there, and the
+model reached straight for it — picking a 40th falling on press day over a
+75th four days later, and opening "forty years ago today". Matt, 2026-09-20:
+"I don't care so much that the anniversary was exactly the day that the
+newsletter was being written." The week is the unit; the surest way to stop
+the model weighing the day is not to tell it. The screen says "this week" for
+the same reason, with the exact release date at the end of the line for
+anyone who wants it.
+
+Two numbers found only by running it: `olderNamesake`'s `minGap` is **8**, not
+12, because MOANA (2016) → MOANA (2026) is ten years and a twelve-year
+minimum threw away the clearest remake on the list; and the remake check runs
+across the top **ten** of the shortlist, not five, because Moana sat eighth.
 
 The chosen film's occasion is stored as DATA (`reason`, `turning`, `daysAway`,
 `releaseDate`), not left to the prose, so the page can answer "how did you

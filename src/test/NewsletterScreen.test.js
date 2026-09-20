@@ -242,15 +242,45 @@ describe('NewsletterScreen', () => {
     it('states the occasion that chose the film', () => {
       const why = mountScreen({ state: { newsletterIssue: issue() } })
         .find('.newsletter-feature-why').text();
-      expect(why).toContain('40 years old today');
+      expect(why).toContain('40 years old this week');
       expect(why).toContain('September 20, 1986');
     });
 
-    it('says "this week" when the anniversary is not today', () => {
+    // The week is the unit — Matt, 2026-09-20: "I don't care so much that the
+    // anniversary was exactly the day that the newsletter was being written."
+    it('says "this week" even when the anniversary is today', () => {
       const why = mountScreen({
-        state: { newsletterIssue: issue({ feature: { ...issue().feature, daysAway: 3 } }) }
+        state: { newsletterIssue: issue({ feature: { ...issue().feature, daysAway: 0 } }) }
       }).find('.newsletter-feature-why').text();
-      expect(why).toContain('40 years old this week');
+      expect(why).toContain('this week');
+      expect(why).not.toContain('today');
+    });
+
+    it('names the person when a person\u2019s anniversary chose the film', () => {
+      const why = mountScreen({
+        state: {
+          newsletterIssue: issue({
+            feature: {
+              ...issue().feature,
+              reason: 'person',
+              turning: null,
+              person: 'Akira Kurosawa was born 110 years ago this week'
+            }
+          })
+        }
+      }).find('.newsletter-feature-why').text();
+      expect(why).toContain('Akira Kurosawa was born 110 years ago');
+    });
+
+    it('names the new film when an original chose it', () => {
+      const why = mountScreen({
+        state: {
+          newsletterIssue: issue({
+            feature: { ...issue().feature, reason: 'original', turning: null, relatedTo: 'Moana (2026)' }
+          })
+        }
+      }).find('.newsletter-feature-why').text();
+      expect(why).toContain('the original behind Moana (2026)');
     });
 
     // A film that is simply back in circulation has no number to turn.

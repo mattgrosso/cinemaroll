@@ -200,15 +200,20 @@ export default {
     },
 
     // The occasion, in plain words, from the data that made the choice.
+    // Four kinds of claim, and the line names whichever one won.
+    //
+    // Note it says "this week" and never "today" even when the anniversary
+    // is today: the week is the unit (Matt, 2026-09-20 — "I don't care so
+    // much that the anniversary was exactly the day"), and the exact date is
+    // right there at the end of the line for anyone who does.
     featureWhy () {
       const f = this.issue?.feature;
       if (!f) return '';
       const released = this.longDate(f.releaseDate);
       const parts = [];
-      if (f.turning) {
-        const when = f.daysAway === 0 ? 'today' : 'this week';
-        parts.push(`${f.turning} years old ${when}`);
-      }
+      if (f.turning) parts.push(`${f.turning} years old this week`);
+      if (f.person) parts.push(f.person);
+      if (f.relatedTo) parts.push(`the original behind ${f.relatedTo}`);
       if (f.reason === 'trending' || f.alsoTrending) parts.push('back in this week\u2019s most-watched');
       if (released) parts.push(`released ${released}`);
       return parts.join(' \u00b7 ');
@@ -345,31 +350,33 @@ export default {
 }
 
 .newsletter-pick {
-  /* flex-start, not the default stretch: a stretched row pulls the poster to
-     the height of the text beside it, which is exactly how these came out
-     squished (report, 2026-09-20 — "the posters are squished"). The house
-     rule for any row of posters is edge-aligned images and text that flows
-     (vue-ui.md). */
-  align-items: flex-start;
-  display: flex;
-  gap: 0.9rem;
+  /* NOT a flex row. The poster FLOATS and the text wraps around it (Matt,
+     2026-09-20: "they ought to be floated so that the text wraps around them
+     nicely"), which a flex row cannot do — in a row the text is a rigid
+     column beside the image and can never flow under it.
+
+     `overflow: hidden` establishes a block formatting context, which is what
+     keeps a tall poster from escaping into the NEXT pick when its blurb is
+     short. Without it a two-line reason leaves the poster hanging over the
+     film below. */
   margin-bottom: 1.75rem;
+  overflow: hidden;
 }
 
 .newsletter-poster {
-  /* TMDB's own poster ratio, declared rather than inferred, so the box is
-     the right shape before the image lands and can never be distorted by
-     whatever the row does. */
+  /* Twice the old 84px, as asked. TMDB's own ratio is declared rather than
+     inferred, so the box is the right shape before the image lands and
+     cannot be distorted by anything around it. */
   aspect-ratio: 2 / 3;
   border-radius: 0.3rem;
-  flex: 0 0 auto;
+  float: left;
   height: auto;
+  margin: 0.2rem 0.9rem 0.4rem 0;
   object-fit: cover;
-  width: 84px;
+  width: 168px;
 }
 
 .newsletter-pick-body {
-  flex: 1;
   min-width: 0;
 }
 
@@ -429,10 +436,17 @@ export default {
 
 .newsletter-pick-footer {
   align-items: center;
+  /* `clear` is load-bearing now the poster floats. A flex container is a
+     block box: it does NOT shorten its line boxes around a float the way
+     paragraphs do, so without this the availability line and the hat button
+     would sit UNDERNEATH the poster and be unreachable. Clearing puts them
+     below it, full width, which is also where a footer belongs. */
+  clear: left;
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
   justify-content: space-between;
+  padding-top: 0.2rem;
 }
 
 .newsletter-where {
@@ -510,7 +524,9 @@ export default {
 }
 
 @media (max-width: 420px) {
-  .newsletter-poster { width: 68px; }
+  /* Still double the old small-screen size, and still under half the content
+     width so the wrapped lines do not collapse to a few words each. */
+  .newsletter-poster { width: 136px; }
   .newsletter-kicker { font-size: 1.35rem; }
 }
 </style>

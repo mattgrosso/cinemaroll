@@ -260,6 +260,82 @@ const TRENDING_WEIGHT = 65;
 // Below this a "trending old film" is just catalogue drift.
 const TRENDING_MIN_AGE_YEARS = 8;
 
+// Ages worth marking for a PERSON.
+//
+// EVERY MULTIPLE OF FIVE, not just the big round ones. The first version took
+// only decades and quarters, which sounds right and is arithmetically almost
+// never: one person's birthday lands in a given week about 1.9% of the time,
+// so twelve people and eight eligible ages fire roughly twice a year. At
+// multiples of five it is a few times a quarter — rare enough to stay a
+// treat, common enough to be a real source of variety.
+//
+// The weights keep the hierarchy that the narrow list was trying to express:
+// a centenary is an event, a 65th birthday is a footnote, and a footnote
+// scores below every film anniversary so it only ever wins a thin week.
+const isMultipleOfFive = (n) => Number.isInteger(n) && n > 0 && n % 5 === 0;
+const PERSON_MIN_BIRTHDAY = 50;   // a director turning 45 is not news
+const PERSON_MIN_DEATH = 5;
+
+const PERSON_WEIGHT = { 100: 95, 125: 92, 110: 88, 90: 78, 80: 76, 75: 74, 70: 70, 60: 66 };
+const PERSON_DEATH_WEIGHT = { 100: 94, 75: 86, 50: 84, 40: 76, 30: 72, 25: 74, 20: 70, 10: 68 };
+
+// What a plain multiple of five is worth when it is not one of the above.
+const PERSON_MINOR_WEIGHT = 55;
+
+// A new release remaking an older film ties the two halves of the issue
+// together, which is worth more than a minor birthday and less than a major
+// one.
+const ORIGINAL_WEIGHT = 72;
+
+function sameWeek (isoDate, now, windowDays = 7) {
+  const month = parseInt(String(isoDate || '').slice(5, 7), 10);
+  const day = parseInt(String(isoDate || '').slice(8, 10), 10);
+  if (!Number.isFinite(month) || !Number.isFinite(day)) return null;
+  const today = new Date(now);
+  const midnight = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  for (const inYear of [today.getUTCFullYear(), today.getUTCFullYear() + 1]) {
+    const at = Date.UTC(inYear, month - 1, day);
+    const offset = Math.round((at - midnight) / 86400000);
+    if (offset >= 0 && offset < windowDays) return inYear;
+  }
+  return null;
+}
+
+/**
+ * People with a round birth or death anniversary this week, each carrying the
+ * film the piece would hang on.
+ *
+ * The people come from the reader's own taste profile, so this can only ever
+ * surface somebody whose work they already rate — which is the point. The
+ * article is about the person; the film is the subject a hat button can hold.
+ */
+function personAnniversaries (people = [], now = Date.now()) {
+  const out = [];
+  for (const person of people) {
+    if (!person?.film?.id) continue;
+
+    const deathYear = sameWeek(person.deathday, now);
+    if (deathYear != null) {
+      const age = deathYear - parseInt(String(person.deathday).slice(0, 4), 10);
+      if (isMultipleOfFive(age) && age >= PERSON_MIN_DEATH) {
+        out.push({
+          person, age, kind: 'death', weight: PERSON_DEATH_WEIGHT[age] || PERSON_MINOR_WEIGHT
+        });
+        continue;   // one claim per person; a death anniversary is the louder
+      }
+    }
+
+    const birthYear = sameWeek(person.birthday, now);
+    if (birthYear != null) {
+      const age = birthYear - parseInt(String(person.birthday).slice(0, 4), 10);
+      if (isMultipleOfFive(age) && age >= PERSON_MIN_BIRTHDAY) {
+        out.push({ person, age, kind: 'birth', weight: PERSON_WEIGHT[age] || PERSON_MINOR_WEIGHT });
+      }
+    }
+  }
+  return out.sort((a, b) => (b.weight - a.weight) || (b.person.film.vote_count - a.person.film.vote_count));
+}
+
 /**
  * Everything with a claim on the feature slot this week, ranked.
  *
@@ -276,6 +352,8 @@ const TRENDING_MIN_AGE_YEARS = 8;
 function featureCandidates ({
   anniversaries = [],
   trending = [],
+  people = [],
+  originals = [],
   now = Date.now(),
   minAgeYears = TRENDING_MIN_AGE_YEARS,
   limit = 12
@@ -324,6 +402,53 @@ function featureCandidates ({
     });
   }
 
+  // A person's round anniversary, hung on their signature film. If that film
+  // is already on the list for its own reasons, the person is the better hook
+  // — two occasions at once — so it replaces the weaker claim.
+  for (const entry of personAnniversaries(people, now)) {
+    const film = entry.person.film;
+    const year = parseInt(String(film.release_date || '').slice(0, 4), 10) || null;
+    const was = entry.kind === 'death' ? 'died' : 'was born';
+    const candidate = {
+      id: film.id,
+      title: film.title,
+      year,
+      releaseDate: film.release_date,
+      overview: film.overview,
+      voteCount: film.vote_count,
+      reason: 'person',
+      turning: null,
+      alsoTrending: false,
+      person: `${entry.person.name} ${was} ${entry.age} years ago this week`,
+      occasion: entry.kind,
+      weight: entry.weight
+    };
+    const existing = byId.get(film.id);
+    if (!existing || candidate.weight > existing.weight) byId.set(film.id, candidate);
+  }
+
+  // An older film a new release shares its title with. Unverified by
+  // construction — the brief says so and the model is told to drop it if the
+  // two turn out to be unrelated.
+  for (const entry of originals) {
+    const film = entry?.original;
+    if (!film?.id || byId.has(film.id)) continue;
+    byId.set(film.id, {
+      id: film.id,
+      title: film.title,
+      year: film.year,
+      releaseDate: film.release_date,
+      overview: film.overview || '',
+      voteCount: film.vote_count || 0,
+      reason: 'original',
+      turning: null,
+      alsoTrending: false,
+      relatedTo: entry.newTitle,
+      occasion: null,
+      weight: ORIGINAL_WEIGHT
+    });
+  }
+
   return [...byId.values()]
     .sort((a, b) => (b.weight - a.weight) || (b.voteCount - a.voteCount))
     .slice(0, limit);
@@ -361,14 +486,22 @@ function issueBrief ({ shortlist = [], features = [], profile = null, weekOf = n
     // birthday is one claim on the slot, being back in circulation is
     // another, and the model is told which is which so it can say WHY this
     // film, this week.
+    // NOTE: `daysAway` is deliberately NOT in the brief. It was, and the
+    // model reached straight for it — picking a 40th falling exactly on
+    // press day over a 75th four days later, and opening with "forty years
+    // ago today". Matt, 2026-09-20: "I don't care so much that the
+    // anniversary was exactly the day that the newsletter was being
+    // written." The week is the unit; the day inside it is noise, and the
+    // surest way to stop the model weighing it is not to tell it.
     features: features.map((f) => ({
       id: f.id,
       title: f.title,
       year: f.year,
       reason: f.reason,
       turning: f.turning,
-      releaseDate: f.releaseDate,
-      daysAway: f.daysAway,
+      occasion: f.occasion || null,
+      person: f.person || null,
+      relatedTo: f.relatedTo || null,
       alsoTrendingNow: f.alsoTrending
     }))
   };
@@ -420,7 +553,12 @@ module.exports = {
   releaseYear,
   shortlistReleases,
   anniversariesThisWeek,
+  personAnniversaries,
   featureCandidates,
+  PERSON_MIN_BIRTHDAY,
+  PERSON_MIN_DEATH,
+  PERSON_MINOR_WEIGHT,
+  ORIGINAL_WEIGHT,
   issueBrief,
   weekKey,
   issueDue

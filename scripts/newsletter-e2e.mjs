@@ -208,7 +208,9 @@ console.log(`  built in ~${Math.round((Date.now() - started) / 1000)}s`);
 
 console.log(`\n${'='.repeat(72)}\nISSUE ${issue.weekKey}${issue.testing ? '  (testing)' : ''}\n${'='.repeat(72)}\n`);
 console.log(issue.intro, '\n');
-console.log(`-- ${issue.picks.length} picks from ${issue.counts.shortlisted} shortlisted (${issue.counts.considered} considered) --\n`);
+console.log(`-- ${issue.picks.length} picks from ${issue.counts.shortlisted} shortlisted (${issue.counts.considered} considered) --`);
+const claims = issue.counts.featureClaims || {};
+console.log(`-- feature claims available: ${Object.entries(claims).map(([k, v]) => `${k} ${v}`).join(', ') || 'none'} --\n`);
 for (const pick of issue.picks) {
   const scores = [
     pick.rottenTomatoes != null ? `${pick.rottenTomatoes}% RT` : null,

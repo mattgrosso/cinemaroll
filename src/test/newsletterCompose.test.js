@@ -6,6 +6,7 @@ import {
   acclaim,
   shortlistReleases,
   anniversariesThisWeek,
+  personAnniversaries,
   featureCandidates,
   issueBrief,
   weekKey,
@@ -429,5 +430,119 @@ describe('featureCandidates', () => {
       anniversaries: [anniversary({ daysAway: 0 })], trending: [], now: Date.UTC(2026, 8, 20)
     });
     expect(first).toMatchObject({ reason: 'anniversary', turning: 50, daysAway: 0, releaseDate: '1976-09-22' });
+  });
+});
+
+describe('personAnniversaries', () => {
+  const person = (over = {}) => ({
+    id: 1, name: 'Akira Kurosawa', birthday: '1910-03-23', deathday: null,
+    film: { id: 346, title: 'Seven Samurai', release_date: '1954-04-26', vote_count: 4000, overview: '' },
+    ...over
+  });
+
+  it('finds a round birthday falling in the coming week', () => {
+    // Born 1926-03-23, read on 2026-03-20: a centenary three days out.
+    const [hit] = personAnniversaries(
+      [person({ birthday: '1926-03-23' })], Date.UTC(2026, 2, 20)
+    );
+    expect(hit).toMatchObject({ age: 100, kind: 'birth' });
+  });
+
+  it('ignores an un-round birthday', () => {
+    expect(personAnniversaries([person({ birthday: '1955-03-23' })], Date.UTC(2026, 2, 20)))
+      .toEqual([]);
+  });
+
+  it('finds a round death anniversary', () => {
+    const [hit] = personAnniversaries(
+      [person({ deathday: '1976-09-06' })], Date.UTC(2026, 8, 3)
+    );
+    expect(hit).toMatchObject({ age: 50, kind: 'death' });
+  });
+
+  // 116 is a number, not an occasion; 115 would be.
+  it('ignores an age that is not a multiple of five', () => {
+    expect(personAnniversaries(
+      [person({ birthday: '1910-03-23' })], Date.UTC(2026, 2, 20)
+    )).toEqual([]);
+  });
+
+  // The narrow first list (decades and quarters only) fired about twice a
+  // year across a dozen people. Multiples of five is what makes this a real
+  // source of variety rather than a dead branch.
+  it('counts a plain multiple of five, scored below the big ones', () => {
+    const [hit] = personAnniversaries(
+      [person({ birthday: '1961-03-23' })], Date.UTC(2026, 2, 20)
+    );
+    expect(hit).toMatchObject({ age: 65, kind: 'birth' });
+    const [centenary] = personAnniversaries(
+      [person({ birthday: '1926-03-23' })], Date.UTC(2026, 2, 20)
+    );
+    expect(centenary.weight).toBeGreaterThan(hit.weight);
+  });
+
+  it('a 45th birthday is not news', () => {
+    expect(personAnniversaries(
+      [person({ birthday: '1981-03-23' })], Date.UTC(2026, 2, 20)
+    )).toEqual([]);
+  });
+
+  // A death anniversary is the louder occasion, and nobody should appear
+  // twice in one week's list.
+  it('prefers the death anniversary when both land in the same week', () => {
+    const hits = personAnniversaries(
+      [person({ birthday: '1926-09-22', deathday: '1976-09-24' })], Date.UTC(2026, 8, 20)
+    );
+    expect(hits).toHaveLength(1);
+    expect(hits[0].kind).toBe('death');
+  });
+
+  it('skips a person with no signature film to hang the piece on', () => {
+    expect(personAnniversaries([person({ film: null })], Date.UTC(2026, 2, 20))).toEqual([]);
+  });
+});
+
+describe('featureCandidates with people and originals', () => {
+  const kurosawa = {
+    id: 5, name: 'Akira Kurosawa', birthday: '1926-09-22', deathday: null,
+    film: { id: 346, title: 'Seven Samurai', release_date: '1954-04-26', vote_count: 4000, overview: '' }
+  };
+
+  it('a centenary outranks a 40th anniversary', () => {
+    const ranked = featureCandidates({
+      anniversaries: [{
+        id: 1, title: 'Turning Forty', year: 1986, releaseDate: '1986-09-22',
+        age: 40, daysAway: 2, weight: 75, voteCount: 9000, overview: ''
+      }],
+      people: [kurosawa],
+      now: Date.UTC(2026, 8, 20)
+    });
+    expect(ranked[0]).toMatchObject({ title: 'Seven Samurai', reason: 'person' });
+    expect(ranked[0].person).toContain('was born 100 years ago');
+  });
+
+  it('carries the new film an original is attached to', () => {
+    const [first] = featureCandidates({
+      originals: [{
+        original: { id: 277, title: 'Moana', year: 2016, release_date: '2016-11-23', vote_count: 9000 },
+        newTitle: 'Moana (2026)'
+      }],
+      now: Date.UTC(2026, 8, 20)
+    });
+    expect(first).toMatchObject({ title: 'Moana', reason: 'original', relatedTo: 'Moana (2026)' });
+  });
+
+  it('does not list one film twice when two claims land on it', () => {
+    const ranked = featureCandidates({
+      anniversaries: [{
+        id: 346, title: 'Seven Samurai', year: 1954, releaseDate: '1954-09-22',
+        age: 70, daysAway: 2, weight: 68, voteCount: 4000, overview: ''
+      }],
+      people: [kurosawa],
+      now: Date.UTC(2026, 8, 20)
+    });
+    expect(ranked).toHaveLength(1);
+    // The louder claim wins the slot.
+    expect(ranked[0].reason).toBe('person');
   });
 });
