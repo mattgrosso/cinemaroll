@@ -20,9 +20,9 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
 const require = createRequire(import.meta.url);
 
-const { shortlistReleases, anniversariesThisWeek, issueBrief, weekKey } =
+const { shortlistReleases, anniversariesThisWeek, featureCandidates, issueBrief, weekKey } =
   require(path.join(root, 'aws-lambda/newsletterCompose.js'));
-const { discoverReleases, enrichCandidate, anniversaryPool } =
+const { discoverReleases, enrichCandidate, anniversaryPool, trendingThisWeek } =
   require(path.join(root, 'aws-lambda/newsletterSources.js'));
 
 const readEnv = (file) => {
@@ -85,12 +85,18 @@ for (const row of shortlist) {
 
 const pool = await anniversaryPool(tmdbKey, asOf);
 const anniversaries = anniversariesThisWeek(pool, asOf);
-console.log(`\nanniversaries: ${anniversaries.length} in the coming week (from ${pool.length} pooled)\n`);
-for (const a of anniversaries.slice(0, 10)) {
-  console.log(`  ${pad(a.title, 34)} ${a.year} → turning ${String(a.age).padStart(3)}  in ${a.daysAway}d`);
+const trending = await trendingThisWeek(tmdbKey).catch(() => []);
+const features = featureCandidates({ anniversaries, trending, now: asOf });
+console.log(`\nfeature candidates: ${features.length} (${anniversaries.length} anniversaries from ${pool.length} pooled, ${trending.length} trending)\n`);
+console.log('  film                               yr   claim');
+for (const f of features) {
+  const claim = f.reason === 'anniversary'
+    ? `turns ${f.turning} in ${f.daysAway}d${f.alsoTrending ? ' + trending now' : ''}`
+    : 'back in this week\u2019s most-watched';
+  console.log(`  ${pad(f.title, 34)} ${pad(f.year, 4)} ${claim}`);
 }
 
-const brief = issueBrief({ shortlist, anniversaries, weekOf: weekKey(asOf) });
+const brief = issueBrief({ shortlist, features, weekOf: weekKey(asOf) });
 const out = path.join(root, 'newsletter-brief.json');
 fs.writeFileSync(out, JSON.stringify(brief, null, 2));
 console.log(`\nfull brief written to ${path.relative(process.cwd(), out)}`);

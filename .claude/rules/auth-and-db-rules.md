@@ -361,6 +361,27 @@ instead: a 45s cooldown (a double tap costs one model call, not two) and 20
 rebuilds per account per day. `yarn newsletter-e2e --double-tap` proves the
 cooldown.
 
+**The feature slot takes two kinds of claim**, ranked against each other by
+`featureCandidates`: a ROUND anniversary falling in the coming seven days
+(10/15/20/25/30/40/50/60/70/75/80/90/100, weighted so a 50th beats a 10th),
+or an old film back in TMDB's weekly trending list (`TRENDING_MIN_AGE_YEARS`
+= 8, weight 65 — above a 15th or 20th, below a 40th). A film with BOTH claims
+gets a bonus, because "it turns 40 this week AND people are watching it again"
+beats either alone. Note the trending signal is often EMPTY: TMDB's weekly
+list is dominated by new releases (on 2026-09-20 all 20 entries were 2026
+films), so anniversaries do nearly all the work in practice.
+
+The chosen film's occasion is stored as DATA (`reason`, `turning`, `daysAway`,
+`releaseDate`), not left to the prose, so the page can answer "how did you
+pick that movie?" — Matt's question, 2026-09-20.
+
+**Deploy the Lambda with `yarn deploy:newsletter`, never by hand.** The prompt
+inside `newsletter.js` is a template literal, and prose written about a
+`field` with backticks terminates it. That shipped once and surfaced only as a
+500 with `Runtime.UserCodeSyntaxError` in CloudWatch, AFTER the upload. The
+script runs `node --check` on all three sources and again on the bundled
+`index.js` before anything leaves the machine.
+
 Model is **Opus** here, alone among the routes — one call a week, so the choice
 is not a cost decision (Matt: "This is only going to happen once a week. It's
 like one call. I think we should use the most advanced model").

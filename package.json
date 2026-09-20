@@ -18,6 +18,7 @@
     "backup-db": "node scripts/backup-database.mjs",
     "restore-db": "node scripts/restore-database.mjs",
     "mint-test-token": "node scripts/mint-test-token.mjs",
+    "deploy:newsletter": "bash scripts/deploy-newsletter-lambda.sh",
     "newsletter-e2e": "node scripts/newsletter-e2e.mjs",
     "newsletter-dry-run": "node scripts/newsletter-dry-run.mjs",
     "fetch-bug-reports": "node scripts/fetch-bug-reports.mjs",

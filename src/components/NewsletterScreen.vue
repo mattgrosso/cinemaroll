@@ -96,12 +96,19 @@
       </section>
 
       <section v-if="issue.feature" class="newsletter-section newsletter-feature">
-        <h2 class="newsletter-section-title">{{ issue.feature.title }} turns {{ issue.feature.turning }}</h2>
+        <h2 class="newsletter-section-title">{{ featureTitle }}</h2>
+        <!-- "How did you pick that movie?" (Matt, 2026-09-20) should be
+             answerable on the page, not only in the prose — so the occasion
+             is stated as a fact, from the same data that did the choosing. -->
+        <p class="newsletter-feature-why">{{ featureWhy }}</p>
         <h3 class="newsletter-feature-headline">{{ issue.feature.headline }}</h3>
         <p v-if="issue.feature.hook" class="newsletter-hook">{{ issue.feature.hook }}</p>
         <p v-for="(para, index) in featureParagraphs" :key="index" class="newsletter-para">
           {{ para }}
         </p>
+        <div v-if="issue.feature.tmdb" class="newsletter-feature-actions">
+          <SendToHat :movies="issue.feature.tmdb" :note="hatNote" label="Add to a hat"/>
+        </div>
       </section>
 
       <footer class="newsletter-footer">
@@ -184,6 +191,29 @@ export default {
         .map((p) => p.trim())
         .filter(Boolean);
     },
+    // "X turns 40" only works for an anniversary; a film that is simply back
+    // in circulation has no number.
+    featureTitle () {
+      const f = this.issue?.feature;
+      if (!f) return '';
+      return f.turning ? `${f.title} turns ${f.turning}` : f.title;
+    },
+
+    // The occasion, in plain words, from the data that made the choice.
+    featureWhy () {
+      const f = this.issue?.feature;
+      if (!f) return '';
+      const released = this.longDate(f.releaseDate);
+      const parts = [];
+      if (f.turning) {
+        const when = f.daysAway === 0 ? 'today' : 'this week';
+        parts.push(`${f.turning} years old ${when}`);
+      }
+      if (f.reason === 'trending' || f.alsoTrending) parts.push('back in this week\u2019s most-watched');
+      if (released) parts.push(`released ${released}`);
+      return parts.join(' \u00b7 ');
+    },
+
     formattedWeek () {
       const key = this.issue?.weekKey;
       if (!key) return '';
@@ -212,6 +242,16 @@ export default {
   },
   methods: {
     posterUrl,
+    longDate (iso) {
+      if (!iso) return '';
+      const [y, m, d] = String(iso).split('-').map(Number);
+      if (!y || !m || !d) return '';
+      // Built from parts, never `new Date(iso)` — that parses as UTC and
+      // reports the previous day in a western timezone.
+      return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+        year: 'numeric', month: 'long', day: 'numeric'
+      });
+    },
     toggleOptIn () {
       this.$store.dispatch('saveNewsletterPrefs', { newsletter: !this.optedIn });
     },
@@ -305,14 +345,26 @@ export default {
 }
 
 .newsletter-pick {
+  /* flex-start, not the default stretch: a stretched row pulls the poster to
+     the height of the text beside it, which is exactly how these came out
+     squished (report, 2026-09-20 — "the posters are squished"). The house
+     rule for any row of posters is edge-aligned images and text that flows
+     (vue-ui.md). */
+  align-items: flex-start;
   display: flex;
   gap: 0.9rem;
   margin-bottom: 1.75rem;
 }
 
 .newsletter-poster {
+  /* TMDB's own poster ratio, declared rather than inferred, so the box is
+     the right shape before the image lands and can never be distorted by
+     whatever the row does. */
+  aspect-ratio: 2 / 3;
   border-radius: 0.3rem;
   flex: 0 0 auto;
+  height: auto;
+  object-fit: cover;
   width: 84px;
 }
 
@@ -391,6 +443,20 @@ export default {
 
 .newsletter-feature {
   margin-top: 2.5rem;
+}
+
+.newsletter-feature-why {
+  color: #ccc;   /* ~11:1 here; Bootstrap's muted grey would not pass */
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  margin: 0.15rem 0 0.6rem;
+  text-transform: uppercase;
+}
+
+.newsletter-feature-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.25rem;
 }
 
 .newsletter-feature-headline {

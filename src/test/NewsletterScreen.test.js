@@ -30,10 +30,15 @@ const issue = (over = {}) => ({
     id: 9,
     title: 'Down by Law',
     year: 1986,
+    reason: 'anniversary',
     turning: 40,
+    daysAway: 0,
+    releaseDate: '1986-09-20',
+    alsoTrending: false,
     headline: 'Three men, one cell, no plot',
     hook: 'Forty years on, it is still the funniest film about doing nothing.',
-    article: 'First paragraph about the film.\n\nSecond paragraph about its influence.'
+    article: 'First paragraph about the film.\n\nSecond paragraph about its influence.',
+    tmdb: { id: 9, title: 'Down by Law', poster_path: '/dbl.jpg', release_date: '1986-09-20' }
   },
   ...over
 });
@@ -214,6 +219,63 @@ describe('NewsletterScreen', () => {
       expect(scores).toContain('52 Metacritic');
       expect(scores).not.toContain('RT');
       expect(scores).not.toContain('No critic score yet');
+    });
+
+    // Matt, 2026-09-20: "it would be nice if there was a button at the bottom
+    // of the article to add that movie to a hat like we do for the other new
+    // releases."
+    it('the feature gets its own hat button, with TMDB-shaped fields', () => {
+      const wrapper = mountScreen({ state: { newsletterIssue: issue() } });
+      const hats = wrapper.findAllComponents({ name: 'SendToHat' });
+      expect(hats).toHaveLength(2);   // one pick, one feature
+      expect(hats[1].props('movies')).toMatchObject({ id: 9, poster_path: '/dbl.jpg' });
+    });
+
+    it('does not offer a hat for a feature with no TMDB card', () => {
+      const wrapper = mountScreen({
+        state: { newsletterIssue: issue({ feature: { ...issue().feature, tmdb: null } }) }
+      });
+      expect(wrapper.findAllComponents({ name: 'SendToHat' })).toHaveLength(1);
+    });
+
+    // "How did you pick that movie?" should be answerable on the page.
+    it('states the occasion that chose the film', () => {
+      const why = mountScreen({ state: { newsletterIssue: issue() } })
+        .find('.newsletter-feature-why').text();
+      expect(why).toContain('40 years old today');
+      expect(why).toContain('September 20, 1986');
+    });
+
+    it('says "this week" when the anniversary is not today', () => {
+      const why = mountScreen({
+        state: { newsletterIssue: issue({ feature: { ...issue().feature, daysAway: 3 } }) }
+      }).find('.newsletter-feature-why').text();
+      expect(why).toContain('40 years old this week');
+    });
+
+    // A film that is simply back in circulation has no number to turn.
+    it('handles a trending feature with no anniversary', () => {
+      const wrapper = mountScreen({
+        state: {
+          newsletterIssue: issue({
+            feature: {
+              ...issue().feature,
+              title: 'The Matrix',
+              reason: 'trending',
+              turning: null,
+              daysAway: null,
+              alsoTrending: true,
+              releaseDate: '1999-03-31'
+            }
+          })
+        }
+      });
+      // Scoped to the feature: .newsletter-section-title also matches the
+      // picks section's heading, which comes first in the document.
+      const title = wrapper.find('.newsletter-feature .newsletter-section-title').text();
+      expect(title).toContain('The Matrix');
+      expect(title).not.toContain('turns');
+      expect(wrapper.find('.newsletter-feature-why').text()).toContain('most-watched');
     });
 
     it('renders an issue with no feature at all', () => {

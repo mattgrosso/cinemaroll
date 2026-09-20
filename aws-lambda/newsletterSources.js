@@ -107,4 +107,35 @@ const anniversaryPool = async (key, now) => {
   return films;
 };
 
-module.exports = { json, discoverReleases, enrichCandidate, anniversaryPool };
+/**
+ * Films in TMDB's weekly trending list that are NOT new.
+ *
+ * An old film back in circulation is having a moment for a reason we cannot
+ * see from here — a re-release, a death, an awards run, a reference in
+ * something new — and the effect is enough to justify a piece even when the
+ * cause is invisible. The age filter is applied by featureCandidates, not
+ * here; this just fetches the week's list.
+ */
+const trendingThisWeek = async (key) => {
+  const data = await json(`${TMDB}/trending/movie/week?api_key=${key}&region=US`);
+  return data.results || [];
+};
+
+/**
+ * Poster and backdrop for one film, so the feature can carry a hat button
+ * with the fields toHatMovie actually reads.
+ */
+const filmCard = async (key, id) => {
+  const d = await json(`${TMDB}/movie/${id}?api_key=${key}`);
+  return {
+    id: d.id,
+    title: d.title || '',
+    poster_path: d.poster_path || null,
+    backdrop_path: d.backdrop_path || null,
+    release_date: d.release_date || '',
+    overview: d.overview || '',
+    vote_average: Number.isFinite(d.vote_average) ? d.vote_average : null
+  };
+};
+
+module.exports = { json, discoverReleases, enrichCandidate, anniversaryPool, trendingThisWeek, filmCard };

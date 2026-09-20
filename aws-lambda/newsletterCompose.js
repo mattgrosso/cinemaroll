@@ -246,6 +246,89 @@ function anniversariesThisWeek (films = [], now = Date.now(), windowDays = 7) {
   return out;
 }
 
+// A film is also worth writing about when it is simply BACK — re-entering
+// TMDB's weekly trending list decades after release means something happened:
+// a re-release, a death, an awards run, a streaming arrival, a reference in
+// something new. We can see the effect without knowing the cause, which is
+// enough to justify a piece.
+//
+// Matt, 2026-09-20: "we ought to scan the whole week for information or
+// things that have brought it up… whatever the most noteworthy anniversary
+// or, like I said, something's in the zeitgeist."
+const TRENDING_WEIGHT = 65;
+
+// Below this a "trending old film" is just catalogue drift.
+const TRENDING_MIN_AGE_YEARS = 8;
+
+/**
+ * Everything with a claim on the feature slot this week, ranked.
+ *
+ * Two kinds of claim, scored on one scale so they can compete:
+ *
+ *   anniversary — a round birthday falling in the coming seven days. The
+ *                 roundness is the hook, so a 50th outranks a 10th.
+ *   trending    — an old film back in TMDB's weekly trending list.
+ *
+ * A film with BOTH claims is the strongest thing on the list and gets a
+ * bonus, because "it turns 40 this week AND people are watching it again" is
+ * a better reason than either alone.
+ */
+function featureCandidates ({
+  anniversaries = [],
+  trending = [],
+  now = Date.now(),
+  minAgeYears = TRENDING_MIN_AGE_YEARS,
+  limit = 12
+} = {}) {
+  const thisYear = new Date(now).getUTCFullYear();
+  const byId = new Map();
+
+  for (const a of anniversaries) {
+    byId.set(a.id, {
+      id: a.id,
+      title: a.title,
+      year: a.year,
+      releaseDate: a.releaseDate,
+      overview: a.overview,
+      voteCount: a.voteCount,
+      reason: 'anniversary',
+      turning: a.age,
+      daysAway: a.daysAway,
+      alsoTrending: false,
+      weight: a.weight
+    });
+  }
+
+  for (const t of trending) {
+    const year = parseInt(String(t?.release_date || '').slice(0, 4), 10);
+    if (!Number.isFinite(year) || thisYear - year < minAgeYears) continue;
+    const existing = byId.get(t.id);
+    if (existing) {
+      // Both claims at once — the best hook there is.
+      existing.alsoTrending = true;
+      existing.weight += 10;
+      continue;
+    }
+    byId.set(t.id, {
+      id: t.id,
+      title: t.title,
+      year,
+      releaseDate: t.release_date,
+      overview: t.overview || '',
+      voteCount: t.vote_count || 0,
+      reason: 'trending',
+      turning: null,
+      daysAway: null,
+      alsoTrending: true,
+      weight: TRENDING_WEIGHT
+    });
+  }
+
+  return [...byId.values()]
+    .sort((a, b) => (b.weight - a.weight) || (b.voteCount - a.voteCount))
+    .slice(0, limit);
+}
+
 // --- The issue ---------------------------------------------------------------
 
 /**
@@ -256,7 +339,7 @@ function anniversariesThisWeek (films = [], now = Date.now(), windowDays = 7) {
  * is null it stays null, so the prompt can say "no critic score" rather than
  * letting the model fill the hole from whatever it half-recalls.
  */
-function issueBrief ({ shortlist = [], anniversaries = [], profile = null, weekOf = null } = {}) {
+function issueBrief ({ shortlist = [], features = [], profile = null, weekOf = null } = {}) {
   return {
     weekOf,
     profile,
@@ -274,13 +357,19 @@ function issueBrief ({ shortlist = [], anniversaries = [], profile = null, weekO
       streamingOn: r.where.stream,
       rentOn: r.where.rent
     })),
-    anniversaries: anniversaries.map((a) => ({
-      id: a.id,
-      title: a.title,
-      year: a.year,
-      turning: a.age,
-      releaseDate: a.releaseDate,
-      daysAway: a.daysAway
+    // Named `features` rather than `anniversaries` since 2026-09-20: a round
+    // birthday is one claim on the slot, being back in circulation is
+    // another, and the model is told which is which so it can say WHY this
+    // film, this week.
+    features: features.map((f) => ({
+      id: f.id,
+      title: f.title,
+      year: f.year,
+      reason: f.reason,
+      turning: f.turning,
+      releaseDate: f.releaseDate,
+      daysAway: f.daysAway,
+      alsoTrendingNow: f.alsoTrending
     }))
   };
 }
@@ -323,12 +412,15 @@ module.exports = {
   VOTE_FLOOR,
   MAX_AGE_YEARS,
   ANNIVERSARY_YEARS,
+  TRENDING_WEIGHT,
+  TRENDING_MIN_AGE_YEARS,
   availability,
   criticScores,
   acclaim,
   releaseYear,
   shortlistReleases,
   anniversariesThisWeek,
+  featureCandidates,
   issueBrief,
   weekKey,
   issueDue

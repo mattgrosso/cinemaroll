@@ -51,11 +51,14 @@ const Anthropic = require('@anthropic-ai/sdk');
 const {
   shortlistReleases,
   anniversariesThisWeek,
+  featureCandidates,
   issueBrief,
   weekKey,
   issueDue
 } = require('./newsletterCompose.js');
-const { discoverReleases, enrichCandidate, anniversaryPool } = require('./newsletterSources.js');
+const {
+  discoverReleases, enrichCandidate, anniversaryPool, trendingThisWeek, filmCard
+} = require('./newsletterSources.js');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
 const DATABASE_URL = 'https://movie-log-8c4d5-default-rtdb.firebaseio.com';
@@ -299,8 +302,16 @@ ${personaFor(profile)}
 NEW RELEASES AVAILABLE THIS WEEK (facts; pick from these and nothing else)
 ${JSON.stringify(brief.releases, null, 1)}
 
-FILMS WITH AN ANNIVERSARY THIS WEEK (pick exactly one to write about)
-${JSON.stringify(brief.anniversaries, null, 1)}
+FILMS WITH A CLAIM ON THIS WEEK (pick exactly one to write about)
+Each carries a "reason" field. "anniversary" means a round birthday falls
+inside the coming seven days, and "turning" is the number of years. "trending"
+means an older film is back in this week's most-watched list, which usually
+means something happened — a re-release, a death, an awards run, a new film
+that references it. "alsoTrendingNow" on an anniversary film means both at
+once.
+Pick the one you can write the most interesting piece about, not simply the
+largest number, and make the hook say plainly why THIS film THIS week.
+${JSON.stringify(brief.features, null, 1)}
 
 Return ONLY valid JSON, no markdown fence, in exactly this shape:
 
@@ -315,7 +326,7 @@ Return ONLY valid JSON, no markdown fence, in exactly this shape:
   "feature": {
     "id": <the chosen anniversary film's id>,
     "headline": "A title for the piece.",
-    "hook": "One sentence on why this film, this week.",
+    "hook": "One sentence on why this film, this week — name the actual occasion (the anniversary, or that it is back in circulation).",
     "article": "500-700 words. Its making, how it landed at the time, what it influenced, why it still matters. Paragraphs separated by \\n\\n."
   }
 }
@@ -361,13 +372,19 @@ const buildIssue = async ({ topKey, profile, now, alwaysOn }) => {
 
   const library = new Set(profile?.seenIds || []);
   const shortlist = shortlistReleases({ candidates, enriched, library, now });
-  const anniversaries = anniversariesThisWeek(await anniversaryPool(tmdbKey, now), now);
 
-  if (!shortlist.length && !anniversaries.length) {
-    return { empty: true, reason: 'nothing available and no anniversary' };
+  // Two claims on the feature slot: a round birthday this week, or an old
+  // film back in TMDB's weekly trending list. Both are fetched; ranking them
+  // against each other is featureCandidates' job.
+  const anniversaries = anniversariesThisWeek(await anniversaryPool(tmdbKey, now), now);
+  const trending = await trendingThisWeek(tmdbKey).catch(() => []);
+  const features = featureCandidates({ anniversaries, trending, now });
+
+  if (!shortlist.length && !features.length) {
+    return { empty: true, reason: 'nothing available and nothing worth featuring' };
   }
 
-  const brief = issueBrief({ shortlist, anniversaries, profile, weekOf: weekKey(now) });
+  const brief = issueBrief({ shortlist, features, profile, weekOf: weekKey(now) });
   const written = await writeIssue({ brief, profile });
 
   // Re-attach the facts to the model's judgement by id. The model returns an
@@ -411,16 +428,28 @@ const buildIssue = async ({ topKey, profile, now, alwaysOn }) => {
     })
     .filter(Boolean);
 
-  const chosen = anniversaries.find((a) => a.id === written.feature?.id) || anniversaries[0] || null;
+  const chosen = features.find((f) => f.id === written.feature?.id) || features[0] || null;
+  // The feature gets a hat button too (Matt, 2026-09-20: "it would be nice if
+  // there was a button at the bottom of the article to add that movie to a
+  // hat like we do for the other new releases"), so it needs the same
+  // TMDB-shaped fields the picks carry.
+  const featureCard = chosen ? await filmCard(tmdbKey, chosen.id).catch(() => null) : null;
   const feature = chosen && written.feature
     ? {
         id: chosen.id,
         title: chosen.title,
         year: chosen.year,
-        turning: chosen.age,
+        // Why it was chosen, kept as DATA rather than left to the prose —
+        // "how did you pick that movie?" should be answerable on the page.
+        reason: chosen.reason,
+        turning: chosen.turning,
+        daysAway: chosen.daysAway,
+        releaseDate: chosen.releaseDate,
+        alsoTrending: chosen.alsoTrending,
         headline: String(written.feature.headline || '').trim(),
         hook: String(written.feature.hook || '').trim(),
-        article: String(written.feature.article || '').trim()
+        article: String(written.feature.article || '').trim(),
+        tmdb: featureCard
       }
     : null;
 

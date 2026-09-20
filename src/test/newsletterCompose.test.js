@@ -6,6 +6,7 @@ import {
   acclaim,
   shortlistReleases,
   anniversariesThisWeek,
+  featureCandidates,
   issueBrief,
   weekKey,
   issueDue,
@@ -280,7 +281,7 @@ describe('issueBrief', () => {
         scores: { rottenTomatoes: null, metacritic: null, imdb: null },
         where: { summary: 'Streaming on Netflix', stream: ['Netflix'], rent: [] }
       }],
-      anniversaries: [],
+      features: [],
       weekOf: '2026-09-18'
     });
     expect(brief.releases[0]).toMatchObject({
@@ -360,5 +361,73 @@ describe('the two Lambdas agree on what is not an account', () => {
 
   it('excludes testing-database, which is a real account devMode writes to', () => {
     expect(roots('../../aws-lambda/newsletter.js')).toContain('testing-database');
+  });
+});
+
+describe('featureCandidates', () => {
+  const anniversary = (over) => ({
+    id: 1, title: 'Turning Fifty', year: 1976, releaseDate: '1976-09-22',
+    age: 50, daysAway: 2, weight: 90, voteCount: 4000, overview: '', ...over
+  });
+  const trend = (over) => ({
+    id: 9, title: 'Back Again', release_date: '1999-03-31', vote_count: 20000,
+    overview: '', ...over
+  });
+
+  it('ranks a big anniversary above a film that is merely trending', () => {
+    const ranked = featureCandidates({
+      anniversaries: [anniversary()],
+      trending: [trend()],
+      now: Date.UTC(2026, 8, 20)
+    });
+    expect(ranked.map((f) => f.title)).toEqual(['Turning Fifty', 'Back Again']);
+    expect(ranked[1]).toMatchObject({ reason: 'trending', turning: null });
+  });
+
+  // Matt, 2026-09-20: "something's in the zeitgeist". A film back in
+  // circulation should beat a minor birthday nobody would notice.
+  it('ranks a trending film above a 15th anniversary', () => {
+    const ranked = featureCandidates({
+      anniversaries: [anniversary({ id: 2, title: 'Turning Fifteen', age: 15, weight: 45 })],
+      trending: [trend()],
+      now: Date.UTC(2026, 8, 20)
+    });
+    expect(ranked[0].title).toBe('Back Again');
+  });
+
+  it('a film with BOTH claims outranks either alone', () => {
+    const ranked = featureCandidates({
+      anniversaries: [
+        anniversary({ id: 1, title: 'Just A Birthday', age: 40, weight: 75 }),
+        anniversary({ id: 2, title: 'Birthday And Back', age: 40, weight: 75, voteCount: 10 })
+      ],
+      trending: [trend({ id: 2, title: 'Birthday And Back', release_date: '1986-09-22' })],
+      now: Date.UTC(2026, 8, 20)
+    });
+    expect(ranked[0]).toMatchObject({ title: 'Birthday And Back', reason: 'anniversary', alsoTrending: true });
+  });
+
+  // Trending is full of this year's films; only an OLD one being back means
+  // anything.
+  it('ignores a new release in the trending list', () => {
+    const ranked = featureCandidates({
+      anniversaries: [],
+      trending: [trend({ id: 5, title: 'Out Last Month', release_date: '2026-08-01' })],
+      now: Date.UTC(2026, 8, 20)
+    });
+    expect(ranked).toEqual([]);
+  });
+
+  it('ignores a trending entry with no usable release date', () => {
+    expect(featureCandidates({
+      anniversaries: [], trending: [trend({ id: 6, release_date: '' })], now: Date.UTC(2026, 8, 20)
+    })).toEqual([]);
+  });
+
+  it('carries the occasion through, so the page can say why', () => {
+    const [first] = featureCandidates({
+      anniversaries: [anniversary({ daysAway: 0 })], trending: [], now: Date.UTC(2026, 8, 20)
+    });
+    expect(first).toMatchObject({ reason: 'anniversary', turning: 50, daysAway: 0, releaseDate: '1976-09-22' });
   });
 });
