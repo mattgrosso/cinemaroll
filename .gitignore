@@ -27,3 +27,4 @@ pnpm-debug.log*
 
 # Vite writes vite.config.mjs.timestamp-<n>.mjs beside the config while loading it
 vite.config.*.timestamp-*
+newsletter-brief.json
