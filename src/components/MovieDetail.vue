@@ -454,11 +454,11 @@
         </div>
 
         <!-- Writers -->
-        <div v-if="getCrewMember('Writer', false).length" class="writers mb-3">
-          <h4>Writer<span v-if="multipleEntries(getCrewMember('Writer', false))">s</span></h4>
+        <div v-if="writers.length" class="writers mb-3">
+          <h4>Writer<span v-if="multipleEntries(writers)">s</span></h4>
           <p class="long-list">
-            <a v-for="(name, index) in getCrewMember('Writer', false)" :key="index" class="link" @click.stop="searchFor(name, 'writer')">
-              {{name}}<span v-if="countCastCrew(name)" class="small-count-bubble">&nbsp;({{ countCastCrew(name) }})</span><span v-if="index !== getCrewMember('Writer', false).length - 1">&nbsp;&nbsp;</span>
+            <a v-for="(name, index) in writers" :key="index" class="link" @click.stop="searchFor(name, 'writer')">
+              {{name}}<span v-if="countCastCrew(name)" class="small-count-bubble">&nbsp;({{ countCastCrew(name) }})</span><span v-if="index !== writers.length - 1">&nbsp;&nbsp;</span>
             </a>
           </p>
         </div>
@@ -597,6 +597,7 @@ import { warmImageCache, posterUrl, backdropUrl } from '../assets/javascript/off
 import { countDirectors, countCastCrew, countGenres, countKeywords, countStudios, countPlaces } from '../assets/javascript/entityCounts.js';
 import { placeNames, PLACE_TYPES } from '../assets/javascript/places.js';
 import { genreIdFor } from '../assets/javascript/tmdbGenres.js';
+import { WRITER_JOBS } from '../assets/javascript/personRoleGroups.js';
 
 export default {
   name: 'MovieDetail',
@@ -930,6 +931,23 @@ export default {
     showShorts () {
       const value = this.$store.state.settings?.includeShorts;
       return typeof value === 'boolean' ? value : false;
+    },
+
+    /**
+     * Every writing credit on this film, in credit order, one entry per person.
+     *
+     * Matched against WRITER_JOBS rather than the word "Writer", which is the
+     * job title more than half the library has never carried. Deduped by name
+     * because a novelist who also wrote the screenplay holds two credits and is
+     * still one writer.
+     */
+    writers () {
+      const crew = this.topStructure(this.result)?.crew;
+      if (!Array.isArray(crew)) return [];
+      const names = crew
+        .filter((member) => WRITER_JOBS.includes(member?.job))
+        .map((member) => member.name);
+      return [...new Set(names)];
     },
 
     countsDirectors () {

@@ -31,6 +31,15 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
 - **It is a pure local lookup — no live TMDB fetch on view.** That's deliberate. Optional
   data (box office, production countries) is `v-if`-guarded so older library entries just
   don't render the section, and a Settings-panel backfill catches them up.
+- **Writing credits match `WRITER_JOBS` (`personRoleGroups.js`), never the word
+  "Writer".** TMDB has no single writing job: 754 of 1,368 movies carry
+  "Screenplay" / "Story" / "Novel" and no plain "Writer" at all, so the old
+  substring match hid the Writers section on more than half the library (The
+  Pelican Brief, report -P1wcbGwHZCGW4YBOtRV, 2026-09-20). The match is by
+  EXACT title — `storedEntry.js` keeps crew by substring, so "Sound Story
+  Editor" reaches storage and must not read as writing — and the `writers`
+  computed dedupes by name, because a novelist who also adapted their own book
+  holds two credits and is one writer.
 - TMDB's `0` means "not available" and is indistinguishable from a genuinely free
   production — treat `0` and `undefined` identically as unknown.
 - Awards content scrolls internally (`.awards-body`, `max-height: 150px`), matching the

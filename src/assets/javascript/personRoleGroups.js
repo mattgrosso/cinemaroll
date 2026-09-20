@@ -55,6 +55,19 @@ export function personNameMatcher (value) {
 }
 
 /**
+ * TMDB's writing credits, exactly as it spells them. There is no single
+ * "Writer" job: 754 of 1,368 movies in the library carry none, crediting
+ * "Screenplay" / "Story" / "Novel" instead. Anything matching on the word
+ * "Writer" alone finds nothing on more than half the library — which is how
+ * MovieDetail hid its Writers section on The Pelican Brief (report
+ * -P1wcbGwHZCGW4YBOtRV).
+ *
+ * Exact titles, not substrings: `storedEntry.js` keeps crew by substring, so
+ * "Sound Story Editor" survives into storage and must not read as writing.
+ */
+export const WRITER_JOBS = ['Writer', 'Screenplay', 'Story', 'Novel'];
+
+/**
  * Which section a crew credit belongs in. Mirrors the role detection the
  * free-text grouped view does inline, in the same order — the order matters,
  * because "Director of Photography" must reach Cinematographer and not
@@ -68,7 +81,7 @@ export function crewRoleKey (job) {
   // are not directing credits.
   if (raw === 'Director') return 'director';
   if (lower.includes('producer')) return 'producer';
-  if (['Writer', 'Screenplay', 'Story', 'Novel'].includes(raw)) return 'writer';
+  if (WRITER_JOBS.includes(raw)) return 'writer';
   if (lower.includes('composer') || lower.includes('music') || lower.includes('score')) return 'music';
   if (lower.includes('editor')) return 'editor';
   if (lower.includes('photo') || lower.includes('cinematographer')) return 'cinematographer';

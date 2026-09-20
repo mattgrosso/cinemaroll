@@ -175,6 +175,59 @@ describe('MovieDetail', () => {
       expect(wrapper.vm.getCrewMember('Director')).toEqual(['Jane Director', 'Co Director'])
     })
 
+    // Report -P1wcbGwHZCGW4YBOtRV, 2026-09-20: "Why don't I see writer on my
+    // movie view?" — from The Pelican Brief, whose only writing credits are
+    // "Screenplay" and "Novel". The section matched on the word "Writer",
+    // which 754 of 1,368 movies in the library do not carry, so it rendered
+    // for none of them.
+    it('lists Screenplay/Story/Novel credits as writers, not just plain "Writer"', async () => {
+      await wrapper.setData({
+        result: makeResult({
+          movie: {
+            crew: [
+              { name: 'Jane Director', job: 'Director' },
+              { name: 'Alan J. Pakula', job: 'Screenplay' },
+              { name: 'John Grisham', job: 'Novel' }
+            ]
+          }
+        })
+      })
+
+      const section = wrapper.find('.writers')
+      expect(section.exists()).toBe(true)
+      expect(section.text()).toContain('Writers')
+      expect(section.text()).toContain('Alan J. Pakula')
+      expect(section.text()).toContain('John Grisham')
+    })
+
+    it('counts a writer credited twice on one film as one writer', async () => {
+      await wrapper.setData({
+        result: makeResult({
+          movie: {
+            crew: [
+              { name: 'Michael Crichton', job: 'Novel' },
+              { name: 'Michael Crichton', job: 'Screenplay' }
+            ]
+          }
+        })
+      })
+
+      expect(wrapper.vm.writers).toEqual(['Michael Crichton'])
+      // Singular heading: one person, however many credits.
+      expect(wrapper.find('.writers').text()).not.toContain('Writers')
+    })
+
+    it('does not read a substring job like "Sound Story Editor" as writing', async () => {
+      await wrapper.setData({
+        result: makeResult({
+          movie: { crew: [{ name: 'Sam Sound', job: 'Sound Story Editor' }] }
+        })
+      })
+
+      expect(wrapper.vm.writers).toEqual([])
+      expect(wrapper.find('.writers').exists()).toBe(false)
+    })
+
     it('topStructure spreads the movie and attaches flatKeywords', () => {
       const top = wrapper.vm.topStructure(makeResult())
       expect(top.title).toBe('Test Movie')
