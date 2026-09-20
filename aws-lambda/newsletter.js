@@ -12,6 +12,16 @@
 //        POST /newsletter/rebuild  - rebuild this week's issue NOW for the
 //                                    caller. The testing switch Matt asked
 //                                    for; the app puts it behind devMode.
+//   3. Async self-invoke ({ rebuildFor: <topKey> }): the work the HTTP route
+//                                    asks for, done off the request.
+//
+// WHY THE REBUILD IS ASYNCHRONOUS. An HTTP API integration times out at 30
+// seconds, hard, and a build is ~30 TMDB/OMDb round trips plus a frontier
+// model call — the first real attempt came back 503 after exactly 30s with
+// the Lambda still working. So the HTTP route verifies the caller, fires an
+// Event-type invoke of this same function, and answers 202 immediately; the
+// app polls until the issue lands. The scheduled Friday sweep has no such
+// limit and does its work inline.
 //
 // THE DIVISION OF LABOUR, which everything here is arranged around:
 //
@@ -35,6 +45,7 @@
 //   VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT
 
 const crypto = require('crypto');
+const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 const webpush = require('web-push');
 const Anthropic = require('@anthropic-ai/sdk');
 const {
@@ -77,6 +88,7 @@ const QA_ACCOUNT_KEYS = new Set(['cinemaroll-tester-example-com']);
 const MODEL = 'claude-opus-5';
 
 const client = new Anthropic();
+const lambda = new LambdaClient({});
 
 webpush.setVapidDetails(
   process.env.VAPID_SUBJECT || 'mailto:mattgrosso@gmail.com',
@@ -482,6 +494,18 @@ const emailToDatabaseKey = (email) =>
   (typeof email === 'string' && email ? email.replace(UNSAFE_KEY_PATTERN, '-') : null);
 
 exports.handler = async (event) => {
+  // The async half of a rebuild: one named account, ignoring the schedule.
+  if (event?.rebuildFor) {
+    try {
+      const result = await runForAccount(event.rebuildFor, { now: Date.now(), alwaysOn: true });
+      console.log('Rebuild:', JSON.stringify(result));
+      return result;
+    } catch (error) {
+      console.error(`Rebuild for ${event.rebuildFor} failed:`, error);
+      throw error;
+    }
+  }
+
   // EventBridge sends no requestContext; API Gateway always does.
   if (!event?.requestContext) {
     const results = await runSweep();
@@ -499,12 +523,17 @@ exports.handler = async (event) => {
   if (!topKey) return response(400, { error: 'No account key for that email' });
 
   try {
-    // The testing switch: rebuild this week's issue now, ignoring the day and
-    // the already-sent check. It still respects the opt-in.
-    const result = await runForAccount(topKey, { now: Date.now(), alwaysOn: true });
-    return response(200, result);
+    // Hand the work to a second invocation of this same function and answer
+    // now — see "WHY THE REBUILD IS ASYNCHRONOUS" at the top. The caller is
+    // already verified, so the async payload carries only the account key.
+    await lambda.send(new InvokeCommand({
+      FunctionName: process.env.AWS_LAMBDA_FUNCTION_NAME,
+      InvocationType: 'Event',
+      Payload: Buffer.from(JSON.stringify({ rebuildFor: topKey }))
+    }));
+    return response(202, { building: true, topKey });
   } catch (error) {
-    console.error(`Rebuild for ${topKey} failed:`, error);
+    console.error(`Could not start a rebuild for ${topKey}:`, error);
     return response(500, { error: error.message });
   }
 };

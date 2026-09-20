@@ -132,11 +132,13 @@ Firebase Realtime Database, keyed by the user's sanitized email:
 /{user-email-key}/
   ├── movieLog/            # rated movies
   ├── settings/            # preferences, tags, personal awards, game wins
+  ├── newsletter/          # prefs, the client-published taste profile, issues
   └── academyAwardWinners/ # cached awards data
 /bugReports/               # write-only by clients; triage via Admin SDK
 ```
 
-External data: TMDB (movie metadata), a `film-awards-api` on Railway (Academy Awards),
+External data: TMDB (movie metadata), OMDb (Rotten Tomatoes + Metacritic, newsletter
+only, server-side key), a `film-awards-api` on Railway (Academy Awards),
 `src/assets/data/otherAwardsWinners.json` (Golden Globes / BAFTA / Cannes / Venice,
 scraped from Wikipedia wikitext), Letterboxd (scraping + deep links).
 
@@ -149,7 +151,8 @@ scraped from Wikipedia wikitext), Letterboxd (scraping + deep links).
 - `src/store/index.js` — Vuex + Firebase
 - `src/utils/` — IndexedDB queues, bug reports, small helpers
 - `src/test/` — ~79 Vitest files
-- `aws-lambda/` — the AI endpoint + push sender (separate deployables, not linted)
+- `aws-lambda/` — the AI endpoint, push sender and weekly newsletter (separate
+  deployables, not linted). See `.claude/rules/auth-and-db-rules.md`.
 - `scripts/` — db-rules generator, bug-report triage
 
 **Preference: extract pure logic into `src/assets/javascript/` and unit-test it directly**
@@ -168,6 +171,8 @@ rather than only through component mounts. That's why `searchFiltering.js`,
 | `yarn build` / `yarn deploy` | build (Vite) / deploy to AWS S3 + CloudFront |
 | `yarn preview` | serve the built `dist/` locally — how a production build gets eyeballed |
 | `yarn generate-db-rules` | regenerate `database.rules.json` — never hand-edit it |
+| `yarn newsletter-dry-run` | build this week's newsletter BRIEF from live data — no keys, no writes, no model call |
+| `yarn newsletter-e2e` | build a REAL issue end to end (model included) against the tester account |
 | `yarn fetch-bug-reports` | unresolved in-app bug reports, newest first |
 | `yarn resolve-bug-report <id…>` | mark reports resolved |
 

@@ -299,3 +299,80 @@ what's missing — profiles are ~100KB each.
 Friend-log body: `prefs.friendLogScores` (default on) is the RECIPIENT's choice to hear
 about the film without the number; a null score is the rater's sharing tier. Both cases
 live in `pushCadence.friendLogBody`, where the tests are.
+
+## The newsletter Lambda (`aws-lambda/newsletter.js`, deployed as `cinemaroll-newsletter`)
+
+The Friday newsletter (Matt, 2026-09-20, after Brian's system). Same auth
+pattern as the other two — Firebase ID token verified with node crypto for the
+HTTP route, service-account OAuth for admin RTDB — plus a scheduled sweep.
+
+**The division of labour is the whole design.** TMDB says what became available
+and where it can be watched; OMDb says what critics scored it; the APP says
+what the reader's taste is; the model RANKS and WRITES and is told the facts
+rather than asked to remember them. A film released this week is past any
+model's training cutoff, so asking it what critics thought is asking it to
+invent exactly what we most want to be true. Every number in a release blurb
+comes from the brief, re-attached to the model's judgement **by id** after the
+call — a hallucinated field cannot reach the screen even if one is emitted.
+
+**The client computes the taste profile** (`src/assets/javascript/newsletterProfile.js`
+→ `{topKey}/newsletter/profile`), for the same reason `pushDigest.js` exists,
+only harder: `calculatedTotal` is never persisted, so a score only exists where
+`getRating` runs. Never port the rating maths into the Lambda.
+
+**Eligibility lives in `newsletterCompose.js`** — pure, dependency-free
+CommonJS, tested from `src/test/newsletterCompose.test.js`, the same shape as
+`pushCadence.js`. Three rules there were each found by running it against live
+data, and each has a test:
+
+- **A digital release date is not a release date.** TMDB logs re-releases and
+  new physical editions with fresh `release_type` 4/5 dates, so a straight
+  window query put FIGHT CLUB (1999) in a list of this week's new films.
+- **Acclaim is RT + Metacritic, never IMDb.** Ranking on all three put BATMAN:
+  KNIGHTFALL PART 1 second on the whole shortlist with no RT score, no
+  Metacritic score and an IMDb of 8.1. IMDb's average is fan enthusiasm wearing
+  a score's clothing — the exact inflation OMDb was added to correct for. It
+  stays in the brief as context the model may mention; it gets no vote.
+- **A missing score is null, never zero.** Direct-to-video, foreign and small
+  documentary releases routinely carry none, and a zero deletes that whole
+  class of film. Same distinction MovieDetail makes for box-office `0`.
+
+**`NON_ACCOUNT_ROOTS` must stay byte-identical to push-notify.js's.** The first
+draft guessed it and carried Movie Hat's `requests`/`siteUsers` while omitting
+`testing-database` — which is a real readable account, devMode's, and would
+have been sent a newsletter. A test asserts the two lists match.
+
+**The rebuild is asynchronous, and has to be.** An HTTP API integration times
+out at **30 seconds**, hard; a build is ~30 TMDB/OMDb round trips plus a
+frontier-model call and measures ~52s end to end. The first attempt came back
+503 at exactly 30s with the Lambda still working. So `POST /newsletter/rebuild`
+verifies the caller, fires an `InvocationType: 'Event'` invoke of the same
+function with `{ rebuildFor: <topKey> }`, and answers **202**; the store polls
+`loadNewsletter` until `builtAt` CHANGES (the week key is the same issue being
+replaced, so its presence proves nothing). The Friday sweep has no such limit
+and works inline.
+
+Model is **Opus** here, alone among the routes — one call a week, so the choice
+is not a cost decision (Matt: "This is only going to happen once a week. It's
+like one call. I think we should use the most advanced model").
+
+Verify without signing anyone in: `yarn newsletter-dry-run` proves the facts
+half from a laptop (no keys, no writes, no model); `yarn newsletter-e2e` proves
+the rest, building a real issue against the TESTER account from a real
+library's taste profile, via a custom token exchanged for an ID token.
+
+Infra (all `--profile personal`, us-east-1): Lambda `cinemaroll-newsletter`
+(nodejs22.x, 512MB, **300s**, role `cinemaroll-push-role` plus inline policy
+`cinemaroll-newsletter-self-invoke`), HTTP API `lpou4xxxng` ($default, throttle
+2/5), EventBridge rule `cinemaroll-newsletter-friday` at
+`cron(0 13 ? * FRI *)`. Env: `FIREBASE_SA`, `TMDB_API_KEY`, `OMDB_API_KEY`,
+`ANTHROPIC_API_KEY`, `VAPID_*`. Redeploy is the push Lambda's recipe with
+`index.js` = `newsletter.js` plus `newsletterCompose.js` and
+`newsletterSources.js`.
+
+**`.env` must end with a newline.** Appending a line to it with `>>` when it
+did not glued `VUE_APP_NEWSLETTER_API_URL` onto the end of
+`VUE_APP_VAPID_PUBLIC_KEY`'s value, and `version.js`'s `dotenv.parse` rewrite
+then silently kept the corrupted key and dropped the new one. It shipped in
+v1.116.3 before anyone noticed. Check `tail -c 1 .env` before appending, and
+prefer rewriting the file over appending to it.

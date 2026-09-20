@@ -37,6 +37,12 @@ import { buildMirrorFeed } from "../assets/javascript/mirrorFeed.js";
 import { buildPushDigest } from "../assets/javascript/pushDigest.js";
 import { buildNewsletterProfile } from "../assets/javascript/newsletterProfile.js";
 import { postToNewsletter } from "../utils/newsletterRequest.js";
+
+// A rebuild takes about a minute end to end (measured at ~52s against the
+// real APIs), so the poll has to outlast that with room to spare without
+// hammering the database: 5s apart, up to two and a half minutes.
+const NEWSLETTER_REBUILD_POLL_MS = 5000;
+const NEWSLETTER_REBUILD_TRIES = 30;
 import { pushPrefsWithDefaults } from "../assets/javascript/pushPrefs.js";
 import { pendingUpdates, reconcilePending } from "../assets/javascript/recommendationStats.js";
 import { toInterchange, profileFromFeed, buildInvite, parseInvite, buildConnectRequest, normalizeInboxRequests, buildDirectoryEntry, normalizeDirectory, findSubscription, dedupeExternalFriends, FEDERATED_APPS } from "../assets/javascript/interchange.js";
@@ -2479,12 +2485,27 @@ export default createStore({
     },
     // devMode only (the screen gates the button). Rebuilds THIS week's issue
     // now rather than waiting for Friday — Matt's testing switch.
+    //
+    // The endpoint answers 202 and builds off the request: an HTTP API
+    // integration times out at 30 seconds and a build is ~30 API round trips
+    // plus a frontier-model call (measured: ~52s). So this polls for the new
+    // issue rather than waiting on the response, and identifies it by
+    // `builtAt` CHANGING — the week key is the same issue being replaced, so
+    // its presence proves nothing.
     async rebuildNewsletter (context) {
       await context.dispatch('publishNewsletterProfile');
+      const before = context.state.newsletterIssue?.builtAt ?? null;
+
       const { data } = await postToNewsletter('/newsletter/rebuild', {});
       if (data?.skipped) throw new Error(`Nothing built: ${data.skipped}`);
-      await context.dispatch('loadNewsletter');
-      return data;
+
+      for (let tries = 0; tries < NEWSLETTER_REBUILD_TRIES; tries += 1) {
+        await new Promise((resolve) => setTimeout(resolve, NEWSLETTER_REBUILD_POLL_MS));
+        await context.dispatch('loadNewsletter');
+        const now = context.state.newsletterIssue?.builtAt ?? null;
+        if (now && now !== before) return context.state.newsletterIssue;
+      }
+      throw new Error('The issue is still building. Give it a minute and reopen this screen.');
     },
     async publishPushDigest (context) {
       const root = context.getters.databaseTopKey;

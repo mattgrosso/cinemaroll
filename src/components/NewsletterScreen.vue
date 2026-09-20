@@ -92,7 +92,7 @@
           :disabled="rebuilding"
           @click="rebuild"
         >
-          {{ rebuilding ? 'Building…' : 'Rebuild this issue' }}
+          {{ rebuilding ? 'Building, about a minute…' : 'Rebuild this issue' }}
         </button>
       </footer>
 
