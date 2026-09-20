@@ -14,7 +14,6 @@ initializeApp({
 const db = getDatabase();
 const from = Date.parse(process.argv[2]);
 const to = Date.parse(process.argv[3]);
-const roots = await db.ref('/').once('value', () => {});
 const shallow = await db.ref('/').get();
 let checked = 0; const hits = [];
 for (const key of Object.keys(shallow.val() || {})) {

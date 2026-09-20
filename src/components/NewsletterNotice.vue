@@ -25,7 +25,7 @@
 // whose whole job is to be read once. Reading it on the phone and finding the
 // card still up on the laptop is the correct, unsurprising behaviour for a
 // newsletter.
-const READ_KEY = 'cinemaRoll.newsletter.lastRead';
+import { NEWSLETTER_READ_KEY as READ_KEY } from '../assets/javascript/newsletterRead.js';
 
 export default {
   name: 'NewsletterNotice',

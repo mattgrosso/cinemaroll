@@ -36,6 +36,17 @@
            they were buried under a scroll ("maybe they should be pulled
            further up"). -->
       <div class="insights-links">
+        <!-- The newsletter lives in this directory, which is the app's list
+             of "ways out of Home". It was briefly a chip in the rainbow row
+             instead; that row has a test asserting the sort chip stays last,
+             and Matt's call was this page (2026-09-20: "just put it in
+             Insights… with things like the"). First in the list because it is
+             the only one of these that changes week to week. -->
+        <button type="button" class="insights-link-card" @click="$router.push('/newsletter')">
+          <i class="bi bi-envelope-paper"></i><span>Newsletter</span>
+          <span v-if="newsletterUnread" class="insights-link-new">new</span>
+          <i class="bi bi-chevron-right link-chevron"></i>
+        </button>
         <button type="button" class="insights-link-card" @click="$router.push('/stats')">
           <i class="bi bi-graph-up-arrow"></i><span>Deep Stats</span><i class="bi bi-chevron-right link-chevron"></i>
         </button>
@@ -315,6 +326,7 @@
 </template>
 
 <script>
+import { NEWSLETTER_READ_KEY } from "../assets/javascript/newsletterRead.js";
 import Outliers from "./Outliers.vue";
 import YearlyAverage from "./YearlyAverage.vue";
 import BoxOfficeYears from "./BoxOfficeYears.vue";
@@ -443,8 +455,25 @@ export default {
   mounted () {
     // Set random axes on page load
     this.randomizeAxes();
+    // The directory card shows whether there is an unread issue, so this
+    // page has to ask for it. No-ops without a signed-in account key.
+    this.$store.dispatch('loadNewsletter')?.catch?.(() => {});
   },
   computed: {
+    // Mirrors NewsletterNotice's `unread` deliberately — the card here and
+    // the notice on Home must never disagree about whether there is something
+    // new, so both key off the same per-device stamp.
+    newsletterUnread () {
+      if (!this.$store.state.newsletterPrefs?.newsletter) return false;
+      const week = this.$store.state.newsletterIssue?.weekKey;
+      if (!week) return false;
+      try {
+        return localStorage.getItem(NEWSLETTER_READ_KEY) !== week;
+      } catch {
+        return true;
+      }
+    },
+
     // Every viewing ever, for the all-time calendar coverage grid. Shorts are
     // included here deliberately: the question is "did I watch something on
     // this date", and a short absolutely counts as having watched something.
@@ -2972,6 +3001,23 @@ export default {
         /* #9aa0a6 on #33383d is ~4.6:1 — a hint, but still a legible one. */
         color: #9aa0a6;
         font-size: 0.9rem;
+      }
+
+      /* The unread flag on the newsletter row. `flex: 0 0 auto` is
+         load-bearing: the rule above gives every span in a card
+         `flex: 1 1 auto`, so without this the badge would split the row's
+         width with the label and push the title into a second line.
+         #ffc107 on #33383d is ~8:1. */
+      .insights-link-new {
+        background: rgba(255, 193, 7, 0.16);
+        border-radius: 999px;
+        color: #ffc107;
+        flex: 0 0 auto;
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        padding: 0.1rem 0.4rem;
+        text-transform: uppercase;
       }
 
       &:active {
