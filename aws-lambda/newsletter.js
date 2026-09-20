@@ -486,6 +486,38 @@ const runSweep = async (now = Date.now()) => {
   return results;
 };
 
+// How often one account may rebuild. A rebuild is a frontier-model call, and
+// the button is visible to anyone opted in, so this is where the spend is
+// bounded — not by hiding the control behind a flag.
+const REBUILD_COOLDOWN_MS = 45 * 1000;
+const REBUILD_DAILY_CAP = 20;
+
+/**
+ * Whether this account may start a rebuild right now.
+ *
+ * Read-then-write rather than a transaction: the cost of losing a race here
+ * is one extra model call, and the failure mode of a transaction against RTDB
+ * REST would be a refused rebuild, which is worse for the thing the button
+ * exists to do.
+ */
+const rebuildGuard = async (topKey) => {
+  const now = Date.now();
+  const day = new Date(now).toISOString().slice(0, 10);
+  const state = (await dbGet(`${topKey}/newsletter/rebuildState`).catch(() => null)) || {};
+
+  const since = now - (Number(state.lastAt) || 0);
+  if (since < REBUILD_COOLDOWN_MS) {
+    return { allowed: false, reason: `another rebuild started ${Math.round(since / 1000)}s ago — give it a moment` };
+  }
+  const usedToday = state.day === day ? Number(state.count) || 0 : 0;
+  if (usedToday >= REBUILD_DAILY_CAP) {
+    return { allowed: false, reason: `${REBUILD_DAILY_CAP} rebuilds already today` };
+  }
+
+  await dbSet(`${topKey}/newsletter/rebuildState`, { lastAt: now, day, count: usedToday + 1 });
+  return { allowed: true };
+};
+
 // Mirrors databaseKey.js — the account key is the email with unsafe
 // characters replaced. FROZEN list; see databaseKeyCharacters.json.
 const UNSAFE_KEY_CHARACTERS = ['-', '!', '$', '%', '@', '^', '&', '*', '(', ')', '_', '+', '|', '~', '=', '`', '{', '}', '[', ']', ':', '"', ';', "'", '<', '>', '?', ',', '.', '/'];
@@ -523,6 +555,15 @@ exports.handler = async (event) => {
   if (!topKey) return response(400, { error: 'No account key for that email' });
 
   try {
+    // Every rebuild spends a frontier-model call, and the button is on screen
+    // for anyone opted in — so the spend is bounded HERE rather than by
+    // hiding the control. Two limits, doing different jobs: a short cooldown
+    // stops a double-tap or a stuck retry costing twice, and a daily cap
+    // bounds the worst case. Both are deliberately generous enough to iterate
+    // against, which is what the button is for.
+    const guard = await rebuildGuard(topKey);
+    if (!guard.allowed) return response(429, { skipped: guard.reason });
+
     // Hand the work to a second invocation of this same function and answer
     // now — see "WHY THE REBUILD IS ASYNCHRONOUS" at the top. The caller is
     // already verified, so the async payload carries only the account key.

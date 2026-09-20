@@ -174,15 +174,30 @@ describe('NewsletterScreen', () => {
     });
   });
 
-  describe('the devMode rebuild', () => {
-    it('is hidden for everybody else', () => {
-      const wrapper = mountScreen({ state: { newsletterIssue: issue(), devMode: false } });
+  describe('the rebuild', () => {
+    // NOT gated on devMode: devMode repoints databaseTopKey at
+    // `testing-database` while the Lambda derives the account from the ID
+    // token, so a devMode rebuild would poll a different node than the one it
+    // writes and wait forever. Spend is bounded on the server instead.
+    it('is offered to anyone opted in, whatever devMode says', () => {
+      const wrapper = mountScreen({
+        state: { newsletterIssue: issue(), newsletterPrefs: { newsletter: true }, devMode: false }
+      });
+      expect(wrapper.find('.btn-outline-warning').exists()).toBe(true);
+    });
+
+    it('is hidden for someone who has not opted in', () => {
+      const wrapper = mountScreen({
+        state: { newsletterIssue: issue(), newsletterPrefs: { newsletter: false } }
+      });
       expect(wrapper.find('.btn-outline-warning').exists()).toBe(false);
     });
 
     it('rebuilds on tap', async () => {
       const dispatch = vi.fn(() => Promise.resolve({}));
-      const wrapper = mountScreen({ state: { newsletterIssue: issue(), devMode: true }, dispatch });
+      const wrapper = mountScreen({
+        state: { newsletterIssue: issue(), newsletterPrefs: { newsletter: true } }, dispatch
+      });
       await wrapper.find('.btn-outline-warning').trigger('click');
       expect(dispatch).toHaveBeenCalledWith('rebuildNewsletter');
     });
@@ -193,7 +208,9 @@ describe('NewsletterScreen', () => {
       const dispatch = vi.fn((action) => (action === 'rebuildNewsletter'
         ? Promise.reject(new Error('Nothing built: not opted in'))
         : Promise.resolve()));
-      const wrapper = mountScreen({ state: { newsletterIssue: issue(), devMode: true }, dispatch });
+      const wrapper = mountScreen({
+        state: { newsletterIssue: issue(), newsletterPrefs: { newsletter: true } }, dispatch
+      });
       await wrapper.find('.btn-outline-warning').trigger('click');
       await new Promise((resolve) => setTimeout(resolve, 0));
       await wrapper.vm.$nextTick();

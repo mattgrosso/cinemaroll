@@ -352,6 +352,15 @@ function with `{ rebuildFor: <topKey> }`, and answers **202**; the store polls
 replaced, so its presence proves nothing). The Friday sweep has no such limit
 and works inline.
 
+**The rebuild is NOT gated on devMode**, which was the first instinct and is
+wrong: `devMode` repoints `databaseTopKey` at `testing-database`, while the
+Lambda derives the account from the caller's ID token — so a devMode rebuild
+writes to the real account and the app polls a different node, waiting forever.
+The button shows for anyone opted in, and the spend is bounded server-side
+instead: a 45s cooldown (a double tap costs one model call, not two) and 20
+rebuilds per account per day. `yarn newsletter-e2e --double-tap` proves the
+cooldown.
+
 Model is **Opus** here, alone among the routes — one call a week, so the choice
 is not a cost decision (Matt: "This is only going to happen once a week. It's
 like one call. I think we should use the most advanced model").

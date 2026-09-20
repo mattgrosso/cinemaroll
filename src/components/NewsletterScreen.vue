@@ -85,9 +85,17 @@
         </button>
         <!-- The testing switch Matt asked for: "set it up just for testing so
              that it shows up all the time, so that I can see it and review
-             it". Behind devMode so it never shows up for anybody else. -->
+             it".
+
+             NOT gated on devMode, though that was the first instinct:
+             devMode repoints `databaseTopKey` at `testing-database`, while
+             the Lambda derives the account from the caller's ID token — so
+             in devMode the app would poll a different node than the one the
+             rebuild writes to, and wait forever. The spend is bounded on the
+             server instead (a cooldown and a daily cap per account), which is
+             the honest place for it. -->
         <button
-          v-if="devMode"
+          v-if="optedIn"
           class="btn btn-sm btn-outline-warning"
           :disabled="rebuilding"
           @click="rebuild"
@@ -132,9 +140,6 @@ export default {
     },
     optedIn () {
       return Boolean(this.$store.state.newsletterPrefs?.newsletter);
-    },
-    devMode () {
-      return Boolean(this.$store.state.devMode);
     },
     picks () {
       return this.issue?.picks || [];

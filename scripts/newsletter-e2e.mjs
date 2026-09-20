@@ -36,6 +36,10 @@ const arg = (name, fallback = null) => {
 };
 const sourceKey = arg('--source', DEFAULT_SOURCE);
 const showAll = process.argv.includes('--show');
+// Fire two rebuilds back to back. A rebuild is a frontier-model call, so a
+// double tap costing two of them is exactly what the server-side cooldown
+// exists to prevent — and the only way to see it work is to do it.
+const doubleTap = process.argv.includes('--double-tap');
 
 const env = Object.fromEntries(
   readFileSync(new URL('../.env', import.meta.url), 'utf8').split('\n')
@@ -155,16 +159,33 @@ const beforeBuiltAt = before
   ? (await db.ref(`${TESTER_KEY}/newsletter/issues/${before}/builtAt`).get()).val()
   : null;
 
+const askForRebuild = async () => {
+  const r = await fetch(`${ENDPOINT}/newsletter/rebuild`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${exchanged.idToken}` },
+    body: '{}'
+  });
+  return { status: r.status, body: await r.text() };
+};
+
+if (doubleTap) {
+  await db.ref(`${TESTER_KEY}/newsletter/rebuildState`).remove();   // known state
+  console.log('\nDouble tap — the second should be refused:');
+  const first = await askForRebuild();
+  const second = await askForRebuild();
+  console.log(`  first :  ${first.status} ${first.body}`);
+  console.log(`  second:  ${second.status} ${second.body}`);
+  if (first.status !== 202) { console.error('  FAIL: the first was not accepted'); process.exit(1); }
+  if (second.status !== 429) { console.error('  FAIL: the second was NOT refused — a double tap costs two model calls'); process.exit(1); }
+  console.log('  cooldown holds.');
+  process.exit(0);
+}
+
 console.log('\nAsking for a rebuild…');
 const started = Date.now();
-const res = await fetch(`${ENDPOINT}/newsletter/rebuild`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${exchanged.idToken}` },
-  body: '{}'
-});
-const body = await res.text();
-console.log(`  ${res.status} ${body}`);
-if (!res.ok) process.exit(1);
+const { status, body } = await askForRebuild();
+console.log(`  ${status} ${body}`);
+if (status >= 400) process.exit(1);
 
 // 5. Poll for the issue the async invocation writes.
 console.log('Waiting for the model…');
