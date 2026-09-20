@@ -35,6 +35,8 @@ import {
 import { buildSocialProfile, socialSettingsWithDefaults, countNewFriendUpdates, clubFetchesNeeded } from "../assets/javascript/social.js";
 import { buildMirrorFeed } from "../assets/javascript/mirrorFeed.js";
 import { buildPushDigest } from "../assets/javascript/pushDigest.js";
+import { buildNewsletterProfile } from "../assets/javascript/newsletterProfile.js";
+import { postToNewsletter } from "../utils/newsletterRequest.js";
 import { pushPrefsWithDefaults } from "../assets/javascript/pushPrefs.js";
 import { pendingUpdates, reconcilePending } from "../assets/javascript/recommendationStats.js";
 import { toInterchange, profileFromFeed, buildInvite, parseInvite, buildConnectRequest, normalizeInboxRequests, buildDirectoryEntry, normalizeDirectory, findSubscription, dedupeExternalFriends, FEDERATED_APPS } from "../assets/javascript/interchange.js";
@@ -404,6 +406,14 @@ export default createStore({
     // for bothering to publish the digest at all.
     pushPrefs: null,
     pushSubscribed: false,
+    // The weekly newsletter (see aws-lambda/newsletter.js). The issue is
+    // BUILT by the Lambda and only read here, so these three are the whole of
+    // the client's state: what it says, whether they want it, and whether the
+    // read has come back yet — `newsletterLoaded` exists so an empty issue and
+    // an unread one can be told apart on screen.
+    newsletterIssue: null,
+    newsletterPrefs: null,
+    newsletterLoaded: false,
     // When the user last opened the Film Club — drives the rainbow chip's
     // new-updates badge. Mirrored to localStorage so it survives reloads.
     filmClubLastSeen: Number(localStorage.getItem('cinemaRoll.filmClub.lastSeen') || 0),
@@ -677,6 +687,15 @@ export default createStore({
     },
     setPushSubscribed (state, value) {
       state.pushSubscribed = Boolean(value);
+    },
+    setNewsletterIssue (state, value) {
+      state.newsletterIssue = value || null;
+    },
+    setNewsletterPrefs (state, value) {
+      state.newsletterPrefs = value || null;
+    },
+    setNewsletterLoaded (state, value) {
+      state.newsletterLoaded = Boolean(value);
     },
     markFilmClubSeen (state) {
       state.filmClubLastSeen = Date.now();
@@ -2402,6 +2421,71 @@ export default createStore({
     // Publish the digest the scheduled Lambda reads (see pushDigest.js for
     // the client-computes/server-sends rule). Safe to call liberally: no-ops
     // without a subscribed device or before the library has loaded.
+    // --- The weekly newsletter ---------------------------------------------
+    //
+    // The Lambda composes and writes; this only reads. `current` is the week
+    // key of the latest issue, so one read finds it without listing every
+    // issue ever written.
+    async loadNewsletter (context) {
+      const root = context.getters.databaseTopKey;
+      if (!root) return;
+      try {
+        const [prefsSnap, currentSnap] = await Promise.all([
+          get(ref(db, `${root}/newsletter/prefs`)),
+          get(ref(db, `${root}/newsletter/current`))
+        ]);
+        context.commit('setNewsletterPrefs', prefsSnap.val());
+        const week = currentSnap.val();
+        if (week) {
+          const issueSnap = await get(ref(db, `${root}/newsletter/issues/${week}`));
+          context.commit('setNewsletterIssue', issueSnap.val());
+        } else {
+          context.commit('setNewsletterIssue', null);
+        }
+      } catch (error) {
+        console.error('Failed to load the newsletter:', error);
+      } finally {
+        // Always, or a failed read leaves the screen spinning forever.
+        context.commit('setNewsletterLoaded', true);
+      }
+    },
+    async saveNewsletterPrefs (context, partial) {
+      const root = context.getters.databaseTopKey;
+      if (!root) return;
+      const merged = { ...(context.state.newsletterPrefs || {}), ...partial };
+      await update(ref(db, `${root}/newsletter/prefs`), merged);
+      context.commit('setNewsletterPrefs', merged);
+      // Opting in with no profile published would give the Lambda nothing to
+      // rank against, and the first issue is the one that has to land.
+      if (merged.newsletter) await context.dispatch('publishNewsletterProfile');
+    },
+    // The taste profile the Lambda ranks against. Published from here for the
+    // same reason the push digest is: calculatedTotal only exists where
+    // getRating runs (see newsletterProfile.js).
+    async publishNewsletterProfile (context) {
+      const root = context.getters.databaseTopKey;
+      if (!root) return;
+      if (!context.state.dbLoaded || !context.state.settingsLoaded) return;
+      if (!context.state.newsletterPrefs?.newsletter) return;
+      try {
+        const profile = buildNewsletterProfile({
+          entries: context.getters.allMediaAsArray,
+          getRating
+        });
+        await set(ref(db, `${root}/newsletter/profile`), profile);
+      } catch (error) {
+        console.error('Failed to publish the newsletter profile:', error);
+      }
+    },
+    // devMode only (the screen gates the button). Rebuilds THIS week's issue
+    // now rather than waiting for Friday — Matt's testing switch.
+    async rebuildNewsletter (context) {
+      await context.dispatch('publishNewsletterProfile');
+      const { data } = await postToNewsletter('/newsletter/rebuild', {});
+      if (data?.skipped) throw new Error(`Nothing built: ${data.skipped}`);
+      await context.dispatch('loadNewsletter');
+      return data;
+    },
     async publishPushDigest (context) {
       const root = context.getters.databaseTopKey;
       if (!root || !context.state.pushSubscribed) return;

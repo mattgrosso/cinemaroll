@@ -553,6 +553,8 @@
 
       <BugResolutionNotice/>
 
+      <NewsletterNotice/>
+
       <UpdateAvailableBanner/>
 
       <StickinessInline
@@ -1571,6 +1573,7 @@ import TweakInline from "./TweakInline.vue";
 import StickinessInline from "./StickinessInline.vue";
 import PersonalAwardsModal from "./PersonalAwardsModal.vue";
 import BugResolutionNotice from "./BugResolutionNotice.vue";
+import NewsletterNotice from './NewsletterNotice.vue';
 import UpdateAvailableBanner from "./UpdateAvailableBanner.vue";
 import RatingCurveSettings from "./RatingCurveSettings.vue";
 import SettingsSection from "./SettingsSection.vue";
@@ -1702,6 +1705,7 @@ export default {
     StickinessInline,
     PersonalAwardsModal,
     BugResolutionNotice,
+    NewsletterNotice,
     UpdateAvailableBanner,
     RatingCurveSettings,
     SettingsSection,

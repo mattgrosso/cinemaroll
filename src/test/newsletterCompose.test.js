@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   availability,
   criticScores,
@@ -335,5 +336,29 @@ describe('issueDue', () => {
   // somebody who turned the newsletter off.
   it('always-on still respects an account that opted out', () => {
     expect(issueDue({ prefs: { newsletter: false }, now: friday, alwaysOn: true }).due).toBe(false);
+  });
+});
+
+// The newsletter Lambda and the push Lambda each discover accounts by
+// shallow-listing the database root, so both need the same list of roots that
+// are NOT people. The first draft of newsletter.js guessed it and got it wrong
+// in both directions — it carried Movie Hat's `requests`/`siteUsers` and
+// omitted `testing-database`, which is a real readable account (devMode's)
+// that would have been sent a newsletter.
+describe('the two Lambdas agree on what is not an account', () => {
+  const roots = (file) => {
+    const source = readFileSync(new URL(file, import.meta.url), 'utf8');
+    const block = source.match(/NON_ACCOUNT_ROOTS = new Set\(\[([\s\S]*?)\]\)/);
+    expect(block, `NON_ACCOUNT_ROOTS not found in ${file}`).toBeTruthy();
+    return (block[1].match(/'[^']+'/g) || []).map((s) => s.slice(1, -1)).sort();
+  };
+
+  it('has identical NON_ACCOUNT_ROOTS in both files', () => {
+    expect(roots('../../aws-lambda/newsletter.js'))
+      .toEqual(roots('../../aws-lambda/push-notify.js'));
+  });
+
+  it('excludes testing-database, which is a real account devMode writes to', () => {
+    expect(roots('../../aws-lambda/newsletter.js')).toContain('testing-database');
   });
 });

@@ -66,6 +66,8 @@ const enrichCandidate = async (key, omdbKey, movie) => {
       imdbId: details.imdb_id || null,
       runtime: details.runtime || null,
       posterPath: details.poster_path || null,
+      backdropPath: details.backdrop_path || null,
+      releaseDate: details.release_date || null,
       genres: (details.genres || []).map((g) => g.name)
     };
   } catch (error) {

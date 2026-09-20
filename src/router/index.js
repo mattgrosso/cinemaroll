@@ -10,6 +10,7 @@ const RateMovie = () => import(/* webpackChunkName: "rate-movie" */ "../componen
 const ReconcilePlaceholder = () => import(/* webpackChunkName: "reconcile-placeholder" */ "../components/ReconcilePlaceholder.vue");
 const Insights = () => import(/* webpackChunkName: "insights" */ "../components/Insights.vue");
 const WebScreen = () => import(/* webpackChunkName: "web" */ "../components/WebScreen.vue");
+const NewsletterScreen = () => import(/* webpackChunkName: "newsletter" */ "../components/NewsletterScreen.vue");
 const ShareDBResults = () => import(/* webpackChunkName: "share-db-results" */ "../components/ShareDBResults.vue");
 const MovieDetail = () => import(/* webpackChunkName: "movie-detail" */ "../components/MovieDetail.vue");
 const YearInReview = () => import(/* webpackChunkName: "year-in-review" */ "../components/YearInReview.vue");
@@ -151,6 +152,25 @@ const routes = [
     meta: {
       title: 'Web',
       parent: '/insights',
+      requiresLogin: true
+    },
+    beforeEnter: (to, from, next) => {
+      if (!loggedIn()) {
+        next('/login');
+      } else {
+        next();
+      }
+    }
+  },
+  {
+    // The weekly newsletter (Matt, 2026-09-20). Its own screen rather than a
+    // card on Home: it is a thing you sit down and read, and the push
+    // notification lands you straight here.
+    path: '/newsletter',
+    component: NewsletterScreen,
+    meta: {
+      title: 'Newsletter',
+      parent: '/',
       requiresLogin: true
     },
     beforeEnter: (to, from, next) => {

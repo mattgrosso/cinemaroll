@@ -58,9 +58,17 @@ const ALLOWED_ORIGINS = [
   'http://localhost:8080'
 ];
 
-// Mirrors push-notify.js — the sweep discovers accounts by shallow root read,
-// and these roots are not accounts.
-const NON_ACCOUNT_ROOTS = new Set(['bugReports', 'social', 'requests', 'siteUsers']);
+// MIRRORS push-notify.js — keep the two lists identical. The sweep discovers
+// accounts by shallow-listing the root, so every shared node has to be named
+// here or it gets treated as a person. The first draft of this file guessed
+// the list from memory and got it wrong in both directions: it carried Movie
+// Hat's roots (`requests`, `siteUsers`, which do not exist in this database)
+// and omitted the club nodes and `testing-database` — the last of which IS a
+// real readable account, devMode's, and would have been sent a newsletter.
+const NON_ACCOUNT_ROOTS = new Set([
+  'bugReports', 'social', 'clubDirectory', 'clubInbox', 'clubFeed',
+  'mirrorFeed', 'testing-database'
+]);
 const QA_ACCOUNT_KEYS = new Set(['cinemaroll-tester-example-com']);
 
 // One call a week, so this is the one route in the whole app where the model
@@ -372,7 +380,21 @@ const buildIssue = async ({ topKey, profile, now, alwaysOn }) => {
         rentOn: facts.where.rent,
         rottenTomatoes: facts.scores.rottenTomatoes,
         metacritic: facts.scores.metacritic,
-        why: String(pick.why || '').trim()
+        why: String(pick.why || '').trim(),
+        // TMDB's own field names, because SendToHat hands this straight to
+        // movieHat.js's toHatMovie, which reads `poster_path` and
+        // `release_date` — a camelCase copy would send a hat a film with no
+        // poster and no year. Stored rather than re-fetched so the hat button
+        // works offline, the way everything else on a stored issue does.
+        tmdb: {
+          id: facts.id,
+          title: facts.title,
+          poster_path: extra.posterPath || null,
+          backdrop_path: extra.backdropPath || null,
+          release_date: extra.releaseDate || (facts.year ? `${facts.year}-01-01` : ''),
+          overview: facts.overview || '',
+          vote_average: facts.tmdbScore
+        }
       };
     })
     .filter(Boolean);
