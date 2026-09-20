@@ -2,16 +2,41 @@
   <div class="newsletter-screen">
     <div v-if="!issue && !loading" class="newsletter-empty">
       <h2>This week in film</h2>
+
+      <!-- "Send me the newsletter" read as email — "where's it going to
+           send it?" (Matt, 2026-09-20). Nothing is sent anywhere: an issue
+           appears on THIS page, and the phone buzzes only if Cinema Roll
+           notifications are already on. So the copy says where it turns up,
+           and the notification line tells the truth about this device rather
+           than promising a buzz that may never come. -->
       <p v-if="!optedIn">
         A short issue every Friday: what became watchable at home this week
         that's worth your time, and one film from the past having a moment.
+        It appears right here — nothing gets emailed.
       </p>
-      <p v-else>
-        No issue yet. The next one lands on Friday.
-      </p>
-      <button class="btn btn-primary" @click="toggleOptIn">
-        {{ optedIn ? 'Turn the newsletter off' : 'Send me the newsletter' }}
-      </button>
+      <template v-else>
+        <p>No issue yet. A new one appears on this page every Friday morning.</p>
+        <p class="newsletter-quiet">
+          {{ pushSubscribed
+            ? 'Your phone will buzz when it lands.'
+            : 'Notifications are off for Cinema Roll, so it will just be waiting for you here — with a New flag on the Insights page.' }}
+        </p>
+      </template>
+
+      <div class="newsletter-empty-actions">
+        <!-- With no issue there was previously nothing to press: the build
+             button lived only in a rendered issue's footer, so opting in led
+             to a dead end. This is the way to a first issue without waiting
+             for Friday. -->
+        <button v-if="optedIn" class="btn btn-primary" :disabled="rebuilding" @click="rebuild">
+          {{ rebuilding ? 'Building, about a minute…' : 'Build this week\'s issue now' }}
+        </button>
+        <button class="btn btn-sm newsletter-optout" @click="toggleOptIn">
+          {{ optedIn ? 'Turn the newsletter off' : 'Turn the newsletter on' }}
+        </button>
+      </div>
+
+      <p v-if="rebuildError" class="newsletter-error">{{ rebuildError }}</p>
     </div>
 
     <div v-else-if="loading" class="newsletter-loading">
@@ -81,7 +106,7 @@
 
       <footer class="newsletter-footer">
         <button class="btn btn-sm newsletter-optout" @click="toggleOptIn">
-          {{ optedIn ? 'Turn the newsletter off' : 'Send me the newsletter' }}
+          {{ optedIn ? 'Turn the newsletter off' : 'Turn the newsletter on' }}
         </button>
         <!-- The testing switch Matt asked for: "set it up just for testing so
              that it shows up all the time, so that I can see it and review
@@ -141,6 +166,12 @@ export default {
     optedIn () {
       return Boolean(this.$store.state.newsletterPrefs?.newsletter);
     },
+    // Whether ANY device holds a push subscription — the same flag the
+    // Notifications card reads. Without it the empty state would promise a
+    // buzz that never comes.
+    pushSubscribed () {
+      return Boolean(this.$store.state.pushSubscribed);
+    },
     picks () {
       return this.issue?.picks || [];
     },
@@ -174,6 +205,10 @@ export default {
     // can hand back something that isn't a promise, and a screen must not go
     // down over that — the same guard SendToHat puts on its getter.
     this.$store.dispatch('loadNewsletter')?.catch?.(() => {});
+    // Also the push state, or `pushSubscribed` is false on a cold open
+    // straight to this route and the empty state tells the reader
+    // notifications are off when they are not.
+    this.$store.dispatch('loadPushState')?.catch?.(() => {});
   },
   methods: {
     posterUrl,
@@ -207,6 +242,24 @@ export default {
 .newsletter-loading {
   padding-top: 3rem;
   text-align: center;
+}
+
+.newsletter-empty p {
+  margin: 0 auto 0.75rem;
+  max-width: 30rem;
+}
+
+.newsletter-quiet {
+  color: #ccc;   /* not .text-muted — that grey fails on this background */
+  font-size: 0.85rem;
+}
+
+.newsletter-empty-actions {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
 }
 
 .newsletter-header {

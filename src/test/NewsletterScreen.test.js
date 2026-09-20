@@ -44,6 +44,7 @@ function mountScreen ({ state = {}, dispatch = vi.fn(() => Promise.resolve()) } 
       newsletterIssue: null,
       newsletterPrefs: null,
       newsletterLoaded: true,
+      pushSubscribed: false,
       devMode: false,
       ...state
     },
@@ -76,17 +77,71 @@ describe('NewsletterScreen', () => {
     expect(wrapper.find('.newsletter-empty').exists()).toBe(false);
   });
 
-  it('pitches the newsletter to someone who has not opted in', () => {
+  // "Send me the newsletter" read as email — Matt, 2026-09-20: "What does it
+  // mean to send it to me? Because like, where's it going to send it?"
+  it('pitches the newsletter without implying anything gets emailed', () => {
     const wrapper = mountScreen();
-    expect(wrapper.find('.newsletter-empty').text()).toContain('every Friday');
-    expect(wrapper.find('.newsletter-empty button').text()).toBe('Send me the newsletter');
+    const text = wrapper.find('.newsletter-empty').text();
+    expect(text).toContain('every Friday');
+    expect(text).toContain('nothing gets emailed');
+    expect(wrapper.find('.newsletter-optout').text()).toBe('Turn the newsletter on');
+    expect(text).not.toContain('Send me');
   });
 
   it('opting in saves the pref', async () => {
     const dispatch = vi.fn(() => Promise.resolve());
     const wrapper = mountScreen({ dispatch });
-    await wrapper.find('.newsletter-empty button').trigger('click');
+    await wrapper.find('.newsletter-optout').trigger('click');
     expect(dispatch).toHaveBeenCalledWith('saveNewsletterPrefs', { newsletter: true });
+  });
+
+  describe('opted in with no issue yet', () => {
+    const optedInEmpty = { newsletterPrefs: { newsletter: true } };
+
+    // The dead end Matt hit: the build button lived only in a rendered
+    // issue's footer, so opting in led to a screen with nothing to press.
+    it('offers a way to build a first issue right now', async () => {
+      const dispatch = vi.fn(() => Promise.resolve());
+      const wrapper = mountScreen({ state: optedInEmpty, dispatch });
+      const build = wrapper.find('.newsletter-empty .btn-primary');
+      expect(build.exists()).toBe(true);
+      expect(build.text()).toContain('Build this week');
+      await build.trigger('click');
+      expect(dispatch).toHaveBeenCalledWith('rebuildNewsletter');
+    });
+
+    it('does not offer to build for someone who has not opted in', () => {
+      expect(mountScreen().find('.newsletter-empty .btn-primary').exists()).toBe(false);
+    });
+
+    it('says where the issue will appear, not that it will be sent', () => {
+      const text = mountScreen({ state: optedInEmpty }).find('.newsletter-empty').text();
+      expect(text).toContain('appears on this page');
+    });
+
+    // Promising a buzz that never comes is worse than saying nothing.
+    it('tells the truth when notifications are off', () => {
+      const text = mountScreen({ state: optedInEmpty }).find('.newsletter-quiet').text();
+      expect(text).toContain('Notifications are off');
+    });
+
+    it('promises the buzz only when a device is actually subscribed', () => {
+      const text = mountScreen({ state: { ...optedInEmpty, pushSubscribed: true } })
+        .find('.newsletter-quiet').text();
+      expect(text).toContain('buzz');
+      expect(text).not.toContain('Notifications are off');
+    });
+
+    it('surfaces a failed first build', async () => {
+      const dispatch = vi.fn((action) => (action === 'rebuildNewsletter'
+        ? Promise.reject(new Error('Nothing built: nothing available'))
+        : Promise.resolve()));
+      const wrapper = mountScreen({ state: optedInEmpty, dispatch });
+      await wrapper.find('.newsletter-empty .btn-primary').trigger('click');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('.newsletter-error').text()).toContain('nothing available');
+    });
   });
 
   it('opting out from a rendered issue turns it off again', async () => {
