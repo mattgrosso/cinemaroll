@@ -344,6 +344,19 @@ describe('MovieDetail', () => {
   })
 
   describe('navigation (documented banner behavior)', () => {
+    // Bug report 2026-09-21: "When a friend logs a movie that isn't in my
+    // library, tapping the notification should take me to my film club."
+    // The push lands on /movie/<id>; an unrated id used to fall back home.
+    it('a movie that is not in the library lands on the film club, not home', async () => {
+      mockStore.state.dbLoaded = true
+      mockStore.getters.allMediaAsArray = [makeResult()]
+
+      await wrapper.vm.loadMovieData('99')
+
+      expect(pushSpy).toHaveBeenCalledWith('/film-club')
+      expect(pushSpy).not.toHaveBeenCalledWith('/')
+    })
+
     it('goBack features this movie in the banner and routes home', () => {
       wrapper.vm.goBack()
       expect(mockStore.commit).toHaveBeenCalledWith('setHomePageNavigationIntent', 'close')

@@ -1031,9 +1031,14 @@ export default {
           this.result = existingMovie;
           this.previousEntry = existingMovie;
         } else {
-          // If not in database, we might need to fetch from TMDB
-          // For now, redirect back to home if movie not found
-          this.$router.push('/');
+          // Not in the library. In practice the only way here is a friend's
+          // activity — a "Seth logged X" push lands on /movie/<id> whether or
+          // not you've seen X (push-notify.js can't tell). Bug report
+          // 2026-09-21: "When a friend logs a movie that isn't in my
+          // library, tapping the notification should take me to my film
+          // club." Home was the old fallback, which read as the tap doing
+          // nothing at all.
+          this.$router.push('/film-club');
           return;
         }
 

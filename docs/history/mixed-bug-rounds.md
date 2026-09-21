@@ -659,3 +659,62 @@ for that, and it fails against the substring version.
 truncated at nine characters plus an ellipsis, so The Empire Strikes Back read "The
 Empir...". Gone for movie categories. Acting categories keep theirs — that caption is the
 person's name over a headshot, plus the roles, and no image says any of it.
+
+## Empty watchlist rows, and the notification that went home (Sep 2026)
+
+Two reports from Matt's phone, a day apart.
+
+### "From directors you love" was empty, and the rows never changed
+
+*"Some of these lists are empty like it says from directors you love and it says
+zero of 13 watched but there's just nothing there and some of these lists don't
+seem like they've updated in weeks... I would like these lists to be reevaluated
+each time I load the page or maybe once a day."*
+
+Probed against the live library before touching anything (`favoritePeople` →
+TMDB credits → `rankWatchlistCandidates`, then checked the result against his
+punts and his six hats): the directors row's top twelve were **all twelve in a
+hat**. The screen hid hatted and punted films in `mediaItems`, i.e. AFTER
+`rankWatchlistCandidates` had already capped the row at 12 — cap to 12, hide
+12, show nothing. This is the same shape as the 2026-08-19 rewatch-row bug
+(cap, then filter, leaves a permanent gap), which had been fixed for the
+library-derived rows but not for the TMDB-fed ones; the comment on
+`skipFromSuggestions` even claimed punts were "excluded INSIDE the candidate
+builders", which was only true of `rewatchCandidates` and `anotherShotCandidates`.
+The "hasn't updated in weeks" half is the same cause seen from the other side:
+the ranking is deterministic, so every visit re-derived the same twelve, and
+once he'd hatted them the row had nothing else to say. With 614 ids across his
+hats, every row on the screen was shrinking the same way.
+
+Two changes in `discover.js`:
+
+- `rankWatchlistCandidates` takes `exclude`, applied before the cap (mirrors
+  `rewatchCandidates`), and keeps `score` on each result.
+- New `dailyPick(pool, now, { cap, reach, exclude })`: drops excluded films
+  first, then picks `cap` of the top `reach` (default 2×cap) with a shuffle
+  seeded by the calendar day — stable across reloads, different tomorrow — and
+  shows them in rank order with match % rescaled to the visible row. A pool no
+  bigger than the cap is shown whole.
+
+`WatchlistScreen` now ranks each TMDB-fed row to a pool of `RANK_POOL` (36) and
+renders `showing(pool)` — a computed closure over `skipFromSuggestions`, so
+hatting a film from a row promotes the next candidate immediately (punts and
+`movieHatMovieIds` are reactive) instead of leaving a gap until the next visit.
+That also sidesteps the ordering problem where `ensureMovieHatContents` could
+land after the pool was built. The learning loop records the shown slice, not
+the pool. Tests: `discover.test.js` (exclude-before-cap, `dailyPick` × 5),
+`WatchlistScreen.test.js` (a hatted film at the top of a 13-deep row is replaced
+by the 13th, not left as an 11-film row); each confirmed failing with the bug's
+signature against the reverted code.
+
+### A friend's log for a film you haven't seen took you home
+
+*"When a friend logs a movie that isn't in my library, tapping the notification
+should take me to my film club."*
+
+`push-notify.js` sends the friend-log push with `navigate: /movie/<tmdbId>`
+regardless of whether the recipient has rated it (it can't tell). `MovieDetail`
+is a pure local lookup and its not-found branch pushed `/` — so the tap looked
+like it did nothing. The fallback is now `/film-club`: in practice a friend's
+activity is the only way to arrive at an unrated id. One-line change, one test
+(`MovieDetail.test.js`).

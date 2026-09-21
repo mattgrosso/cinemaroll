@@ -259,13 +259,41 @@ export function tasteBonus (movie, profile) {
   return known.reduce((sum, id) => sum + profile[id], 0) / known.length;
 }
 
-export function rankWatchlistCandidates (credits, ratedTmdbIds, now = Date.now(), { cap = 12, minVotes = 50, profile = null } = {}) {
+// Match % (Brian-survey D1): the list's scores min-max scaled into 62-97 —
+// shown items already passed quality/unseen filters, so nothing reads as a
+// bad match, and nothing claims perfection. Computed over whatever list is
+// handed in, so it describes the row the viewer actually sees.
+function withMatchPct (scored) {
+  const max = scored[0]?.score ?? 1;
+  const min = scored[scored.length - 1]?.score ?? 0;
+  const span = max - min || 1;
+  return scored.map(({ movie, score }) => ({
+    ...movie,
+    score,
+    matchPct: Math.round(62 + ((score - min) / span) * 35)
+  }));
+}
+
+// `exclude` drops candidates BEFORE the cap, same as rewatchCandidates.
+//
+// Bug report, 2026-09-20: "some of these lists are empty like it says from
+// directors you love and it says zero of 13 watched but there's just nothing
+// there and some of these lists don't seem like they've updated in weeks."
+//
+// Verified against the live library: the directors row's top twelve were
+// ALL sitting in one of his hats. The screen hid hatted and punted films
+// after this cap was applied — cap to 12, hide 12, show nothing — and
+// because the same twelve came top every visit, the row had nothing new to
+// offer for weeks. Excluding here means the cap is filled with films that
+// can actually be shown, so hatting one promotes the next in line.
+export function rankWatchlistCandidates (credits, ratedTmdbIds, now = Date.now(), { cap = 12, minVotes = 50, profile = null, exclude = null } = {}) {
   const rated = ratedTmdbIds instanceof Set ? ratedTmdbIds : new Set(ratedTmdbIds || []);
   const byId = new Map();
 
   (credits || []).forEach((movie) => {
     if (!movie || movie.id == null || rated.has(movie.id)) return;
     if (movie.adult) return;
+    if (exclude && exclude(movie)) return;
     const released = movie.release_date && new Date(movie.release_date).getTime() <= now;
     if (!released) return;
     if ((movie.vote_count || 0) < minVotes) return;
@@ -283,16 +311,52 @@ export function rankWatchlistCandidates (credits, ratedTmdbIds, now = Date.now()
     .sort((a, b) => b.score - a.score)
     .slice(0, cap);
 
-  // Match % (Brian-survey D1): the section's scores min-max scaled into
-  // 62-97 — shown items already passed quality/unseen filters, so nothing
-  // reads as a bad match, and nothing claims perfection.
-  const max = scored[0]?.score ?? 1;
-  const min = scored[scored.length - 1]?.score ?? 0;
-  const span = max - min || 1;
-  return scored.map(({ movie, score }) => ({
-    ...movie,
-    matchPct: Math.round(62 + ((score - min) / span) * 35)
-  }));
+  return withMatchPct(scored);
+}
+
+const DAY_MS = 24 * 3600 * 1000;
+
+// Small deterministic PRNG (mulberry32): the same seed always yields the
+// same sequence, which is what makes a day's pick stable across reloads.
+function seededRandom (seed) {
+  let t = seed >>> 0;
+  return () => {
+    t = (t + 0x6D2B79F5) >>> 0;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * The day's showing from a ranked pool.
+ *
+ * Same bug report as above: "I would like these lists to be reevaluated each
+ * time I load the page or maybe once a day... so that I see new options."
+ * The rows WERE rebuilt on every visit — but deterministically, so a rebuild
+ * produced the same twelve. Now the screen keeps a deeper ranked pool and
+ * this picks `cap` of the best `reach` for today: excluded (punted,
+ * hatted) films are dropped first so the pick refills the moment one is
+ * hatted; the choice among the remaining top `reach` is seeded by the
+ * calendar day, so it holds still across reloads and turns over tomorrow;
+ * and what's shown stays in rank order, with match % re-scaled to it.
+ *
+ * A pool no bigger than `cap` is shown whole — there is nothing to rotate.
+ */
+export function dailyPick (ranked, now = Date.now(), { cap = 12, reach = cap * 2, exclude = null } = {}) {
+  const eligible = (ranked || []).filter((movie) => movie && !(exclude && exclude(movie)));
+  const window = eligible.slice(0, Math.max(cap, reach));
+  let chosen = window;
+  if (window.length > cap) {
+    const random = seededRandom(Math.floor(now / DAY_MS));
+    const indices = window.map((_, i) => i);
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    chosen = indices.slice(0, cap).sort((a, b) => a - b).map((i) => window[i]);
+  }
+  return withMatchPct(chosen.map((movie) => ({ movie, score: movie.score ?? 0 })));
 }
 
 // The movies to seed "more like this" recommendations from: your highest

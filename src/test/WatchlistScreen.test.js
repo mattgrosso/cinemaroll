@@ -453,6 +453,29 @@ describe('films already in a hat are not suggested again', () => {
     expect(cardNames(after.wrapper)).not.toContain('Similar Pick');
   });
 
+  // Bug report 2026-09-20: "some of these lists are empty like it says from
+  // directors you love and it says zero of 13 watched but there's just
+  // nothing there". Every one of the row's twelve was in a hat, and the hat
+  // filter ran after the cap.
+  it('a hatted film at the top of a full row is replaced by the next candidate, not left as a gap', async () => {
+    const crew = Array.from({ length: 13 }, (_, i) => ({
+      id: 200 + i, title: `Director Film ${i}`, job: 'Director', release_date: '2015-06-15', vote_count: 9000 - i * 10, vote_average: 8
+    }));
+    axios.get.mockImplementation((url) => (
+      url.includes('/person/777/movie_credits')
+        ? Promise.resolve({ data: { crew, cast: [] } })
+        : tmdbImpl(url)
+    ));
+
+    const { wrapper } = factory({ movieHatMovieIds: { 200: true } });
+    await flushPromises();
+
+    const names = cardNames(wrapper);
+    expect(names).not.toContain('Director Film 0');
+    expect(names).toContain('Director Film 12');
+    expect(names.filter((name) => name.startsWith('Director Film'))).toHaveLength(12);
+  });
+
   it('loads the hat contents itself rather than waiting for a button to mount', () => {
     const dispatch = vi.fn();
     factory({ dispatch });

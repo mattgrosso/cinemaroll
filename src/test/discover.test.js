@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rewatchCandidates, rewatchCycleYears, anotherShotCandidates, nearThresholdYears, favoritePeople, rankWatchlistCandidates, ratedTmdbIds, tasteProfile, tasteBonus, nextPunt, isPunted, puntKeyFor , peopleYouRateHigher } from '@/assets/javascript/discover.js';
+import { rewatchCandidates, rewatchCycleYears, anotherShotCandidates, nearThresholdYears, favoritePeople, rankWatchlistCandidates, dailyPick, ratedTmdbIds, tasteProfile, tasteBonus, nextPunt, isPunted, puntKeyFor , peopleYouRateHigher } from '@/assets/javascript/discover.js';
 
 const NOW = new Date('2026-08-15T00:00:00Z').getTime();
 const yearsAgo = (years) => NOW - years * 365.25 * 24 * 3600 * 1000;
@@ -196,6 +196,54 @@ describe('rankWatchlistCandidates', () => {
   it('caps the list', () => {
     const credits = Array.from({ length: 40 }, (_, i) => tmdb(i, `M${i}`));
     expect(rankWatchlistCandidates(credits, new Set(), NOW)).toHaveLength(12);
+  });
+
+  // Bug report 2026-09-20: the directors row's whole top twelve were in a
+  // hat, and hiding them AFTER the cap left the row empty for weeks.
+  it('excludes before the cap, so a hidden film is replaced rather than leaving a gap', () => {
+    const credits = Array.from({ length: 20 }, (_, i) => tmdb(i, `M${i}`, { votes: 10000 - i }));
+    const hatted = new Set([0, 1, 2]);
+    const list = rankWatchlistCandidates(credits, new Set(), NOW, { exclude: (movie) => hatted.has(movie.id) });
+
+    expect(list).toHaveLength(12);
+    expect(list.map((m) => m.id)).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+  });
+});
+
+describe('dailyPick', () => {
+  const DAY = 24 * 3600 * 1000;
+  const pool = (n) => Array.from({ length: n }, (_, i) => ({ id: i, title: `M${i}`, score: 100 - i }));
+
+  it('shows a pool no bigger than the cap whole, in rank order', () => {
+    expect(dailyPick(pool(5), NOW).map((m) => m.id)).toEqual([0, 1, 2, 3, 4]);
+    expect(dailyPick(pool(12), NOW).map((m) => m.id)).toEqual(Array.from({ length: 12 }, (_, i) => i));
+  });
+
+  it('drops excluded films first, so hatting one promotes the next in line', () => {
+    const hatted = new Set([0, 1]);
+    const shown = dailyPick(pool(12), NOW, { exclude: (m) => hatted.has(m.id) });
+    expect(shown.map((m) => m.id)).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+  });
+
+  it('picks the cap from within reach, keeps rank order, and holds still all day', () => {
+    const shown = dailyPick(pool(36), NOW, { cap: 12, reach: 24 });
+    const ids = shown.map((m) => m.id);
+
+    expect(ids).toHaveLength(12);
+    expect(ids.every((id) => id < 24)).toBe(true);
+    expect([...ids].sort((a, b) => a - b)).toEqual(ids);
+    expect(dailyPick(pool(36), NOW + 20 * 3600 * 1000, { cap: 12, reach: 24 }).map((m) => m.id)).toEqual(ids);
+  });
+
+  it('turns over from one day to the next', () => {
+    const days = Array.from({ length: 5 }, (_, d) => dailyPick(pool(36), NOW + d * DAY, { cap: 12, reach: 24 }).map((m) => m.id).join(','));
+    expect(new Set(days).size).toBeGreaterThan(1);
+  });
+
+  it('rescales match % to what is shown, so the top of the row reads 97', () => {
+    const shown = dailyPick(pool(36), NOW, { cap: 12, reach: 24 });
+    expect(shown[0].matchPct).toBe(97);
+    expect(shown[shown.length - 1].matchPct).toBe(62);
   });
 });
 

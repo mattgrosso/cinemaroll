@@ -279,7 +279,7 @@ import MoviePreview from './MoviePreview.vue';
 import { getRating } from '../assets/javascript/GetRating.js';
 import { friendsLoveUnseen } from '../assets/javascript/social.js';
 import { rankSections, sourceSummary } from '../assets/javascript/recommendationStats.js';
-import { rewatchCandidates, anotherShotCandidates, nearThresholdYears, favoritePeople, peopleYouRateHigher, rankWatchlistCandidates, ratedTmdbIds, topRatedSeeds, tasteProfile, puntKeyFor, nextPunt, isPunted, PEOPLE_PER_SECTION, MIN_PEOPLE_PER_SECTION } from '../assets/javascript/discover.js';
+import { rewatchCandidates, anotherShotCandidates, nearThresholdYears, favoritePeople, peopleYouRateHigher, rankWatchlistCandidates, dailyPick, ratedTmdbIds, topRatedSeeds, tasteProfile, puntKeyFor, nextPunt, isPunted, PEOPLE_PER_SECTION, MIN_PEOPLE_PER_SECTION } from '../assets/javascript/discover.js';
 import { awardsYearThreshold } from '../assets/javascript/personalAwards.js';
 import { formatScore } from '../assets/javascript/formatScore.js';
 import { tasteSummary, pickTmdbMatch, buildPromptedList } from '../assets/javascript/promptedWatchlist.js';
@@ -291,6 +291,13 @@ import { postToAi } from '../utils/aiRequest.js';
 // Long enough to read the "added to <hat>" confirmation before the card that
 // owns it leaves the list.
 const PUNT_AFTER_HAT_MS = 4000;
+
+// Each TMDB-fed row is ranked to this depth and kept, and the row on screen
+// is dailyPick's slice of it (discover.js): punted and hatted films drop
+// out first, and which of the best remaining ones show turns over daily.
+// Bug report 2026-09-20 — the directors row was empty because its twelve
+// were all already in a hat, and the rows never changed between visits.
+const RANK_POOL = 36;
 
 // The performer pool is resolved against TMDB (for gender and id) in rank
 // order, this many names at a time, until both the actors and the
@@ -459,6 +466,16 @@ export default {
     skipFromSuggestions () {
       return (entry) => isPunted(entry, this.punts) || this.isHatted(entry);
     },
+    /**
+     * A ranked pool's showing for today. Reads punts and hat contents, so
+     * hatting a film from a row promotes the next candidate at once rather
+     * than leaving a gap until the next visit — and hat contents that land
+     * after the pool was built are honoured the moment they do.
+     */
+    showing () {
+      const exclude = this.skipFromSuggestions;
+      return (pool) => dailyPick(pool || [], Date.now(), { exclude });
+    },
     rewatchList () {
       return rewatchCandidates(this.library, getRating, Date.now(), { exclude: this.skipFromSuggestions });
     },
@@ -495,7 +512,7 @@ export default {
       return this.nearYears.find((year) => year.year === this.selectedYear) || { count: 0, missing: 0 };
     },
     selectedYearMovies () {
-      return this.yearMovies[this.selectedYear] || [];
+      return this.showing(this.yearMovies[this.selectedYear]);
     },
     awardsThreshold () {
       return awardsYearThreshold(this.$store.state.settings);
@@ -545,21 +562,21 @@ export default {
           key: 'directors',
           title: 'From directors you love',
           names: this.favoriteDirectors.map((p) => p.name),
-          movies: this.directorMovies,
+          movies: this.showing(this.directorMovies),
           loading: this.directorsLoading
         },
         {
           key: 'actresses',
           title: 'From actresses you love',
           names: this.actressNames.map((p) => p.name),
-          movies: this.actressMovies,
+          movies: this.showing(this.actressMovies),
           loading: this.actorsLoading
         },
         {
           key: 'actors',
           title: 'From actors you love',
           names: this.actorNames.map((p) => p.name),
-          movies: this.actorMovies,
+          movies: this.showing(this.actorMovies),
           loading: this.actorsLoading
         },
         {
@@ -568,21 +585,21 @@ export default {
           key: 'underrated',
           title: 'From people you rate higher than most',
           names: this.underratedNames.map((p) => p.name),
-          movies: this.underratedMovies,
+          movies: this.showing(this.underratedMovies),
           loading: this.actorsLoading
         },
         {
           key: 'similar',
           title: 'More like your favorites',
           names: this.recommendationSeeds.map((entry) => entry.movie.title),
-          movies: this.similarMovies,
+          movies: this.showing(this.similarMovies),
           loading: this.similarLoading
         },
         {
           key: 'gems',
           title: 'Hidden gems',
           names: this.topTasteGenres.map((g) => g.name),
-          movies: this.gemMovies,
+          movies: this.showing(this.gemMovies),
           loading: this.gemsLoading
         }
       ].filter((section) => section.names.length >= (PEOPLE_SECTION_KEYS.has(section.key) ? MIN_PEOPLE_PER_SECTION : 1));
@@ -958,11 +975,12 @@ export default {
       }
 
       try {
+        // What's on screen — today's slice of each pool, not the pool.
         await this.$store.dispatch('recordWatchlistSuggestions', {
-          directors: directorMovies.map((movie) => movie.id),
-          actors: actorMovies.map((movie) => movie.id),
-          similar: similarMovies.map((movie) => movie.id),
-          gems: gemMovies.map((movie) => movie.id),
+          directors: this.showing(directorMovies).map((movie) => movie.id),
+          actors: this.showing(actorMovies).map((movie) => movie.id),
+          similar: this.showing(similarMovies).map((movie) => movie.id),
+          gems: this.showing(gemMovies).map((movie) => movie.id),
           friends: this.friendPickMedia.map((movie) => movie.id)
         });
       } catch (error) {
@@ -992,7 +1010,7 @@ export default {
         vote_count: movie.vote_count,
         genre_ids: movie.genre_ids
       }));
-      return rankWatchlistCandidates(candidates, rated, Date.now(), { cap: 12, profile: this.taste });
+      return rankWatchlistCandidates(candidates, rated, Date.now(), { cap: RANK_POOL, profile: this.taste, exclude: this.skipFromSuggestions });
     },
     // Per near-threshold year: TMDB discover, well-voted first, then the
     // shared unseen-only quality ranking.
@@ -1013,7 +1031,7 @@ export default {
           vote_count: movie.vote_count,
           popularity: movie.popularity
         }));
-        return rankWatchlistCandidates(candidates, rated, Date.now(), { cap: 12, profile: this.taste });
+        return rankWatchlistCandidates(candidates, rated, Date.now(), { cap: RANK_POOL, profile: this.taste, exclude: this.skipFromSuggestions });
       } catch {
         return [];
       }
@@ -1071,7 +1089,7 @@ export default {
         }
       }));
 
-      return rankWatchlistCandidates(allCredits, rated, Date.now(), { profile: this.taste });
+      return rankWatchlistCandidates(allCredits, rated, Date.now(), { cap: RANK_POOL, profile: this.taste, exclude: this.skipFromSuggestions });
     },
     /**
      * Resolve gender (and id) for the top cast names, so the performer list
@@ -1133,7 +1151,7 @@ export default {
         }
       }));
 
-      return rankWatchlistCandidates(pooled, rated, Date.now(), { profile: this.taste });
+      return rankWatchlistCandidates(pooled, rated, Date.now(), { cap: RANK_POOL, profile: this.taste, exclude: this.skipFromSuggestions });
     }
   }
 };
