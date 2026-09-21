@@ -42,7 +42,9 @@ export default {
     async reload () {
       if (this.updating) return;
       this.updating = true;
-      await reloadForUpdate();
+      // The target lets a second tap for the SAME update escalate to a hard
+      // reload instead of looping (appUpdate.js, bug report 2026-09-21).
+      await reloadForUpdate({ target: this.$store.state.updateTargetBundle });
     },
     // The wait-out-the-install logic lives in utils/appUpdate.js, shared
     // with App.vue's automatic update path.

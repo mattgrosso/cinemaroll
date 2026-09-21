@@ -31,7 +31,7 @@ import OfflineBanner from "./components/OfflineBanner.vue";
 import LibraryAccessBanner from "./components/LibraryAccessBanner.vue";
 import { pickFallbackBanner } from "./assets/javascript/bannerFallback.js";
 import { flushStashedBugReports } from "./utils/bugReports.js";
-import { reloadForUpdate, isSafeMomentForReload, shouldAutoAttempt } from "./utils/appUpdate.js";
+import { reloadForUpdate, isSafeMomentForReload, shouldAutoAttempt, markUpdateLanded, recordWorkerState } from "./utils/appUpdate.js";
 import { refreshSubscriptionIfGranted } from "./utils/push.js";
 
 export default {
@@ -126,8 +126,10 @@ export default {
 
       try {
         const registration = await navigator.serviceWorker.getRegistration();
+        recordWorkerState(registration);
         if (registration) {
           await registration.update();
+          recordWorkerState(registration);
         }
       } catch {
         // Best-effort - a failed check just means we try again on the next
@@ -172,7 +174,12 @@ export default {
         const deployedBundle = (await response.text()).match(/js\/app\.[a-z0-9]+\.js/);
         if (deployedBundle && deployedBundle[0] !== runningBundle) {
           this.deployedBundleSeen = deployedBundle[0];
+          this.$store.commit('setUpdateTargetBundle', deployedBundle[0]);
           this.$store.commit('setUpdateAvailable', true);
+        } else if (deployedBundle) {
+          // Running what's deployed: any earlier reload attempt worked, so
+          // the next update starts from a clean slate (appUpdate.js).
+          markUpdateLanded();
         }
       } catch {
         // Offline, blocked, or the check simply failed - try again next time.
@@ -217,7 +224,7 @@ export default {
       // flight yet — apply right away.
       const fresh = Date.now() - (this.lastBecameVisibleAt || 0) < 5000;
       if (fresh && isSafeMomentForReload({ routePath: this.$route?.path || '' })) {
-        reloadForUpdate();
+        reloadForUpdate({ target: this.deployedBundleSeen });
         return;
       }
 
@@ -228,7 +235,7 @@ export default {
         if (quiet && isSafeMomentForReload({ routePath: this.$route?.path || '' })) {
           clearInterval(this.autoUpdateTimer);
           this.autoUpdateTimer = null;
-          reloadForUpdate();
+          reloadForUpdate({ target: this.deployedBundleSeen });
         }
       }, 5000);
     }

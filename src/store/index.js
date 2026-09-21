@@ -460,6 +460,10 @@ export default createStore({
     // there used to yank the page out from under whatever the user was
     // doing (e.g. mid-way through the box office backfill button).
     updateAvailable: false,
+    // The deployed bundle name the check saw (`js/app.<hash>.js`), so the
+    // reload path can tell a second attempt at the SAME update from a new
+    // one (appUpdate.js).
+    updateTargetBundle: null,
   },
   getters: {
     allMediaAsArray: (state) => {
@@ -839,6 +843,9 @@ export default createStore({
     },
     setUpdateAvailable (state, value) {
       state.updateAvailable = value;
+    },
+    setUpdateTargetBundle (state, value) {
+      state.updateTargetBundle = value;
     },
     setDBSearchValue (state, value) {
       state.DBSearchValue = value;

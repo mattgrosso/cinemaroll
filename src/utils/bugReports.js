@@ -1,4 +1,5 @@
 import { getDatabase, ref as dbRef, push, set, serverTimestamp } from 'firebase/database';
+import { getLastWorkerState, getReloadAttempt } from './appUpdate.js';
 
 // Same "report a bug without breaking your flow" pattern used in the
 // thunderstone/space-base repos, adapted to Cinema Roll's Vuex store (not
@@ -32,8 +33,30 @@ function buildAppStateSummary (store, route) {
     // empty" report that couldn't be diagnosed, because nothing in the
     // snapshot could distinguish "no results matched the active filter"
     // from "the list genuinely failed to render".
-    homeLive: state.homePageLiveState || null
+    homeLive: state.homePageLiveState || null,
+    // The update machinery's view of the world (bug report 2026-09-21, "the
+    // auto refresh is stuck"): what this page is running, what the last
+    // check saw deployed, what the service worker was doing, and whether a
+    // reload for this update has already been tried.
+    update: {
+      running: runningBundleName(),
+      deployed: state.updateTargetBundle || null,
+      available: Boolean(state.updateAvailable),
+      worker: getLastWorkerState(),
+      reloadAttempt: getReloadAttempt()
+    }
   };
+}
+
+function runningBundleName () {
+  try {
+    const scripts = Array.from(document.querySelectorAll('script[src]'));
+    for (const script of scripts) {
+      const match = (script.getAttribute('src') || '').match(/js\/app\.[a-z0-9]+\.js/);
+      if (match) return match[0];
+    }
+  } catch { /* no document */ }
+  return null;
 }
 
 function buildReport (store, text, route) {

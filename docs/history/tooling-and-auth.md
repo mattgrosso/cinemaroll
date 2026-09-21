@@ -285,3 +285,45 @@ lives in the footer, which renders on every screen.
 
 No new version number was invented: the stamp reuses `VUE_APP_VERSION` and the existing
 `yarn deploy` bump. Shipped as 1.96.5.
+
+## The update that couldn't land (Sep 2026)
+
+Matt, 2026-09-21: *"something is wrong with the auto refresh on a new version...
+it's like it's stuck. I can push the button. It reloads the page, but it still
+tells me there's a new version, and then it tries to reload."*
+
+Production was consistent when probed (index.html, the worker's precache
+manifest and every one of its 137 URLs all returned the same deploy, 200s
+throughout; CloudFront's CachingOptimized policy ignores query strings, which
+the `?updateCheck=` fetch tolerates because every deploy invalidates `/*`). So
+the loop lives on the phone: a plain `location.reload()` navigates through the
+service worker's precache, and if the new worker never takes over — an install
+that won't finish, an activation that failed — every reload serves the OLD
+index.html, `checkDeployedBundle` sees the newer bundle again, and round it
+goes. The exact reason the worker stalls on his phone couldn't be read from
+here; the fix makes the outcome not depend on it, and adds the instrumentation
+to read it next time.
+
+`appUpdate.js`:
+
+- `reloadForUpdate({ target })` remembers (localStorage, 24h) which deployed
+  bundle it last reloaded for. A second attempt for the SAME target — auto or
+  banner tap — becomes `hardReload()`. `markUpdateLanded()` clears the memory
+  once the running bundle matches the deployed one, so the next update starts
+  clean. `waitForNewWorker` now returns `'stuck'` when a worker is still
+  installing/waiting at the deadline (and nudges a waiting one with
+  `SKIP_WAITING`); stuck goes straight to the hard path.
+- `hardReload()` deletes every cache but `tmdb-images` (the posters are still
+  good and re-downloading a library's worth is the one cost worth avoiding) and
+  navigates to `?fresh=<now>` (hash preserved). The worker is deliberately NOT
+  unregistered: the push subscription lives on the registration. With the
+  precache empty, workbox's precache handler falls through to the network, so
+  even a worker that never manages to update serves the current deploy.
+- `recordWorkerState()` snapshots installing/waiting/active script states on
+  every check; bug reports now carry `update: { running, deployed, available,
+  worker, reloadAttempt }` (`bugReports.js`), so a repeat of this report shows
+  what the worker was doing.
+
+Tests: `appUpdate.test.js` (escalation on repeat, reset on a newer deploy and on
+landing, stuck → hard, no target → never escalates, hardReload keeps the poster
+cache and preserves the hash).
