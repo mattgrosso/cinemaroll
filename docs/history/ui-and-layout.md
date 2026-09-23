@@ -418,3 +418,33 @@ billing for performers so a crowd scene doesn't hand every extra a billion dolla
 Seven roles: directors, performers, producers, writers, composers, cinematographers,
 editors. Writers are the one role where a person routinely holds two credits on one
 film (Screenplay + Novel), so names are deduped per film before summing.
+
+## Insights "takes forever to open" was a min/max per score (2026-09-23)
+
+Report (Matt, from his phone): "Off-line support still doesn't seem like it's
+working all that well... if I tap on the insights tab, it takes forever to open
+it... maybe we're trying, we have a little bit of Internet, and we should give up
+faster." Reproduced with Playwright against `dist/` signed in as the tester with
+his 1,435-film library cloned in, 4x CPU throttle for phone speed: the tap took
+2.7s with a fast network and 2.8s with a 4s-latency / 300 B/s one. Not the
+network at all. The CPU profile put ~550ms (unthrottled) inside
+`calculatePostStickyRatingFor`: every `getRating` call did
+`Math.min(...allRatings)` / `Math.max(...allRatings)` over the whole library to
+get the normalization range, and Insights' glance row alone calls it six times
+per film. The module-level `allRatings` copy was also only refreshed when EMPTY,
+so a new rating never widened the range until a reload.
+
+Fix: `scoreRange()` memoizes min/max on the identity of the
+`allMediaRatingsArray` getter's result (a cached Vuex getter, same array until
+movieLog changes). First build threw 1,436 `reading 'length'` errors on sign-in:
+that getter itself went through `getRating`, which now read the getter back
+mid-computation, and a re-entered Vue computed returns undefined. The getter
+(and `sortByRating`) now use `rawScore()`, the raw weighted total with no
+normalization, which is all they ever needed. After: 0.5s at the same throttle,
+zero page errors. The `GetRating.test.js` store mock had pointed at a path that
+resolved to nothing (`../../store/index` from `src/test/`) since it was written,
+so its tests had been running against the real store; fixed with `vi.hoisted`.
+Tooling worth keeping: the lie-fi + CPU-throttle timing script lived in the
+session scratchpad, pattern = `Network.emulateNetworkConditions` +
+`Emulation.setCPUThrottlingRate` over CDP, `Profiler.start/stop` for the flame.
+

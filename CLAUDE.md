@@ -109,8 +109,11 @@ Weighted criteria, combined into `calculatedTotal`:
 | Performance | 0.7 |
 | Soundtrack | 0.3 |
 
-`GetRating.js` is uncached and moderately expensive — never call it inside a sort
-comparator (see `.claude/rules/home-search.md`).
+`GetRating.js` is uncached per call — never call it inside a sort comparator (see
+`.claude/rules/home-search.md`); sort on `rawScore()` (the raw total, no normalization).
+The library-wide min/max the normalization needs is memoized on the ratings array's
+identity (2026-09-23) — it used to be two spreads over the whole library per call, which
+made Insights take ~3s to open on a phone.
 
 **Precision (2026-08-21): scores are computed to FOUR decimals, displayed at TWO.**
 "The score is the rank" — Matt rejected keeping a separate ranking order, so

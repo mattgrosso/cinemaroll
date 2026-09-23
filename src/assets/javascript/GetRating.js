@@ -1,7 +1,34 @@
 import store from '../../store/index';
 import { baseNormalized, applyNormalization } from './normalizationPicker.js';
 
-let allRatings = store.getters.allMediaRatingsArray;
+// The library-wide score range that normalization stretches every rating
+// across. allMediaRatingsArray is a cached Vuex getter - the same array
+// object until movieLog changes - so its identity is the cache key. This
+// used to be `Math.min(...allRatings)` / `Math.max(...allRatings)` INSIDE
+// every getRating call: two spreads over the whole library (1,435 films) per
+// score, and Insights asks for thousands of scores on open. Profiled at
+// ~550ms of pure min/max on a desktop, ~2.7s at phone speed - the "tapping
+// Insights takes forever" report (Matt, 2026-09-23), which read as an
+// offline problem but had nothing to do with the network. The old
+// module-level copy was also only refreshed when EMPTY, so the range went
+// stale the moment a rating was added mid-session.
+let rangeMemo = { ratings: undefined, min: undefined, max: undefined };
+
+const scoreRange = () => {
+  const ratings = store.getters.allMediaRatingsArray;
+  if (ratings !== rangeMemo.ratings) {
+    let min = Infinity;
+    let max = -Infinity;
+    for (const score of ratings) {
+      // A NaN score (an entry with no calculatedTotal) is skipped rather
+      // than poisoning the whole range, which is what the spread did.
+      if (score < min) min = score;
+      if (score > max) max = score;
+    }
+    rangeMemo = { ratings, min, max };
+  }
+  return rangeMemo;
+};
 
 // The raw weighted score alone — shared by the display path below and by
 // anchor resolution (which must NOT recurse into normalization).
@@ -83,16 +110,11 @@ const calculatePostStickyRatingFor = (rating) => {
 
   const calculatedTotal = rawCalculatedTotal(rating);
 
-  if (!allRatings.length) {
-    allRatings = store.getters.allMediaRatingsArray;
-  }
-
   let normalizedRating;
 
-  if (allRatings.length) {
-    const minRating = Math.min(...allRatings);
-    const maxRating = Math.max(...allRatings);
+  const { ratings: allRatings, min: minRating, max: maxRating } = scoreRange();
 
+  if (allRatings.length && minRating !== Infinity) {
     if (maxRating !== minRating) {
       const base = baseNormalized(calculatedTotal, minRating, maxRating);
       const anchorBases = resolveAnchorBases(minRating, maxRating);
@@ -152,4 +174,16 @@ export const getAllRatings = (dbEntry) => {
 export const getRating = (dbEntry) => {
   const mostRecent = mostRecentRating(dbEntry);
   return calculatePostStickyRatingFor(mostRecent);
+}
+
+// The most recent rating's raw weighted total and nothing else: no
+// normalization, so no dependency on the library-wide range. This is what
+// the store's allMediaRatingsArray getter must use - that getter IS the
+// range's input, and if it went through getRating it would read itself
+// mid-computation (a Vue computed re-entered returns undefined). It is also
+// the right thing for any sort comparator: calculatedTotal is the rank, and
+// the normalization step is pure display.
+export const rawScore = (dbEntry) => {
+  const mostRecent = mostRecentRating(dbEntry);
+  return mostRecent ? rawCalculatedTotal(mostRecent) : 0;
 }

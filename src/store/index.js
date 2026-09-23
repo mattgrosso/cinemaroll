@@ -16,7 +16,7 @@ import {
   onAuthStateChanged
 } from "firebase/auth";
 import * as Sentry from "@sentry/vue";
-import { getRating } from "../assets/javascript/GetRating";
+import { getRating, rawScore } from "../assets/javascript/GetRating";
 import router from '@/router';
 import ErrorLogService from "../services/ErrorLogService.js";
 import { saveSnapshot, loadSnapshot } from "../utils/offlineStore.js";
@@ -58,13 +58,13 @@ const sortByVoteCount = (a, b) => {
   return 0;
 }
 
-const mostRecentRating = (media) => {
-  return getRating(media);
-}
-
+// Raw weighted totals only (rawScore, not getRating): the score is the rank
+// and normalization is display-only, and allMediaRatingsArray below is the
+// input to that normalization - going through getRating there re-entered
+// the getter while it was computing (2026-09-23).
 const sortByRating = (a, b) => {
-  const sortValueA = mostRecentRating(a).calculatedTotal;
-  const sortValueB = mostRecentRating(b).calculatedTotal;
+  const sortValueA = rawScore(a);
+  const sortValueB = rawScore(b);
 
   if (sortValueA < sortValueB) {
     return 1;
@@ -486,9 +486,7 @@ export default createStore({
       return getters.allMediaAsArray.sort(sortByRating);
     },
     allMediaRatingsArray: (state, getters) => {
-      return getters.allMediaAsArray.map((media) => {
-        return mostRecentRating(media).calculatedTotal;
-      });
+      return getters.allMediaAsArray.map(rawScore);
     },
     databaseTopKey (state, getters) {
       return getters.devMode ? state.devModeTopKey : state.databaseTopKey;
