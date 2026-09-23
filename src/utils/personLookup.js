@@ -11,6 +11,7 @@
 // cached too, so an unreachable API costs one failed request per name and
 // never a retry storm.
 import ErrorLogService from '../services/ErrorLogService.js';
+import { fetchWithTimeout } from './networkHealth.js';
 
 const cache = new Map();
 const inFlight = new Map();
@@ -24,7 +25,7 @@ export async function lookupPerson (name) {
   const url = `https://api.themoviedb.org/3/search/person?api_key=${process.env.VUE_APP_TMDB_API_KEY}&query=${query}`;
   const lookup = (async () => {
     try {
-      const response = await fetch(url);
+      const response = await fetchWithTimeout(url);
       if (!response.ok) throw new Error(`TMDB search/person returned ${response.status}`);
       const data = await response.json();
       return data?.results?.length ? data.results[0] : null;

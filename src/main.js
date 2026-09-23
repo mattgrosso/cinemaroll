@@ -22,6 +22,13 @@ import * as Sentry from "@sentry/vue";
 import { BrowserTracing } from "@sentry/tracing";
 import VueLazyLoad from 'vue3-lazyload';
 import './registerServiceWorker'
+import axios from 'axios';
+import { installNetworkHealth } from './utils/networkHealth.js';
+
+// Every network request gets a timeout, and a request nothing answers flips
+// the app to its offline paths (lie-fi, bug report 2026-09-23). Before the
+// app mounts, so no component can fire a request without it.
+installNetworkHealth({ store, axios });
 
 const app = createApp(App);
 

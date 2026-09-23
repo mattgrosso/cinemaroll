@@ -301,3 +301,70 @@ Still open, smallest first: natalierosegrosso (7.8 MB `sharedDBSearches` +
 branches — real users' accounts, so not touched without Matt's say-so; pennies
 once backups are throttled. The structural fix for the per-launch download
 remains delta sync phase 2/3 above.
+
+## Lie-fi: "my phone thought I had a connection, but basically did not" (2026-09-23)
+
+Matt, after a day in a low-signal area: "There were a lot of things where it
+felt like I would tell it to do something and it would just sit there... my
+phone thought I had a connection, but basically did not." An earlier pass had
+blamed Insights' CPU cost (real, fixed the same day - see GetRating's range
+memo) and tested with DevTools network throttling, which changed nothing.
+That was the wrong instrument: CDP throttling never touches service-worker
+or websocket traffic, and slow is not dead.
+
+**The reproduction that worked** is `scripts/liefi-proxy.mjs`: an HTTP proxy
+that accepts every connection and, in blackhole mode, never returns a byte -
+existing tunnels drop everything, new CONNECTs are "established" and silent.
+`navigator.onLine` stays true throughout. Chromium via Playwright with
+`bypass: '<-loopback>'`, dist/ served locally, tester signed in with Matt's
+library cloned, 4x CPU throttle, service worker precached before the switch.
+
+**What actually sat there.** Screen-to-screen navigation was fine (precache).
+Relaunch was fine (IndexedDB snapshot, auth restore does not block). What
+hung: anything that talked to TMDB (no axios call had a timeout, so the
+search-for-a-new-title spinner never ended, and with it the whole results
+area including the Settings/Insights buttons), and any Firebase write (15s
+timeout, then an error). The offline branches - rate from memory, the
+queued write, the banner - all existed and never engaged, because every one
+of them keys off `store.state.isOnline`, which was `navigator.onLine`, which
+was true.
+
+**The fix, `src/utils/networkHealth.js`:** "online" now means "the internet
+is answering". Every axios request gets an 8s timeout; a timed-out or
+network-failed request (or a timed-out Firebase write) marks the connection
+STALLED, which sets `isOnline` false - so every existing offline path
+engages, and the banner says "Your connection isn't answering" rather than
+"You're offline" (bars are showing; "offline" would read as wrong). While
+stalled, a no-store fetch of index.html probes every 15s; the first answer
+(or any successful request, or the browser's own 'online' event) clears the
+stall and flushes the queue. `flushPendingWrites` now guards on
+`state.isOnline`, not `navigator.onLine`. Measured under blackhole: the
+rate-from-memory offer at ~10s (8s timeout + the 1s mount delay + debounce),
+save in ~3s, back online 8-15s after signal returned, the queued rating on
+the server after that.
+
+**Two real bugs under the rock.**
+1. `pendingWriteQueue.enqueueWrite` was failing for EVERY rating queued from
+   the form - offline, placeholder, and the durability copy under an online
+   save - and swallowing the error. RateMovie hands over its reactive
+   `ratings` array; IndexedDB's structured clone refuses a Proxy ("[object
+   Array] could not be cloned"); the user saw "offline storage is
+   unavailable" and the rating was gone. The unit tests only ever queued
+   plain objects. Records are now JSON-round-tripped to plain data
+   (`pendingWriteQueueReactive.test.js` fails on the old code), the catch
+   logs, and open/put are bounded (6s) with onblocked/onabort handled - an
+   unsettled promise there was a form stuck on "Submiting…".
+2. `addRating` for a brand-new movie whose TMDB detail fetch failed threw,
+   and RateMovie said "check your connection and try again" - the rating
+   typed out was simply lost. It now falls back to a placeholder rating
+   (poster, title and date kept from the search result, `pendingTmdbId`
+   stashed) exactly like rating from memory offline. `AddRatingLieFi.test.js`.
+
+**Harness notes.** A Playwright `click()` blurs the search input first,
+which turns the typed title into a chip and re-renders the button under the
+pointer - dispatch the click from `page.evaluate` (that is what a finger
+does). `page.reload()`/`page.screenshot()` hang under blackhole waiting for
+images and fonts; use `waitUntil: 'commit'` and CDP `Page.captureScreenshot`.
+The tester's Firebase keys are `<timestamp>-<uuid>-<title>`, so look for a
+test title by substring, not `orderByKey().startAt()`.
+

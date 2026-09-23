@@ -16,7 +16,8 @@
       </div>
     </div>
     <div v-else-if="offlineFallback" class="offline-fallback">
-      <p>You're offline, so "{{ value }}" can't be looked up on TMDB right now.</p>
+      <p v-if="$store.state.networkStalled">Your connection isn't answering, so "{{ value }}" can't be looked up on TMDB right now.</p>
+      <p v-else>You're offline, so "{{ value }}" can't be looked up on TMDB right now.</p>
       <p>You can still rate it from memory — once you're back online, you'll be asked to confirm which movie it was.</p>
       <button class="btn btn-primary" @click="rateOffline">Rate "{{ value }}" from memory</button>
     </div>

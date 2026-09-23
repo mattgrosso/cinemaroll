@@ -2,7 +2,7 @@ import axios from 'axios';
 import store from '../../store/index';
 import { warmImageCache, posterUrl, backdropUrl } from './offlinePosterCache.js';
 import { fetchLocationsForIds } from './movieLocations.js';
-import { isPlaceholderId } from '../../utils/placeholderId.js';
+import { isPlaceholderId, makePlaceholderId } from '../../utils/placeholderId.js';
 import { trimCrew, RUNTIME_ENTRY_FIELDS } from './storedEntry.js';
 import { enqueueWrite, removePendingWrite, updatePendingWrite } from '../../utils/pendingWriteQueue.js';
 
@@ -168,13 +168,21 @@ const buildPlaceholderMovie = (ratings) => {
   const typedYear = /^\d{4}$/.test(String(rating.year || '').trim()) ? String(rating.year).trim() : null;
   const year = typedYear || String(new Date().getFullYear());
 
+  // A placeholder made from a TMDB search result (the lie-fi fallback in
+  // addRating) already knows its poster and real release date; a typed
+  // title knows neither. Reconciliation replaces the whole object anyway.
+  const knownDate = /^\d{4}-\d{2}-\d{2}$/.test(String(rating.release_date || '')) ? rating.release_date : null;
+
   return {
     id: rating.id,
     title: rating.title,
-    release_date: `${year}-01-01`,
+    release_date: knownDate || `${year}-01-01`,
     runtime: 90,
-    poster_path: null,
-    backdrop_path: null,
+    poster_path: rating.poster_path || null,
+    backdrop_path: rating.backdrop_path || null,
+    // The TMDB id the search result carried, kept so a later reconciliation
+    // can offer that match first. Absent on a typed-title placeholder.
+    ...(rating.pendingTmdbId ? { pendingTmdbId: rating.pendingTmdbId } : {}),
     genres: [],
     cast: [],
     crew: [],
@@ -326,16 +334,37 @@ const addRating = async (ratings) => {
     return;
   }
 
-  const isPlaceholder = isPlaceholderId(id);
+  let isPlaceholder = isPlaceholderId(id);
   let dbEntry;
 
+  const buildPlaceholderEntry = (placeholderRatings) => {
+    const movie = buildPlaceholderMovie(placeholderRatings);
+    const ratingsWithoutOwnership = stripOwnership(placeholderRatings);
+    const key = findKeyForMovieInDatabase(placeholderRatings[0].id) || safeTitleKey(movie.title);
+    return { path: `movieLog/${key}`, value: { movie, ratings: ratingsWithoutOwnership } };
+  };
+
   if (isPlaceholder) {
-    const movie = buildPlaceholderMovie(ratings);
-    const ratingsWithoutOwnership = stripOwnership(ratings);
-    const key = findKeyForMovieInDatabase(id) || safeTitleKey(movie.title);
-    dbEntry = { path: `movieLog/${key}`, value: { movie, ratings: ratingsWithoutOwnership } };
+    dbEntry = buildPlaceholderEntry(ratings);
   } else {
-    dbEntry = await addMovieRating(ratings);
+    try {
+      dbEntry = await addMovieRating(ratings);
+    } catch (error) {
+      // A brand-new movie whose TMDB fetch failed. Until 2026-09-23 this
+      // threw, and RateMovie told the user to check their connection and
+      // try again - which, on a connection that shows bars but answers
+      // nothing (lie-fi), meant the rating they'd just typed out was simply
+      // lost. It now becomes a placeholder rating, exactly as if they had
+      // rated it from memory offline: saved locally, queued, poster and
+      // date kept from the search result, and reconciled to the real movie
+      // once TMDB answers again. A movie already in the library never gets
+      // here (addMovieRating falls back to its stored data instead).
+      if (findKeyForMovieInDatabase(id) || !ratings[0].title) throw error;
+      console.error('TMDB unreachable for a new rating; saving it as a placeholder to reconcile later:', error);
+      ratings = ratings.map((rating) => ({ ...rating, id: makePlaceholderId(), pendingTmdbId: id }));
+      isPlaceholder = true;
+      dbEntry = buildPlaceholderEntry(ratings);
+    }
     if (!dbEntry) {
       return;
     }

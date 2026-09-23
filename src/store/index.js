@@ -19,6 +19,7 @@ import * as Sentry from "@sentry/vue";
 import { getRating, rawScore } from "../assets/javascript/GetRating";
 import router from '@/router';
 import ErrorLogService from "../services/ErrorLogService.js";
+import { markStalled } from '../utils/networkHealth.js';
 import { saveSnapshot, loadSnapshot } from "../utils/offlineStore.js";
 import { maxUpdatedAt, reconstructFromDelta, diffLibraries, describeStaleEntry, launchPlan } from "../assets/javascript/deltaSync.js";
 import { enqueueWrite, listPendingWrites, removePendingWrite, updatePendingWrite } from "../utils/pendingWriteQueue.js";
@@ -103,7 +104,11 @@ const removeNaNAndUndefined = (obj) => {
 // write against a bounded timeout guarantees performDatabaseWrite always
 // settles, so a stuck write becomes a recorded failure (retried on the next
 // trigger) instead of a silent permanent stall.
-const DATABASE_WRITE_TIMEOUT_MS = 15000;
+// 8s, down from 15s (2026-09-23): the rating is durably queued BEFORE this
+// attempt, so a shorter wait costs nothing but the user's patience - and on
+// lie-fi (see networkHealth.js) a timed-out write is what tells the app the
+// connection is dead, so the next save skips the wait entirely.
+const DATABASE_WRITE_TIMEOUT_MS = 8000;
 
 // Used to build absolute feed/inbox URLs for people on other apps.
 const DATABASE_URL = 'https://movie-log-8c4d5-default-rtdb.firebaseio.com';
@@ -142,6 +147,9 @@ const performDatabaseWrite = async (context, dbEntry) => {
   } catch (error) {
     console.error('Error setting database value:', error);
     ErrorLogService.error('Error setting database value:', dbEntry.path, error);
+    // A write that never came back is lie-fi's signature: flip the app to
+    // its offline paths until something answers again (networkHealth.js).
+    if (/timed out/.test(error?.message || '')) markStalled();
     throw error;
   }
 };
@@ -448,6 +456,12 @@ export default createStore({
     // mirrors the pendingWriteQueue's unreconciled placeholder entries, kept
     // in Vuex so Home.vue can reactively show a "needs a match" banner.
     isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+    // True while the connection LOOKS up (navigator.onLine) but nothing is
+    // answering - "lie-fi". Set by networkHealth.js when a request times
+    // out; cleared when one succeeds, when a probe gets through, or when the
+    // browser fires a fresh 'online' event. While true, isOnline is false so
+    // every offline path in the app engages. Bug report 2026-09-23.
+    networkStalled: false,
     // { [dbPath]: value } for writes committed locally but not yet confirmed
     // by the server — see the trackInFlightWrite mutation for why.
     inFlightWrites: {},
@@ -832,6 +846,13 @@ export default createStore({
     },
     setIsOnline (state, value) {
       state.isOnline = value;
+      // The browser's own 'online' event is a fresh signal: give the
+      // connection another chance. The next timed-out request re-flags it.
+      if (value) state.networkStalled = false;
+    },
+    setNetworkStalled (state, value) {
+      state.networkStalled = value;
+      state.isOnline = value ? false : (typeof navigator !== 'undefined' ? navigator.onLine : true);
     },
     setIsFlushingPendingWrites (state, value) {
       state.isFlushingPendingWrites = value;
@@ -1564,7 +1585,10 @@ export default createStore({
     // + its other iOS-reliability triggers/interval, and once from
     // initializeDB on a cold start that's already online.
     async flushPendingWrites (context) {
-      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+      // state.isOnline, not navigator.onLine: while the connection is
+      // stalled (lie-fi) every attempt would just burn the write timeout.
+      // networkHealth's probe dispatches this again the moment it clears.
+      if (!context.state.isOnline) return;
       if (context.state.isFlushingPendingWrites) return;
       if (!context.getters.databaseTopKey) return;
 

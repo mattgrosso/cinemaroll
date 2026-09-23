@@ -36,6 +36,9 @@ function openDB () {
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
+    // A promise that never settles is a rating form stuck on "Submitting…"
+    // (2026-09-23, lie-fi reproduction): every outcome has to reject.
+    request.onblocked = () => reject(new Error('IndexedDB open blocked'));
   });
 }
 
@@ -63,17 +66,30 @@ function putRecord (db, record) {
     tx.objectStore(STORE_NAME).put(record);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
   });
 }
+
+// IndexedDB can wedge (iOS storage pressure, a stuck versionchange, a
+// private window). Whatever happens, the caller gets an answer: null from
+// enqueueWrite, and the save path takes it from there.
+const STORAGE_TIMEOUT_MS = 6000;
+const bounded = (promise, what) => {
+  let timer;
+  const timeout = new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error(`${what} timed out after ${STORAGE_TIMEOUT_MS}ms`)), STORAGE_TIMEOUT_MS); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+};
 
 // Adds a new pending write, or — for type 'write' — overwrites the existing
 // entry targeting the same dbEntry.path so repeated offline edits to the
 // same movie before the next flush collapse to a single write (the same
 // outcome the online same-path debounce already gives, just durable across
 // a reload). Returns the stored record, or null if IndexedDB is unavailable.
+const toPlain = (value) => JSON.parse(JSON.stringify(value));
+
 export async function enqueueWrite (entry) {
   try {
-    const db = await openDB();
+    const db = await bounded(openDB(), 'IndexedDB open');
 
     let existingId = null;
     let existingCreatedAt = null;
@@ -86,17 +102,29 @@ export async function enqueueWrite (entry) {
       }
     }
 
-    const record = {
+    // PLAIN DATA ONLY. The entry arrives straight off RateMovie's reactive
+    // state, and a Vue reactive array is a Proxy, which the structured
+    // clone behind IDBObjectStore.put() refuses ("[object Array] could not
+    // be cloned"). Every rating queued from the form - offline, placeholder
+    // OR the durability copy under an online save - was failing here and
+    // surfacing as "offline storage is unavailable" (found 2026-09-23 while
+    // reproducing lie-fi; the unit tests only ever queued plain objects).
+    // The JSON round-trip is the same shape Firebase stores anyway.
+    const record = toPlain({
       attempts: 0,
       lastError: null,
       ...entry,
       id: existingId || crypto.randomUUID(),
       createdAt: existingCreatedAt || Date.now()
-    };
+    });
 
-    await putRecord(db, record);
+    await bounded(putRecord(db, record), 'IndexedDB put');
     return record;
-  } catch {
+  } catch (error) {
+    // Still resolves null (callers depend on that), but never silently:
+    // a swallowed DataCloneError here surfaced to the user as "offline
+    // storage is unavailable" for a day before anyone could see why.
+    console.error('pendingWriteQueue: could not enqueue', entry?.type, entry?.dbEntry?.path, error);
     return null;
   }
 }
@@ -138,7 +166,7 @@ export async function updatePendingWrite (id, patch) {
     const existing = await getRecord(db, id);
     if (!existing) return null;
 
-    const updated = { ...existing, ...patch };
+    const updated = toPlain({ ...existing, ...patch });
     await putRecord(db, updated);
     return updated;
   } catch {

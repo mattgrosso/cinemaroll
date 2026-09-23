@@ -98,13 +98,28 @@ afterEach(() => {
 })
 
 describe('flushPendingWrites', () => {
+  // The guard reads store.state.isOnline, not navigator.onLine (2026-09-23):
+  // on lie-fi the browser still says online, and only the store knows the
+  // connection has stopped answering (networkHealth.js).
   it('does nothing when offline', async () => {
-    Object.defineProperty(window.navigator, 'onLine', { value: false, configurable: true })
+    store.commit('setIsOnline', false)
     listPendingWritesMock.mockResolvedValue([{ id: '1', type: 'write', dbEntry: { path: 'movieLog/a', value: {} } }])
 
     await store.dispatch('flushPendingWrites')
 
     expect(setMock).not.toHaveBeenCalled()
+    store.commit('setIsOnline', true)
+  })
+
+  it('does nothing while the connection is stalled, even though the browser says online', async () => {
+    Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true })
+    store.commit('setNetworkStalled', true)
+    listPendingWritesMock.mockResolvedValue([{ id: '1', type: 'write', dbEntry: { path: 'movieLog/a', value: {} } }])
+
+    await store.dispatch('flushPendingWrites')
+
+    expect(setMock).not.toHaveBeenCalled()
+    store.commit('setNetworkStalled', false)
   })
 
   it('writes each queued entry and removes type "write" entries on success', async () => {

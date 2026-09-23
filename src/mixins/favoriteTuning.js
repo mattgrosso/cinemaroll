@@ -1,4 +1,5 @@
 import { getRating } from "../assets/javascript/GetRating.js";
+import { fetchWithTimeout } from '../utils/networkHealth.js';
 import { globalAverage } from "../assets/javascript/logScore.js";
 import ErrorLogService from "../services/ErrorLogService.js";
 
@@ -69,7 +70,7 @@ export default {
       const query = encodeURIComponent(personName);
       const url = `https://api.themoviedb.org/3/search/person?api_key=${process.env.VUE_APP_TMDB_API_KEY}&query=${query}`;
       try {
-        const response = await fetch(url);
+        const response = await fetchWithTimeout(url);
         if (!response.ok) {
           throw new Error('Failed to fetch from TMDB');
         }
