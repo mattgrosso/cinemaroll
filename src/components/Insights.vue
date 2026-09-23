@@ -17,9 +17,18 @@
       </button>
     </nav>
 
+    <!-- The tapped tab's highlight paints first; the pane follows one frame
+         later (setTab), so the tap is acknowledged before a heavy pane (the
+         Places map on a cold cache, the Ratings charts) is built. In that one
+         frame this stands in. -->
+    <div v-if="renderedTab !== activeTab" class="insights-pane-pending">
+      <SkeletonBlock :rows="activeTab === 'places' ? 2 : 4"/>
+      <p v-if="activeTab === 'places'" class="insights-pane-note">Mapping your films…</p>
+    </div>
+
     <!-- OVERVIEW: at-a-glance numbers, fun facts, and the directory of
          every data page in the app. -->
-    <template v-if="activeTab === 'overview'">
+    <template v-else-if="renderedTab === 'overview'">
       <div class="glance-strip">
         <div class="glance-item feature"><span class="glance-label">Movies</span><span class="glance-value">{{ filteredEntriesWithFlatKeywordsAdded.length }}</span></div>
         <div class="glance-item feature"><span class="glance-label">Viewings</span><span class="glance-value">{{ viewsCount }}</span></div>
@@ -76,7 +85,7 @@
     </template>
 
     <!-- RATINGS: how you rate. -->
-    <template v-else-if="activeTab === 'ratings'">
+    <template v-else-if="renderedTab === 'ratings'">
     <InsightsPane>
       <RatingCurvePlayback
         :chartData="ratingsCountData"
@@ -143,7 +152,7 @@
     </template>
 
     <!-- ACTIVITY: when you watch. -->
-    <template v-else-if="activeTab === 'activity'">
+    <template v-else-if="renderedTab === 'activity'">
       <!-- The pace figure gets a box to itself, and every other time-based
            number moved off Overview to join it — Activity was just a calendar,
            and Overview was half activity ("I'm not sure what activity means
@@ -218,7 +227,7 @@
          "a coverage map that shows me how much of the world I've explored
          in film"). Data from Wikidata via places.js; tapping any place runs
          a Cinema Roll search, never a map app. -->
-    <template v-else-if="activeTab === 'places'">
+    <template v-else-if="renderedTab === 'places'">
     <div class="people-chips">
       <button
         v-for="option in placeTypeOptions"
@@ -299,7 +308,7 @@
     </template>
     </template>
 
-    <template v-else-if="activeTab === 'people'">
+    <template v-else-if="renderedTab === 'people'">
     <div class="people-chips">
       <button
         v-for="category in peopleCategories"
@@ -363,6 +372,8 @@ import RatingCurvePlayback from "./RatingCurvePlayback.vue";
 import CoverageMap from "./CoverageMap.vue";
 import { placeRows, favouritePlaces, mostVisitedPlaces, placeSummary, countryCoverage, warmCountryLookup } from "../assets/javascript/places.js";
 import { memoByIdentity } from "../utils/memoByIdentity.js";
+import { afterFrame } from "../utils/nextFrame.js";
+import SkeletonBlock from "./SkeletonBlock.vue";
 
 // See allEntriesWithFlatKeywordsAdded. The mapping closure is passed in
 // because it reads component helpers; it is only ever run on a cache miss.
@@ -391,6 +402,7 @@ export default {
     FunFactsRow,
     ScatterChart,
     InsightsPane,
+    SkeletonBlock,
     RatingCurvePlayback,
     Outliers,
     YearlyAverage,
@@ -411,6 +423,8 @@ export default {
     return {
       // Tabbed layout state; both persist across visits.
       activeTab: localStorage.getItem('cinemaRoll.insights.tab') || 'overview',
+      // The pane actually rendered; trails activeTab by one frame (setTab).
+      renderedTab: localStorage.getItem('cinemaRoll.insights.tab') || 'overview',
       peopleCategory: localStorage.getItem('cinemaRoll.insights.people') || 'directors',
       monthAbbreviations: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
       tabs: [
@@ -1212,10 +1226,14 @@ export default {
     },
   },
   watch: {
+    // Content a frame behind the highlight - see the template note. A
+    // watcher rather than part of setTab, so a tab set any other way (a
+    // restored choice, a deep link, a test) is rendered too.
     activeTab: {
       immediate: true,
-      handler (tab) {
-        if (tab === 'places') this.loadWorld();
+      handler (key) {
+        if (key === 'places') this.loadWorld();
+        afterFrame(() => { if (this.activeTab === key) this.renderedTab = key; });
       }
     }
   },
@@ -2918,6 +2936,22 @@ export default {
     gap: 0.35rem;
     margin: 0.25rem 0 0.75rem;
     width: 100%;
+
+    .insights-pane-pending {
+      padding: 1rem 1rem 0;
+    }
+
+    .insights-pane-note {
+      color: #adb5bd;
+      font-size: 0.9rem;
+      margin: -0.5rem 0 1rem;
+    }
+
+    .insights-tab:active,
+    .people-chip:active {
+      transform: scale(0.97);
+      opacity: 0.85;
+    }
 
     .insights-tab {
       background: none;

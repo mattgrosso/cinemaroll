@@ -22,6 +22,12 @@
           @keydown.esc="dismissTypeahead"
           :value="inputValue"
         >
+        <!-- Typing waits 300ms before the list re-filters (debouncedSetSearchValue);
+             this small spinner covers that gap so a keystroke is seen to be
+             working, and the list dims a touch until it settles. -->
+        <span v-if="searchPending" class="search-pending" aria-hidden="true">
+          <span class="spinner-border spinner-border-sm"></span>
+        </span>
         <!-- The quick-links lightning bolt, relocated from the rainbow bar
              (its slot went to the Circle). Same Bootstrap collapse trigger,
              miniaturized into the input's right edge. -->
@@ -90,91 +96,91 @@
               <i class="bi bi-shuffle"></i> Surprise me
             </span>
             <span
-              class="badge mx-1"
+              class="badge mx-1 tap-feedback"
               :class="activeListChip?.value === 'annual' ? 'text-bg-success' : 'text-bg-secondary'"
               @click="toggleAnnualBestFilter"
             >
               Annual Best
             </span>
             <span
-              class="badge mx-1"
+              class="badge mx-1 tap-feedback"
               :class="activeListChip?.value === 'bestPicture' ? 'text-bg-success' : 'text-bg-secondary'"
               @click="toggleBestPicturesFilter"
             >
               Best Picture
             </span>
             <span
-              class="badge mx-1"
+              class="badge mx-1 tap-feedback"
               :class="activeListChip?.value === 'thisYear' ? 'text-bg-success' : 'text-bg-secondary'"
               @click="toggleThisYearFilter"
             >
               This Year
             </span>
             <span
-              class="badge mx-1"
+              class="badge mx-1 tap-feedback"
               :class="activeListChip?.value === 'lastYear' ? 'text-bg-success' : 'text-bg-secondary'"
               @click="toggleLastYearFilter"
             >
               Last Year
             </span>
             <span
-              class="badge mx-1"
+              class="badge mx-1 tap-feedback"
               :class="activeListChip?.value === 'thisMonth' ? 'text-bg-success' : 'text-bg-secondary'"
               @click="toggleThisMonthFilter"
             >
               This Month
             </span>
             <span
-              class="badge mx-1"
+              class="badge mx-1 tap-feedback"
               :class="activeListChip?.value === 'lastMonth' ? 'text-bg-success' : 'text-bg-secondary'"
               @click="toggleLastMonthFilter"
             >
               Last Month
             </span>
             <span
-              class="badge mx-1"
+              class="badge mx-1 tap-feedback"
               :class="activeListChip?.value === 'notOnLetterboxd' ? 'text-bg-success' : 'text-bg-secondary'"
               @click="toggleNotOnLetterboxdFilter"
             >
               Not on Letterboxd
             </span>
             <span
-              class="badge mx-1"
+              class="badge mx-1 tap-feedback"
               :class="activeQuickLinkList === 'genre' ? 'text-bg-success' : 'text-bg-secondary'"
               @click="toggleQuickLinksList('genre')"
             >
               Genres
             </span>
             <span
-              class="badge mx-1"
+              class="badge mx-1 tap-feedback"
               :class="activeQuickLinkList === 'keyword' ? 'text-bg-success' : 'text-bg-secondary'"
               @click="toggleQuickLinksList('keyword')"
             >
               Keywords
             </span>
             <span
-              class="badge mx-1"
+              class="badge mx-1 tap-feedback"
               :class="activeQuickLinkList === 'year' ? 'text-bg-success' : 'text-bg-secondary'"
               @click="toggleQuickLinksList('year')"
             >
               Years
             </span>
             <span
-              class="badge mx-1"
+              class="badge mx-1 tap-feedback"
               :class="activeQuickLinkList === 'director' ? 'text-bg-success' : 'text-bg-secondary'"
               @click="toggleQuickLinksList('director')"
             >
               Directors
             </span>
             <span
-              class="badge mx-1"
+              class="badge mx-1 tap-feedback"
               :class="activeQuickLinkList === 'cast/crew' ? 'text-bg-success' : 'text-bg-secondary'"
               @click="toggleQuickLinksList('cast/crew')"
             >
               Cast/Crew Members
             </span>
             <span
-              class="badge mx-1"
+              class="badge mx-1 tap-feedback"
               :class="activeQuickLinkList === 'studios' ? 'text-bg-success' : 'text-bg-secondary'"
               @click="toggleQuickLinksList('studios')"
             >
@@ -191,7 +197,7 @@
             <span
               v-for="(tag, index) in tags"
               :key="`tag-${index}`"
-              class="badge mx-1"
+              class="badge mx-1 tap-feedback"
               :class="activeFilters.some((filter) => filter.type === 'tag' && filter.value === tag) ? 'text-bg-success' : 'text-bg-secondary'"
               @click="toggleQuickLinksList(tag)"
             >
@@ -209,7 +215,7 @@
               </button>
               <ul class="quick-link-list p-0 col-12">
                 <li v-for="(value, index) in sortedDataForActiveQuickLinkList" :key="index" @click="updateSearchValue(value.name)">
-                  <span class="badge mx-1" :class="darkOrLight">
+                  <span class="badge mx-1 tap-feedback" :class="darkOrLight">
                     {{ value.name }}<span v-if="quickLinksSortType === 'count' && value.count">&nbsp;({{value.count}})</span>
                   </span>
                 </li>
@@ -350,6 +356,7 @@
     <div
       v-if="!shouldShowStartSuggestions && showResultsList && paginatedSortedResults.length"
       class="results"
+      :class="{ 'results-searching': searchPending }"
     >
       <div class="results-actions col-12 md-col-6 d-flex justify-content-between flex-wrap mt-1">
         <div class="btn-group col-12" role="group" aria-label="Button group">
@@ -1193,9 +1200,11 @@
                                 <small class="form-text text-white d-block mb-2">Your whole library and settings as a JSON file.</small>
                                 <button
                                   class="btn btn-outline-light btn-sm w-100"
+                                  :disabled="signingOut"
                                   @click="signOut"
                                 >
-                                  <i class="bi bi-box-arrow-right"></i> Sign out
+                                  <span v-if="signingOut" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                  <i v-else class="bi bi-box-arrow-right"></i> {{ signingOut ? 'Signing out…' : 'Sign out' }}
                                 </button>
               </SettingsSection>
 
@@ -1359,9 +1368,11 @@
           <div v-if="canLoadMore" ref="loadMoreSentinel" class="load-more-sentinel d-flex justify-content-center mb-5">
             <button
               class="btn btn-secondary"
+              :disabled="loadingMore"
               @click="addMoreResults"
             >
-              More...
+              <span v-if="loadingMore" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              {{ loadingMore ? 'Loading…' : 'More...' }}
             </button>
           </div>
           <!-- Suggestions button/component at the very bottom, only if not searching/filtering and all results are shown and user has rated 10+ movies -->
@@ -1579,6 +1590,7 @@ import RatingCurveSettings from "./RatingCurveSettings.vue";
 import SettingsSection from "./SettingsSection.vue";
 import NoResults from "./NoResults.vue";
 import { memoByIdentity } from "../utils/memoByIdentity.js";
+import { afterFrame } from "../utils/nextFrame.js";
 
 // See allEntriesWithFlatKeywordsAdded. Pure in (library, anchors, tweak):
 // flat keywords and search fields come from the entry, the score from the
@@ -1818,6 +1830,9 @@ export default {
       newOverrideYear: null,
       noResults: false, // Show no results message for TMDB search
       numberOfResultsToShow: 25,
+      // Spinner on the More… button for the frame the next 48 cards take.
+      loadingMore: false,
+      signingOut: false,
       offlineDownload: { status: 'idle', completed: 0, total: 0, failed: 0 },
       boxOfficeBackfill: { status: 'idle', completed: 0, total: 0, failed: 0 },
       countriesBackfill: { status: 'idle', completed: 0, total: 0, failed: 0 },
@@ -2347,6 +2362,11 @@ export default {
       return [...found, ...extras.map((hat) => ({ ...hat, movies: '—' }))];
     },
     // Diagnostic only - see the liveDebugState watcher above.
+    // A keystroke the list hasn't caught up with yet (see
+    // debouncedSetSearchValue): the search bar spins and the list dims.
+    searchPending () {
+      return (this.inputValue || '').trim() !== (this.searchValue || '').trim();
+    },
     liveDebugState () {
       return {
         quickLink: this.quickLinkContext,
@@ -4975,7 +4995,13 @@ export default {
     loadMoreResults () {
       // Add movies in increments of 48 for stable grid layout. (Persistence of
       // numberOfResultsToShow happens in beforeRouteLeave on navigation away.)
-      this.numberOfResultsToShow = this.numberOfResultsToShow + 48;
+      // The spinner paints first (one frame), then the 48 new cards render.
+      if (this.loadingMore) return;
+      this.loadingMore = true;
+      afterFrame(() => {
+        this.numberOfResultsToShow = this.numberOfResultsToShow + 48;
+        this.$nextTick(() => { this.loadingMore = false; });
+      });
     },
     addMoreResults () {
       // Manual tap on the fallback button: load the next batch and nudge the
@@ -5167,7 +5193,13 @@ export default {
       this.offlineDownload = { status: 'done', ...result };
     },
     async signOut () {
-      await this.$store.dispatch('logout');
+      if (this.signingOut) return;
+      this.signingOut = true;
+      try {
+        await this.$store.dispatch('logout');
+      } finally {
+        this.signingOut = false;
+      }
     },
     // Shared write path for every metadata backfill (box office, production
     // countries, locations). `fieldsFor(item)` returns the movie fields that
@@ -7622,3 +7654,37 @@ export default {
 }
 
 </style>
+
+<style>
+/* Search-in-progress (2026-09-23): the spinner sits inside the input's
+   right edge, left of the lightning bolt; the list dims while a keystroke
+   is still being applied. */
+.search-input-group {
+  position: relative;
+}
+
+.search-pending {
+  position: absolute;
+  right: 44px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+  color: #6c757d;
+  pointer-events: none;
+}
+
+.search-pending .spinner-border {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-width: 0.15em;
+}
+
+.results {
+  transition: opacity 160ms ease;
+}
+
+.results.results-searching {
+  opacity: 0.7;
+}
+</style>
+

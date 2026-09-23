@@ -4,6 +4,12 @@
     <h1 class="ds-title">Deep Stats</h1>
     <p class="ds-subtitle">Your library, interrogated.</p>
 
+    <!-- Painted for one frame before the real content (nextFrame): the
+         tap that opened this screen is acknowledged at once instead of
+         after the ~0.5-1s the sections below take to build. -->
+    <SkeletonBlock v-if="!painted" :rows="7"/>
+    <template v-else>
+
     <!-- The Crown -->
     <section v-if="crown.length" class="ds-section">
       <h2 class="ds-section-title">The Crown</h2>
@@ -377,15 +383,17 @@
         </div>
       </div>
     </section>
+    </template>
   </div>
 </template>
-
 <script>
 // Deep Stats (/stats): the best of Brian's Movie Log stats suite, adapted
 // (surveyed live 2026-08-15 — Crown, Pantheon, Rewatches, Marathon, plus
 // log-scored Years and Genres). All computation is pure in deepStats.js /
 // logScore.js; this screen only renders. Fully offline.
 import BackLink from './games/BackLink.vue';
+import SkeletonBlock from './SkeletonBlock.vue';
+import { afterFrame, SKELETON_FIRST } from '../utils/nextFrame.js';
 import PersonModal from './PersonModal.vue';
 import { getRating } from '../assets/javascript/GetRating.js';
 import { crownTimeline, pantheon, rewatchStats, marathonStats, yearStats, genreStats, standouts, tieStats } from '../assets/javascript/deepStats.js';
@@ -403,9 +411,10 @@ const CAST_LOOKUP_CAP = 40;
 
 export default {
   name: 'DeepStats',
-  components: { BackLink, PersonModal },
+  components: { SkeletonBlock, BackLink, PersonModal },
   data () {
     return {
+      painted: !SKELETON_FIRST,
       // Years section ordering — see the Years block.
       yearSort: 'chronological',
       // Decade Championship. `selectedDecade` is the tapped pill; null means
@@ -545,6 +554,9 @@ export default {
         });
       }
     }
+  },
+  mounted () {
+    afterFrame(() => { this.painted = true; });
   },
   methods: {
     formatScore,

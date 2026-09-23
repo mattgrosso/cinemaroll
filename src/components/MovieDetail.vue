@@ -1707,6 +1707,7 @@ export default {
         : { path: `movieLog/${entry.dbKey}/ratings`, value: scratch.ratings };
 
       this.$store.dispatch('writeDurably', dbEntry);
+      this.$store.commit('flashSaved', scratch === null ? 'Movie removed' : 'Viewing removed');
       document.querySelectorAll('.confirm-delete-button').forEach((button) => button.classList.add('d-none'));
       document.querySelectorAll('.delete-button').forEach((button) => button.classList.remove('d-none'));
 
@@ -1852,18 +1853,21 @@ export default {
 
     async selectPoster (posterPath) {
       try {
+        // Local first, so the new poster is on screen the instant it is
+        // tapped; the durable write follows. (It used to wait for the write
+        // and then change, with nothing to say the tap had registered.)
+        this.result.customPosterPath = posterPath;
+        if (this.previousEntry) {
+          this.previousEntry.customPosterPath = posterPath;
+        }
+        this.$store.commit('flashSaved', 'Poster saved');
+
         // Leaf-path durable write for the custom poster choice
         // (2026-08-15 offline audit).
         await this.$store.dispatch('writeDurably', {
           path: `movieLog/${this.result.dbKey}/customPosterPath`,
           value: posterPath
         });
-
-        // Update local data
-        this.result.customPosterPath = posterPath;
-        if (this.previousEntry) {
-          this.previousEntry.customPosterPath = posterPath;
-        }
 
         // Fire-and-forget: get the newly-chosen poster into the offline
         // image cache immediately rather than waiting for it to be viewed.
@@ -1944,6 +1948,13 @@ export default {
 
     async selectBackdrop (backdropPath) {
       try {
+        // Local first (see selectPoster), then the durable write.
+        this.result.customBackdropPath = backdropPath;
+        if (this.previousEntry) {
+          this.previousEntry.customBackdropPath = backdropPath;
+        }
+        this.$store.commit('flashSaved', 'Backdrop saved');
+
         // Update the movie entry in the database with the custom backdrop path
         // Leaf-path durable write for the custom backdrop choice
         // (2026-08-15 offline audit).
@@ -1951,12 +1962,6 @@ export default {
           path: `movieLog/${this.result.dbKey}/customBackdropPath`,
           value: backdropPath
         });
-
-        // Update local data
-        this.result.customBackdropPath = backdropPath;
-        if (this.previousEntry) {
-          this.previousEntry.customBackdropPath = backdropPath;
-        }
 
         // Update the movie data to immediately reflect the change
         if (this.movie) {

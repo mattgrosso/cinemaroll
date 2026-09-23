@@ -455,6 +455,10 @@ export default createStore({
     // browser fires a fresh 'online' event. While true, isOnline is false so
     // every offline path in the app engages. Bug report 2026-09-23.
     networkStalled: false,
+    // A screen is on its way (router guard); RouteProgress shows the bar.
+    routePending: false,
+    // { text, at } for SavedFlash's "Saved" pill; `at` makes repeats fire.
+    savedFlash: null,
     // { [dbPath]: value } for writes committed locally but not yet confirmed
     // by the server — see the trackInFlightWrite mutation for why.
     inFlightWrites: {},
@@ -850,6 +854,12 @@ export default createStore({
       const next = { ...state.inFlightWrites };
       delete next[path];
       state.inFlightWrites = next;
+    },
+    setRoutePending (state, value) {
+      state.routePending = value;
+    },
+    flashSaved (state, text = 'Saved') {
+      state.savedFlash = { text, at: Date.now() };
     },
     setIsOnline (state, value) {
       state.isOnline = value;

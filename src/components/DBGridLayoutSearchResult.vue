@@ -893,6 +893,15 @@ export default {
   .grid-layout-media-result {
     cursor: pointer;
     position: relative;
+    transition: transform 90ms ease-out, filter 90ms ease-out;
+
+    // A finger on a poster: the card presses in until the detail page (or
+    // the tap's own frame of work) arrives. Bootstrap removes the native tap
+    // highlight, so without this a poster tap looked like a miss.
+    &:active {
+      transform: scale(0.97);
+      filter: brightness(0.85);
+    }
 
     &.not-rated {
       filter: sepia(1);

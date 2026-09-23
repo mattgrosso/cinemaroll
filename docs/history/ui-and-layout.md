@@ -514,3 +514,39 @@ library goes through `memoByIdentity`; never sort a getter's array in place;
 never key an identity memo on an object that is mutated in place; big static
 data (maps, catalogs) gets `markRaw`.
 
+## Feel of response: acknowledging every tap (2026-09-23)
+
+After the speed sweep Matt asked for the other half: "even if the thing
+isn't doing something right away, the app clearly registered my
+interaction." Fifteen items, all shipped, all deliberately quiet:
+
+- **A one-frame yield before heavy work.** `src/utils/nextFrame.js`
+  (`nextFrame`, `afterFrame`, `SKELETON_FIRST`). Vue batches a tap's
+  acknowledgment and the render it triggers into one paint, so nothing
+  showed until the expensive part was done. The router guard now flags
+  `routePending` and yields a frame before resolving a route; Insights'
+  `renderedTab` trails `activeTab` by a frame (with a skeleton and, for
+  Places, "Mapping your films…" in that frame); Home's More… button spins
+  for the frame its 48 cards take. Under Vitest the yield is immediate and
+  skeletons are off, since component tests read content straight after mount.
+- **RouteProgress.vue:** a 2px bar under the header, visible only after 90ms
+  so instant screens never show it. **App.vue:** enter-only 140ms fade on
+  the router view; global `.tap-feedback` (2% press + dim while the finger
+  is down) on the grid card, back link, header home link, tiebreak posters,
+  quick-filter badges, Insights tabs and people chips; posters ease from the
+  placeholder instead of cutting.
+- **SkeletonBlock.vue** for one frame on Watchlist, Film Club, Deep Stats
+  and Club Charts (`painted` flips in mounted via afterFrame).
+- **SavedFlash.vue + the `flashSaved` mutation:** "Poster saved", "Backdrop
+  saved", "Viewing removed", "Stickiness saved". MovieDetail's poster and
+  backdrop picks apply locally FIRST and write after, instead of the
+  reverse.
+- Home: a small spinner inside the search input and a dimmed list while a
+  keystroke is still being applied (`searchPending`); Sign out disables
+  and spins. RateMovie: the form dims and locks while "Submitting…" (also
+  no longer "Submiting"). NewRatingSearch's spinner says "Checking TMDB…"
+  and, after 4s, "Still trying…".
+
+Verified with `scripts/perf-tour.mjs` (no timing regression beyond the
+~16ms frame yield) and phone-width screenshots of each state.
+

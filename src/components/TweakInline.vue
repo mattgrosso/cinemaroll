@@ -98,7 +98,7 @@
                exactly right even before an image arrives), and a hidden row
                takes no taps. -->
           <div class="poster-row d-flex justify-content-center gap-4" :class="{ 'posters-hidden': !postersReady }">
-            <div class="poster-container text-center" @click="chooseWinner(firstResult)">
+            <div class="poster-container text-center tap-feedback" @click="chooseWinner(firstResult)">
               <div class="poster-wrapper">
                 <img
                   :key="`first-${firstResult.dbKey}`"
@@ -124,7 +124,7 @@
               <span class="text-light">vs</span>
             </div>
 
-            <div class="poster-container text-center" @click="chooseWinner(secondResult)">
+            <div class="poster-container text-center tap-feedback" @click="chooseWinner(secondResult)">
               <div class="poster-wrapper">
                 <img
                   :key="`second-${secondResult.dbKey}`"

@@ -44,7 +44,7 @@ function factory (entries) {
   const wrapper = mount(StickinessInline, {
     global: {
       mocks: {
-        $store: {
+        $store: { commit: vi.fn(),
           state: { currentLog: 'movieLog', settings: {} },
           getters: { allMoviesAsArray: entries },
           dispatch
@@ -158,7 +158,7 @@ describe('StickinessInline autoOpen', () => {
     return mount(StickinessInline, {
       global: {
         mocks: {
-          $store: { state: { currentLog: 'movieLog', settings: {} }, getters: { allMoviesAsArray: entries }, dispatch: vi.fn() }
+          $store: { commit: vi.fn(), state: { currentLog: 'movieLog', settings: {} }, getters: { allMoviesAsArray: entries }, dispatch: vi.fn() }
         }
       },
       props: { allEntriesWithFlatKeywordsAdded: entries, showStickinessModal: true, now: Date.now(), ...props }

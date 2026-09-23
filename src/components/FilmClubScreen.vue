@@ -4,6 +4,12 @@
     <h1 class="cs-title">Film Club</h1>
     <p class="cs-subtitle">Friends on Cinema Roll — what they're watching and where your tastes meet.</p>
 
+    <!-- Painted for one frame before the real content (nextFrame): the
+         tap that opened this screen is acknowledged at once instead of
+         after the ~0.5-1s the sections below take to build. -->
+    <SkeletonBlock v-if="!painted" :rows="7"/>
+    <template v-else>
+
     <div v-if="!socialSettings.enabled" class="cs-section">
       <p class="cs-empty">Sharing is off. Turn on "Share on Cinema Roll" in Settings to join the club — nothing is shared until you do.</p>
     </div>
@@ -301,15 +307,17 @@
          tapping along the feed re-targets it rather than mounting and tearing
          down a sheet per poster. -->
     <MoviePreview :movie="previewing" @close="previewing = null" @rate="rateFromPreview"/>
+    </template>
   </div>
 </template>
-
 <script>
 // The Film Club hub (/film-club): requests inbox, the combined all-friends
 // summary, the friends list (each row opens the per-friend comparison),
 // and the directory for sending requests. All set math is pure in
 // src/assets/javascript/social.js; this screen only renders and dispatches.
 import BackLink from './games/BackLink.vue';
+import SkeletonBlock from './SkeletonBlock.vue';
+import { afterFrame, SKELETON_FIRST } from '../utils/nextFrame.js';
 import SettingsSection from './SettingsSection.vue';
 import SendToHat from './SendToHat.vue';
 import MoviePreview from './MoviePreview.vue';
@@ -340,9 +348,10 @@ const FRIEND_POSTERS_TRIGGER = 120;
 
 export default {
   name: 'FilmClubScreen',
-  components: { BackLink, SettingsSection, SendToHat, MoviePreview },
+  components: { SkeletonBlock, BackLink, SettingsSection, SendToHat, MoviePreview },
   data () {
     return {
+      painted: !SKELETON_FIRST,
       // How many recent posters each friend's strip is currently rendering,
       // keyed by friend key. Absent = the initial page.
       friendPosterCounts: {},
@@ -497,6 +506,9 @@ export default {
     this.$store.dispatch('fetchFederatedDirectory');
     // Opening the club clears the rainbow chip's new-updates badge.
     this.$store.commit('markFilmClubSeen');
+  },
+  mounted () {
+    afterFrame(() => { this.painted = true; });
   },
   methods: {
     // Exposed so the template can call them — an Options API template can't

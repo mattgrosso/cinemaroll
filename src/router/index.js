@@ -2,6 +2,7 @@ import { createRouter, createWebHashHistory } from 'vue-router';
 import store from "../store";
 import { appScrollBehavior, rememberNavigationSource } from "./scrollBehavior.js";
 import { handleRouterChunkError } from "../utils/staleChunkReload.js";
+import { nextFrame } from "../utils/nextFrame.js";
 
 const Home = () => import(/* webpackChunkName: "home" */ "../components/Home.vue");
 const Login = () => import(/* webpackChunkName: "login" */ "../components/Login.vue");
@@ -708,9 +709,21 @@ const router = createRouter({
 // scrollBehavior runs AFTER the target component mounts, so it can't tell
 // Home whether this was the one navigation that restores a scroll position.
 // This guard runs before, and records it.
-router.beforeEach((to, from) => {
+router.beforeEach(async (to, from) => {
   rememberNavigationSource(to, from);
+  // Acknowledge the tap before the work: flag the pending route (the
+  // progress bar) and yield one frame so that, the pressed state on
+  // whatever was tapped, and any tab highlight get painted BEFORE the
+  // lazy chunk loads and the new screen's (often 0.2-0.7s) render begins.
+  // Without the yield Vue folds all of it into the same render and the
+  // screen sits unchanged until the new one is ready.
+  store.commit('setRoutePending', true);
+  await nextFrame();
   return true;
+})
+
+router.afterEach(() => {
+  store.commit('setRoutePending', false);
 })
 
 // Safety net for scroll-lock leaks. Modals/overlays across the app lock body
@@ -730,6 +743,7 @@ router.afterEach(() => {
 // in a blank router-view. One guarded reload recovers onto the new build.
 // See staleChunkReload.js for the full story.
 router.onError((error, to) => {
+  store.commit('setRoutePending', false);
   handleRouterChunkError(error, to);
 })
 

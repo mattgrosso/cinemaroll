@@ -26,10 +26,14 @@
       <p>I'm pretty sure that movie doesn't exist.</p>
       <p>Either you're from the future or maybe you just spelled it wrong.</p>
     </div>
-    <div v-else class="d-flex justify-content-center my-5">
+    <div v-else class="d-flex flex-column align-items-center my-5 tmdb-wait">
       <div class="spinner-border" :class="inDarkMode ? 'text-light' : 'text-dark'" role="status">
         <span class="visually-hidden">Loading...</span>
       </div>
+      <!-- A bare spinner for up to 8s on a weak signal (networkHealth's
+           timeout) read as frozen; this says what it is waiting on, and
+           after 4s that it knows it's slow. -->
+      <p class="tmdb-wait-note" :class="inDarkMode ? 'text-light' : 'text-dark'">{{ waitingLong ? 'Still trying… TMDB is slow to answer.' : 'Checking TMDB…' }}</p>
     </div>
   </div>
 </template>
@@ -62,10 +66,13 @@ export default {
       noResults: false,
       suggestions: [],
       suggestionsPage: 1,
-      offlineFallback: false
+      offlineFallback: false,
+      waitingLong: false,
+      waitTimer: null
     }
   },
   mounted () {
+    this.waitTimer = setTimeout(() => { this.waitingLong = true; }, 4000);
     if (this.suggestionsMode) {
       this.fetchSuggestions();
     } else if (!this.$store.state.isOnline) {
@@ -97,6 +104,9 @@ export default {
     inDarkMode () {
       return document.querySelector("body").classList.contains('bg-dark');
     },
+  },
+  beforeUnmount () {
+    clearTimeout(this.waitTimer);
   },
   methods: {
     async fetchSuggestions () {
@@ -188,6 +198,12 @@ export default {
 
 <style lang="scss">
   .new-rating-search {
+    .tmdb-wait-note {
+      font-size: 0.9rem;
+      margin: 0.75rem 0 0;
+      opacity: 0.8;
+    }
+
     .search-inputs {
       position: relative;
     }

@@ -1,5 +1,5 @@
 <template>
-  <div class="rate-movie">
+  <div class="rate-movie" :class="{ 'rate-movie-saving': loading }">
     <div class="rate-movie-header">
       <div class="home-link" @click="returnHome">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-caret-left-fill" viewBox="0 0 16 16">
@@ -215,7 +215,7 @@
       >
         <span v-if="!loading">{{ isEditing ? 'Save Changes' : 'Submit' }}</span>
         <span v-if="loading" class="disabled-show spinner-border spinner-border-sm mx-2" role="status" aria-hidden="true"></span>
-        <span v-if="loading" class="disabled-show ">{{ isEditing ? 'Saving...' : 'Submiting...' }}</span>
+        <span v-if="loading" class="disabled-show ">{{ isEditing ? 'Saving…' : 'Submitting…' }}</span>
       </button>
     </div>
 
@@ -1150,3 +1150,15 @@ export default {
     }
   }
 </style>
+
+<style>
+/* While a rating is saving (up to a few seconds on a weak signal) the form
+   steps back so the "Submitting…" button is the only live thing on screen,
+   and a second tap on anything can't land. */
+.rate-movie.rate-movie-saving > *:not(.rate-movie-header) {
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+</style>
+

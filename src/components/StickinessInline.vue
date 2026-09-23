@@ -324,6 +324,7 @@ export default {
       // survives being offline (bug report - see CLAUDE.md's Offline
       // Support Extension section).
       this.$store.dispatch('writeDurably', dbEntry);
+      this.$store.commit('flashSaved', 'Stickiness saved');
 
       this.submittingStickiness = false;
       this.stickinessRating = "";

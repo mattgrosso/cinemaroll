@@ -88,10 +88,10 @@ await measure('clear search', () => page.fill('.search-bar input', ''), () => tr
 await page.keyboard.press('Escape').catch(() => {});
 // scroll: 12 steps of 500px, count frames
 const scroll = await page.evaluate(async () => {
-  window.scrollTo(0, 0); await new Promise((r) => setTimeout(r, 300));
+  window.scrollTo(0, 0); await new Promise((resolve) => setTimeout(resolve, 300));
   const t0 = performance.now(); const lt0 = window.__lt.length;
   let frames = 0; let stop = false; const tick = () => { frames++; if (!stop) requestAnimationFrame(tick); }; requestAnimationFrame(tick);
-  for (let i = 0; i < 12; i++) { window.scrollBy(0, 500); await new Promise((r) => setTimeout(r, 150)); }
+  for (let i = 0; i < 12; i++) { window.scrollBy(0, 500); await new Promise((resolve) => setTimeout(resolve, 150)); }
   stop = true; const dt = performance.now() - t0;
   const busy = window.__lt.slice(lt0).reduce((a, x) => a + x.d, 0);
   return { fps: Math.round(frames / (dt / 1000)), busy: Math.round(busy), dt: Math.round(dt) };

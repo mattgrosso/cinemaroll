@@ -3,6 +3,8 @@
     <!-- Invisible scroll-to-top trigger area -->
     <div class="scroll-to-top-trigger" @click.stop="scrollToTop"></div>
     <AppHeader/>
+    <RouteProgress/>
+    <SavedFlash/>
     <!-- UpdateAvailableBanner and BugResolutionNotice render inside Home's
          .home-notices section now — the one notification space — not here.
          The auto-update machinery below stays global; only the visible
@@ -16,7 +18,13 @@
          viewport + footer tall — so there was always a screenful of empty
          space to scroll through. -->
     <main class="app-main">
-      <router-view></router-view>
+      <!-- Enter-only fade: the new screen eases in over 140ms; nothing is
+           delayed (no leave phase), the arrival just stops being a cut. -->
+      <router-view v-slot="slot">
+        <transition name="screen" appear>
+          <component :is="slot && slot.Component"/>
+        </transition>
+      </router-view>
     </main>
     <AppFooter v-if="$store.state.dbLoaded"/>
     <BugReportButton/>
@@ -29,6 +37,8 @@ import AppHeader from "./components/Header.vue";
 import BugReportButton from "./components/BugReportButton.vue";
 import OfflineBanner from "./components/OfflineBanner.vue";
 import LibraryAccessBanner from "./components/LibraryAccessBanner.vue";
+import RouteProgress from "./components/RouteProgress.vue";
+import SavedFlash from "./components/SavedFlash.vue";
 import { pickFallbackBanner } from "./assets/javascript/bannerFallback.js";
 import { flushStashedBugReports } from "./utils/bugReports.js";
 import { reloadForUpdate, isSafeMomentForReload, shouldAutoAttempt, markUpdateLanded, recordWorkerState } from "./utils/appUpdate.js";
@@ -37,6 +47,8 @@ import { refreshSubscriptionIfGranted } from "./utils/push.js";
 export default {
   name: "Cinema-Roll",
   components: {
+    RouteProgress,
+    SavedFlash,
     AppFooter,
     AppHeader,
     BugReportButton,
@@ -370,3 +382,46 @@ export default {
     }
   }
 </style>
+
+<style>
+/* Feel-of-response rules (2026-09-23), app-wide and deliberately quiet.
+   Bootstrap's reboot removes the native tap highlight, so custom tappable
+   things gave NO sign a finger landed until their screen changed. Every
+   custom tap target in the app declares .tap-feedback (or its own
+   :active), which presses in by 2% and dims for as long as the finger is
+   down. Buttons keep Bootstrap's own :active colours. */
+.tap-feedback {
+  transition: transform 90ms ease-out, opacity 90ms ease-out, filter 90ms ease-out;
+}
+
+.tap-feedback:active {
+  transform: scale(0.98);
+  opacity: 0.82;
+}
+
+/* A poster arriving: the card already shows a placeholder while the real
+   image loads (vue3-lazyload swaps `lazy` from loading to loaded); this
+   just keeps the swap from being a hard cut. */
+img[lazy="loading"] {
+  filter: brightness(0.75);
+}
+
+img[lazy="loaded"] {
+  animation: poster-arrive 220ms ease-out;
+}
+
+@keyframes poster-arrive {
+  from { filter: brightness(0.75); }
+  to { filter: brightness(1); }
+}
+
+/* The screen transition: new screen only, see App.vue's router-view. */
+.screen-enter-active {
+  transition: opacity 140ms ease-out;
+}
+
+.screen-enter-from {
+  opacity: 0;
+}
+</style>
+

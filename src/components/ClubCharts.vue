@@ -5,6 +5,12 @@
     <h1 class="cc-title">Club Charts</h1>
     <p class="cc-subtitle">Where your taste and everyone else's actually meet.</p>
 
+    <!-- Painted for one frame before the real content (nextFrame): the
+         tap that opened this screen is acknowledged at once instead of
+         after the ~0.5-1s the sections below take to build. -->
+    <SkeletonBlock v-if="!painted" :rows="7"/>
+    <template v-else>
+
     <!-- Gate on the roster, not on the current selection: deselecting every
          friend must never swallow the picker you'd need to undo it. -->
     <p v-if="!legend || legend.length < 2" class="cc-empty">
@@ -302,11 +308,13 @@
         </div>
       </section>
     </template>
+    </template>
   </div>
 </template>
-
 <script>
 import BackLink from './games/BackLink.vue';
+import SkeletonBlock from './SkeletonBlock.vue';
+import { afterFrame, SKELETON_FIRST } from '../utils/nextFrame.js';
 import { memoByIdentity } from '../utils/memoByIdentity.js';
 import SendToHat from './SendToHat.vue';
 import ClubVenn from './ClubVenn.vue';
@@ -335,9 +343,10 @@ const joinedMemo = memoByIdentity((entries, profiles) => buildOverlaps(entries, 
 
 export default {
   name: 'ClubCharts',
-  components: { BackLink, SendToHat, ClubVenn },
+  components: { SkeletonBlock, BackLink, SendToHat, ClubVenn },
   data () {
     return {
+      painted: !SKELETON_FIRST,
       // Ordered picker state: 'you' plus friend keys, in pick order (the
       // Venn draws the first three). Seeded to everyone once profiles load.
       selectedKeys: [],
@@ -452,6 +461,9 @@ export default {
     // Reachable directly, so it can't assume the Film Club screen ran first.
     this.$store.dispatch('attachSocialListeners');
     this.$store.dispatch('fetchFriendProfiles');
+  },
+  mounted () {
+    afterFrame(() => { this.painted = true; });
   },
   methods: {
     // Template-exposed; two decimals on every score (bug report).

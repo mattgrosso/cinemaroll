@@ -4,6 +4,12 @@
     <h1 class="watchlist-title">Watchlist</h1>
     <p class="watchlist-subtitle">Built from your own ratings — what to revisit, and what to see next.</p>
 
+    <!-- Painted for one frame before the real content (nextFrame): the
+         tap that opened this screen is acknowledged at once instead of
+         after the ~0.5-1s the sections below take to build. -->
+    <SkeletonBlock v-if="!painted" :rows="7"/>
+    <template v-else>
+
     <!-- Bug report (2026-08-27): "It'll be cool if I could have a prompt
          somewhere on the watchlist page where I could give it a prompt and it
          would give me back a watchlist tailored to that prompt."
@@ -260,9 +266,9 @@
     <p v-if="!$store.state.isOnline" class="watchlist-offline-note">
       You're offline — the "what to see next" lists need a connection, so only the rewatch list is shown.
     </p>
+    </template>
   </div>
 </template>
-
 <script>
 // Bug-report request: "I should figure out how to generate watchlists based
 // on my ratings and also maybe a way to make a list of movies that I should
@@ -273,6 +279,8 @@
 // people means ~12 requests once per visit.
 import axios from 'axios';
 import BackLink from './games/BackLink.vue';
+import SkeletonBlock from './SkeletonBlock.vue';
+import { afterFrame, SKELETON_FIRST } from '../utils/nextFrame.js';
 import WatchlistRow from './WatchlistRow.vue';
 import DrawFromHat from './DrawFromHat.vue';
 import MoviePreview from './MoviePreview.vue';
@@ -321,6 +329,7 @@ const PEOPLE_SECTION_KEYS = new Set(['directors', 'actresses', 'actors', 'underr
 export default {
   name: 'WatchlistScreen',
   components: {
+    SkeletonBlock,
     BackLink,
     DrawFromHat,
     MoviePreview,
@@ -328,6 +337,7 @@ export default {
   },
   data () {
     return {
+      painted: !SKELETON_FIRST,
       // Pending hat-punts, cleared on unmount — see puntAll.
       puntTimers: [],
       // The "ask for something" box. `promptAsked` is the request the results
@@ -675,6 +685,9 @@ export default {
       if (years.some((year) => year.year === this.selectedYear)) return;
       this.selectYear(this.defaultYear);
     }
+  },
+  mounted () {
+    afterFrame(() => { this.painted = true; });
   },
   methods: {
     // TMDB-shaped lists (year fillers, Film Club picks, ranked sections).
