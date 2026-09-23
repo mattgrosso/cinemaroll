@@ -550,3 +550,30 @@ interaction." Fifteen items, all shipped, all deliberately quiet:
 Verified with `scripts/perf-tour.mjs` (no timing regression beyond the
 ~16ms frame yield) and phone-width screenshots of each state.
 
+## Launch image, self-finishing placeholders, and what a keystroke really costs (2026-09-23)
+
+Three of the ideas offered after the sweep, Matt's picks:
+
+- **The last Home as a launch image** (`src/utils/homePaintCache.js`). On
+  leaving Home (route change, app backgrounded) the search bar and both
+  `.results` blocks are stored as inert HTML in localStorage (~60KB, ids and
+  lazy-load state stripped). On the next launch Home paints it in the
+  `dbLoaded` gap, dimmed and untappable, and the live grid replaces it in
+  the paint it arrives in. Measured at phone speed: something on screen at
+  ~0.2s instead of ~1.4s. Home renders a fragment, so the capture reads from
+  `document`, not `this.$el`.
+- **Placeholders that finish themselves** (`reconcilePlaceholder.js`,
+  `autoReconcilePlaceholders`). The lie-fi fallback stores `pendingTmdbId`;
+  `refreshPendingReconciliations` now hands those to `finalizePlaceholder`
+  (shared with the Reconcile screen) whenever the app is online, so the
+  "needs a match" badge only appears for a title typed from memory.
+- **Off-screen cards skip layout and paint** (`content-visibility: auto`
+  on `.grid-layout-media-result`, `contain-intrinsic-size: auto`). No blank
+  gaps while flinging (checked), scroll stays 60fps. It did NOT move the
+  keystroke number, and a trace showed why: layout and paint are ~5ms of a
+  keystroke; the rest is `onInput` rewriting the temp filter chip (which
+  re-filters the grid synchronously, ~57ms) and then the debounced
+  `searchValue` re-filtering it again (~70ms). Cards are four DOM nodes. A
+  faster keystroke means changing that pipeline, which is a design
+  question, not a rendering one - left alone on purpose.
+

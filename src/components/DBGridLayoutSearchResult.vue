@@ -894,6 +894,13 @@ export default {
     cursor: pointer;
     position: relative;
     transition: transform 90ms ease-out, filter 90ms ease-out;
+    // Off-screen cards skip layout and paint entirely (the browser's own
+    // virtualisation - no blank gaps while flinging, the DOM stays whole).
+    // A keystroke re-rendered ~120 cards of which ~12 were visible; this is
+    // where most of that time went (2026-09-23 speed sweep). `auto` keeps
+    // each card's last real size, so scroll position never jumps.
+    content-visibility: auto;
+    contain-intrinsic-size: auto 140px 250px;
 
     // A finger on a poster: the card presses in until the detail page (or
     // the tap's own frame of work) arrives. Bootstrap removes the native tap

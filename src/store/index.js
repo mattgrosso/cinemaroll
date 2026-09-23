@@ -20,6 +20,9 @@ import { getRating, rawScore } from "../assets/javascript/GetRating";
 import router from '@/router';
 import ErrorLogService from "../services/ErrorLogService.js";
 import { markStalled } from '../utils/networkHealth.js';
+import { placeholdersReadyToFinish, finalizePlaceholder } from '../assets/javascript/reconcilePlaceholder.js';
+
+let autoReconcileRunning = false;
 import { saveSnapshot, loadSnapshot } from "../utils/offlineStore.js";
 import { maxUpdatedAt, reconstructFromDelta, diffLibraries, describeStaleEntry, launchPlan } from "../assets/javascript/deltaSync.js";
 import { enqueueWrite, listPendingWrites, removePendingWrite, updatePendingWrite } from "../utils/pendingWriteQueue.js";
@@ -1638,6 +1641,32 @@ export default createStore({
     async refreshPendingReconciliations (context) {
       const pending = await listPendingWrites();
       context.commit('setPendingReconciliations', pending.filter((entry) => entry.type === 'placeholder' && entry.status !== 'reconciled'));
+      if (context.state.isOnline) {
+        context.dispatch('autoReconcilePlaceholders', pending);
+      }
+    },
+    // Placeholders whose movie the user already picked (pendingTmdbId, set by
+    // AddRating's lie-fi fallback) finish themselves as soon as TMDB answers:
+    // the details are fetched, the entry replaced in place, the badge never
+    // shown. One pass at a time; a failure leaves that entry for next time.
+    async autoReconcilePlaceholders (context, pending = null) {
+      if (autoReconcileRunning || !context.state.isOnline) return;
+      const candidates = placeholdersReadyToFinish(pending || await listPendingWrites());
+      if (!candidates.length) return;
+      autoReconcileRunning = true;
+      try {
+        for (const entry of candidates) {
+          if (!context.state.isOnline) break;
+          try {
+            await finalizePlaceholder(context, entry, entry.dbEntry.value.movie.pendingTmdbId);
+            context.commit('flashSaved', `${entry.title || 'A rating'} matched`);
+          } catch (error) {
+            console.warn('Could not finish a placeholder rating automatically; it stays on the review list:', error?.message);
+          }
+        }
+      } finally {
+        autoReconcileRunning = false;
+      }
     },
     // Processes the durable offline-write queue (see pendingWriteQueue.js) in
     // order once online: attempts each entry's write, removes 'write' entries

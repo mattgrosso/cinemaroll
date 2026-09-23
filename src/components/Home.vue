@@ -1420,6 +1420,11 @@
            on a load that's genuinely slow — never as a flash on the way in
            (bug report 2026-09-05: notification tap "flashes to the loading
            screen and then shows it again"). -->
+      <!-- The last Home this device showed, painted from localStorage while
+           the real one is built (homePaintCache.js) - a native app's launch
+           image, in effect. Inert, dimmed a touch, replaced in the same paint
+           the live grid arrives in. -->
+      <div v-else-if="cachedPaint" class="cached-paint" v-html="cachedPaint" aria-hidden="true"></div>
       <div v-else class="loading-screen d-flex justify-content-center align-items-center my-5">
         <div v-if="libraryLoadIsSlow" class="spinner-border text-light" role="status">
           <span class="visually-hidden">Loading...</span>
@@ -1591,6 +1596,7 @@ import SettingsSection from "./SettingsSection.vue";
 import NoResults from "./NoResults.vue";
 import { memoByIdentity } from "../utils/memoByIdentity.js";
 import { afterFrame } from "../utils/nextFrame.js";
+import { captureHomePaint, saveHomePaint, loadHomePaint } from "../utils/homePaintCache.js";
 
 // See allEntriesWithFlatKeywordsAdded. Pure in (library, anchors, tweak):
 // flat keywords and search fields come from the entry, the score from the
@@ -1760,6 +1766,8 @@ export default {
       // True once the library has taken long enough to load that a spinner
       // is worth showing. See the loading-screen comment in the template.
       libraryLoadIsSlow: false,
+      // See the cached-paint block in the template.
+      cachedPaint: null,
       libraryLoadTimer: null,
       // Movie Hat linking (settings pane).
       findingHats: false,
@@ -2047,6 +2055,14 @@ export default {
   },
   mounted () {
     this.armLoadingSpinner();
+    if (!this.$store.state.dbLoaded) {
+      this.cachedPaint = loadHomePaint(this.$store.getters.databaseTopKey);
+    }
+    // The snapshot is taken as the user leaves - the app going to the
+    // background, or a navigation away (beforeRouteLeave) - which is the
+    // last Home they saw by definition.
+    document.addEventListener('visibilitychange', this.saveHomePaintIfHidden);
+    window.addEventListener('pagehide', this.saveHomePaintNow);
 
     // Which state the Notifications settings card should render in.
     this.checkPushDevice();
@@ -2296,6 +2312,8 @@ export default {
     window.addEventListener('resize', this.debouncedUpdateDidYouMeanFitCount);
   },
   beforeUnmount () {
+    document.removeEventListener('visibilitychange', this.saveHomePaintIfHidden);
+    window.removeEventListener('pagehide', this.saveHomePaintNow);
     window.removeEventListener('resize', this.debouncedUpdateDidYouMeanFitCount);
     document.removeEventListener('visibilitychange', this.refreshPromptClockIfVisible);
     clearTimeout(this.libraryLoadTimer);
@@ -2318,6 +2336,7 @@ export default {
 
   // Combined beforeRouteLeave method
   beforeRouteLeave (to, from, next) {
+    this.saveHomePaintNow();
     // Save wherever you're going. This used to save ONLY for MovieDetail and
     // /games and deliberately reset sorting for everywhere else, which meant
     // searching, sorting, tapping Insights and coming back lost the lot
@@ -4223,6 +4242,16 @@ export default {
     // The loading spinner only earns its place on a genuinely slow load.
     // Under this it stays hidden, so a warm launch goes straight from the
     // header to the library with nothing flashing in between.
+    saveHomePaintIfHidden () {
+      if (document.visibilityState === 'hidden') this.saveHomePaintNow();
+    },
+    saveHomePaintNow () {
+      // From the document, not this.$el: Home renders a fragment, so $el is
+      // a text node with no querySelector.
+      if (!this.$store.state.dbLoaded || typeof document === 'undefined') return;
+      const html = captureHomePaint(document);
+      if (html) saveHomePaint(this.$store.getters.databaseTopKey, html);
+    },
     armLoadingSpinner () {
       clearTimeout(this.libraryLoadTimer);
       if (this.$store.state.dbLoaded) return;
@@ -7685,6 +7714,16 @@ export default {
 
 .results.results-searching {
   opacity: 0.7;
+}
+</style>
+
+<style>
+/* The launch snapshot (see the cached-paint block): looks like the grid it
+   is about to become, minus interaction. */
+.cached-paint {
+  pointer-events: none;
+  opacity: 0.85;
+  user-select: none;
 }
 </style>
 
