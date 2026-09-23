@@ -34,7 +34,7 @@ function factory ({ allAcademyAwards = [], result = makeResult() } = {}) {
       settings: { letterboxdConnected: false, letterboxdUsername: '' },
       allAcademyAwards
     },
-    getters: { allMediaSortedByRating: [result], allMediaAsArray: [result] },
+    getters: { allMediaSortedByRating: [result], allMediaAsArray: [result], overallRankByDbKey: new Map([[result.dbKey, 1]]) },
     commit: vi.fn(),
     dispatch: vi.fn()
   }
@@ -101,7 +101,7 @@ describe('DBGridLayoutSearchResult — Academy Award wins/nominations (continued
     const result = makeResult()
     const mockStore = {
       state: { settings: { letterboxdConnected: false, letterboxdUsername: '' } },
-      getters: { allMediaSortedByRating: [result], allMediaAsArray: [result] },
+      getters: { allMediaSortedByRating: [result], allMediaAsArray: [result], overallRankByDbKey: new Map([[result.dbKey, 1]]) },
       commit: vi.fn(),
       dispatch: vi.fn()
     }
@@ -128,7 +128,7 @@ describe('DBGridLayoutSearchResult — the caption names whatever the list is so
     const result = makeResult({ movie: { budget: 200_000_000, revenue: 900_000_000, ...movie } })
     const mockStore = {
       state: { settings: { letterboxdConnected: false, letterboxdUsername: '' }, allAcademyAwards: [], moneyInTodaysDollars },
-      getters: { allMediaSortedByRating: [result], allMediaAsArray: [result] },
+      getters: { allMediaSortedByRating: [result], allMediaAsArray: [result], overallRankByDbKey: new Map([[result.dbKey, 1]]) },
       commit: vi.fn(),
       dispatch: vi.fn()
     }
@@ -226,7 +226,7 @@ describe('DBGridLayoutSearchResult — the caption follows the money mode', () =
     const result = makeResult({ movie: { budget: 63_000_000, revenue: 920_000_000, release_date: '1993-06-11', ...movie } })
     const mockStore = {
       state: { settings: { letterboxdConnected: false, letterboxdUsername: '' }, allAcademyAwards: [], moneyInTodaysDollars: adjusted },
-      getters: { allMediaSortedByRating: [result], allMediaAsArray: [result] },
+      getters: { allMediaSortedByRating: [result], allMediaAsArray: [result], overallRankByDbKey: new Map([[result.dbKey, 1]]) },
       commit: vi.fn(),
       dispatch: vi.fn()
     }
@@ -277,7 +277,7 @@ describe('DBGridLayoutSearchResult — the sunk-film marker', () => {
     const result = makeResult({ movie: { budget: 150_000_000, revenue: 0, release_date: '2020-07-10', ...movie } })
     const mockStore = {
       state: { settings: { letterboxdConnected: false, letterboxdUsername: '' }, allAcademyAwards: [], moneyInTodaysDollars: false },
-      getters: { allMediaSortedByRating: [result], allMediaAsArray: [result] },
+      getters: { allMediaSortedByRating: [result], allMediaAsArray: [result], overallRankByDbKey: new Map([[result.dbKey, 1]]) },
       commit: vi.fn(),
       dispatch: vi.fn()
     }

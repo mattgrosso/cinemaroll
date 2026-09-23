@@ -448,3 +448,69 @@ Tooling worth keeping: the lie-fi + CPU-throttle timing script lived in the
 session scratchpad, pattern = `Network.emulateNetworkConditions` +
 `Emulation.setCPUThrottlingRate` over CDP, `Profiler.start/stop` for the flame.
 
+## Speed sweep: "make every interaction really snappy" (2026-09-23)
+
+Matt: "lots of small things add up... every button push, every screen load,
+every scroll, all of it just feel really snappy and tight." Tooling:
+`scripts/perf-tour.mjs` (Playwright, 4x CPU throttle ≈ his iPhone, tester
+signed in with his 1,435-film library, long-task accounting per action) and
+CDP `Profiler` runs per hot spot. Before/after at phone speed:
+
+| Action | Before | After |
+|---|---|---|
+| Insights → Places tab | 3.5s | 0.24s cold, ~30ms once warmed |
+| Return to Home (any screen) | 0.9-1.6s | 0.2-0.35s |
+| Trophy Case open | 1.4s busy | 0.46s |
+| Insights → Ratings tab | 1.4s busy | 0.7s |
+| Search keystroke | ~1.0s busy | 0.3-0.7s |
+| Relaunch: second full rebuild ~2s in | 0.8s stall | gone |
+
+What each was:
+
+- **Places tab.** The world polygon data was plain component data, so Vue
+  made 15,000 vertices reactive and every ring read in `countryForPoint` was
+  a Proxy trap. `markRaw` fixed most of it; resolved points are now cached
+  for the life of the page (`countryLookup.js`), the coverage table is
+  memoized, and Insights warms the lookup in idle slices from mount
+  (`warmCountryLookup`) so the tab is instant by the time it is tapped.
+- **Return to Home.** Every library-derived table (flattened keywords, search
+  fields, scores, entity counts, director filmographies) lived in component
+  computeds and died with the component. `src/utils/memoByIdentity.js`
+  caches them at module scope keyed on the cached Vuex getter's identity;
+  `entityCounts.js` exports are wrapped, Home/Insights/Film Club/Watchlist/
+  Club Charts/Trophy Case use it. Two traps found on the way: the Home memo
+  first keyed on `settings.normalizationAnchors` by identity, and every
+  settings write (a game's play counter) lands a fresh settings object, so
+  a Wordle visit cost a full rebuild - key nested settings by VALUE (JSON).
+  And the awards object is edited in place by the modal, so the Trophy
+  Case memo keys on its JSON too. `allMediaSortedByRating` sorted
+  `allMediaAsArray` IN PLACE (reordering another getter's cached array for
+  everyone) and re-scored both sides of every comparison; now a decorated
+  copy, plus an `overallRankByDbKey` Map so cards stop running `findIndex`
+  over the library. `allDirectors` did a `find` over the library per
+  director in both Home and Insights - one indexing pass now.
+- **Keystrokes.** `sortResultsFast` re-scored all 1,400 entries per
+  keystroke - scores ride on the memoized entries (`_rating`). The grid's
+  `smallFormattedDate` built a new `Intl.DateTimeFormat` per call, twice per
+  card per render - shared formatters now. What remains is DOM work for
+  ~120 cards, not app code.
+- **Relaunch.** The settings snapshot was read only after the auth restore,
+  so Home painted without the rating-curve anchors and rebuilt every score
+  when they arrived; it now rides along with the library snapshot and lands
+  first. Then the live listener re-committed an identical library ~2s in
+  (`startAt(lastSync)` is inclusive, so the delta always contains the
+  newest entry) and everything derived from it rebuilt again; both the
+  delta and full listeners now keep the snapshot's identity when nothing
+  actually changed (same keys, same updatedAt, nothing in flight).
+- **Trophy Case.** `expandNomineeFromMinimal` did a linear `find` per
+  nominee; `collectAwardEntries` builds one id index.
+
+Not done: Watchlist (0.8s), Deep Stats (1.0s) and Club Charts (0.9s) first
+opens are mostly rendering, and Club Charts' `buildOverlaps` join is real
+work on first open (memoized after). Scrolling was already 60fps.
+
+Rules that came out of it, in CLAUDE.md: anything derived from the whole
+library goes through `memoByIdentity`; never sort a getter's array in place;
+never key an identity memo on an object that is mutated in place; big static
+data (maps, catalogs) gets `markRaw`.
+

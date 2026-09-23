@@ -317,6 +317,12 @@ import { ratedTmdbIds } from '../assets/javascript/discover.js';
 import { timeAgo } from '../assets/javascript/timeAgo.js';
 import { getRating } from '../assets/javascript/GetRating.js';
 import { filmClubSummary, friendSnapshot, myRatingsById } from '../assets/javascript/social.js';
+import { memoByIdentity } from '../utils/memoByIdentity.js';
+
+// Both are pure in their (cached getter) inputs and were rebuilt on every
+// open of the club - ~200ms at desktop speed (2026-09-23 speed sweep).
+const summaryMemo = memoByIdentity((entries, profiles) => filmClubSummary(entries, getRating, profiles));
+const clubTitlesMemo = memoByIdentity((entries, friends) => clubTitleIndex(entries, friends));
 import { filterDirectory } from '../assets/javascript/interchange.js';
 import { clubTitleIndex, searchClubTitles, clubSeenBreakdown } from '../assets/javascript/clubTitleSearch.js';
 import { omitQaAccounts, isQaAccountKey } from '../assets/javascript/databaseKey.js';
@@ -368,7 +374,7 @@ export default {
      * search itself is then a walk over a flat array.
      */
     clubTitles () {
-      return clubTitleIndex(this.$store.getters.allMoviesAsArray, this.$store.getters.filmClubFriends);
+      return clubTitlesMemo(this.$store.getters.allMoviesAsArray, this.$store.getters.filmClubFriends);
     },
     seenMatches () {
       return searchClubTitles(this.clubTitles, this.seenSearch);
@@ -467,9 +473,8 @@ export default {
         .map(([key, row]) => ({ key, name: row?.name || key }));
     },
     summary () {
-      return filmClubSummary(
+      return summaryMemo(
         this.$store.getters.allMoviesAsArray || [],
-        getRating,
         this.$store.getters.filmClubProfiles || {}
       );
     }

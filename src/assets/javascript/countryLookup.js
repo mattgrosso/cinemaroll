@@ -81,8 +81,39 @@ function nearestVertexDistance (ring, x, y) {
  * The country containing (lat, lon), or the nearest one within
  * NEAREST_FALLBACK_UNITS of its coastline, or null.
  */
+// Resolved points, kept for the life of the page. A library of ~1,400 films
+// has a few thousand distinct places and the polygon walk costs ~0.2ms each
+// unthrottled - 740ms for the Places tab, 3.5s at phone speed, and it was
+// paid again on every visit (2026-09-23 speed sweep). Keyed by world object
+// then by rounded coordinates, so a place is resolved once per session.
+const pointsByWorld = new WeakMap();
+const pointKey = (lat, lon) => `${lat.toFixed(4)},${lon.toFixed(4)}`;
+
+function resolvedPoints (world) {
+  let points = pointsByWorld.get(world);
+  if (!points) {
+    points = new Map();
+    pointsByWorld.set(world, points);
+  }
+  return points;
+}
+
 export function countryForPoint (lat, lon, world) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || !world) return null;
+  const points = resolvedPoints(world);
+  const key = pointKey(lat, lon);
+  if (points.has(key)) return points.get(key);
+  const found = countryForPointUncached(lat, lon, world);
+  points.set(key, found);
+  return found;
+}
+
+/** True when this point has already been resolved (used by the warm-up). */
+export function isPointResolved (lat, lon, world) {
+  return Boolean(world) && Number.isFinite(lat) && Number.isFinite(lon) && resolvedPoints(world).has(pointKey(lat, lon));
+}
+
+function countryForPointUncached (lat, lon, world) {
   const { x, y } = projectPoint(lon, lat, world);
   const boxes = boxesFor(world);
 

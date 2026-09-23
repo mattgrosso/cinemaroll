@@ -327,6 +327,7 @@
 
 <script>
 import { NEWSLETTER_READ_KEY } from "../assets/javascript/newsletterRead.js";
+import { markRaw } from 'vue';
 import Outliers from "./Outliers.vue";
 import YearlyAverage from "./YearlyAverage.vue";
 import BoxOfficeYears from "./BoxOfficeYears.vue";
@@ -360,7 +361,20 @@ import { ScatterChart } from "vue-chart-3";
 import InsightsPane from "./InsightsPane.vue";
 import RatingCurvePlayback from "./RatingCurvePlayback.vue";
 import CoverageMap from "./CoverageMap.vue";
-import { placeRows, favouritePlaces, mostVisitedPlaces, placeSummary, countryCoverage } from "../assets/javascript/places.js";
+import { placeRows, favouritePlaces, mostVisitedPlaces, placeSummary, countryCoverage, warmCountryLookup } from "../assets/javascript/places.js";
+import { memoByIdentity } from "../utils/memoByIdentity.js";
+
+// See allEntriesWithFlatKeywordsAdded. The mapping closure is passed in
+// because it reads component helpers; it is only ever run on a cache miss.
+// Place rows are pure in (entries, type); the tab re-renders on every
+// type toggle and every revisit and used to rebuild them each time.
+const placeRowsMemo = memoByIdentity((entries, type) => placeRows(entries, getRating, { type, includeShorts: true }));
+const insightsEntriesCache = memoByIdentity((source, isTv, buildRef) => buildRef.build(source));
+const insightsBuildRef = { build: null };
+const insightsEntriesMemo = (source, isTv, build) => {
+  insightsBuildRef.build = build;
+  return insightsEntriesCache(source, isTv, insightsBuildRef);
+};
 import { formatScore } from "../assets/javascript/formatScore.js";
 import FunFactsRow from './FunFactsRow.vue';
 import BackLink from './games/BackLink.vue';
@@ -458,6 +472,22 @@ export default {
     // The directory card shows whether there is an unread issue, so this
     // page has to ask for it. No-ops without a signed-in account key.
     this.$store.dispatch('loadNewsletter')?.catch?.(() => {});
+    // Places tab prep, in idle time: fetch the world map and resolve every
+    // place to a country in small slices while the user reads whichever
+    // tab they opened on. The tab used to do all of it on tap - 3.5s at
+    // phone speed (2026-09-23 speed sweep). See warmCountryLookup.
+    const warm = () => {
+      if (this.activeTab === 'places') return;
+      this.loadWorld().then(() => {
+        if (this.world) this.cancelWarmup = warmCountryLookup(this.filteredEntriesWithFlatKeywordsAdded, this.world);
+        return null;
+      }).catch(() => {});
+    };
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(warm, { timeout: 3000 });
+    else setTimeout(warm, 1500);
+  },
+  beforeUnmount () {
+    if (this.cancelWarmup) this.cancelWarmup();
   },
   computed: {
     // Mirrors NewsletterNotice's `unread` deliberately — the card here and
@@ -529,7 +559,7 @@ export default {
       ];
     },
     placeRowsForType () {
-      return placeRows(this.filteredEntriesWithFlatKeywordsAdded, getRating, { type: this.placeType, includeShorts: true });
+      return placeRowsMemo(this.filteredEntriesWithFlatKeywordsAdded, this.placeType);
     },
     favouritePlaceRows () {
       return favouritePlaces(this.placeRowsForType, { minFilms: 3, limit: 12 });
@@ -563,7 +593,10 @@ export default {
       return this.$store.state.currentLog === "tvLog";
     },
     allEntriesWithFlatKeywordsAdded () {
-      return this.$store.getters.allMediaAsArray.map((result) => {
+      // Module-scope identity cache (see memoByIdentity.js): Insights
+      // rebuilt this on every open, and the Places/People tables on top of
+      // it. Same library object in, same table out.
+      return insightsEntriesMemo(this.$store.getters.allMediaAsArray, this.currentLogIsTVLog, (source) => source.map((result) => {
         if (this.currentLogIsTVLog) {
           return {
             ...result,
@@ -584,7 +617,7 @@ export default {
             }
           }
         }
-      });
+      }));
     },
     allCounts () {
       return {
@@ -709,10 +742,18 @@ export default {
         return [];
       }
 
+      // One pass to index stored filmographies, instead of a find over the
+      // whole library per director (~150ms of the Ratings tab, 2026-09-23).
+      const filmographies = {};
+      this.allEntriesWithFlatKeywordsAdded.forEach((entry) => {
+        (entry.movie.crew || []).forEach((person) => {
+          if (person.job === "Director" && person.filmography && !filmographies[person.name]) {
+            filmographies[person.name] = person.filmography;
+          }
+        });
+      });
       return Object.keys(this.countDirectors).map((keyword) => {
-        const filmography = this.allEntriesWithFlatKeywordsAdded.find((entry) => {
-          return entry.movie.crew.find((person) => person.job === "Director" && person.name === keyword);
-        }).movie.crew.find((person) => person.name === keyword && person.filmography)?.filmography;
+        const filmography = filmographies[keyword];
 
         return {
           name: this.titleCase(keyword),
@@ -1194,7 +1235,11 @@ export default {
       if (this.world) return;
       try {
         const module = await import(/* webpackChunkName: "world-countries" */ '../assets/data/worldCountries.json');
-        this.world = module.default || module;
+        // markRaw: 15,000 polygon vertices must never become reactive. Held
+        // as plain component data, every ring read in countryForPoint went
+        // through a Proxy trap - the whole reason the Places tab cost 3.5s at
+        // phone speed (2026-09-23 speed sweep).
+        this.world = markRaw(module.default || module);
       } catch (error) {
         console.error('Could not load the world map data:', error);
       }

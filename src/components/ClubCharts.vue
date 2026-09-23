@@ -307,6 +307,7 @@
 
 <script>
 import BackLink from './games/BackLink.vue';
+import { memoByIdentity } from '../utils/memoByIdentity.js';
 import SendToHat from './SendToHat.vue';
 import ClubVenn from './ClubVenn.vue';
 import { getRating } from '../assets/javascript/GetRating.js';
@@ -327,6 +328,10 @@ import {
   clubActivity,
   criterionRadar
 } from '../assets/javascript/clubCharts.js';
+
+// The one join every chart reads, ~290ms at desktop speed on each open
+// (2026-09-23 speed sweep); pure in (my library, the active profiles).
+const joinedMemo = memoByIdentity((entries, profiles) => buildOverlaps(entries, getRating, profiles));
 
 export default {
   name: 'ClubCharts',
@@ -358,7 +363,7 @@ export default {
     },
     // One join, shared by nearly every chart on the page.
     joined () {
-      return buildOverlaps(this.myEntries, getRating, this.activeProfiles);
+      return joinedMemo(this.myEntries, this.activeProfiles);
     },
     overlaps () {
       return this.joined.overlaps;

@@ -10,8 +10,18 @@
 // their own choice of library subset (e.g. Insights.vue's shorts-filtered
 // list vs PersonalAwardsModal's full list) since that's a per-caller
 // decision, not something this function should make.
-export function expandNomineeFromMinimal (minimalNominee, entriesLibrary) {
+// `byId` is an optional Map(movie id -> entry) for callers expanding many
+// nominees at once: the linear find below is fine for one nominee and was
+// ~230ms of the Trophy Case open for a few hundred (2026-09-23 speed sweep).
+export function libraryIndexById (entriesLibrary) {
+  const byId = new Map();
+  (entriesLibrary || []).forEach((entry) => { if (entry?.movie?.id != null) byId.set(entry.movie.id, entry); });
+  return byId;
+}
+
+export function expandNomineeFromMinimal (minimalNominee, entriesLibrary, byId = null) {
   if (!minimalNominee) return null;
+  const findMovie = (id) => (byId ? byId.get(id) || null : entriesLibrary.find(entry => entry.movie.id === id));
 
   // Handle legacy data - if it already has a movie object, it's not minimal
   if (minimalNominee.movie) {
@@ -19,7 +29,7 @@ export function expandNomineeFromMinimal (minimalNominee, entriesLibrary) {
   }
 
   if (minimalNominee.type === 'person') {
-    const movieEntry = entriesLibrary.find(entry => entry.movie.id === minimalNominee.movieId);
+    const movieEntry = findMovie(minimalNominee.movieId);
 
     if (!movieEntry) {
       console.warn('⚠️ Could not find movie for person nominee:', minimalNominee);
@@ -45,7 +55,7 @@ export function expandNomineeFromMinimal (minimalNominee, entriesLibrary) {
 
     return expanded;
   } else if (minimalNominee.type === 'movie') {
-    const movieEntry = entriesLibrary.find(entry => entry.movie.id === minimalNominee.movieId);
+    const movieEntry = findMovie(minimalNominee.movieId);
 
     if (!movieEntry) {
       console.warn('⚠️ Could not find movie entry:', minimalNominee);

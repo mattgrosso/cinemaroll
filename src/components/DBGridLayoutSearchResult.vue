@@ -288,6 +288,12 @@
 
 <script>
 import axios from 'axios';
+
+const DATE_FORMATS = {
+  weekday: new Intl.DateTimeFormat('en-US', { weekday: 'long' }),
+  monthDay: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }),
+  monthDayYear: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+};
 import { formatScore } from '../assets/javascript/formatScore.js';
 import { formatMoneyShort, formatProfit, formatReturn } from '../assets/javascript/formatMoney.js';
 import { adjustedMovieMoney } from '../assets/javascript/inflation.js';
@@ -437,9 +443,8 @@ export default {
       return this.sortValue === 'budget' && isModernWithNoBoxOffice(this.result);
     },
     overAllRank () {
-      return this.$store.getters.allMediaSortedByRating.findIndex((media) => {
-        return media.dbKey === this.result.dbKey;
-      }) + 1;
+      const ranks = this.$store.getters.overallRankByDbKey;
+      return (ranks && ranks.get(this.result.dbKey)) || 0;
     },
     previousEntry () {
       return this.$store.getters.allMediaAsArray.find((entry) => {
@@ -662,7 +667,9 @@ export default {
       return this.mostRecentRating(result).normalizedRating;
     },
     mostRecentRating (media) {
-      return getRating(media);
+      // Home pre-scores its entries once per library (see its
+      // allEntriesWithFlatKeywordsAdded); a fresh score only when it hasn't.
+      return media?._rating || getRating(media);
     },
     getOrdinal (number) {
       return ordinal.toOrdinal(number);
@@ -695,16 +702,23 @@ export default {
         }
       }
 
+      // toLocaleDateString rendered an unparseable date as this string;
+      // Intl.DateTimeFormat.format throws on one instead.
+      if (Number.isNaN(inputDate.getTime())) return 'Invalid Date';
+
       const now = new Date();
       const diffInDays = Math.floor((now - inputDate) / (1000 * 60 * 60 * 24));
 
+      // Shared Intl formatters: toLocaleDateString(locale, options) builds a
+      // new formatter per call, and a grid of 120 cards calls this twice
+      // each on every render - 30ms+ of a keystroke (2026-09-23 sweep).
       if (diffInDays <= 6) {
-        return inputDate.toLocaleDateString('en-US', { weekday: 'long' });
+        return DATE_FORMATS.weekday.format(inputDate);
       } else {
         if (now.getFullYear() === inputDate.getFullYear()) {
-          return inputDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          return DATE_FORMATS.monthDay.format(inputDate);
         } else {
-          return inputDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          return DATE_FORMATS.monthDayYear.format(inputDate);
         }
       }
     },

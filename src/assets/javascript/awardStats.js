@@ -1,4 +1,5 @@
-import { expandNomineeFromMinimal } from './personalAwards.js';
+import { expandNomineeFromMinimal, libraryIndexById } from './personalAwards.js';
+import { memoByIdentity } from '../../utils/memoByIdentity.js';
 
 // Leaderboards over the user's personal awards, for the Trophy Case.
 //
@@ -36,8 +37,17 @@ function isPerson (expanded) {
 // nominee lists, and nominees whose movie has since left the library
 // (expandNomineeFromMinimal returns null for those, and they're skipped).
 export function collectAwardEntries (personalAwards, library) {
+  // The awards object is edited IN PLACE by the awards modal, so it is
+  // keyed by value (a JSON string, ~1ms); the library is a cached getter
+  // and keyed by identity.
+  return collectAwardEntriesMemo(JSON.stringify(personalAwards || {}), personalAwards, library);
+}
+
+// Asked for by every shelf on the Trophy Case; once per (awards, library).
+const collectAwardEntriesMemo = memoByIdentity((_awardsKey, personalAwards, library) => {
   const wins = [];
   const nominations = [];
+  const byId = libraryIndexById(library);
 
   Object.keys(personalAwards || {}).forEach((yearKey) => {
     const year = Number(yearKey);
@@ -46,18 +56,18 @@ export function collectAwardEntries (personalAwards, library) {
     Object.keys(categories).forEach((categoryKey) => {
       const category = categories[categoryKey] || {};
 
-      const winner = category.winner ? expandNomineeFromMinimal(category.winner, library) : null;
+      const winner = category.winner ? expandNomineeFromMinimal(category.winner, library, byId) : null;
       if (winner) wins.push({ year, categoryKey, expanded: winner });
 
       (category.nominees || []).forEach((nominee) => {
-        const expanded = expandNomineeFromMinimal(nominee, library);
+        const expanded = expandNomineeFromMinimal(nominee, library, byId);
         if (expanded) nominations.push({ year, categoryKey, expanded });
       });
     });
   });
 
   return { wins, nominations };
-}
+});
 
 // Ranks people by how many of the given entries they appear in. Ties break
 // alphabetically so the order is stable rather than dependent on whatever

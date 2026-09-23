@@ -1578,6 +1578,29 @@ import UpdateAvailableBanner from "./UpdateAvailableBanner.vue";
 import RatingCurveSettings from "./RatingCurveSettings.vue";
 import SettingsSection from "./SettingsSection.vue";
 import NoResults from "./NoResults.vue";
+import { memoByIdentity } from "../utils/memoByIdentity.js";
+
+// See allEntriesWithFlatKeywordsAdded. Pure in (library, anchors, tweak):
+// flat keywords and search fields come from the entry, the score from the
+// entry plus those two settings.
+const homeEntriesMemo = memoByIdentity((entries, _anchors, _tweak) => entries.map((result) => {
+  // Use the shared keyword util so Home matches the detail page exactly,
+  // including manually-added (customKeywords) and removed (removedKeywords)
+  // keywords. An inline version here previously omitted those, so e.g. a
+  // user-added "Star Wars" keyword was invisible to grouping/filtering.
+  const movie = {
+    ...result.movie,
+    flatKeywords: computeFlatKeywords(result.movie)
+  };
+  // Precompute lowercased search fields and the score ONCE per library, so
+  // neither is redone per keystroke or per mount.
+  return {
+    ...result,
+    movie,
+    _search: buildSearchFieldsUtil(movie, result.ratings),
+    _rating: getRating(result)
+  };
+}));
 import InsetBrowserModal from './InsetBrowserModal.vue';
 import ThreeStateToggle from './ThreeStateToggle.vue';
 import SendToHat from './SendToHat.vue';
@@ -2694,23 +2717,22 @@ export default {
       });
     },
     allEntriesWithFlatKeywordsAdded () {
-      return this.$store.getters.allMediaAsArray.map((result) => {
-        // Use the shared keyword util so Home matches the detail page exactly,
-        // including manually-added (customKeywords) and removed (removedKeywords)
-        // keywords. An inline version here previously omitted those, so e.g. a
-        // user-added "Star Wars" keyword was invisible to grouping/filtering.
-        const movie = {
-          ...result.movie,
-          flatKeywords: computeFlatKeywords(result.movie)
-        };
-        // Precompute lowercased search fields ONCE here (memoized with this
-        // computed) so applyFilter doesn't re-lowercase every movie per keystroke.
-        return {
-          ...result,
-          movie,
-          _search: this.buildSearchFields(movie, result.ratings)
-        }
-      });
+      // Cached by identity at module scope (homeEntriesMemo), not only in
+      // this computed: the computed dies with the component, and every
+      // return to Home was rebuilding all 1,400 entries, their search
+      // fields AND their scores (2026-09-23 speed sweep). The Vuex getter is
+      // the same array until the library changes; the two normalization
+      // settings are the only other inputs to a score.
+      // The anchors are keyed by VALUE (a JSON string): every settings write
+      // (a game's play counter, say) lands a fresh settings object from the
+      // listener, and keying on the nested object's identity made a Wordle
+      // visit cost a full rebuild on the way back to Home.
+      const settings = this.$store.state.settings || {};
+      return homeEntriesMemo(
+        this.$store.getters.allMediaAsArray,
+        JSON.stringify(settings.normalizationAnchors || null),
+        Number(settings.normalizationTweak) || 0
+      );
     },
     allGenres () {
       return Object.keys(this.countedGenres).map((keyword) => {
@@ -4879,7 +4901,9 @@ export default {
       if (!media || typeof media !== 'object') {
         return { calculatedTotal: null, date: null };
       }
-      return getRating(media);
+      // Scored once per library in allEntriesWithFlatKeywordsAdded; a sort
+      // on every keystroke used to re-score all 1,400 entries.
+      return media._rating || getRating(media);
     },
     async searchTMDB () {
       if (!this.effectiveSearchTerm) {

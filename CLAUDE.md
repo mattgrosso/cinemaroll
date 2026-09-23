@@ -158,6 +158,13 @@ scraped from Wikipedia wikitext), Letterboxd (scraping + deep links).
   deployables, not linted). See `.claude/rules/auth-and-db-rules.md`.
 - `scripts/` — db-rules generator, bug-report triage
 
+**Performance rules (2026-09-23 speed sweep, `docs/history/ui-and-layout.md`):** anything
+derived from the whole library (counts, search fields, scores, joins) goes through
+`src/utils/memoByIdentity.js`, keyed on the cached Vuex getter's identity, never
+rebuilt per mount; never sort a getter's array in place; never key an identity memo on an
+object that is mutated in place (settings sub-objects, personalAwards — key those by JSON);
+big static data (the world map, catalogs) is `markRaw`. `scripts/perf-tour.mjs` is the ruler.
+
 **Preference: extract pure logic into `src/assets/javascript/` and unit-test it directly**
 rather than only through component mounts. That's why `searchFiltering.js`,
 `entityCounts.js`, `tieBreakTournament.js`, `awardStats.js`, `storedEntry.js`,

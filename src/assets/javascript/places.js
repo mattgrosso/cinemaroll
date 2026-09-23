@@ -12,7 +12,8 @@
 // are kept apart all the way to the screen: "set in Paris" and "filmed in
 // Paris" are different facts, and the report asked for both.
 
-import { countryForPoint, countryForIso } from './countryLookup.js';
+import { countryForPoint, countryForIso, isPointResolved } from './countryLookup.js';
+import { memoByIdentity } from '../../utils/memoByIdentity.js';
 
 export const PLACE_TYPES = { FILMING: 'filming', NARRATIVE: 'narrative' };
 
@@ -167,6 +168,46 @@ export function placeSummary (entries, { type = 'all', includeShorts = false } =
  * many the map knows about.
  */
 export function countryCoverage (entries, world, { type = 'all', includeShorts = false } = {}) {
+  return countryCoverageMemo(entries, world, type, includeShorts);
+}
+
+/**
+ * Resolve every place in the library to a country ahead of time, in idle
+ * slices, so the Places tab opens on a warm cache instead of doing 3.5s of
+ * polygon tests (phone speed) while the user waits. countryForPoint keeps
+ * the answers for the life of the page, so this is pure prep: whatever it
+ * hasn't reached when the tab opens is resolved synchronously as before.
+ * Returns a cancel function.
+ */
+export function warmCountryLookup (entries, world, { sliceMs = 6, schedule = null } = {}) {
+  if (!world) return () => {};
+  const pending = [];
+  const seen = new Set();
+  (entries || []).forEach((entry) => {
+    movieLocations(entry.movie).forEach((location) => {
+      if (!Number.isFinite(location.lat) || !Number.isFinite(location.lon)) return;
+      const key = `${location.lat},${location.lon}`;
+      if (seen.has(key) || isPointResolved(location.lat, location.lon, world)) return;
+      seen.add(key);
+      pending.push(location);
+    });
+  });
+  let cancelled = false;
+  const later = schedule || ((fn) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 2000 }) : setTimeout(fn, 50)));
+  const step = () => {
+    if (cancelled) return;
+    const started = Date.now();
+    while (pending.length && Date.now() - started < sliceMs) {
+      const location = pending.shift();
+      countryForPoint(location.lat, location.lon, world);
+    }
+    if (pending.length) later(step);
+  };
+  if (pending.length) later(step);
+  return () => { cancelled = true; };
+}
+
+const countryCoverageMemo = memoByIdentity((entries, world, type, includeShorts) => {
   const byIso = new Map();
   const row = (country) => {
     const existing = byIso.get(country.iso);
@@ -183,16 +224,13 @@ export function countryCoverage (entries, world, { type = 'all', includeShorts =
     byIso.set(country.iso, created);
     return created;
   };
-  const pointCache = new Map();
+  // countryForPoint caches per point for the life of the page (see
+  // countryLookup.js), so no per-call cache is needed here any more.
   const resolve = (location) => {
-    const cacheKey = location.id || `${location.lat},${location.lon}`;
-    if (!pointCache.has(cacheKey)) {
-      const hit = Number.isFinite(location.lat) && Number.isFinite(location.lon)
-        ? countryForPoint(location.lat, location.lon, world)
-        : null;
-      pointCache.set(cacheKey, hit && hit.iso ? hit : null);
-    }
-    return pointCache.get(cacheKey);
+    const hit = Number.isFinite(location.lat) && Number.isFinite(location.lon)
+      ? countryForPoint(location.lat, location.lon, world)
+      : null;
+    return hit && hit.iso ? hit : null;
   };
 
   eligible(entries, includeShorts).forEach((entry) => {
@@ -241,4 +279,4 @@ export function countryCoverage (entries, world, { type = 'all', includeShorts =
     touched: rows.length,
     total: (world?.countries || []).filter((c) => c.iso).length
   };
-}
+});

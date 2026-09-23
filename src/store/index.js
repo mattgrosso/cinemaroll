@@ -59,25 +59,6 @@ const sortByVoteCount = (a, b) => {
   return 0;
 }
 
-// Raw weighted totals only (rawScore, not getRating): the score is the rank
-// and normalization is display-only, and allMediaRatingsArray below is the
-// input to that normalization - going through getRating there re-entered
-// the getter while it was computing (2026-09-23).
-const sortByRating = (a, b) => {
-  const sortValueA = rawScore(a);
-  const sortValueB = rawScore(b);
-
-  if (sortValueA < sortValueB) {
-    return 1;
-  }
-
-  if (sortValueA > sortValueB) {
-    return -1;
-  }
-
-  return 0;
-}
-
 const removeNaNAndUndefined = (obj) => {
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
@@ -240,12 +221,24 @@ function startSnapshotRead (context, key) {
     return snapshotReadInFlight.promise;
   }
   const promise = loadSnapshot(key, 'movieLog').catch(() => null);
+  // The settings snapshot rides along, and lands BEFORE dbLoaded. It used
+  // to be read only after the auth restore, ~1.2s later at phone speed, so
+  // Home painted once without the rating-curve anchors and then rebuilt
+  // every score and card when settings arrived: two ~0.9s renders where
+  // one will do (2026-09-23 speed sweep, relaunch phases).
+  const settingsPromise = loadSnapshot(key, 'settings').catch(() => null);
   snapshotReadInFlight = { key, promise };
 
   promise.then(async (cached) => {
     // The account changed while this read was in flight: whoever started
     // the read for the new key applies that one instead.
     if (context.getters.databaseTopKey !== key) return null;
+    const cachedSettings = await settingsPromise;
+    if (cachedSettings && !context.state.settingsLoaded && context.getters.databaseTopKey === key) {
+      context.commit('setSettings', cachedSettings);
+      context.commit('setSettingsLoaded', true);
+      await context.dispatch('replayPendingWrites', 'settings');
+    }
     if (cached && !context.state.dbLoaded) {
       context.commit('setMovieLog', cached);
     }
@@ -497,7 +490,21 @@ export default createStore({
       })
     },
     allMediaSortedByRating: (state, getters) => {
-      return getters.allMediaAsArray.sort(sortByRating);
+      // A COPY, decorated once. This used to sort allMediaAsArray in place
+      // (quietly reordering another getter's cached array for everyone)
+      // and re-score both sides of every comparison - ~170ms of each
+      // return to Home at desktop speed (2026-09-23 speed sweep).
+      return getters.allMediaAsArray
+        .map((media) => ({ media, score: rawScore(media) }))
+        .sort((a, b) => b.score - a.score)
+        .map((d) => d.media);
+    },
+    // dbKey -> 1-based overall rank, so a grid of 120 cards asks a Map
+    // instead of each running findIndex over the whole library.
+    overallRankByDbKey: (state, getters) => {
+      const ranks = new Map();
+      getters.allMediaSortedByRating.forEach((media, index) => ranks.set(media.dbKey, index + 1));
+      return ranks;
     },
     allMediaRatingsArray: (state, getters) => {
       return getters.allMediaAsArray.map(rawScore);
@@ -1170,6 +1177,29 @@ export default createStore({
         const attachFullListener = () => onValue(ref(db, `${topKey}/movieLog`), (snapshot) => {
           const data = snapshot.val();
 
+          // Same library the launch snapshot already painted (same entry
+          // count, same newest updatedAt, nothing of ours in flight): keep
+          // that object rather than handing Home a new identity to rebuild
+          // every derived table from - an 0.8s stall at phone speed ~2s
+          // into every launch (2026-09-23 speed sweep, relaunch phases).
+          // Every write stamps updatedAt, so an edit moves the max and a
+          // deletion moves the count. The shadow check still runs.
+          const current = context.state.movieLog;
+          const unchanged = data && current && context.state.dbLoaded && !context.state.dbReadDenied &&
+            !Object.keys(context.state.inFlightWrites || {}).length &&
+            Object.keys(data).length === Object.keys(current).length &&
+            maxUpdatedAt(data) === maxUpdatedAt(current);
+
+          if (data && unchanged) {
+            if (!shadowCheckStarted) {
+              shadowCheckStarted = true;
+              context.dispatch('runDeltaShadowCheck', { fresh: data, priorSnapshotPromise, topKey });
+            }
+            context.dispatch('replayPendingWrites', 'movieLog');
+            context.commit('setDbReadDenied', false);
+            return;
+          }
+
           if (data) {
             // Delta sync SHADOW check (phase 1): reconstruct the library
             // from prior-snapshot + delta query and diff it against this
@@ -1211,6 +1241,28 @@ export default createStore({
 
           const applyReconstruction = () => {
             if (latestDelta === null) return;
+            // Nothing changed since the snapshot this launch painted from:
+            // keep that very object. Committing an identical reconstruction
+            // gave the library a new identity, and everything derived from
+            // it (scores, search fields, counts, the grid) was rebuilt a
+            // second time ~2s into every launch - an 0.8s stall at phone
+            // speed (2026-09-23 speed sweep, relaunch phases).
+            // startAt(lastSync) is inclusive, so the newest entry of the
+            // snapshot always comes back in the delta: "nothing new" means
+            // every delta entry is one the snapshot already holds at the
+            // same updatedAt (every write stamps it).
+            const deltaAlreadyHeld = Object.entries(latestDelta).every(([key, entry]) =>
+              priorSnapshot?.[key] && priorSnapshot[key].updatedAt === entry?.updatedAt);
+            const nothingNew = deltaAlreadyHeld &&
+              Object.keys(latestTombstones).length === 0 &&
+              !Object.keys(context.state.inFlightWrites || {}).length &&
+              context.state.movieLog === priorSnapshot;
+            if (nothingNew) {
+              context.dispatch('replayPendingWrites', 'movieLog');
+              context.commit('setDbReadDenied', false);
+              context.commit('setDbLoaded', true);
+              return;
+            }
             const reconstructed = reconstructFromDelta(priorSnapshot, latestDelta, latestTombstones);
             // Same in-flight + durable-queue re-tops as the full listener:
             // the snapshot half of the reconstruction predates this

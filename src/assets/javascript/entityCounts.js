@@ -1,5 +1,6 @@
 import uniq from 'lodash/uniq';
 import { placeNames } from './places.js';
+import { memoByIdentity } from '../../utils/memoByIdentity.js';
 
 // Pure counting logic shared by Home.vue's "add filter" dropdown counts and
 // MovieDetail.vue's parenthetical (N) badges next to cast/director/genre/
@@ -37,7 +38,7 @@ const COUNTED_CREW_JOB_SUBSTRINGS = ['Writer', 'Composer', 'Editor', 'Photo', 'P
 // whichever director TMDB happened to list FIRST for a co-directed movie —
 // every other credited co-director silently undercounted. `.filter(...)`
 // credits all of them.
-export function countDirectors (entries, includeShorts) {
+function countDirectorsUncached (entries, includeShorts) {
   const counts = {};
   eligibleEntries(entries, includeShorts).forEach((result) => {
     const crew = result.movie.crew;
@@ -59,7 +60,7 @@ export function countDirectors (entries, includeShorts) {
 // what getCrewMember actually surfaces, while still avoiding counting every
 // background department credit TMDB lists (grips, sound mixers, etc.) that
 // no template section ever displays a badge for.
-export function countCastCrew (entries, includeShorts) {
+function countCastCrewUncached (entries, includeShorts) {
   const counts = {};
   eligibleEntries(entries, includeShorts).forEach((result) => {
     const cast = Array.isArray(result.movie.cast) ? result.movie.cast.map((person) => person.name) : [];
@@ -73,7 +74,7 @@ export function countCastCrew (entries, includeShorts) {
   return counts;
 }
 
-export function countGenres (entries, includeShorts) {
+function countGenresUncached (entries, includeShorts) {
   const counts = {};
   eligibleEntries(entries, includeShorts).forEach((result) => {
     const genres = result.movie.genres;
@@ -82,7 +83,7 @@ export function countGenres (entries, includeShorts) {
   return counts;
 }
 
-export function countKeywords (entries, includeShorts) {
+function countKeywordsUncached (entries, includeShorts) {
   const counts = {};
   eligibleEntries(entries, includeShorts).forEach((result) => {
     const keywords = result.movie.flatKeywords;
@@ -91,7 +92,7 @@ export function countKeywords (entries, includeShorts) {
   return counts;
 }
 
-export function countStudios (entries, includeShorts) {
+function countStudiosUncached (entries, includeShorts) {
   const counts = {};
   eligibleEntries(entries, includeShorts).forEach((result) => {
     const companies = (result.movie.production_companies || []).map((company) => company.name);
@@ -102,10 +103,21 @@ export function countStudios (entries, includeShorts) {
 
 // Places (Wikidata filming + narrative locations, see places.js): one count
 // per movie per place, whichever type it was.
-export function countPlaces (entries, includeShorts) {
+function countPlacesUncached (entries, includeShorts) {
   const counts = {};
   eligibleEntries(entries, includeShorts).forEach((result) => {
     incrementEach(counts, placeNames(result.movie));
   });
   return counts;
 }
+
+// Each table is a pure function of (library entries, include shorts) and is
+// asked for by Home on every mount: cached by identity, so a return to Home
+// with an unchanged library costs nothing here. See memoByIdentity.js.
+export const countDirectors = memoByIdentity(countDirectorsUncached);
+export const countCastCrew = memoByIdentity(countCastCrewUncached);
+export const countGenres = memoByIdentity(countGenresUncached);
+export const countKeywords = memoByIdentity(countKeywordsUncached);
+export const countStudios = memoByIdentity(countStudiosUncached);
+export const countPlaces = memoByIdentity(countPlacesUncached);
+

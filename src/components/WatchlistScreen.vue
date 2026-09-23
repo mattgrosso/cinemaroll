@@ -278,6 +278,11 @@ import DrawFromHat from './DrawFromHat.vue';
 import MoviePreview from './MoviePreview.vue';
 import { getRating } from '../assets/javascript/GetRating.js';
 import { friendsLoveUnseen } from '../assets/javascript/social.js';
+import { memoByIdentity } from '../utils/memoByIdentity.js';
+
+// Pure in (my library, friend profiles), both cached getters; rebuilt on
+// every open of the Watchlist before (~100ms desktop, 2026-09-23 sweep).
+const friendPicksMemo = memoByIdentity((library, profiles) => friendsLoveUnseen(library, getRating, profiles));
 import { rankSections, sourceSummary } from '../assets/javascript/recommendationStats.js';
 import { rewatchCandidates, anotherShotCandidates, nearThresholdYears, favoritePeople, peopleYouRateHigher, rankWatchlistCandidates, dailyPick, ratedTmdbIds, topRatedSeeds, tasteProfile, puntKeyFor, nextPunt, isPunted, PEOPLE_PER_SECTION, MIN_PEOPLE_PER_SECTION } from '../assets/javascript/discover.js';
 import { awardsYearThreshold } from '../assets/javascript/personalAwards.js';
@@ -543,7 +548,7 @@ export default {
     friendPicks () {
       // Includes friends on other apps — a Movie Log friend's raves count
       // exactly like a Cinema Roll friend's.
-      return friendsLoveUnseen(this.library, getRating, this.$store.getters.filmClubProfiles || {});
+      return friendPicksMemo(this.library, this.$store.getters.filmClubProfiles || {});
     },
     friendPickMedia () {
       return this.friendPicks.map((pick) => ({

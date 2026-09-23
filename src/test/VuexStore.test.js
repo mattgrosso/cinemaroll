@@ -337,6 +337,14 @@ describe('Vuex Store - Movie Data Processing', () => {
     })
 
     describe('allMediaSortedByRating', () => {
+      // 2026-09-23: this getter used to sort allMediaAsArray IN PLACE, so
+      // reading it silently reordered the other getter's cached array.
+      it('does not reorder allMediaAsArray', () => {
+        const before = [...store.getters.allMediaAsArray].map((m) => m.dbKey)
+        store.getters.allMediaSortedByRating
+        expect(store.getters.allMediaAsArray.map((m) => m.dbKey)).toEqual(before)
+      })
+
       it('should sort movies by calculated total rating (highest first)', () => {
         const result = store.getters.allMediaSortedByRating
 
