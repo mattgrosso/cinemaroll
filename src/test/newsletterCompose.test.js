@@ -11,6 +11,7 @@ import {
   issueBrief,
   weekKey,
   issueDue,
+  previouslyIssued,
   VOTE_FLOOR
 } from '../../aws-lambda/newsletterCompose.js';
 
@@ -544,5 +545,65 @@ describe('featureCandidates with people and originals', () => {
     expect(ranked).toHaveLength(1);
     // The louder claim wins the slot.
     expect(ranked[0].reason).toBe('person');
+  });
+});
+
+describe('previouslyIssued', () => {
+  // Bug report (Matt, 2026-09-25): "I just got An American in Paris two
+  // weeks in a row." It was the feature on both the 09-18 and 09-25 issues,
+  // and In the Grey was a pick on both — nothing looked at past issues.
+  const DAY = 86400000;
+  const now = Date.parse('2026-09-25T13:00:00Z');
+  const issues = {
+    '2026-09-18': {
+      builtAt: Date.parse('2026-09-20T19:15:21Z'),
+      picks: [{ id: 101, title: 'Look Back' }, { id: 102, title: 'In the Grey' }],
+      feature: { id: 2769, title: 'An American in Paris' }
+    },
+    '2026-09-25': {
+      builtAt: Date.parse('2026-09-25T13:02:37Z'),
+      picks: [{ id: 999, title: 'This week' }],
+      feature: { id: 888 }
+    },
+    '2026-01-02': {
+      builtAt: now - 300 * DAY,
+      picks: [{ id: 5 }],
+      feature: { id: 6 }
+    }
+  };
+
+  it('collects recent picks and features', () => {
+    const { pickIds, featureIds } = previouslyIssued(issues, '2026-09-25', now);
+    expect(pickIds.has(102)).toBe(true);
+    expect(featureIds.has(2769)).toBe(true);
+  });
+
+  it('ignores the issue being rebuilt, so a rebuild can keep its own picks', () => {
+    const { pickIds, featureIds } = previouslyIssued(issues, '2026-09-25', now);
+    expect(pickIds.has(999)).toBe(false);
+    expect(featureIds.has(888)).toBe(false);
+  });
+
+  it('forgets after half a year, so a film can return for its next milestone', () => {
+    const { pickIds, featureIds } = previouslyIssued(issues, '2026-09-25', now);
+    expect(pickIds.has(5)).toBe(false);
+    expect(featureIds.has(6)).toBe(false);
+  });
+
+  it('copes with no history at all', () => {
+    const { pickIds, featureIds } = previouslyIssued(null, '2026-09-25', now);
+    expect(pickIds.size + featureIds.size).toBe(0);
+  });
+
+  it('shortlistReleases drops anything already picked', () => {
+    const candidates = [
+      { id: 102, title: 'In the Grey', vote_count: 900, release_date: '2026-08-01' },
+      { id: 103, title: 'Fresh', vote_count: 900, release_date: '2026-08-01' }
+    ];
+    const enriched = new Map(candidates.map((m) => [m.id, {
+      providers: providers({ flatrate: [{ provider_name: 'Netflix' }] })
+    }]));
+    const rows = shortlistReleases({ candidates, enriched, issued: new Set([102]), now });
+    expect(rows.map((r) => r.id)).toEqual([103]);
   });
 });

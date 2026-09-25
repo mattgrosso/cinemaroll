@@ -130,6 +130,7 @@ function shortlistReleases ({
   candidates = [],
   enriched = new Map(),
   library = new Set(),
+  issued = new Set(),
   now = Date.now(),
   voteFloor = VOTE_FLOOR,
   maxAgeYears = MAX_AGE_YEARS,
@@ -144,6 +145,7 @@ function shortlistReleases ({
     if (seen.has(movie.id)) continue;            // discover pages overlap
     seen.add(movie.id);
     if (library.has(movie.id)) continue;         // he's already rated it
+    if (issued.has(movie.id)) continue;          // an earlier issue picked it
     if ((movie.vote_count || 0) < voteFloor) continue;
 
     const year = releaseYear(movie);
@@ -541,6 +543,30 @@ function issueDue ({ prefs = {}, lastIssue = null, now = Date.now(), alwaysOn = 
   return { due: true, weekKey: key, reason: 'Friday, no issue yet' };
 }
 
+/**
+ * Everything recent issues already ran, so this week's doesn't repeat it.
+ *
+ * Bug report (Matt, 2026-09-25): "I just got An American in Paris two weeks
+ * in a row." The fortnight discovery window and the loose anniversary week
+ * both let the same film qualify twice, and nothing looked back. The issue
+ * being rebuilt is skipped (a rebuild replaces it, it doesn't follow it), and
+ * the memory lasts half a year so a film can come back for its next round
+ * birthday.
+ */
+const ISSUE_MEMORY_MS = 182 * 86400000;
+
+function previouslyIssued (issues = {}, currentWeekKey = null, now = Date.now()) {
+  const pickIds = new Set();
+  const featureIds = new Set();
+  for (const [key, issue] of Object.entries(issues || {})) {
+    if (!issue || key === currentWeekKey) continue;
+    if (now - (Number(issue.builtAt) || 0) > ISSUE_MEMORY_MS) continue;
+    for (const pick of issue.picks || []) if (pick?.id != null) pickIds.add(pick.id);
+    if (issue.feature?.id != null) featureIds.add(issue.feature.id);
+  }
+  return { pickIds, featureIds };
+}
+
 module.exports = {
   VOTE_FLOOR,
   MAX_AGE_YEARS,
@@ -561,5 +587,6 @@ module.exports = {
   ORIGINAL_WEIGHT,
   issueBrief,
   weekKey,
-  issueDue
+  issueDue,
+  previouslyIssued
 };

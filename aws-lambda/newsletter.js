@@ -54,7 +54,8 @@ const {
   featureCandidates,
   issueBrief,
   weekKey,
-  issueDue
+  issueDue,
+  previouslyIssued
 } = require('./newsletterCompose.js');
 const {
   discoverReleases, enrichCandidate, anniversaryPool, trendingThisWeek, filmCard,
@@ -365,7 +366,7 @@ Choose 4-6 picks, best first. If fewer than four releases are worth recommending
 
 // --- Building one account's issue --------------------------------------------
 
-const buildIssue = async ({ topKey, profile, now, alwaysOn }) => {
+const buildIssue = async ({ topKey, profile, pastIssues = null, now, alwaysOn }) => {
   const tmdbKey = process.env.TMDB_API_KEY;
   const omdbKey = process.env.OMDB_API_KEY;
   const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
@@ -373,6 +374,7 @@ const buildIssue = async ({ topKey, profile, now, alwaysOn }) => {
   // A fortnight, not a week: a Friday-to-Friday window misses anything whose
   // providers landed a few days after its logged digital date, and the
   // already-seen and already-issued filters stop it repeating itself.
+  const { pickIds, featureIds } = previouslyIssued(pastIssues, weekKey(now), now);
   const candidates = await discoverReleases(tmdbKey, iso(now - 14 * 86400000), iso(now));
 
   // Enrich only what could plausibly survive the floor — the network is the
@@ -385,7 +387,7 @@ const buildIssue = async ({ topKey, profile, now, alwaysOn }) => {
   }
 
   const library = new Set(profile?.seenIds || []);
-  const shortlist = shortlistReleases({ candidates, enriched, library, now });
+  const shortlist = shortlistReleases({ candidates, enriched, library, issued: pickIds, now });
 
   // Two claims on the feature slot: a round birthday this week, or an old
   // film back in TMDB's weekly trending list. Both are fetched; ranking them
@@ -419,7 +421,8 @@ const buildIssue = async ({ topKey, profile, now, alwaysOn }) => {
   // available this week, not what survived the cut — the point of having
   // four kinds of claim is variety, and a tally of the top twelve would
   // report "all anniversaries" forever.
-  const allFeatures = featureCandidates({ anniversaries, trending, people, originals, now, limit: 200 });
+  const allFeatures = featureCandidates({ anniversaries, trending, people, originals, now, limit: 200 })
+    .filter((f) => !featureIds.has(f.id));
   const features = allFeatures.slice(0, 12);
 
   if (!shortlist.length && !features.length) {
@@ -544,7 +547,7 @@ const runForAccount = async (topKey, { now, alwaysOn }) => {
   const decision = issueDue({ prefs, lastIssue: node?.lastIssue || null, now, alwaysOn });
   if (!decision.due) return { topKey, skipped: decision.reason };
 
-  const issue = await buildIssue({ topKey, profile: node?.profile || null, now, alwaysOn });
+  const issue = await buildIssue({ topKey, profile: node?.profile || null, pastIssues: node?.issues || null, now, alwaysOn });
   if (issue.empty) return { topKey, skipped: issue.reason };
 
   const push = await dbGet(`${topKey}/push`).catch(() => null);
