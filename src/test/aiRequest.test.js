@@ -8,6 +8,7 @@ let currentUser = { getIdToken };
 vi.mock('firebase/auth', () => ({ getAuth: () => ({ get currentUser () { return currentUser; } }) }));
 
 const { postToAi } = await import('@/utils/aiRequest.js');
+const { REQUEST_TIMEOUT_MS } = await import('@/utils/networkHealth.js');
 
 describe('postToAi', () => {
   beforeEach(() => {
@@ -31,6 +32,18 @@ describe('postToAi', () => {
     const [url, payload] = axios.post.mock.calls[0];
     expect(url).toContain('/keywords');
     expect(payload).toEqual({ title: 'Jaws' });
+  });
+
+  it('waits longer than the app-wide 8s network timeout', async () => {
+    // Bug report (Matt, 2026-09-24): "could not load context" every time.
+    // The Lambda answered in 8.1s and 9.1s; the lie-fi work had just put an
+    // 8s timeout on every axios request, so the app hung up on a reply that
+    // was about to arrive. Model calls are slow by nature, not a dead link.
+    await postToAi('/context', { title: 'Jaws', year: 1975 });
+
+    const [, , config] = axios.post.mock.calls[0];
+    expect(config.timeout).toBeGreaterThan(REQUEST_TIMEOUT_MS);
+    expect(config.timeout).toBeGreaterThanOrEqual(30000);
   });
 
   it('refuses to fire a request at all when nobody is signed in', async () => {

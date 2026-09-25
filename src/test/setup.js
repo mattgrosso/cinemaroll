@@ -4,6 +4,27 @@
 // Global test configuration
 import { vi } from 'vitest'
 
+// Node 22+ defines a `localStorage` global of its own (undefined unless the
+// process starts with --localstorage-file), and vitest's jsdom environment
+// won't overwrite a global that already exists — so every test touching
+// localStorage saw `undefined`. Went unnoticed until the machine moved to
+// Node 26 and 316 tests went red at once (2026-09-25). In-memory stand-in.
+class MemoryStorage {
+  #map = new Map()
+  get length () { return this.#map.size }
+  key (i) { return [...this.#map.keys()][i] ?? null }
+  getItem (k) { return this.#map.has(String(k)) ? this.#map.get(String(k)) : null }
+  setItem (k, v) { this.#map.set(String(k), String(v)) }
+  removeItem (k) { this.#map.delete(String(k)) }
+  clear () { this.#map.clear() }
+}
+
+for (const name of ['localStorage', 'sessionStorage']) {
+  if (typeof globalThis[name] === 'undefined') {
+    Object.defineProperty(globalThis, name, { value: new MemoryStorage(), configurable: true, writable: true })
+  }
+}
+
 // The store calls getAuth() at module load (the Realtime Database SDK only
 // picks up an auth token if Auth was instantiated before it — see the comment
 // in store/index.js). Under vitest that resolves to Firebase Auth's *Node*
