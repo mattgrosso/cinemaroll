@@ -157,20 +157,41 @@
            number moved off Overview to join it — Activity was just a calendar,
            and Overview was half activity ("I'm not sure what activity means
            relative to overview"). -->
-      <div class="pace-box">
+      <div class="pace-box tappable" :class="{ selected: breakdownTile === 'year' }" role="button" @click="toggleBreakdown('year')">
         <span class="pace-label">{{ thisYear }} so far</span>
         <span class="pace-value">{{ moviesWatchedThisYear }}</span>
         <span class="pace-note">on track for {{ estimatedMoviesThisYear }} by the end of the year</span>
       </div>
 
+      <!-- Every count here is tappable and opens its history underneath
+           (Matt, 2026-09-25: "make those all tappable so I could click on the
+           month one and see a month by month breakdown going backwards"). -->
       <div class="glance-strip">
-        <div class="glance-item third"><span class="glance-label">This Week</span><span class="glance-value">{{ moviesWatchedThisWeek }}</span></div>
-        <div class="glance-item third"><span class="glance-label">{{ thisMonth }}</span><span class="glance-value">{{ moviesWatchedThisMonth }}</span></div>
-        <div class="glance-item third"><span class="glance-label">{{ lastMonth }}</span><span class="glance-value">{{ moviesWatchedLastMonth }}</span></div>
-        <!-- Last year's two figures are the comparison pair, so they share a
-             deeper shade of the tab's colour rather than a different hue. -->
-        <div class="glance-item alt"><span class="glance-label">{{ lastYear }} to Same Date</span><span class="glance-value">{{ moviesWatchedLastYearToDate }}</span></div>
-        <div class="glance-item alt"><span class="glance-label">{{ lastYear }} Total</span><span class="glance-value">{{ moviesWatchedLastYear }}</span></div>
+        <div v-for="tile in activityTiles" :key="tile.key"
+             class="glance-item tappable" :class="[tile.size, { selected: breakdownTile === tile.key }]"
+             role="button" :aria-expanded="breakdownTile === tile.key"
+             @click="toggleBreakdown(tile.key)">
+          <span class="glance-label">{{ tile.label }}</span><span class="glance-value">{{ tile.value }}</span>
+        </div>
+      </div>
+
+      <div v-if="breakdown" class="breakdown-box">
+        <div class="breakdown-head">
+          <h3 class="breakdown-title">{{ breakdown.title }}</h3>
+          <button type="button" class="breakdown-close" aria-label="Close" @click="breakdownTile = null">&times;</button>
+        </div>
+        <div v-if="breakdown.rows.length" class="breakdown-list" :class="{ 'with-todate': breakdown.showToDate }">
+          <div v-for="row in breakdown.rows" :key="row.key" class="breakdown-row">
+            <span class="breakdown-label">{{ row.label }}</span>
+            <span class="breakdown-bar-track">
+              <span class="breakdown-bar" :style="{ width: `${breakdown.max ? (row.count / breakdown.max) * 100 : 0}%` }"></span>
+            </span>
+            <span class="breakdown-count">{{ row.count }}</span>
+            <span v-if="breakdown.showToDate" class="breakdown-todate">{{ row.toDate }}</span>
+          </div>
+        </div>
+        <p v-else class="breakdown-empty">Nothing watched yet.</p>
+        <p v-if="breakdown.showToDate" class="breakdown-note">Right-hand column: how many by {{ todayLabel }} that year.</p>
       </div>
 
       <!-- All-time calendar coverage. The Year in Review heatmap shows one
@@ -364,6 +385,7 @@ const PEOPLE_CATEGORIES = [
 ];
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import { allViewings, calendarCoverage } from "../assets/javascript/yearInReview.js";
+import { monthlyBreakdown, weeklyBreakdown, yearlyBreakdown } from "../assets/javascript/activityBreakdown.js";
 
 import { Chart, registerables } from "chart.js";
 import { ScatterChart } from "vue-chart-3";
@@ -437,6 +459,8 @@ export default {
       // Set in / filmed in / both, for the Places tab. Persists like the tab.
       placeType: localStorage.getItem('cinemaRoll.insights.placeType') || 'all',
       selectedCountry: null,
+      // Which Activity count's history is open underneath the tiles, if any.
+      breakdownTile: null,
       // The country polygons (worldCountries.json, ~60K gzipped) are pulled
       // in only when the Places tab is opened, not with the Insights chunk.
       world: null,
@@ -836,6 +860,54 @@ export default {
       }
 
       return datesWithCounts;
+    },
+    // The same viewings datesWithCounts tallies, as dates, so a breakdown
+    // row for this week/month/year always agrees with the tile you tapped.
+    viewingDates () {
+      const dates = [];
+      for (const result of this.filteredEntriesWithFlatKeywordsAdded) {
+        for (const rating of result.ratings || []) {
+          if (rating?.date) dates.push(new Date(rating.date));
+        }
+      }
+      return dates;
+    },
+    activityTiles () {
+      return [
+        { key: 'week', size: 'third', label: 'This Week', value: this.moviesWatchedThisWeek },
+        { key: 'month', size: 'third', label: this.thisMonth, value: this.moviesWatchedThisMonth },
+        { key: 'lastMonth', size: 'third', label: this.lastMonth, value: this.moviesWatchedLastMonth },
+        // Last year's two figures are the comparison pair, so they share a
+        // deeper shade of the tab's colour rather than a different hue.
+        { key: 'yearToDate', size: 'alt', label: `${this.lastYear} to Same Date`, value: this.moviesWatchedLastYearToDate },
+        { key: 'yearTotal', size: 'alt', label: `${this.lastYear} Total`, value: this.moviesWatchedLastYear }
+      ];
+    },
+    todayLabel () {
+      const today = new Date();
+      return `${this.monthAbbreviations[today.getMonth()]} ${today.getDate()}`;
+    },
+    // Both month tiles open the month-by-month list; the pace box and both
+    // last-year tiles open the year-by-year one.
+    breakdown () {
+      const kind = {
+        week: 'week', month: 'month', lastMonth: 'month',
+        year: 'year', yearToDate: 'year', yearTotal: 'year'
+      }[this.breakdownTile];
+      if (!kind) return null;
+      const now = new Date();
+      const rows = kind === 'week'
+        ? weeklyBreakdown(this.viewingDates, now)
+        : kind === 'month'
+          ? monthlyBreakdown(this.viewingDates, now)
+          : yearlyBreakdown(this.viewingDates, now);
+      const titles = { week: 'Week by Week', month: 'Month by Month', year: 'Year by Year' };
+      return {
+        title: titles[kind],
+        rows,
+        max: Math.max(0, ...rows.map((row) => row.count)),
+        showToDate: kind === 'year'
+      };
     },
     thisMonth () {
       const today = new Date();
@@ -1238,6 +1310,9 @@ export default {
     }
   },
   methods: {
+    toggleBreakdown (key) {
+      this.breakdownTile = this.breakdownTile === key ? null : key;
+    },
     coverageClass (cell) {
       if (!cell.count) return cell.rare ? 'coverage-rare' : 'coverage-none';
       // Four steps against the busiest date, so the grid still has contrast
@@ -3141,6 +3216,106 @@ export default {
       font-size: 0.75rem;
       padding: 0 0.5rem 0.5rem;
     }
+  }
+
+  /* Tappable Activity counts (2026-09-25). A tap opens that count's history
+     in .breakdown-box below; the open one gets an accent ring. :active for
+     the press, never :hover — iOS keeps hover stuck after a tap. */
+  .tappable {
+    cursor: pointer;
+    transition: transform 0.08s ease;
+    -webkit-tap-highlight-color: transparent;
+
+    &:active { transform: scale(0.97); }
+    &.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  }
+
+  .breakdown-box {
+    border: 1px solid var(--accent);
+    border-radius: 3px;
+    color: white;
+    margin-bottom: 0.75rem;
+    padding: 0.6rem 0.7rem 0.7rem;
+  }
+
+  .breakdown-head {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.4rem;
+  }
+
+  .breakdown-title {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  .breakdown-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.4rem;
+    line-height: 1;
+    padding: 0 0.25rem;
+
+    &:active { opacity: 0.6; }
+  }
+
+  /* Long histories (every week since the first rating) scroll in place
+     rather than pushing the calendar off the page. */
+  /* One grid for the whole list (rows are display: contents) so the bars
+     line up whatever the label widths. */
+  .breakdown-list {
+    align-items: center;
+    column-gap: 0.5rem;
+    display: grid;
+    font-size: 0.8rem;
+    grid-template-columns: max-content 1fr auto;
+    max-height: 18rem;
+    overflow-y: auto;
+    row-gap: 0.3rem;
+  }
+
+  .breakdown-list.with-todate { grid-template-columns: max-content 1fr auto auto; }
+
+  .breakdown-row { display: contents; }
+
+  .breakdown-label { white-space: nowrap; }
+
+  .breakdown-bar-track {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    height: 0.6rem;
+    overflow: hidden;
+  }
+
+  .breakdown-bar {
+    background: var(--accent);
+    display: block;
+    height: 100%;
+  }
+
+  .breakdown-count {
+    font-variant-numeric: tabular-nums;
+    min-width: 1.5rem;
+    font-weight: 700;
+    text-align: right;
+  }
+
+  .breakdown-todate {
+    /* #b9b9b9 on the panel, ~8:1. */
+    color: #b9b9b9;
+    font-variant-numeric: tabular-nums;
+    min-width: 2rem;
+    text-align: right;
+  }
+
+  .breakdown-empty,
+  .breakdown-note {
+    color: #b9b9b9;
+    font-size: 0.72rem;
+    margin: 0.4rem 0 0;
   }
 
   /* All-time calendar coverage. Ramps use the tab's own --accent so this

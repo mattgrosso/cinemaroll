@@ -278,3 +278,9 @@ The search is over the club's own titles (mine + everything any friend has
 published), not TMDB. Every film the club has an answer for is in that set by
 construction; a film nobody has logged has one possible answer, and the empty
 state says it in a sentence rather than costing a round trip.
+
+Every Activity count is tappable (2026-09-25): This Week → week by week (the
+same rolling 7-day window the tile counts), either month tile → month by month,
+the pace box or either last-year tile → year by year with a "by today's date"
+column. The lists come from `activityBreakdown.js` (pure, tested) fed the same
+viewings `datesWithCounts` tallies, so a row always agrees with its tile.

@@ -455,6 +455,39 @@ describe('Insights — what lives on which tab', () => {
     expect(tabLabels(wrapper)[0]).toBe('This Week')
   })
 
+  // Matt, 2026-09-25: "make those all tappable so I could click on the
+  // month one and see a month by month breakdown going backwards."
+  describe('tappable activity counts', () => {
+    it('opens the month-by-month history from the month tile, and closes it on a second tap', async () => {
+      const now = new Date()
+      const { wrapper } = mountInsights({
+        mediaEntries: [entry({ ratings: [{ calculatedTotal: 5, date: new Date(now.getFullYear(), now.getMonth(), 1).toISOString() }] })]
+      })
+      await showTab(wrapper, 'activity')
+      expect(wrapper.find('.breakdown-box').exists()).toBe(false)
+
+      const monthTile = wrapper.findAll('.glance-item')[1]
+      await monthTile.trigger('click')
+      expect(wrapper.find('.breakdown-title').text()).toBe('Month by Month')
+      expect(wrapper.find('.breakdown-row .breakdown-count').text()).toBe('1')
+
+      await monthTile.trigger('click')
+      expect(wrapper.find('.breakdown-box').exists()).toBe(false)
+    })
+
+    it('opens week-by-week from This Week and year-by-year from the pace box', async () => {
+      const { wrapper } = mountInsights({ mediaEntries: [entry()] })
+      await showTab(wrapper, 'activity')
+
+      await wrapper.findAll('.glance-item')[0].trigger('click')
+      expect(wrapper.find('.breakdown-title').text()).toBe('Week by Week')
+
+      await wrapper.find('.pace-box').trigger('click')
+      expect(wrapper.find('.breakdown-title').text()).toBe('Year by Year')
+      expect(wrapper.find('.breakdown-list').classes()).toContain('with-todate')
+    })
+  })
+
   describe('all-time calendar coverage', () => {
     it('lays every calendar date out on Activity and counts the ones you have', async () => {
       const { wrapper } = mountInsights({
