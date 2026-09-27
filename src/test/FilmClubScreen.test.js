@@ -112,6 +112,30 @@ describe('FilmClubScreen', () => {
     expect(wrapper.find('.cs-poster-score').text()).toBe('9.00');
   });
 
+  // 2026-09-26: "sometimes it all comes out on 2 lines, sometimes it's on
+  // three... just always keep the formatting at 3 lines." The caption is a
+  // fixed stack — name, stars, when — and the when line is there even empty.
+  it('stacks every feed caption as name, stars, then when', () => {
+    const starred = {
+      brian: { ...PROFILES.brian, recent: [{ ...PROFILES.brian.recent[0], s: 4 }] }
+    };
+    const wrapper = factory({ profiles: starred, myEntries: [myMovie(1, 'Heat', 8)] });
+    const lines = wrapper.find('.cs-poster-note').element.children;
+
+    expect([...lines].map((line) => line.className)).toEqual(['cs-poster-who', 'cs-poster-stars', 'cs-poster-when']);
+  });
+
+  it('keeps the when line even when the viewing has no usable date', () => {
+    const undated = {
+      brian: { ...PROFILES.brian, recent: [{ ...PROFILES.brian.recent[0], at: 'not a time' }] }
+    };
+    const wrapper = factory({ profiles: undated, myEntries: [myMovie(1, 'Heat', 8)] });
+    const when = wrapper.find('.cs-poster-note .cs-poster-when');
+
+    expect(when.exists()).toBe(true);
+    expect(when.text()).toBe('');
+  });
+
   it('says how long ago each viewing was', () => {
     const wrapper = factory({ profiles: PROFILES, myEntries: [myMovie(1, 'Heat', 8)] });
 

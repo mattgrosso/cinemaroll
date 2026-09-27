@@ -65,8 +65,11 @@
                 <i v-if="hasHalfStar(item.s)" class="bi bi-star-half"/>
               </span>
               <span v-else class="cs-poster-score">{{ formatScore(item.r) }}</span>
+              <!-- Always rendered, even empty: every caption is the same three
+                   lines — name, stars, when — whatever the name's length
+                   (2026-09-26, "always keep the formatting at 3 lines"). -->
+              <span class="cs-poster-when">{{ watchedAgo(item.at) }}</span>
             </span>
-            <span v-if="watchedAgo(item.at)" class="cs-poster-when">{{ watchedAgo(item.at) }}</span>
             <span v-if="!inMyLibrary(item.id)" class="cs-poster-unseen">Not in your library</span>
           </div>
         </div>
@@ -894,19 +897,23 @@ export default {
   text-align: center;
 }
 
+/* A fixed stack, one item per line: name, stars (or score), when. It used to
+   be a wrapping row, so a short name sat beside its stars (two lines) and a
+   long one pushed them under (three) — ragged captions across the feed. Each
+   line reserves its height even when empty, so every card reads the same. */
 .cs-poster-note {
   align-items: center;
   color: #ccc;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   font-size: 0.65rem;
-  gap: 0.05rem 0.3rem;
-  justify-content: center;
   margin-top: 0.2rem;
+  text-align: center;
 }
 
-/* The name is the part that gets long, so it's the only part that truncates —
-   the stars beside it stay whole. */
+.cs-poster-note > * { line-height: 1.3; min-height: 1.3em; }
+
+/* The name is the part that gets long, so it truncates on its own line. */
 .cs-poster-who {
   max-width: 100%;
   overflow: hidden;
@@ -932,6 +939,7 @@ export default {
   color: #9a9a9a;
   display: block;
   font-size: 0.62rem;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
