@@ -112,20 +112,29 @@ describe('FilmClubScreen', () => {
     expect(wrapper.find('.cs-poster-score').text()).toBe('9.00');
   });
 
-  // 2026-09-26: "sometimes it all comes out on 2 lines, sometimes it's on
-  // three... just always keep the formatting at 3 lines." The caption is a
-  // fixed stack — name, stars, when — and the when line is there even empty.
-  it('stacks every feed caption as name, stars, then when', () => {
+  // 2026-09-27: "I wish we could get this all fit on two lines consistently
+  // ... I don't need the not in your library message at all." The caption is
+  // the name, then one line holding stars and when; the when is there even
+  // empty.
+  it('lays every feed caption out as name, then stars beside when', () => {
     const starred = {
       brian: { ...PROFILES.brian, recent: [{ ...PROFILES.brian.recent[0], s: 4 }] }
     };
     const wrapper = factory({ profiles: starred, myEntries: [myMovie(1, 'Heat', 8)] });
-    const lines = wrapper.find('.cs-poster-note').element.children;
+    const lines = [...wrapper.find('.cs-poster-note').element.children];
 
-    expect([...lines].map((line) => line.className)).toEqual(['cs-poster-who', 'cs-poster-stars', 'cs-poster-when']);
+    expect(lines.map((line) => line.className)).toEqual(['cs-poster-who', 'cs-poster-line']);
+    expect([...lines[1].children].map((part) => part.className)).toEqual(['cs-poster-stars', 'cs-poster-when']);
   });
 
-  it('keeps the when line even when the viewing has no usable date', () => {
+  it('says nothing about films missing from your library', () => {
+    const wrapper = factory({ profiles: PROFILES, myEntries: [] });
+
+    expect(wrapper.find('.cs-feed-row').exists()).toBe(true);
+    expect(wrapper.find('.cs-feed-row').text()).not.toContain('Not in your library');
+  });
+
+  it('keeps the when slot even when the viewing has no usable date', () => {
     const undated = {
       brian: { ...PROFILES.brian, recent: [{ ...PROFILES.brian.recent[0], at: 'not a time' }] }
     };
@@ -136,10 +145,10 @@ describe('FilmClubScreen', () => {
     expect(when.text()).toBe('');
   });
 
-  it('says how long ago each viewing was', () => {
+  it('says how long ago each viewing was, compactly', () => {
     const wrapper = factory({ profiles: PROFILES, myEntries: [myMovie(1, 'Heat', 8)] });
 
-    expect(wrapper.find('.cs-poster-when').text()).toBe('3 hours ago');
+    expect(wrapper.find('.cs-poster-when').text()).toBe('3h');
     expect(wrapper.vm.watchedAgo(null)).toBeNull();
   });
 

@@ -54,4 +54,18 @@ describe('timeAgo', () => {
     expect(timeAgo(NaN, NOW)).toBeNull();
     expect(timeAgo('yesterday', NOW)).toBeNull();
   });
+
+  // The Film Club feed's caption fits stars and this on one line.
+  it('has a compact form for tight spaces', () => {
+    const short = (t) => timeAgo(t, NOW, { short: true });
+
+    expect(short(NOW)).toBe('now');
+    expect(short(NOW - 45 * MINUTE)).toBe('45m');
+    expect(short(NOW - 3 * HOUR)).toBe('3h');
+    expect(short(NOW - DAY)).toBe('yesterday');
+    expect(short(NOW - 5 * DAY)).toBe('5d');
+    expect(short(new Date(2026, 5, 4, 12).getTime())).toBe('Jun 4');
+    expect(short(new Date(2025, 8, 4, 12).getTime())).toBe('9/4/25');
+    expect(short(null)).toBeNull();
+  });
 });

@@ -58,19 +58,21 @@
                  ratings"). The score stays as the fallback for anyone whose
                  profile publishes no stars — same rule as the detail-page
                  pills. -->
+            <!-- Two left-aligned lines on every card: the name, then stars
+                 and when side by side (2026-09-27, "I wish we could get this
+                 all fit on two lines consistently"). No "Not in your library"
+                 line — the hat ribbon on the poster already says it. -->
             <span class="cs-poster-note">
               <span class="cs-poster-who">{{ item.friendName }}</span>
-              <span v-if="item.s !== null && item.s !== undefined" class="cs-poster-stars" :aria-label="`${item.s} out of 5`">
-                <i v-for="i in fullStars(item.s)" :key="`f${i}`" class="bi bi-star-fill"/>
-                <i v-if="hasHalfStar(item.s)" class="bi bi-star-half"/>
+              <span class="cs-poster-line">
+                <span v-if="item.s !== null && item.s !== undefined" class="cs-poster-stars" :aria-label="`${item.s} out of 5`">
+                  <i v-for="i in fullStars(item.s)" :key="`f${i}`" class="bi bi-star-fill"/>
+                  <i v-if="hasHalfStar(item.s)" class="bi bi-star-half"/>
+                </span>
+                <span v-else class="cs-poster-score">{{ formatScore(item.r) }}</span>
+                <span class="cs-poster-when">{{ feedWhen(item.at) }}</span>
               </span>
-              <span v-else class="cs-poster-score">{{ formatScore(item.r) }}</span>
-              <!-- Always rendered, even empty: every caption is the same three
-                   lines — name, stars, when — whatever the name's length
-                   (2026-09-26, "always keep the formatting at 3 lines"). -->
-              <span class="cs-poster-when">{{ watchedAgo(item.at) }}</span>
             </span>
-            <span v-if="!inMyLibrary(item.id)" class="cs-poster-unseen">Not in your library</span>
           </div>
         </div>
       </section>
@@ -531,6 +533,10 @@ export default {
     watchedAgo (at) {
       return timeAgo(at);
     },
+    // The feed's compact form ("3h", "5d") so it fits beside the stars.
+    feedWhen (at) {
+      return timeAgo(at, Date.now(), { short: true });
+    },
     async requestFriend (person) {
       this.externalError = '';
       this.externalNote = '';
@@ -735,13 +741,6 @@ export default {
   top: 0;
 }
 
-.cs-poster-unseen {
-  color: #9a9a9a;
-  display: block;
-  font-size: 0.62rem;
-  line-height: 1.2;
-}
-
 /* Only the ones that go somewhere look like they do. */
 .cs-poster-tappable { cursor: pointer; }
 .cs-poster-tappable:active { transform: scale(0.97); }
@@ -897,21 +896,27 @@ export default {
   text-align: center;
 }
 
-/* A fixed stack, one item per line: name, stars (or score), when. It used to
-   be a wrapping row, so a short name sat beside its stars (two lines) and a
-   long one pushed them under (three) — ragged captions across the feed. Each
-   line reserves its height even when empty, so every card reads the same. */
+/* Two lines on every card, left-aligned: the name, then stars and when side
+   by side. Each line reserves its height even when empty, so every card reads
+   the same (2026-09-27; it was a centered three-line stack before, and a
+   wrapping row before that). */
 .cs-poster-note {
-  align-items: center;
   color: #ccc;
   display: flex;
   flex-direction: column;
   font-size: 0.65rem;
   margin-top: 0.2rem;
-  text-align: center;
+  text-align: left;
 }
 
 .cs-poster-note > * { line-height: 1.3; min-height: 1.3em; }
+
+.cs-poster-line {
+  align-items: center;
+  display: flex;
+  gap: 0.3rem;
+  min-width: 0;
+}
 
 /* The name is the part that gets long, so it truncates on its own line. */
 .cs-poster-who {
@@ -925,6 +930,7 @@ export default {
 .cs-poster-stars {
   color: #f8d62b;
   display: inline-flex;
+  flex: none;
   font-size: 0.6rem;
   gap: 0.05rem;
   white-space: nowrap;
@@ -938,8 +944,9 @@ export default {
 .cs-poster-when {
   color: #9a9a9a;
   display: block;
+  flex: 0 1 auto;
   font-size: 0.62rem;
-  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
