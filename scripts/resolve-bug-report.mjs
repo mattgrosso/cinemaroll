@@ -13,10 +13,10 @@
 // component names. "The list forgot your filters when you came back" beats
 // "route state wasn't persisted". The reporter sees exactly these words.
 //
-// --silent exists for reports that need no reply: duplicates, QA noise,
-// reports filed by whoever is running this command. Resolving WITHOUT saying
-// which — texts or --silent — is refused, so closing the loop is the default
-// shape of resolving a bug, not an optional extra.
+// --silent exists for reports that need no reply: duplicates and QA noise.
+// Matt's own reports get the notice too (he wants to see the fix land).
+// Resolving WITHOUT saying which — texts or --silent — is refused, so
+// closing the loop is the default shape of resolving a bug, not an optional extra.
 //
 // Requires FIREBASE_ADMIN_KEY_PATH in .env.local (same as fetch-bug-reports).
 
@@ -42,7 +42,7 @@ function usage () {
   console.error('');
   console.error('The --understood / --fixed texts are shown to the reporter in the app,');
   console.error('word for word — write them for a smart 12-year-old, no jargon.');
-  console.error('--silent skips the notice (duplicates, QA noise, self-filed reports).');
+  console.error('--silent skips the notice (duplicates, QA noise).');
   process.exit(1);
 }
 
