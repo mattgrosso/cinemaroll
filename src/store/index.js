@@ -39,6 +39,7 @@ import {
 import { buildSocialProfile, socialSettingsWithDefaults, countNewFriendUpdates, clubFetchesNeeded } from "../assets/javascript/social.js";
 import { buildMirrorFeed } from "../assets/javascript/mirrorFeed.js";
 import { buildPushDigest } from "../assets/javascript/pushDigest.js";
+import { appBadgeCount } from "../assets/javascript/appBadge.js";
 import { buildNewsletterProfile } from "../assets/javascript/newsletterProfile.js";
 import { postToNewsletter } from "../utils/newsletterRequest.js";
 
@@ -2640,6 +2641,26 @@ export default createStore({
         await set(ref(db, `${root}/push/digest`), digest);
       } catch (error) {
         console.error('Failed to publish push digest:', error);
+      }
+    },
+    // The home-screen icon badge: the number of chores waiting (appBadge.js).
+    // Set by the app itself, not only by a push, so it's right on any device
+    // the moment you leave the app. Zero clears it. The Badging API needs
+    // notification permission on iOS; without it this quietly does nothing.
+    async refreshAppBadge (context) {
+      if (typeof navigator === 'undefined' || !navigator.setAppBadge) return;
+      if (!context.state.dbLoaded || !context.state.settingsLoaded) return;
+      const digest = buildPushDigest({
+        entries: context.getters.allMediaAsArray,
+        settings: context.state.settings || {},
+        getRating
+      });
+      const count = appBadgeCount(digest, context.state.pushPrefs || {});
+      try {
+        if (count > 0) await navigator.setAppBadge(count);
+        else await navigator.clearAppBadge?.();
+      } catch {
+        // Permission not granted, or the platform refused — nothing to do.
       }
     },
     async sendFriendRequest (context, toKey) {

@@ -295,3 +295,27 @@ describe('App - noticing a new deploy without the service worker', () => {
     expect(commit).not.toHaveBeenCalledWith('setUpdateAvailable', true);
   });
 });
+
+// Bug report (2026-09-27): "This app never shows badges when it has things I
+// need to do." Opening or returning to the app used to CLEAR the icon badge;
+// now it recounts the chores still waiting, both ways through the door.
+describe('App - icon badge', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('recounts the badge (never blanket-clears it) when the app comes back and when it leaves', () => {
+    const clearAppBadge = vi.fn(() => Promise.resolve())
+    Object.defineProperty(navigator, 'clearAppBadge', { value: clearAppBadge, configurable: true })
+    const { listeners, store } = factory()
+
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+    listeners['document:visibilitychange']()
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+    listeners['document:visibilitychange']()
+
+    expect(store.dispatch.mock.calls.filter((call) => call[0] === 'refreshAppBadge')).toHaveLength(2)
+    expect(clearAppBadge).not.toHaveBeenCalled()
+    delete navigator.clearAppBadge
+  })
+})

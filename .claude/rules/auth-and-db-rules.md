@@ -221,6 +221,14 @@ with everything played sends nothing. Once a day at the chosen hour, `state/game
 tag `games` (never replaces a chores notification), no badge. All decisions in
 `pushCadence.js`, tested alongside the chores.
 
+**The icon badge is set by the app too, never just cleared** (2026-09-27: "never shows
+badges when it has things I need to do"). `refreshAppBadge` (store) counts chores with
+`appBadge.js` — a mirror of `dueFromDigest`'s arithmetic, pinned to it by
+`appBadge.test.js` — on load, after each library/settings change (the digest debounce),
+and on every visibilitychange both ways. Zero clears. Film Club logs aren't counted: a
+friend-log push adds one, and the app's recount on open drops it. Change one badge rule,
+change both.
+
 **Tapping a chore notification opens that prompt** (2026-09-13: "took me to the home
 screen with the applicable notification already opened and ready to go").
 `composeMessage` returns `open` — the chore its headline names, `stickiness` /

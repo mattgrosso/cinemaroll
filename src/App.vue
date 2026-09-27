@@ -109,9 +109,9 @@ export default {
   },
   methods: {
     async initializePush () {
-      // Opening the app clears the icon badge — whatever it was counting,
-      // the user is now looking at it.
-      navigator.clearAppBadge?.().catch(() => {});
+      // Opening the app sets the icon badge to the chores actually waiting
+      // (it used to clear it, which left the icon blank with work to do).
+      this.$store.dispatch('refreshAppBadge');
       await this.$store.dispatch('loadPushState');
       await refreshSubscriptionIfGranted(this.$store);
       this.$store.dispatch('publishPushDigest');
@@ -123,6 +123,7 @@ export default {
       clearTimeout(this.pushDigestTimer);
       this.pushDigestTimer = setTimeout(() => {
         this.$store.dispatch('publishPushDigest');
+        this.$store.dispatch('refreshAppBadge');
       }, 5000);
     },
     scrollToTop () {
@@ -275,10 +276,13 @@ export default {
         this.lastBecameVisibleAt = Date.now();
         this.checkForServiceWorkerUpdate();
         this.attemptPendingWritesFlush();
-        // Foregrounding an installed PWA doesn't re-run initializePush, and
-        // it's the most common way a badge gets looked at.
-        navigator.clearAppBadge?.().catch(() => {});
+        // Foregrounding an installed PWA doesn't re-run initializePush.
+        // Recount rather than clear: a friend-log push's extra one drops,
+        // the chores still waiting stay on the icon.
+        this.$store.dispatch('refreshAppBadge');
       } else {
+        // Leaving: the icon should show what's left, as of now.
+        this.$store.dispatch('refreshAppBadge');
         // Going away: run any pending debounced profile publish before the
         // timer dies with the page. See scheduleSocialPublish — a backgrounded
         // PWA does not run setTimeout, so this is the difference between a
