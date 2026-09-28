@@ -229,6 +229,17 @@ and on every visibilitychange both ways. Zero clears. Film Club logs aren't coun
 friend-log push adds one, and the app's recount on open drops it. Change one badge rule,
 change both.
 
+**New sign-ups ping the owner only** (2026-09-28: "It would be cool if I knew when
+someone signed up"). Each sweep compares the shallow root listing against
+`mattgrosso-gmail-com/push/state/knownAccounts` (`OWNER_ACCOUNT_KEY`); `signupsDue` and
+`composeSignupMessages` in `pushCadence.js` decide and word it, tested. The first run
+(no stored list) is silent and just records everyone; the list only grows; more than
+three at once becomes one summary. The key can't be turned back into an email in
+general, so `emailGuessFromKey` restores common providers (gmail, icloud, Apple relay…)
+and shows the raw key otherwise; the name is `settings/social/displayName` or the
+directory name when a brand-new account has one. The sign-in (Identity Toolkit) user
+list would give real emails, but was not wired up — the SA's scope for it is untested.
+
 **Tapping a chore notification opens that prompt** (2026-09-13: "took me to the home
 screen with the applicable notification already opened and ready to go").
 `composeMessage` returns `open` — the chore its headline names, `stickiness` /

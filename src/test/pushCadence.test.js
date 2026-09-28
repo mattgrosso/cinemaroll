@@ -14,7 +14,11 @@ import {
   shouldSendGames,
   composeGamesMessage,
   externalWatches,
-  externalLogsDue
+  externalLogsDue,
+  signupsDue,
+  emailGuessFromKey,
+  composeSignupMessages,
+  SIGNUP_MAX_PER_SWEEP
 } from '../../aws-lambda/pushCadence.js';
 
 // Matt, 2026-08-28: notify "as the prompts come in", not once a day. The
@@ -645,5 +649,63 @@ describe('friends on other apps', () => {
     expect(friendLogBody(scoreLine, {})).toBe('They gave it a 9.10.');
     expect(friendLogBody(scoreLine, { friendLogScores: false })).toBe('Tap to see it in their library.');
     expect(friendLogBody(null, {})).toBe('Tap to see it in their library.');
+  });
+});
+
+// Matt, 2026-09-28: "It would be cool if I knew when someone signed up." The
+// risk is announcing people who were already here, so the first run is silent.
+describe('new sign-ups', () => {
+  const NOW = Date.UTC(2026, 8, 28, 15);
+
+  it('says nothing on the first run, and records everyone already here', () => {
+    const due = signupsDue({ known: null, current: ['a-gmail-com', 'b-me-com'], now: NOW });
+    expect(due.fresh).toEqual([]);
+    expect(due.seeded).toBe(true);
+    expect(due.nextKnown).toEqual({ 'a-gmail-com': NOW, 'b-me-com': NOW });
+  });
+
+  it('announces only accounts it has not seen before', () => {
+    const known = { 'a-gmail-com': 1 };
+    const due = signupsDue({ known, current: ['a-gmail-com', 'new-person-gmail-com'], now: NOW });
+    expect(due.fresh).toEqual(['new-person-gmail-com']);
+    expect(due.nextKnown).toEqual({ 'a-gmail-com': 1, 'new-person-gmail-com': NOW });
+  });
+
+  it('stays silent when nobody is new', () => {
+    const due = signupsDue({ known: { 'a-gmail-com': 1 }, current: ['a-gmail-com'], now: NOW });
+    expect(due.fresh).toEqual([]);
+    expect(due.seeded).toBe(false);
+  });
+
+  it('does not forget an account whose node briefly disappears', () => {
+    const known = { 'a-gmail-com': 1, 'b-me-com': 2 };
+    const gone = signupsDue({ known, current: ['a-gmail-com'], now: NOW });
+    expect(gone.nextKnown).toEqual(known);
+    const back = signupsDue({ known: gone.nextKnown, current: ['a-gmail-com', 'b-me-com'], now: NOW });
+    expect(back.fresh).toEqual([]);
+  });
+
+  it('turns keys from common providers back into readable addresses', () => {
+    expect(emailGuessFromKey('jane-doe-gmail-com')).toBe('jane-doe@gmail.com');
+    expect(emailGuessFromKey('x7-privaterelay-appleid-com')).toBe('x7@privaterelay.appleid.com');
+    expect(emailGuessFromKey('someone-example-org')).toBe('someone-example-org');
+  });
+
+  it('writes one notification per sign-up, name first when there is one', () => {
+    const messages = composeSignupMessages([
+      { key: 'jane-gmail-com', name: 'Jane' },
+      { key: 'bob-icloud-com', name: '' }
+    ]);
+    expect(messages).toEqual([
+      { title: 'New Cinema Roll sign-up', body: 'Jane (jane@gmail.com)', tag: 'signup-jane-gmail-com' },
+      { title: 'New Cinema Roll sign-up', body: 'bob@icloud.com', tag: 'signup-bob-icloud-com' }
+    ]);
+  });
+
+  it('collapses a burst into a single summary', () => {
+    const fresh = Array.from({ length: SIGNUP_MAX_PER_SWEEP + 1 }, (_, i) => ({ key: `p${i}-gmail-com`, name: '' }));
+    const messages = composeSignupMessages(fresh);
+    expect(messages).toHaveLength(1);
+    expect(messages[0].title).toBe(`${fresh.length} new Cinema Roll sign-ups`);
   });
 });

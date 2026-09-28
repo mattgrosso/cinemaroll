@@ -34,7 +34,8 @@ const webpush = require('web-push');
 const {
   dueFromDigest, nextBaseline, shouldSend, composeMessage, friendLogBody, EMPTY_BASELINE,
   gamesDue, shouldSendGames, composeGamesMessage,
-  externalWatches, externalLogsDue
+  externalWatches, externalLogsDue,
+  signupsDue, composeSignupMessages
 } = require('./pushCadence');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
@@ -58,6 +59,9 @@ const NON_ACCOUNT_ROOTS = new Set([
 // Mirrors QA_ACCOUNT_KEYS in src/assets/javascript/databaseKey.js - the QA
 // account never gets real notifications.
 const QA_ACCOUNT_KEYS = new Set(['cinemaroll-tester-example-com']);
+// The one account told about new sign-ups. The list of accounts already seen
+// lives in its own push state, which only this function writes.
+const OWNER_ACCOUNT_KEY = 'mattgrosso-gmail-com';
 
 // Mirrors databaseKeyCharacters.json (FROZEN list - see that file).
 const UNSAFE_KEY_CHARACTERS = ['-', '!', '$', '%', '@', '^', '&', '*', '(', ')', '_', '+', '|', '~', '=', '`', '{', '}', '[', ']', ':', '"', ';', "'", '<', '>', '?', ',', '.', '/'];
@@ -260,6 +264,13 @@ const runSweep = async () => {
     .filter((key) => !NON_ACCOUNT_ROOTS.has(key) && !QA_ACCOUNT_KEYS.has(key));
 
   const results = [];
+  try {
+    const signups = await notifySignups(accounts, now);
+    if (signups) results.push({ topKey: OWNER_ACCOUNT_KEY, delivered: signups, reason: 'signup' });
+  } catch (error) {
+    console.error('Sign-up check failed:', error.message);
+  }
+
   for (const topKey of accounts) {
     try {
       const push = await dbGet(`${topKey}/push`);
@@ -334,6 +345,42 @@ const runSweep = async () => {
   }
   console.log('Sweep:', JSON.stringify(results));
   return results;
+};
+
+// --- New sign-ups -----------------------------------------------------------
+//
+// Matt, 2026-09-28: "It would be cool if I knew when someone signed up." An
+// account key the sweep hasn't seen before is a sign-up; signupsDue (tested)
+// decides, including the silent first run. Send first, then record, so a
+// failed write repeats the news rather than losing it.
+const notifySignups = async (accounts, now) => {
+  const known = await dbGet(`${OWNER_ACCOUNT_KEY}/push/state/knownAccounts`);
+  const { fresh, nextKnown, seeded } = signupsDue({ known, current: accounts, now });
+  if (seeded) {
+    await dbSet(`${OWNER_ACCOUNT_KEY}/push/state/knownAccounts`, nextKnown);
+    console.log(`Sign-ups: first run, recorded ${Object.keys(nextKnown).length} existing account(s)`);
+    return 0;
+  }
+  if (!fresh.length) return 0;
+
+  // A brand-new account rarely has a name yet; use one if it's there.
+  const named = await Promise.all(fresh.map(async (key) => {
+    const [social, directory] = await Promise.all([
+      dbGet(`${key}/settings/social/displayName`).catch(() => null),
+      dbGet(`social/directory/${key}/name`).catch(() => null)
+    ]);
+    const name = [social, directory].find((value) => typeof value === 'string' && value.trim());
+    return { key, name: name ? name.trim() : '' };
+  }));
+
+  let delivered = 0;
+  const subscriptions = await dbGet(`${OWNER_ACCOUNT_KEY}/push/subscriptions`);
+  for (const message of composeSignupMessages(named)) {
+    delivered += await sendToAccount(OWNER_ACCOUNT_KEY, subscriptions, buildPayload({ ...message, navigate: '/' }));
+  }
+  await dbSet(`${OWNER_ACCOUNT_KEY}/push/state/knownAccounts`, nextKnown);
+  console.log(`Sign-ups: ${fresh.length} new, ${delivered} push(es) delivered`);
+  return delivered;
 };
 
 // --- Friends on other apps --------------------------------------------------

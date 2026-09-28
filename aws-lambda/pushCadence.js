@@ -496,7 +496,82 @@ function externalLogsDue ({ watches, seenAt = 0, now = Date.now(), maxAgeMs = EX
   return { announce, nextSeenAt: Math.max(marker, newest), seeded: false };
 }
 
+// --- New sign-ups (Matt, 2026-09-28) -----------------------------------------
+//
+// "It would be cool if I knew when someone signed up for this app." The sweep
+// already shallow-lists every account, so a sign-up is simply an account key
+// that wasn't there last time. Only the owner is told.
+
+const SIGNUP_MAX_PER_SWEEP = 3;
+
+/**
+ * Which accounts are new since the stored list, and the list to store next.
+ *
+ * The FIRST run (no stored list) announces nobody - it records everyone
+ * already here, so turning this on doesn't announce the whole user base.
+ * The stored list only ever grows: an account whose node briefly vanishes
+ * and comes back is not a new person. More than SIGNUP_MAX_PER_SWEEP at once
+ * collapses into one summary rather than a burst of pushes.
+ */
+function signupsDue ({ known, current, now = Date.now() }) {
+  const keys = (current || []).filter((key) => typeof key === 'string' && key);
+  if (!known || typeof known !== 'object') {
+    const seededKnown = {};
+    keys.forEach((key) => { seededKnown[key] = now; });
+    return { fresh: [], nextKnown: seededKnown, seeded: true };
+  }
+  const fresh = keys.filter((key) => !(key in known)).sort();
+  const nextKnown = { ...known };
+  fresh.forEach((key) => { nextKnown[key] = now; });
+  return { fresh, nextKnown, seeded: false };
+}
+
+// Account keys are the email with every unsafe character turned into '-', so
+// the address can't be recovered in general. For the common providers the
+// domain is certain, which is enough to make the key readable.
+const KNOWN_EMAIL_DOMAINS = [
+  'gmail.com', 'googlemail.com', 'icloud.com', 'me.com', 'mac.com', 'yahoo.com',
+  'hotmail.com', 'outlook.com', 'live.com', 'aol.com', 'privaterelay.appleid.com'
+];
+
+function emailGuessFromKey (key) {
+  if (typeof key !== 'string' || !key) return '';
+  for (const domain of KNOWN_EMAIL_DOMAINS) {
+    const suffix = `-${domain.replace(/\./g, '-')}`;
+    if (key.endsWith(suffix) && key.length > suffix.length) {
+      return `${key.slice(0, -suffix.length)}@${domain}`;
+    }
+  }
+  return key;
+}
+
+/** fresh: [{ key, name }] - the notifications to send, owner-only. */
+function composeSignupMessages (fresh) {
+  const list = (fresh || []).filter((entry) => entry && entry.key);
+  if (!list.length) return [];
+  const label = ({ key, name }) => {
+    const email = emailGuessFromKey(key);
+    return name ? `${name} (${email})` : email;
+  };
+  if (list.length > SIGNUP_MAX_PER_SWEEP) {
+    return [{
+      title: `${list.length} new Cinema Roll sign-ups`,
+      body: list.map(label).join(', '),
+      tag: 'signup-batch'
+    }];
+  }
+  return list.map((entry) => ({
+    title: 'New Cinema Roll sign-up',
+    body: label(entry),
+    tag: `signup-${entry.key}`
+  }));
+}
+
 module.exports = {
+  SIGNUP_MAX_PER_SWEEP,
+  signupsDue,
+  emailGuessFromKey,
+  composeSignupMessages,
   friendLogBody,
   EXTERNAL_MAX_AGE_MS,
   EXTERNAL_MAX_PER_FRIEND,
