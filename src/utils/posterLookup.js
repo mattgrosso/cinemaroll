@@ -71,14 +71,20 @@ export async function lookupFilm (title, year = null) {
     return hit;
   }
 
-  const params = new URLSearchParams({ api_key: process.env.VUE_APP_TMDB_API_KEY, query: q.query, include_adult: 'false' });
-  if (q.year) params.set('year', String(q.year));
+  const search = async (query) => {
+    const params = new URLSearchParams({ api_key: process.env.VUE_APP_TMDB_API_KEY, query, include_adult: 'false' });
+    if (q.year) params.set('year', String(q.year));
+    const response = await fetchWithTimeout(`https://api.themoviedb.org/3/search/movie?${params}`);
+    if (!response.ok) throw new Error(`TMDB search/movie returned ${response.status}`);
+    return (await response.json())?.results || [];
+  };
   const lookup = (async () => {
     try {
-      const response = await fetchWithTimeout(`https://api.themoviedb.org/3/search/movie?${params}`);
-      if (!response.ok) throw new Error(`TMDB search/movie returned ${response.status}`);
-      const data = await response.json();
-      const results = data?.results || [];
+      let results = await search(q.query);
+      // "Manhunter: The Final Cut", "THE RIVER TRAIN w/ FOR THE OPPONENTS":
+      // a theater's programme title wraps the film's; try the film's alone.
+      const head = (/^(.+?)\s*(?::|\s+w\/\s+|\s+\+\s+)/.exec(q.query) || [])[1];
+      if (!results.length && head && head.length >= 3) results = await search(head);
       const best = results.find((r) => r.poster_path) || results[0] || null;
       const released = (best && /^(\d{4})/.exec(best.release_date || '') || [])[1];
       return {
