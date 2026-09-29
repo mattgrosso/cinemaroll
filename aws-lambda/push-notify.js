@@ -130,7 +130,7 @@ const THEATERS = [
   {
     key: 'alamo-bryant-street',
     name: 'Alamo Bryant Street',
-    url: 'https://drafthouse.com/dc/theater/dc-bryant-street',
+    url: 'https://drafthouse.com/dc-metro-area/theater/dc-bryant-street',
     listings: async () => alamoListings(await fetchJson('https://drafthouse.com/s/mother/v2/schedule/market/dc-metro-area'), '1101')
   },
   {

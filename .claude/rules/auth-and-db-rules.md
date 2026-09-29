@@ -349,6 +349,16 @@ dates, so the sweep backfills `s` (first showtime) into the seen-state eight fil
 (`SHOWTIME_BACKFILL_PER_SWEEP`, via the theater's `enrich`) and `boardForApp` shows it.
 Verified with synthetic touches on the tester (v1.118.10).
 
+**Alamo links use the market's FULL slug** (2026-09-29 report: a poster "takes me to their
+website but it's just a broken link"). drafthouse.com is a client-rendered app — every URL
+answers 200 with the same shell, so curl can't tell a real page from a dead one; render it
+(Playwright from meal-hat's node_modules, as perf-tour does). `/dc/show/<slug>` lands on
+`/tickets/shownotfound`; `/dc-metro-area/show/<slug>?cinemaId=1101` is the film's page
+(presentation slugs work too), and the theater is `/dc-metro-area/theater/dc-bryant-street`.
+`alamoListings` reads the market slug from the feed's own `market[0].slug`. **The Alamo iPhone
+app can't be linked into**: its apple-app-site-association claims only the Season Pass
+sign-up paths, so no film or theater URL opens the app.
+
 **Years in captions** (v1.118.11: "it would be nice if the year of the movie was always listed …
 sometimes it's in the title so let's not duplicate"). `lookupFilm` in `posterLookup.js` returns
 { poster, year } from the same TMDB search (cache rows without a `year` key are re-fetched once);

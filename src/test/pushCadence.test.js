@@ -733,7 +733,7 @@ describe('new sign-ups', () => {
 // Alamo's own market schedule; the risks are the same as sign-ups (announce
 // the whole board on day one) plus one of their own: a board that drifts.
 describe('theater listings', () => {
-  const BRYANT = { key: 'alamo-bryant-street', name: 'Alamo Bryant Street', url: 'https://drafthouse.com/dc/theater/dc-bryant-street' };
+  const BRYANT = { key: 'alamo-bryant-street', name: 'Alamo Bryant Street', url: 'https://drafthouse.com/dc-metro-area/theater/dc-bryant-street' };
   const feed = {
     data: {
       presentations: [
@@ -756,10 +756,18 @@ describe('theater listings', () => {
     const listings = alamoListings(feed, '1101');
     expect(listings.map((l) => l.slug)).toEqual(['advance-screening-dune-part-three', 'dune-part-three', 'halloween-1978']);
     expect(listings[1].firstShowTime).toBe('2026-12-17T10:15:00');
-    expect(listings[1].url).toBe('https://drafthouse.com/dc/show/dune-part-three');
+    expect(listings[1].url).toBe('https://drafthouse.com/dc-metro-area/show/dune-part-three?cinemaId=1101');
     expect(listings[1].poster).toBeNull();
     expect(alamoListings({ data: { presentations: [{ slug: 'p', show: { slug: 'p', title: 'P', posterImages: [{ uri: 'https://img/p.jpg' }] } }], sessions: [{ cinemaId: '1101', presentationSlug: 'p' }] } }, '1101')[0].poster).toBe('https://img/p.jpg');
     expect(alamoListings({ data: { presentations: [{ slug: 'q', show: { slug: 'q', title: 'Q', posterImages: [{ uri: 'https://img/q.jpg?auto=compress&fit=clip&h=1620&q=80&w=1080' }] } }], sessions: [{ cinemaId: '1101', presentationSlug: 'q' }] } }, '1101')[0].poster).toBe('https://img/q.jpg?auto=compress&fit=clip&h=513&q=70&w=342');
+  });
+
+  // Report 2026-09-29: drafthouse.com/dc/show/<slug> is Alamo's "not found"
+  // page; the market segment has to be the feed's own slug.
+  it('links each film under the market the feed names, at the chosen cinema', () => {
+    const inAustin = { data: { ...feed.data, market: [{ id: '0000', slug: 'austin' }] } };
+    expect(alamoListings(inAustin, '1101')[1].url).toBe('https://drafthouse.com/austin/show/dune-part-three?cinemaId=1101');
+    expect(alamoListings(feed, '1101').every((l) => !l.url.includes('drafthouse.com/dc/'))).toBe(true);
   });
 
   it('a special presentation of a film is its own listing, named for what it is', () => {
@@ -772,7 +780,7 @@ describe('theater listings', () => {
     expect(alamoListings(null, '1101')).toEqual([]);
     expect(alamoListings({ data: {} }, '1101')).toEqual([]);
     expect(alamoListings({ data: { sessions: [{ cinemaId: '1101', presentationSlug: 'x' }] } }, '1101'))
-      .toEqual([{ slug: 'x', title: 'x', firstShowTime: null, url: 'https://drafthouse.com/dc/show/x', poster: null }]);
+      .toEqual([{ slug: 'x', title: 'x', firstShowTime: null, url: 'https://drafthouse.com/dc-metro-area/show/x?cinemaId=1101', poster: null }]);
   });
 
   it('the first run announces nothing and records the whole board', () => {
@@ -832,7 +840,7 @@ describe('theater listings', () => {
   });
 
   it('a burst of listings collapses into one summary that opens the Showtimes screen', () => {
-    const fresh = Array.from({ length: LISTINGS_MAX_PER_SWEEP + 1 }, (_, i) => ({ slug: `film-${i}`, title: `Film ${i}`, firstShowTime: null, url: `https://drafthouse.com/dc/show/film-${i}` }));
+    const fresh = Array.from({ length: LISTINGS_MAX_PER_SWEEP + 1 }, (_, i) => ({ slug: `film-${i}`, title: `Film ${i}`, firstShowTime: null, url: `https://drafthouse.com/dc-metro-area/show/film-${i}?cinemaId=1101` }));
     const messages = composeListingMessages(fresh, BRYANT);
     expect(messages).toHaveLength(1);
     expect(messages[0].title).toBe(`${LISTINGS_MAX_PER_SWEEP + 1} new listings at Alamo Bryant Street`);

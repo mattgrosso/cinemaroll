@@ -595,6 +595,10 @@ function alamoListings (feed, cinemaId) {
     if (!(s.presentationSlug in first) || (when && when < first[s.presentationSlug])) first[s.presentationSlug] = when;
   });
   const presentations = new Map((data.presentations || []).filter((p) => p && p.slug).map((p) => [p.slug, p]));
+  // A film's page lives under the market's full slug: drafthouse.com/dc/show/…
+  // (the short form the first version guessed) lands on Alamo's "not found"
+  // page (report 2026-09-29). The feed names its own market, so read it.
+  const market = (Array.isArray(data.market) && data.market[0] && typeof data.market[0].slug === 'string' && data.market[0].slug) || 'dc-metro-area';
   return Object.keys(first).sort().map((slug) => {
     const p = presentations.get(slug);
     const show = (p && p.show) || {};
@@ -608,7 +612,7 @@ function alamoListings (feed, cinemaId) {
       slug,
       title: eventLabel && slug !== show.slug ? `${title} (${eventLabel})` : title,
       firstShowTime: first[slug] || null,
-      url: `https://drafthouse.com/dc/show/${slug}`,
+      url: `https://drafthouse.com/${market}/show/${slug}?cinemaId=${cinemaId}`,
       poster
     };
   });
