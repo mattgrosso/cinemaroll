@@ -28,7 +28,7 @@
 
       <section v-for="theater in theaters" :key="theater.key" class="st-theater">
         <h2 class="st-theater-name">
-          <a v-if="theater.url" :href="theater.url" target="_blank" rel="noopener">{{ theater.name }}</a>
+          <a v-if="hrefFor(theater)" :href="hrefFor(theater)" :target="targetFor(hrefFor(theater))" rel="noopener">{{ theater.name }}</a>
           <span v-else>{{ theater.name }}</span>
           <span class="st-count">{{ theater.shown.length }}</span>
         </h2>
@@ -53,7 +53,7 @@
             @touchend="touchEnd($event, theater, item)"
             @touchcancel="touchEnd($event, theater, item, true)"
           >
-            <a class="st-card-link" :href="item.url || theater.url" target="_blank" rel="noopener" @click="blockIfSwiping($event)">
+            <a class="st-card-link" :href="hrefFor(theater, item)" :target="targetFor(hrefFor(theater, item))" rel="noopener" @click="blockIfSwiping($event)">
               <img
                 v-if="posterFor(item)"
                 :src="posterFor(item)"
@@ -109,6 +109,7 @@ import BackLink from './games/BackLink.vue';
 import SkeletonBlock from './SkeletonBlock.vue';
 import { lookupFilm, titleWithYear } from '../utils/posterLookup.js';
 import { reminderTimeFor } from '../utils/reminderTime.js';
+import { theaterHref, opensInNewTab } from '../assets/javascript/theaterLinks.js';
 
 // Matt, 2026-09-28: "it would also be great if I could see this somewhere on
 // Cinemaroll, besides just the push notification … a page … that would show
@@ -223,6 +224,9 @@ export default {
   },
   methods: {
     cardId (theater, item) { return `${theater.key}/${item.slug}`; },
+    // Alamo opens its app, everything else the theater's page (theaterLinks.js).
+    hrefFor (theater, item) { return theaterHref(theater, item); },
+    targetFor (href) { return opensInNewTab(href) ? '_blank' : null; },
     posterKey (item) { return `${item.title}|${item.year || ''}`; },
     posterFor (item) {
       if (item.poster && !this.failed[this.cardKeyFor(item)]) return item.poster;

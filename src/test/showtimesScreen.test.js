@@ -3,6 +3,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { showtimeLabel } from '../components/ShowtimesScreen.vue';
 import { posterQuery, titleWithYear } from '../utils/posterLookup.js';
+import { theaterHref, opensInNewTab, ALAMO_APP_LINK } from '../assets/javascript/theaterLinks.js';
 
 // The Showtimes screen (2026-09-28) is a read-only view of the board the
 // push sweep publishes. These pin the wiring that would otherwise fail
@@ -64,5 +65,33 @@ describe('Showtimes screen wiring', () => {
     expect(titleWithYear('Blade Runner 2049', 2017)).toBe('Blade Runner 2049');
     expect(titleWithYear('Terminator 2: Judgment Day', 1991)).toBe('Terminator 2: Judgment Day (1991)');
     expect(titleWithYear('Tenet', null)).toBe('Tenet');
+  });
+});
+
+describe('Showtimes links', () => {
+  const alamo = { key: 'alamo-bryant-street', url: 'https://drafthouse.com/dc-metro-area/theater/dc-bryant-street' };
+  const afi = { key: 'afi-silver', url: 'https://silver.afi.com/now-playing/' };
+
+  it('opens the Alamo app, with nothing attached ("I just need it to open")', () => {
+    expect(ALAMO_APP_LINK).toBe('shortcuts://run-shortcut?name=Open%20Alamo');
+    expect(theaterHref(alamo)).toBe(ALAMO_APP_LINK);
+    expect(theaterHref(alamo, { url: 'https://drafthouse.com/dc-metro-area/show/x?cinemaId=1101' })).toBe(ALAMO_APP_LINK);
+    // An app link in a new tab would leave a blank one behind.
+    expect(opensInNewTab(ALAMO_APP_LINK)).toBe(false);
+  });
+
+  it('leaves every other theater on its own site, in a new tab', () => {
+    expect(theaterHref(afi, { url: 'https://silver.afi.com/movies/detail/1' })).toBe('https://silver.afi.com/movies/detail/1');
+    expect(theaterHref(afi, {})).toBe(afi.url);
+    expect(theaterHref(afi)).toBe(afi.url);
+    expect(theaterHref({ key: 'x' })).toBe(null);
+    expect(opensInNewTab(afi.url)).toBe(true);
+  });
+
+  it('routes both the posters and the theater heading through it', () => {
+    const screen = read('../components/ShowtimesScreen.vue');
+    expect(screen).toContain(':href="hrefFor(theater, item)"');
+    expect(screen).toContain(':href="hrefFor(theater)"');
+    expect(screen).not.toMatch(/:href="item\.url|:href="theater\.url/);
   });
 });

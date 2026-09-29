@@ -359,6 +359,15 @@ answers 200 with the same shell, so curl can't tell a real page from a dead one;
 app can't be linked into**: its apple-app-site-association claims only the Season Pass
 sign-up paths, so no film or theater URL opens the app.
 
+**Alamo links on the Showtimes screen open the Alamo APP, via a Shortcut** (2026-09-29: "can
+we just open the Alamo app directly without any parameters? … I'll find the movie myself").
+Both the posters and the heading use `theaterLinks.js`: `shortcuts://run-shortcut?name=Open%20Alamo`,
+no `target` (an app link in a new tab leaves a blank one). Matt's phone needs a Shortcut named
+exactly "Open Alamo" with one "Open App: Alamo Drafthouse" action. Why not the app's own scheme:
+it publishes none, and the App Store won't install it on a Mac (`isIOSBinaryMacOSCompatible`
+false), so its Info.plist can't be read. If a scheme ever turns up, swap `ALAMO_APP_LINK`. The
+lambda's `url` fields stay web pages (reminders, the board); only the screen maps them.
+
 **Years in captions** (v1.118.11: "it would be nice if the year of the movie was always listed …
 sometimes it's in the title so let's not duplicate"). `lookupFilm` in `posterLookup.js` returns
 { poster, year } from the same TMDB search (cache rows without a `year` key are re-fetched once);
