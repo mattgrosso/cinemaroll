@@ -926,13 +926,15 @@ describe('theater listings — the parsed sites', () => {
     expect(afiListings('')).toEqual([]);
   });
 
-  it('Cinema Arts: scheduled ids joined to the static movie list, earliest day first', () => {
-    const scheduled = { movieIds: {}, scheduledDays: { 3690: ['2026-10-26'], 327174: ['2026-10-03', '2026-10-02', 'garbage'], 999: ['2026-10-05'] } };
-    const movies = { nodes: [{ id: '3690', title: "All the President's Men", path: '/movies/3690-all-the-presidents-men', poster: 'https://cms/p.jpg' }, { id: '327174', title: 'Digger', path: '/movies/327174-digger' }] };
+  it('Cinema Arts: scheduled ids joined to the static movie list, earliest day first, untitled ones left out', () => {
+    // 1000026622 is scheduled but not yet in the site's movie list, and 555
+    // is there with a blank title: both wait rather than show as a number.
+    const scheduled = { movieIds: {}, scheduledDays: { 3690: ['2026-10-26'], 327174: ['2026-10-03', '2026-10-02', 'garbage'], 999: ['2026-10-05'], 1000026622: ['2026-10-16'], 555: ['2026-10-07'] } };
+    const movies = { nodes: [{ id: '3690', title: "All the President's Men", path: '/movies/3690-all-the-presidents-men', poster: 'https://cms/p.jpg' }, { id: '327174', title: 'Digger', path: '/movies/327174-digger' }, { id: '999', title: 'Verity' }, { id: '555', title: '  ' }] };
     expect(boxofficeListings(scheduled, movies, 'https://www.cinemaartstheatre.com/')).toEqual([
       { slug: '327174', title: 'Digger', firstShowTime: '2026-10-02', url: 'https://www.cinemaartstheatre.com/movies/327174-digger', poster: null },
       { slug: '3690', title: "All the President's Men", firstShowTime: '2026-10-26', url: 'https://www.cinemaartstheatre.com/movies/3690-all-the-presidents-men', poster: 'https://cms/p.jpg' },
-      { slug: '999', title: 'Movie 999', firstShowTime: '2026-10-05', url: 'https://www.cinemaartstheatre.com', poster: null }
+      { slug: '999', title: 'Verity', firstShowTime: '2026-10-05', url: 'https://www.cinemaartstheatre.com', poster: null }
     ]);
     expect(boxofficeListings(null, null, 'https://x.test')).toEqual([]);
   });

@@ -267,7 +267,9 @@ from the poster URL, dates carry no year so `veeziDateTime` infers it, the `<div
 Gatsby site: `/api/gatsby-source-boxofficeapi/scheduledMovies?theaters=X050X` gives ids +
 days, titles come from the static query `page-data/sq/d/3836549025.json`, with a scan of the
 index page's `staticQueryHashes` if that hash ever moves). All seeded 2026-09-28 from the
-Lambda itself, so none of the sites block AWS.
+Lambda itself, so none of the sites block AWS. The schedule runs ahead of the static list, so a
+scheduled id with no title there is LEFT OUT (2026-09-29: it used to show as "Movie 1000026622");
+left out means unrecorded, so it's announced by name once the site rebuilds.
 
 **The pecking order, and the IMAXs** (later the same night: "if a movie is showing at more
 than one theater, there's sort of a hierarchy … I'll always go to the Alamo first … only show

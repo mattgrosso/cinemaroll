@@ -785,19 +785,23 @@ function afiListings (html) {
  * A Webedia/Boxoffice cinema site (Cinema Arts Theatre): the live
  * `scheduledMovies` call says which movie ids have showtimes and on which
  * days; the site's static movie list supplies titles and paths. A scheduled
- * id missing from the static list still counts - the site rebuilds later
- * than its schedule updates - it just gets its id as a title.
+ * id missing from the static list is left out until it appears there - the
+ * site rebuilds later than its schedule updates, and a bare ten-digit id is
+ * no use as a title (2026-09-29 report). Left out means not recorded as
+ * seen, so the film is announced by name once the list catches up.
  */
 function boxofficeListings (scheduled, movies, siteUrl) {
   const days = (scheduled && scheduled.scheduledDays) || {};
   const byId = new Map(((movies && movies.nodes) || movies || []).filter((m) => m && m.id).map((m) => [String(m.id), m]));
   const base = String(siteUrl || '').replace(/\/$/, '');
-  return Object.keys(days).sort().map((id) => {
+  return Object.keys(days).sort().flatMap((id) => {
     const movie = byId.get(id);
+    const title = movie && typeof movie.title === 'string' ? movie.title.trim() : '';
+    if (!title) return [];
     const dates = (days[id] || []).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
     return {
       slug: id,
-      title: movie && typeof movie.title === 'string' && movie.title.trim() ? movie.title.trim() : `Movie ${id}`,
+      title,
       firstShowTime: dates[0] || null,
       url: movie && movie.path ? `${base}${movie.path}` : base,
       poster: movie && typeof movie.poster === 'string' && movie.poster ? movie.poster : null
