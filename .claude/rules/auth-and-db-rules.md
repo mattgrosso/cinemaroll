@@ -338,6 +338,12 @@ dates, so the sweep backfills `s` (first showtime) into the seen-state eight fil
 (`SHOWTIME_BACKFILL_PER_SWEEP`, via the theater's `enrich`) and `boardForApp` shows it.
 Verified with synthetic touches on the tester (v1.118.10).
 
+**Years in captions** (v1.118.11: "it would be nice if the year of the movie was always listed …
+sometimes it's in the title so let's not duplicate"). `lookupFilm` in `posterLookup.js` returns
+{ poster, year } from the same TMDB search (cache rows without a `year` key are re-fetched once);
+`titleWithYear` appends " (year)" unless the title already carries any four-digit year.
+The lookup now runs for every card lacking a year, not just those lacking a poster.
+
 **Testing it signed in** (2026-09-28, Matt: "you should be able to use the test user to test
 this"). The sweep mirrors the board to `cinemaroll-tester-example-com/theaters/board` on every
 run, and `scripts/copy-theater-board.mjs` does it on demand (Admin SDK; also prints poster

@@ -71,7 +71,7 @@
               <div class="st-swipe-hint left" :style="hintStyle(theater, item, 'left')"><i class="bi bi-bell-fill"></i> Remind me</div>
               <div class="st-swipe-hint right" :style="hintStyle(theater, item, 'right')"><i class="bi bi-x-lg"></i> Dismiss</div>
               <div class="st-caption">
-                <span class="st-caption-title">{{ item.title }}</span>
+                <span class="st-caption-title">{{ captionTitle(item) }}</span>
                 <span class="st-caption-when">{{ when(item) }}</span>
                 <span v-if="item.coveredBy" class="st-caption-also">Also at {{ nameOf(item.coveredBy) }}</span>
               </div>
@@ -106,7 +106,7 @@
 <script>
 import BackLink from './games/BackLink.vue';
 import SkeletonBlock from './SkeletonBlock.vue';
-import { lookupPoster } from '../utils/posterLookup.js';
+import { lookupFilm, titleWithYear } from '../utils/posterLookup.js';
 import { reminderTimeFor } from '../utils/reminderTime.js';
 
 // Matt, 2026-09-28: "it would also be great if I could see this somewhere on
@@ -156,7 +156,8 @@ export default {
       toast: '',
       toastTimer: null,
       now: Date.now(),
-      // Posters the feeds didn't carry, looked up by title: { [key]: url|null }.
+      // Posters and years the feeds didn't carry, looked up by title:
+      // { [key]: { poster, year } }.
       lookedUp: {},
       failed: {},
       // Swipe state for the one card under a finger.
@@ -220,7 +221,16 @@ export default {
     posterKey (item) { return `${item.title}|${item.year || ''}`; },
     posterFor (item) {
       if (item.poster && !this.failed[this.cardKeyFor(item)]) return item.poster;
-      return this.lookedUp[this.posterKey(item)] || null;
+      const hit = this.lookedUp[this.posterKey(item)];
+      return (hit && hit.poster) || null;
+    },
+    yearFor (item) {
+      if (Number.isInteger(item.year)) return item.year;
+      const hit = this.lookedUp[this.posterKey(item)];
+      return (hit && hit.year) || null;
+    },
+    captionTitle (item) {
+      return titleWithYear(item.title, this.yearFor(item));
     },
     cardKeyFor (item) { return `${item.slug}:${item.poster || ''}`; },
     posterFailed (item) {
@@ -231,14 +241,14 @@ export default {
     },
     fillPosters () {
       this.theaters.forEach((theater) => theater.shown.forEach((item) => {
-        if (this.posterFor(item)) return;
+        if (this.posterFor(item) && this.yearFor(item)) return;
         const key = this.posterKey(item);
         if (key in this.lookedUp) return;
         this.lookedUp = { ...this.lookedUp, [key]: null };
-        lookupPoster(item.title, item.year)
-          .then((url) => {
-            if (url) this.lookedUp = { ...this.lookedUp, [key]: url };
-            return url;
+        lookupFilm(item.title, item.year)
+          .then((hit) => {
+            if (hit && (hit.poster || hit.year)) this.lookedUp = { ...this.lookedUp, [key]: hit };
+            return hit;
           })
           .catch(() => null);
       }));

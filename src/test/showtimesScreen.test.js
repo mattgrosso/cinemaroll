@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { showtimeLabel } from '../components/ShowtimesScreen.vue';
-import { posterQuery } from '../utils/posterLookup.js';
+import { posterQuery, titleWithYear } from '../utils/posterLookup.js';
 
 // The Showtimes screen (2026-09-28) is a read-only view of the board the
 // push sweep publishes. These pin the wiring that would otherwise fail
@@ -49,5 +49,15 @@ describe('Showtimes screen wiring', () => {
     expect(posterQuery('Dune: Part Three (Advance Screening)', 2026)).toEqual({ query: 'Dune: Part Three', year: 2026 });
     expect(posterQuery('Avengers: Endgame', 2019).year).toBe(2019);
     expect(posterQuery('').query).toBe('');
+  });
+
+  it('lists the year, but never twice ("sometimes it\'s in the title … let\'s not duplicate")', () => {
+    expect(titleWithYear('Beetlejuice', 1988)).toBe('Beetlejuice (1988)');
+    expect(titleWithYear('Halloween (1978)', 1978)).toBe('Halloween (1978)');
+    expect(titleWithYear('Sabrina – 1954', 1954)).toBe('Sabrina – 1954');
+    expect(titleWithYear('Street Fighter (2026)', 2026)).toBe('Street Fighter (2026)');
+    expect(titleWithYear('Blade Runner 2049', 2017)).toBe('Blade Runner 2049');
+    expect(titleWithYear('Terminator 2: Judgment Day', 1991)).toBe('Terminator 2: Judgment Day (1991)');
+    expect(titleWithYear('Tenet', null)).toBe('Tenet');
   });
 });
