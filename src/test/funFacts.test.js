@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { totalWatchTime, decadeDna, busiestMonth, genreSplit, biggestDay, oldestMovie, allFunFacts } from '@/assets/javascript/funFacts.js';
+import { totalWatchTime, decadeDna, busiestMonth, genreSplit, biggestDay, oldestMovie, leastSeenMovie, allFunFacts } from '@/assets/javascript/funFacts.js';
 
 function entry ({ runtime = 120, release = '1994-06-15', genres = ['Drama'], rating = 8, watches = ['2024-06-15T12:00:00'] } = {}) {
   return {
@@ -58,7 +58,33 @@ describe('funFacts', () => {
 
   it('oldestMovie finds the earliest release', () => {
     const fact = oldestMovie([entry({ release: '1994-06-15' }), entry({ release: '1927-06-15' })]);
+    expect(fact.label).toBe('Oldest film');
     expect(fact.detail).toBe('Released 1927.');
+  });
+
+  const voted = (votes, release = '1994-06-15') => {
+    const e = entry({ release });
+    e.movie.vote_count = votes;
+    return e;
+  };
+
+  it('leastSeenMovie is the Deepest cut: fewest TMDB votes, not the oldest release', () => {
+    const fact = leastSeenMovie([voted(30000, '1927-06-15'), voted(14, '2019-06-15'), voted(900, '1960-06-15')]);
+    expect(fact.label).toBe('Deepest cut');
+    expect(fact.value).toBe('Movie 2019-06-15');
+    expect(fact.detail).toBe('Only 14 people have rated it on TMDB.');
+  });
+
+  it('leastSeenMovie skips entries missing a vote count rather than treating them as zero', () => {
+    const fact = leastSeenMovie([entry({ release: '1950-06-15' }), voted(null, '1951-06-15'), voted(5000, '2001-06-15')]);
+    expect(fact.value).toBe('Movie 2001-06-15');
+    expect(leastSeenMovie([entry()])).toBeNull();
+  });
+
+  it('leastSeenMovie breaks ties toward the older release and words small counts', () => {
+    expect(leastSeenMovie([voted(1, '2010-06-15'), voted(1, '1980-06-15')]).value).toBe('Movie 1980-06-15');
+    expect(leastSeenMovie([voted(1)]).detail).toBe('Only 1 person has rated it on TMDB.');
+    expect(leastSeenMovie([voted(0)]).detail).toBe('Nobody else has rated it on TMDB.');
   });
 
   it('allFunFacts drops facts an empty or sparse library cannot support', () => {

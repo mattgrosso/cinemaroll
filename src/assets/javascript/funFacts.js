@@ -130,7 +130,8 @@ export function biggestDay (entries) {
   };
 }
 
-// The oldest thing you've rated.
+// The oldest thing you've rated. Was "Deepest cut" until 2026-09-29, when
+// that name moved to leastSeenMovie below.
 export function oldestMovie (entries) {
   const dated = (entries || [])
     .map((entry) => ({ entry, year: new Date(entry?.movie?.release_date ?? NaN).getFullYear() }))
@@ -139,9 +140,34 @@ export function oldestMovie (entries) {
   const oldest = dated.sort((a, b) => a.year - b.year)[0];
   return {
     key: 'oldestMovie',
-    label: 'Deepest cut',
+    label: 'Oldest film',
     value: oldest.entry.movie.title,
     detail: `Released ${oldest.year}.`
+  };
+}
+
+// The least-seen thing you've rated (report 2026-09-29: "the weirdest movie
+// I've seen... not the popularity score but literally the number of people
+// who have seen it"). TMDB publishes no view counts; vote_count — how many
+// people rated it there — is the honest stand-in, and it's in the stored
+// shape (AddRating + the server-side backfill). Stale as of when it was
+// saved, which is fine for ranking obscurity. Entries without it are
+// skipped, never treated as zero; ties go to the older release.
+export function leastSeenMovie (entries) {
+  const counted = (entries || [])
+    .filter((entry) => Number.isFinite(entry?.movie?.vote_count) && entry.movie.vote_count >= 0)
+    .map((entry) => ({ entry, votes: entry.movie.vote_count, time: new Date(entry.movie.release_date ?? NaN).getTime() }));
+  if (!counted.length) return null;
+  const least = counted.sort((a, b) => (a.votes - b.votes) ||
+    ((Number.isFinite(a.time) ? a.time : Infinity) - (Number.isFinite(b.time) ? b.time : Infinity)))[0];
+  const { votes } = least;
+  return {
+    key: 'leastSeenMovie',
+    label: 'Deepest cut',
+    value: least.entry.movie.title,
+    detail: votes === 0
+      ? 'Nobody else has rated it on TMDB.'
+      : `Only ${votes.toLocaleString()} ${votes === 1 ? 'person has' : 'people have'} rated it on TMDB.`
   };
 }
 
@@ -153,6 +179,7 @@ export function allFunFacts (entries, getRatingFn) {
     genreSplit(entries, getRatingFn),
     busiestMonth(entries),
     biggestDay(entries),
+    leastSeenMovie(entries),
     oldestMovie(entries)
   ].filter(Boolean);
 }
