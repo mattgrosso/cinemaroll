@@ -818,7 +818,7 @@ describe('theater listings', () => {
     expect(showTimeLabel(null)).toBe('');
   });
 
-  it('one push per new listing, tapping through to its ticket page, each with its own tag', () => {
+  it('one push per new listing, tapping through to its card on the Showtimes screen, each with its own tag', () => {
     const fresh = alamoListings(feed, '1101').slice(0, 2);
     const messages = composeListingMessages(fresh, BRYANT);
     expect(messages).toHaveLength(2);
@@ -826,18 +826,18 @@ describe('theater listings', () => {
       title: 'New at Alamo Bryant Street',
       body: 'Dune: Part Three (The Big Show Insider Screening) · first showing Tue Dec 15, 6:00 PM',
       tag: 'listing-alamo-bryant-street-advance-screening-dune-part-three',
-      navigate: 'https://drafthouse.com/dc/show/advance-screening-dune-part-three'
+      navigate: '/showtimes?focus=alamo-bryant-street/advance-screening-dune-part-three'
     });
     expect(messages[1].tag).not.toBe(messages[0].tag);
   });
 
-  it('a burst of listings collapses into one summary that opens the schedule', () => {
+  it('a burst of listings collapses into one summary that opens the Showtimes screen', () => {
     const fresh = Array.from({ length: LISTINGS_MAX_PER_SWEEP + 1 }, (_, i) => ({ slug: `film-${i}`, title: `Film ${i}`, firstShowTime: null, url: `https://drafthouse.com/dc/show/film-${i}` }));
     const messages = composeListingMessages(fresh, BRYANT);
     expect(messages).toHaveLength(1);
     expect(messages[0].title).toBe(`${LISTINGS_MAX_PER_SWEEP + 1} new listings at Alamo Bryant Street`);
     expect(messages[0].body).toBe('Film 0, Film 1, Film 2, Film 3');
-    expect(messages[0].navigate).toBe(BRYANT.url);
+    expect(messages[0].navigate).toBe('/showtimes');
   });
 
   it('nothing new means no messages', () => {
@@ -1059,7 +1059,7 @@ describe('reminders', () => {
       title: 'Reminder: Glory',
       body: 'First showing Fri Oct 2, 7:00 PM at the Miracle Theatre',
       tag: `remind-alamo-a-${NOW - 60}`,
-      navigate: 'https://t/a'
+      navigate: '/showtimes?focus=alamo/a'
     });
     expect(composeReminderMessage(e).body).toBe('From Mon Oct 26 at AFI Silver');
   });

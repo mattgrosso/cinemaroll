@@ -103,16 +103,18 @@ const cinemaArtsMovies = async () => {
 };
 
 // The chains (Regal, AMC) and www.si.edu all refuse a plain fetch; CinemaClock
-// lists them all, and marks which showtimes are on the IMAX screen.
+// lists them all, and marks which showtimes are on the IMAX screen. It is
+// only ever READ: every link Matt sees goes to the theater's own site ("I
+// don't ever want to go to that movie clock intermediate page").
 const CINEMACLOCK_URL = 'https://www.cinemaclock.com/movie-theaters';
 const SHOWTIME_BACKFILL_PER_SWEEP = 8;
 // Every screen counts ("I'd be interested in the non-IMAX screens at these
 // other theaters as well"); a film's `imax` flag says which ones are.
-const viaCinemaclock = (key, name, page, { smithsonian = false } = {}) => ({
+const viaCinemaclock = (key, name, page, site, { smithsonian = false } = {}) => ({
   key,
   name,
-  url: `${CINEMACLOCK_URL}/${page}`,
-  listings: async () => cinemaclockListings(await fetchText(`${CINEMACLOCK_URL}/${page}`), { url: `${CINEMACLOCK_URL}/${page}` }),
+  url: site,
+  listings: async () => cinemaclockListings(await fetchText(`${CINEMACLOCK_URL}/${page}`), { url: site }),
   // The Smithsonian theaters publish in batches every few weeks; a quiet
   // board there is real, not a broken fetch.
   mayBeEmpty: smithsonian
@@ -161,12 +163,12 @@ const THEATERS = [
     // listings about to be announced.
     enrich: async (listing) => ({ ...listing, firstShowTime: afiFirstShowtime(await fetchText(listing.url)) })
   },
-  viaCinemaclock('imax-udvar-hazy', 'the Udvar-Hazy IMAX', 'airbus-imax-theater', { smithsonian: true }),
-  viaCinemaclock('imax-air-and-space', 'the Air and Space IMAX', 'lockheed-martin-imax-theater', { smithsonian: true }),
-  viaCinemaclock('imax-regal-majestic', 'Regal Majestic', 'regal-majestic-imax'),
-  viaCinemaclock('imax-amc-georgetown', 'AMC Georgetown', 'amc-loews-georgetown-14'),
-  viaCinemaclock('imax-amc-tysons', 'AMC Tysons', 'amc-tysons-corner-16'),
-  viaCinemaclock('imax-amc-hoffman', 'AMC Hoffman Center', 'amc-hoffman-center-22')
+  viaCinemaclock('imax-udvar-hazy', 'the Udvar-Hazy IMAX', 'airbus-imax-theater', 'https://www.si.edu/theaters/airbus', { smithsonian: true }),
+  viaCinemaclock('imax-air-and-space', 'the Air and Space IMAX', 'lockheed-martin-imax-theater', 'https://www.si.edu/theaters/lockheedmartin', { smithsonian: true }),
+  viaCinemaclock('imax-regal-majestic', 'Regal Majestic', 'regal-majestic-imax', 'https://www.regmovies.com/theatres/regal-majestic-1862'),
+  viaCinemaclock('imax-amc-georgetown', 'AMC Georgetown', 'amc-loews-georgetown-14', 'https://www.amctheatres.com/movie-theatres/washington-d-c/amc-georgetown-14'),
+  viaCinemaclock('imax-amc-tysons', 'AMC Tysons', 'amc-tysons-corner-16', 'https://www.amctheatres.com/movie-theatres/washington-d-c/amc-tysons-corner-16'),
+  viaCinemaclock('imax-amc-hoffman', 'AMC Hoffman Center', 'amc-hoffman-center-22', 'https://www.amctheatres.com/movie-theatres/washington-d-c/amc-hoffman-center-22')
 ];
 
 // Mirrors databaseKeyCharacters.json (FROZEN list - see that file).

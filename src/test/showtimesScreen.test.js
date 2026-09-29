@@ -34,6 +34,11 @@ describe('Showtimes screen wiring', () => {
     expect(screen).toContain("dispatch('remindListing'");
     expect(store).toContain('`${root}/theaters/reminders/${theaterKey}`');
     expect(lambda).toContain('/theaters/reminders`');
+    // A notification lands on this screen, never on a theater's site.
+    const cadence = read('../../aws-lambda/pushCadence.js');
+    expect(cadence).toMatch(/navigate: `\/showtimes\?focus=/);
+    expect(cadence).not.toMatch(/navigate: entry\.url|navigate: reminder\.url/);
+    expect(screen).toContain('query?.focus');
   });
 
   it('labels a showing on the cinema clock without a timezone getting a say', () => {

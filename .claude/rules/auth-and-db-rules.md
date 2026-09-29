@@ -329,7 +329,17 @@ it's already within one week, remind me again the day before"). `src/utils/remin
 picks the first rung still ahead — a week before, the day before, three hours before — reading
 the cinema-clock stamp as local time (a bare date is noon); no rung left or no showtime known
 means a toast and a snap back — except NO date at all, which is a week's snooze from now
-(v1.118.13: "if there isn't a date, snooze for a week, you can represent it then"). The screen writes `theaters/reminders/<theater>/<slug>` =
+(v1.118.13: "if there isn't a date, snooze for a week, you can represent it then").
+
+**Taps land in the app, links land on the theater** (v1.118.14: "Clicking on the notification
+should not take me directly to their website … it should just take me to Cinema Roll, to the
+Showtimes page … I don't ever want to go to that movie clock intermediate page"). Every listing
+and reminder push `navigate`s to `/showtimes?focus=<theaterKey>/<slug>` (a summary to
+`/showtimes`); the screen's `focusFromQuery` strips the query, un-hides the card whatever its
+state, scrolls it into view and rings it for four seconds. CinemaClock is read-only: each chain
+entry carries the theater's own `site` (regmovies.com/theatres/regal-majestic-1862, the three
+amctheatres.com pages, si.edu/theaters/{airbus,lockheedmartin}) and that is the card's link.
+The earlier absolute-URL pass-through in `buildPayload` is now unused by these pushes. The screen writes `theaters/reminders/<theater>/<slug>` =
 { remindAt, setAt, title, theaterName, url, firstShowTime } via store `remindListing`
 (`reminder: null` cancels); the card is hidden while it waits (a "n reminders" chip shows them,
 bell-slash cancels) and returns once the sweep stamps `sentAt`. Lambda: `remindersDue` +

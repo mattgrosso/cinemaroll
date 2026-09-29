@@ -978,16 +978,17 @@ function composeReminderMessage (reminder) {
     title: `Reminder: ${reminder.title || 'a film you flagged'}`,
     body: when ? `${/,/.test(when) ? 'First showing' : 'From'} ${when}${where}` : `On the board${where}`,
     tag: `remind-${reminder.theaterKey}-${reminder.slug}-${Number(reminder.remindAt) || 0}`,
-    navigate: reminder.url || '/'
+    navigate: `/showtimes?focus=${reminder.theaterKey}/${reminder.slug}`
   };
 }
 
 /**
  * fresh: alamoListings entries. theater: { key, name, url }. Up to
- * LISTINGS_MAX_PER_SWEEP separate pushes, each tapping through to that
- * listing's ticket page; more than that is one summary that opens the
- * theater's schedule. Tags carry the slug so two listings never replace each
- * other in Notification Center.
+ * LISTINGS_MAX_PER_SWEEP separate pushes; more than that is one summary.
+ * Every tap lands on the app's Showtimes screen, a single one with that
+ * card scrolled into view - never on a theater's site ("that's useless to
+ * me. It's with ads", 2026-09-28). Tags carry the slug so two listings
+ * never replace each other in Notification Center.
  */
 function composeListingMessages (fresh, theater) {
   const list = (fresh || []).filter((entry) => entry && entry.slug);
@@ -999,7 +1000,7 @@ function composeListingMessages (fresh, theater) {
       title: `${list.length} new listings at ${name}`,
       body: list.map((entry) => entry.title).join(', '),
       tag: `listing-${key}-batch-${list[0].slug}`,
-      navigate: (theater && theater.url) || '/'
+      navigate: '/showtimes'
     }];
   }
   return list.map((entry) => {
@@ -1009,7 +1010,7 @@ function composeListingMessages (fresh, theater) {
       title: `New at ${name}`,
       body: when ? `${title} · ${/,/.test(when) ? 'first showing' : 'from'} ${when}` : title,
       tag: `listing-${key}-${entry.slug}`,
-      navigate: entry.url || (theater && theater.url) || '/'
+      navigate: `/showtimes?focus=${key}/${entry.slug}`
     };
   });
 }

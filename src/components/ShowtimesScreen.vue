@@ -45,7 +45,8 @@
             v-for="item in theater.shown"
             :key="item.slug"
             class="st-card"
-            :class="{ covered: item.coveredBy, dismissed: item.dismissed, waiting: item.waiting, leaving: leaving === cardId(theater, item), 'leaving-left': leavingLeft === cardId(theater, item) }"
+            :class="{ covered: item.coveredBy, dismissed: item.dismissed, waiting: item.waiting, focused: focus === cardId(theater, item), leaving: leaving === cardId(theater, item), 'leaving-left': leavingLeft === cardId(theater, item) }"
+            :data-card="cardId(theater, item)"
             :style="cardStyle(theater, item)"
             @touchstart.passive="touchStart($event, theater, item)"
             @touchmove.passive="touchMove($event, theater, item)"
@@ -163,7 +164,10 @@ export default {
       // Swipe state for the one card under a finger.
       swipe: null,
       leaving: null,
-      leavingLeft: null
+      leavingLeft: null,
+      // A notification tap lands here with ?focus=<theater>/<slug>: that card
+      // is shown whatever its state, scrolled to and lit for a moment.
+      focus: null
     };
   },
   computed: {
@@ -215,6 +219,7 @@ export default {
     // The Insights card's "new" pill is relative to the last visit here.
     try { localStorage.setItem(SHOWTIMES_SEEN_KEY, String(Date.now())); } catch { /* private mode */ }
     this.fillPosters();
+    this.focusFromQuery();
   },
   methods: {
     cardId (theater, item) { return `${theater.key}/${item.slug}`; },
@@ -271,6 +276,29 @@ export default {
       if (mins < 60) return `${mins} min ago`;
       const hours = Math.round(mins / 60);
       return hours < 24 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
+    },
+    // "Clicking on the notification should … take me to Cinema Roll, to the
+    // Showtimes page, where I can look and see when the movie is playing"
+    // (2026-09-28). The push sends /showtimes?focus=<theater>/<slug>.
+    focusFromQuery () {
+      const focus = typeof this.$route?.query?.focus === 'string' ? this.$route.query.focus : '';
+      if (!focus) return;
+      // Strip it so a refresh doesn't re-scroll; then make sure the card is
+      // on screen whatever filter would hide it.
+      this.$router.replace({ path: this.$route.path }).catch(() => {});
+      const [theaterKey, slug] = focus.split('/');
+      const theater = this.theaters.find((t) => t.key === theaterKey);
+      const item = theater && theater.listings.find((l) => l.slug === slug);
+      if (!item) return;
+      if (item.dismissed) this.showDismissed = true;
+      if (item.waiting) this.showWaiting = true;
+      if (item.coveredBy) this.onlyUnique = false;
+      this.focus = focus;
+      this.$nextTick(() => {
+        const el = this.$el.querySelector(`[data-card="${CSS.escape(focus)}"]`);
+        if (el) el.scrollIntoView({ block: 'center' });
+        setTimeout(() => { this.focus = null; }, 4000);
+      });
     },
     say (message) {
       this.toast = message;
@@ -472,6 +500,7 @@ export default {
   &.covered { opacity: 0.55; }
   &.dismissed { opacity: 0.4; }
   &.waiting { opacity: 0.75; }
+  &.focused { box-shadow: 0 0 0 3px #ffc107; }
   &.leaving { transform: translateX(120%); opacity: 0; }
   &.leaving-left { transform: translateX(-120%); opacity: 0; }
 }
