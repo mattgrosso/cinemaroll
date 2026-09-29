@@ -315,3 +315,85 @@ export async function commitDraw (title, dbKey, movie, now = Date.now()) {
 
   return movie;
 }
+
+/**
+ * Which hats to look inside when asking "is this film already in a hat?".
+ *
+ * Bug report, 2026-09-29: "we should only show that button if the movie is
+ * not already in any of the hats that I'm subscribed to". This used to read
+ * only the hats linked in Cinema Roll's settings, so a film waiting in any
+ * other hat you belong to still got a hat button and still got suggested.
+ * Now it's every hat Movie Hat's own index says you're a member of, plus the
+ * linked ones (in case the index is behind). A linked hat saved without a
+ * key borrows the index's key; without one it can't be read at all.
+ */
+export function hatsToCheck (linked = [], indexed = []) {
+  const byTitle = new Map();
+  [...(indexed || []), ...(linked || [])].forEach((hat) => {
+    if (!hat?.title) return;
+    const known = byTitle.get(hat.title);
+    const keys = known ? known.keys : new Set();
+    if (hat.dbKey) keys.add(hat.dbKey);
+    byTitle.set(hat.title, { title: hat.title, keys });
+  });
+
+  const hats = [];
+  byTitle.forEach(({ title, keys }) => {
+    if (!keys.size) hats.push({ title, dbKey: null });
+    keys.forEach((dbKey) => hats.push({ title, dbKey }));
+  });
+  return hats;
+}
+
+/**
+ * The TMDB ids waiting in every hat you belong to.
+ *
+ * `complete` is false when any hat (or the index itself) couldn't be read.
+ * The caller must not cache an incomplete answer as if it were the truth —
+ * that's what used to hide the gap for ten minutes at a time. `previousIds`
+ * are kept on an incomplete read: a film you knew was in a hat a minute ago
+ * is a better guess than forgetting it because one request failed.
+ */
+export async function readHatContents ({ linked = [], email = null, previousIds = {} } = {}) {
+  let complete = true;
+  let accessError = null;
+  const noteError = (error) => {
+    complete = false;
+    // One refusal explains all of them (they share a session), so the first
+    // is kept rather than the last-to-land of several racing reads.
+    if (isMovieHatAccessError(error)) {
+      accessError = accessError || { reason: error.reason, email: error.email };
+    }
+  };
+
+  let indexed = [];
+  try {
+    indexed = email ? await fetchMyHats(email) : [];
+  } catch (error) {
+    noteError(error);
+    console.warn('[movie-hat] could not read the hat index', error.message);
+  }
+
+  const ids = {};
+  await Promise.all(hatsToCheck(linked, indexed).map(async (hat) => {
+    // Keyless means the index doesn't list it either: a hat you've left, or
+    // one that's gone. If the index itself failed, complete is already false.
+    if (!hat.dbKey) return;
+    try {
+      // Only the movies: the whole hat, history included, is ~2MB for six.
+      const movies = await fetchHatMovies(hat.title, hat.dbKey);
+      movies.forEach((movie) => {
+        if (movie?.id != null) ids[movie.id] = true;
+      });
+    } catch (error) {
+      noteError(error);
+      console.warn('[movie-hat] could not read hat contents', hat.title, error.message);
+    }
+  }));
+
+  return {
+    ids: complete ? ids : { ...(previousIds || {}), ...ids },
+    complete,
+    accessError
+  };
+}

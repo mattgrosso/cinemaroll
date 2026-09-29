@@ -29,7 +29,7 @@ import { enqueueWrite, listPendingWrites, removePendingWrite, updatePendingWrite
 import { setValueAtPath } from "../utils/statePath.js";
 import { stampPlanForWrite, stampUpdatesForBatch } from "../assets/javascript/syncStamp.js";
 import { emailToDatabaseKey, isQaAccountKey } from "../assets/javascript/databaseKey.js";
-import { fetchAllHats, fetchMyHats, hatsForMember, fetchHat, fetchHatMovies, toHatMovie, alreadyInHat, addMovieToHat, pickFromHat, commitDraw, isMovieHatAccessError } from "../assets/javascript/movieHat.js";
+import { fetchAllHats, fetchMyHats, hatsForMember, fetchHat, readHatContents, toHatMovie, alreadyInHat, addMovieToHat, pickFromHat, commitDraw, isMovieHatAccessError } from "../assets/javascript/movieHat.js";
 import {
   connectMovieHat as signIntoMovieHat,
   connectMovieHatWithToken as signIntoMovieHatWithToken,
@@ -184,6 +184,8 @@ const db = getDatabase();
 
 // Pending debounced profile publish (see scheduleSocialPublish).
 let socialPublishTimer = null;
+// The one ensureMovieHatContents read in progress, shared by every caller.
+let movieHatContentsInFlight = null;
 
 // Records that the profile was just published, so Home's every-six-hours
 // backstop doesn't immediately repeat a ~100KB write. Every path that publishes
@@ -390,6 +392,8 @@ export default createStore({
     // to put back in.
     movieHatMovieIds: {},
     movieHatContentsAt: 0,
+    // False when the last read missed a hat, so the ids above may be short.
+    movieHatContentsComplete: true,
     // Per-hat cards for the watchlist's draw section.
     movieHatSummaries: [],
     // The Google address signed into Movie Hat's project, if any.
@@ -679,9 +683,10 @@ export default createStore({
     setAvailableMovieHats (state, value) {
       state.availableMovieHats = value || [];
     },
-    setMovieHatContents (state, { ids, at } = {}) {
+    setMovieHatContents (state, { ids, at, complete = true } = {}) {
       state.movieHatMovieIds = ids || {};
       state.movieHatContentsAt = at || 0;
+      state.movieHatContentsComplete = complete !== false;
     },
     // Sent successfully: hide those buttons now rather than after the next
     // refresh of the cache.
@@ -2353,49 +2358,50 @@ export default createStore({
     },
 
     /**
-     * Which movies are already waiting in a linked hat.
+     * Which movies are already waiting in any hat you belong to.
      *
-     * One request per linked hat, cached for `maxAgeMs` — a hat's contents
-     * change rarely and every read is billed egress on Movie Hat's
-     * database, so this deliberately does NOT refetch per screen. A hat
-     * that fails to load simply contributes nothing: the button then shows
-     * when it might not need to, and sending still reports "already in
-     * there", which is the safe way round.
+     * One request per hat, cached for `maxAgeMs` — a hat's contents change
+     * rarely and every read is billed egress on Movie Hat's database, so
+     * this deliberately does NOT refetch per screen. Every hat Movie Hat's
+     * index lists for you counts, not just the linked ones (bug report,
+     * 2026-09-29) — see readHatContents.
+     *
+     * An incomplete read (a hat, or the index, that couldn't be read) used
+     * to be cached for the full ten minutes as if it were the whole answer.
+     * Now it's only held for `retryAfterMs`, and it's flagged so the
+     * watchlist can say it couldn't check everything. Sending still reports
+     * "already in there" either way — that check stays the authority.
      */
-    async ensureMovieHatContents (context, { maxAgeMs = 10 * 60 * 1000, force = false } = {}) {
+    ensureMovieHatContents (context, { maxAgeMs = 10 * 60 * 1000, retryAfterMs = 60 * 1000, force = false } = {}) {
       const hats = context.getters.linkedMovieHats;
 
       if (!hats.length) {
-        context.commit('setMovieHatContents', { ids: {}, at: Date.now() });
-        return;
+        context.commit('setMovieHatContents', { ids: {}, at: Date.now(), complete: true });
+        return Promise.resolve();
       }
 
-      const age = Date.now() - (context.state.movieHatContentsAt || 0);
-      if (!force && context.state.movieHatContentsAt && age < maxAgeMs) return;
+      const { movieHatContentsAt: at, movieHatContentsComplete: complete } = context.state;
+      const age = Date.now() - (at || 0);
+      if (!force && at && age < (complete === false ? retryAfterMs : maxAgeMs)) return Promise.resolve();
 
-      const ids = {};
-      let accessError = null;
-      await Promise.all(hats.map(async (hat) => {
-        try {
-          // Only the movies: this used to call fetchHat, which downloads the
-          // whole hat — history included — for six hats every ten minutes,
-          // to read nothing but the ids.
-          const movies = await fetchHatMovies(hat.title, hat.dbKey);
-          movies.forEach((movie) => {
-            if (movie?.id != null) ids[movie.id] = true;
-          });
-        } catch (error) {
-          // One refusal explains all of them (they share a session), so the
-          // first is kept rather than the last-to-land of six racing reads.
-          if (isMovieHatAccessError(error)) {
-            accessError = accessError || { reason: error.reason, email: error.email };
-          }
-          console.warn('[movie-hat] could not read hat contents', hat.title, error.message);
-        }
-      }));
+      // A screen full of hat buttons mounts in one tick, and each one asks.
+      // One read in flight answers all of them. A forced read (just after a
+      // draw) starts its own, since the one in flight may predate the draw.
+      if (movieHatContentsInFlight && !force) return movieHatContentsInFlight;
 
-      context.commit('setMovieHatAccessError', accessError);
-      context.commit('setMovieHatContents', { ids, at: Date.now() });
+      const read = (async () => {
+        const { ids, complete: allRead, accessError } = await readHatContents({
+          linked: hats,
+          email: context.state.movieHatEmail || context.state.userEmail,
+          previousIds: context.state.movieHatMovieIds
+        });
+        context.commit('setMovieHatAccessError', accessError);
+        context.commit('setMovieHatContents', { ids, at: Date.now(), complete: allRead });
+      })().finally(() => {
+        if (movieHatContentsInFlight === read) movieHatContentsInFlight = null;
+      });
+      movieHatContentsInFlight = read;
+      return read;
     },
 
     /**

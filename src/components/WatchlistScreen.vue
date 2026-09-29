@@ -10,6 +10,13 @@
     <SkeletonBlock v-if="!painted" :rows="7"/>
     <template v-else>
 
+    <!-- Bug report (2026-09-29): hatted films were still being suggested.
+         When a hat couldn't be read, the rows can't know what's in it, so
+         say so rather than quietly suggesting films that may be hatted. -->
+    <p v-if="hatCheckIncomplete" class="hat-check-note">
+      Couldn't check all your hats just now, so a few of these may already be in one.
+    </p>
+
     <!-- Bug report (2026-08-27): "It'll be cool if I could have a prompt
          somewhere on the watchlist page where I could give it a prompt and it
          would give me back a watchlist tailored to that prompt."
@@ -462,6 +469,10 @@ export default {
     // TMDB ids already sitting in one of your hats.
     hattedIds () {
       return this.$store.state.movieHatMovieIds || {};
+    },
+    hatCheckIncomplete () {
+      return this.$store.state.movieHatContentsComplete === false
+        && (this.$store.getters.linkedMovieHats || []).length > 0;
     },
     /**
      * Everything a suggestion row should skip.
@@ -1190,6 +1201,12 @@ export default {
   color: #adb5bd;
   font-size: 0.85rem;
   margin: 0.25rem 0 1.25rem;
+}
+
+.hat-check-note {
+  color: #ccc;
+  font-size: 0.8rem;
+  margin: -0.75rem 0 1.25rem;
 }
 
 /* 1.75rem when every row still ended in a bulk "add all to a hat" button,

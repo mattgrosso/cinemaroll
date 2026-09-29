@@ -66,15 +66,15 @@ function tmdbImpl (url) {
   return Promise.reject(new Error(`unexpected url ${url}`));
 }
 
-function factory ({ isOnline = true, movies = library(), dispatch = vi.fn(), movieHatMovieIds = {} } = {}) {
+function factory ({ isOnline = true, movies = library(), dispatch = vi.fn(), movieHatMovieIds = {}, movieHatContentsComplete = true, linkedMovieHats = [] } = {}) {
   const pushSpy = vi.fn();
   const commitSpy = vi.fn();
   const wrapper = mount(WatchlistScreen, {
     global: {
       mocks: {
         $store: {
-          state: { isOnline, movieHatMovieIds },
-          getters: { allMoviesAsArray: movies },
+          state: { isOnline, movieHatMovieIds, movieHatContentsComplete },
+          getters: { allMoviesAsArray: movies, linkedMovieHats },
           commit: commitSpy,
           dispatch
         },
@@ -481,6 +481,24 @@ describe('films already in a hat are not suggested again', () => {
     factory({ dispatch });
 
     expect(dispatch).toHaveBeenCalledWith('ensureMovieHatContents');
+  });
+
+  // Bug report 2026-09-29: hatted films were still being suggested. When a
+  // hat couldn't be read the rows can't know, so the screen says so.
+  it("says so when it couldn't check every hat", async () => {
+    const { wrapper } = factory({ movieHatContentsComplete: false, linkedMovieHats: [{ title: 'Just Matt', dbKey: 'k1' }] });
+    await flushPromises();
+
+    expect(wrapper.find('.hat-check-note').exists()).toBe(true);
+  });
+
+  it('stays quiet when every hat was read, or there are no hats', async () => {
+    const read = factory({ linkedMovieHats: [{ title: 'Just Matt', dbKey: 'k1' }] });
+    const none = factory({ movieHatContentsComplete: false });
+    await flushPromises();
+
+    expect(read.wrapper.find('.hat-check-note').exists()).toBe(false);
+    expect(none.wrapper.find('.hat-check-note').exists()).toBe(false);
   });
 
   it('suggests everything as normal when no hats hold anything', async () => {

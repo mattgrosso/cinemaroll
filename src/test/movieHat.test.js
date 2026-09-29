@@ -8,6 +8,8 @@ import {
   drawnRecord,
   fetchHat,
   fetchHatMovies,
+  hatsToCheck,
+  readHatContents,
   addMovieToHat,
   commitDraw,
   isMovieHatAccessError
@@ -382,5 +384,105 @@ describe('hat ordering by recent use', () => {
       { title: 'Never' },
       { title: 'Used', lastUsedAt: 5 }
     ])).toEqual(['Used', 'Never']);
+  });
+});
+
+// Bug report, 2026-09-29: "we should only show that button if the movie is
+// not already in any of the hats that I'm subscribed to". Only LINKED hats
+// were read, and a hat that failed to read was cached as empty for ten
+// minutes.
+describe('hatsToCheck', () => {
+  it('includes every hat the index lists, not just the linked ones', () => {
+    expect(hatsToCheck([{ title: 'Just Matt', dbKey: 'k1' }], [
+      { title: 'Just Matt', dbKey: 'k1' },
+      { title: 'Natalie and Matt', dbKey: 'k2' }
+    ])).toEqual([
+      { title: 'Just Matt', dbKey: 'k1' },
+      { title: 'Natalie and Matt', dbKey: 'k2' }
+    ]);
+  });
+
+  it('fills in a linked hat saved without a key from the index', () => {
+    expect(hatsToCheck([{ title: 'Just Matt', dbKey: null }], [{ title: 'Just Matt', dbKey: 'k1' }]))
+      .toEqual([{ title: 'Just Matt', dbKey: 'k1' }]);
+  });
+
+  it('still reads a linked hat the index has not caught up with', () => {
+    expect(hatsToCheck([{ title: 'Old Hat', dbKey: 'k9' }], []))
+      .toEqual([{ title: 'Old Hat', dbKey: 'k9' }]);
+  });
+});
+
+describe('readHatContents', () => {
+  const INDEX = { a: { title: 'Just Matt', hatKey: 'k1' }, b: { title: 'Natalie and Matt', hatKey: 'k2' } };
+  const respond = (routes) => {
+    global.fetch = vi.fn((url) => {
+      const route = Object.keys(routes).find((part) => url.includes(part));
+      const body = route ? routes[route] : null;
+      if (body instanceof Error) return Promise.resolve({ ok: false, status: 500, text: () => Promise.resolve('') });
+      return Promise.resolve({ ok: true, text: () => Promise.resolve(JSON.stringify(body)) });
+    });
+  };
+
+  beforeEach(() => {
+    connectedAs();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    delete global.fetch;
+    vi.restoreAllMocks();
+  });
+
+  it('counts films waiting in a hat that was never linked', async () => {
+    respond({
+      userHats: INDEX,
+      'k1/movies': { m1: { id: 1 } },
+      'k2/movies': { m2: { id: 2 } }
+    });
+
+    const result = await readHatContents({ linked: [{ title: 'Just Matt', dbKey: 'k1' }], email: 'matt@example.com' });
+
+    expect(result.ids).toEqual({ 1: true, 2: true });
+    expect(result.complete).toBe(true);
+  });
+
+  it('reads a linked hat saved without a key, using the index', async () => {
+    respond({ userHats: INDEX, 'k1/movies': { m1: { id: 1 } }, 'k2/movies': {} });
+
+    const result = await readHatContents({ linked: [{ title: 'Just Matt' }], email: 'matt@example.com' });
+
+    expect(result.ids).toEqual({ 1: true });
+  });
+
+  it('flags a failed hat as incomplete and keeps what it knew before', async () => {
+    respond({ userHats: INDEX, 'k1/movies': { m1: { id: 1 } }, 'k2/movies': new Error('boom') });
+
+    const result = await readHatContents({
+      linked: [{ title: 'Just Matt', dbKey: 'k1' }],
+      email: 'matt@example.com',
+      previousIds: { 2: true }
+    });
+
+    expect(result.complete).toBe(false);
+    expect(result.ids).toEqual({ 1: true, 2: true });
+  });
+
+  it('flags a lapsed Movie Hat session as incomplete, with the reason', async () => {
+    notConnected();
+    respond({});
+
+    const result = await readHatContents({ linked: [{ title: 'Just Matt', dbKey: 'k1' }], email: 'matt@example.com' });
+
+    expect(result.complete).toBe(false);
+    expect(result.accessError).toMatchObject({ reason: 'not-connected' });
+  });
+
+  it('drops films drawn since last time when every hat was read', async () => {
+    respond({ userHats: INDEX, 'k1/movies': { m1: { id: 1 } }, 'k2/movies': {} });
+
+    const result = await readHatContents({ linked: [], email: 'matt@example.com', previousIds: { 7: true } });
+
+    expect(result.ids).toEqual({ 1: true });
   });
 });
