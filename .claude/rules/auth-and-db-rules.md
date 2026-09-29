@@ -257,6 +257,21 @@ not. An empty board is treated as a failed fetch, never as "everything left". Ea
 through untouched — which is untested on iOS's declarative path; if a tap lands in the app
 instead, fall back to `/`. Adding a theater is adding a `THEATERS` entry with its own adapter.
 
+**Three more theaters the same night** ("the AFI in Silver Spring … the Miracle Theater …
+a really small independent theater in Fairfax" — Cinema Arts Theatre). None has a JSON feed;
+each `THEATERS` entry fetches a public page and hands it to a pure, tested parser in
+`pushCadence.js`: `afiListings` (silver.afi.com/now-playing, one `movie_item` per Vista film
+id, no dates on the page), `veeziListings` (the Miracle's Veezi "Show Times" page — film code
+from the poster URL, dates carry no year so `veeziDateTime` infers it, the `<div` and its
+`class` sit on different lines), `boxofficeListings` (Cinema Arts is a Webedia/Boxoffice
+Gatsby site: `/api/gatsby-source-boxofficeapi/scheduledMovies?theaters=X050X` gives ids +
+days, titles come from the static query `page-data/sq/d/3836549025.json`, with a scan of the
+index page's `staticQueryHashes` if that hash ever moves). All seeded 2026-09-28 from the
+Lambda itself, so none of the sites block AWS. **Not built:** an IMAX — Udvar-Hazy's Airbus
+IMAX has a feed (`dashboard.si.edu/showtimes/json/theater/53`, `52` = the Mall's Lockheed
+Martin; `www.si.edu` itself is bot-walled) but it was empty at the time, and AMC/Regal/
+imax.com all answer 403 to a plain fetch.
+
 **Tapping a chore notification opens that prompt** (2026-09-13: "took me to the home
 screen with the applicable notification already opened and ready to go").
 `composeMessage` returns `open` — the chore its headline names, `stickiness` /

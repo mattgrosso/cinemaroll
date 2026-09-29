@@ -23,6 +23,11 @@ import {
   listingsDue,
   showTimeLabel,
   composeListingMessages,
+  decodeEntities,
+  veeziDateTime,
+  veeziListings,
+  afiListings,
+  boxofficeListings,
   LISTINGS_MAX_PER_SWEEP,
   LISTINGS_FORGET_MS
 } from '../../aws-lambda/pushCadence.js';
@@ -824,5 +829,93 @@ describe('theater listings', () => {
 
   it('nothing new means no messages', () => {
     expect(composeListingMessages([], BRYANT)).toEqual([]);
+  });
+});
+
+// The other three theaters Matt named the same night ("the AFI in Silver
+// Spring … the Miracle Theater … a really small independent theater in
+// Fairfax" — Cinema Arts). None has a JSON feed; these fixtures are cut
+// from the real pages, so a parser that survives them survives the sites.
+describe('theater listings — the parsed sites', () => {
+  const VEEZI = `
+    <div id="sessionsByDateConent"><div class="date"><h3 class="date-title">Friday 2, October</h3>
+      <div
+        class="film "
+        id="" name=""
+        ><div class="poster-container"><img class="poster" src="/Media/Poster?siteToken=tok&amp;code=0000002468" alt="Glory" /></div>
+        <div><h3 class="title"> Glory </h3><p><span class="censor">R</span></p><div class="sessions"><div class="date-container"><h4 class="date">Friday 2, October</h4>
+        <ul class="session-times"><li><a href="https://ticketing.useast.veezi.com/purchase/2907?siteToken=tok"><time>7:00 PM</time></a></li></ul></div></div></div></div></div>
+    <div class="date"><h3 class="date-title">Sunday 4, October</h3>
+      <div class="film " ><img class="poster" src="/Media/Poster?siteToken=tok&amp;code=0000002468" alt="Glory" /><h3 class="title">Glory</h3>
+        <div class="date-container"><h4 class="date">Sunday 4, October</h4><ul class="session-times"><li><a href="https://ticketing.useast.veezi.com/purchase/2908?siteToken=tok"><time>2:00 PM</time></a></li></ul></div></div></div></div>
+    <div id="sessionsByFilmConent">
+      <div class="film " ><img class="poster" src="/Media/Poster?siteToken=tok&amp;code=0000002470" alt="Selma" /><h3 class="title">Selma &amp; Friends</h3>
+        <div class="date-container"><h4 class="date">Friday 6, November</h4><ul class="session-times"><li><a href="https://ticketing.useast.veezi.com/purchase/2910?siteToken=tok"><time>7:00 PM</time></a></li></ul></div>
+        <div class="date-container"><h4 class="date">Saturday 7, November</h4><ul class="session-times"><li><a href="https://ticketing.useast.veezi.com/purchase/2911?siteToken=tok"><time>2:00 PM</time></a></li></ul></div></div>
+    </div>`;
+  const SEPT_28 = new Date('2026-09-28T22:00:00Z').getTime();
+
+  it('a Veezi page yields one film per film code with its earliest showing and a ticket link', () => {
+    const listings = veeziListings(VEEZI, { now: SEPT_28 });
+    expect(listings).toEqual([
+      { slug: '0000002468', title: 'Glory', firstShowTime: '2026-10-02T19:00:00', url: 'https://ticketing.useast.veezi.com/purchase/2907?siteToken=tok' },
+      { slug: '0000002470', title: 'Selma & Friends', firstShowTime: '2026-11-06T19:00:00', url: 'https://ticketing.useast.veezi.com/purchase/2910?siteToken=tok' }
+    ]);
+  });
+
+  it('Veezi dates carry no year: a January date seen in December is next year, yesterday is this year', () => {
+    const dec = new Date('2026-12-20T12:00:00Z').getTime();
+    expect(veeziDateTime('Friday 8, January', '7:00 PM', dec)).toBe('2027-01-08T19:00:00');
+    expect(veeziDateTime('Saturday 19, December', '12:15 AM', dec)).toBe('2026-12-19T00:15:00');
+    expect(veeziDateTime('Sunday 4, October', '2:00 PM', SEPT_28)).toBe('2026-10-04T14:00:00');
+    expect(veeziDateTime('nonsense', '2:00 PM', SEPT_28)).toBeNull();
+  });
+
+  it('an empty Veezi page is an empty board, not a crash', () => {
+    expect(veeziListings('', { now: SEPT_28 })).toEqual([]);
+    expect(veeziListings('<div class="film "><h3 class="title">No code</h3></div>', { now: SEPT_28 })).toEqual([]);
+  });
+
+  const AFI = `
+    <section id="now_plying_movies"><div class="container">
+      <div class="movie_item "><a href="https://silver.afi.com/movies/detail/0100005647"><div class="img_wrapper"></div></a>
+        <div class="item-details" ><h3 class="item-title"> <a href="https://silver.afi.com/movies/detail/0100005647" class="movie-detail">&quot;Fallen Angels&quot; by No&euml;l Coward</a></h3><p>Sparkling…</p></div></div>
+      <div class="movie_item "><a href="https://silver.afi.com/movies/detail/0100005662"></a>
+        <div class="item-details"><h3 class="item-title"><a href="https://silver.afi.com/movies/detail/0100005662">THE CONDOR DAUGHTER</a></h3></div></div>
+      <div class="movie_item "><a href="https://silver.afi.com/movies/detail/0100005662"></a>
+        <div class="item-details"><h3 class="item-title"><a href="https://silver.afi.com/movies/detail/0100005662">THE CONDOR DAUGHTER (again)</a></h3></div></div>
+    </div></section>`;
+
+  it('AFI Silver: one listing per Vista film id, first title wins, no dates on the page', () => {
+    expect(afiListings(AFI)).toEqual([
+      { slug: '0100005647', title: '"Fallen Angels" by Noël Coward', firstShowTime: null, url: 'https://silver.afi.com/movies/detail/0100005647' },
+      { slug: '0100005662', title: 'THE CONDOR DAUGHTER', firstShowTime: null, url: 'https://silver.afi.com/movies/detail/0100005662' }
+    ]);
+    expect(afiListings('')).toEqual([]);
+  });
+
+  it('Cinema Arts: scheduled ids joined to the static movie list, earliest day first', () => {
+    const scheduled = { movieIds: {}, scheduledDays: { 3690: ['2026-10-26'], 327174: ['2026-10-03', '2026-10-02', 'garbage'], 999: ['2026-10-05'] } };
+    const movies = { nodes: [{ id: '3690', title: "All the President's Men", path: '/movies/3690-all-the-presidents-men' }, { id: '327174', title: 'Digger', path: '/movies/327174-digger' }] };
+    expect(boxofficeListings(scheduled, movies, 'https://www.cinemaartstheatre.com/')).toEqual([
+      { slug: '327174', title: 'Digger', firstShowTime: '2026-10-02', url: 'https://www.cinemaartstheatre.com/movies/327174-digger' },
+      { slug: '3690', title: "All the President's Men", firstShowTime: '2026-10-26', url: 'https://www.cinemaartstheatre.com/movies/3690-all-the-presidents-men' },
+      { slug: '999', title: 'Movie 999', firstShowTime: '2026-10-05', url: 'https://www.cinemaartstheatre.com' }
+    ]);
+    expect(boxofficeListings(null, null, 'https://x.test')).toEqual([]);
+  });
+
+  it('a date-only showing reads "from", a timed one "first showing"', () => {
+    expect(showTimeLabel('2026-10-26')).toBe('Mon Oct 26');
+    const [dated] = composeListingMessages([{ slug: 'a', title: 'Digger', firstShowTime: '2026-10-02', url: 'u' }], { key: 'k', name: 'Cinema Arts' });
+    expect(dated.body).toBe('Digger · from Fri Oct 2');
+    const [timed] = composeListingMessages([{ slug: 'a', title: 'Glory', firstShowTime: '2026-10-02T19:00:00', url: 'u' }], { key: 'k', name: 'the Miracle' });
+    expect(timed.body).toBe('Glory · first showing Fri Oct 2, 7:00 PM');
+    const [bare] = composeListingMessages([{ slug: 'a', title: 'Faust', firstShowTime: null, url: 'u' }], { key: 'k', name: 'AFI Silver' });
+    expect(bare.body).toBe('Faust');
+  });
+
+  it('decodes the entities these pages actually use', () => {
+    expect(decodeEntities('Sabrina &#8211; 1954 &amp; &quot;Glory&quot; &#x27;s &euml;')).toBe('Sabrina – 1954 & "Glory" \'s ë');
   });
 });

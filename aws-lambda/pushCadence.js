@@ -639,12 +639,128 @@ function listingsDue ({ known, current, now = Date.now() }) {
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function showTimeLabel (clt) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(clt || '');
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(clt || '');
   if (!m) return '';
-  const [, y, mo, d, h, min] = m.map(Number);
+  const [y, mo, d] = m.slice(1, 4).map(Number);
   const weekday = WEEKDAYS[new Date(Date.UTC(y, mo - 1, d)).getUTCDay()];
+  const day = `${weekday} ${MONTHS[mo - 1]} ${d}`;
+  if (m[4] === undefined) return day;
+  const [h, min] = [Number(m[4]), Number(m[5])];
   const hour12 = h % 12 || 12;
-  return `${weekday} ${MONTHS[mo - 1]} ${d}, ${hour12}:${String(min).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+  return `${day}, ${hour12}:${String(min).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
+// The other theaters have no JSON feed; their public pages are parsed here
+// with regexes (no DOM in the Lambda). Each parser is pure: page text in,
+// [{ slug, title, firstShowTime, url }] out, same shape as alamoListings.
+
+const NAMED_ENTITIES = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ndash: '\u2013', mdash: '\u2014', hellip: '\u2026',
+  rsquo: '\u2019', lsquo: '\u2018', rdquo: '\u201d', ldquo: '\u201c',
+  eacute: 'é', egrave: 'è', euml: 'ë', ecirc: 'ê', aacute: 'á', agrave: 'à', auml: 'ä', acirc: 'â', iacute: 'í', iuml: 'ï',
+  oacute: 'ó', ouml: 'ö', ocirc: 'ô', uacute: 'ú', uuml: 'ü', ntilde: 'ñ', ccedil: 'ç'
+};
+function decodeEntities (text) {
+  return String(text || '')
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)))
+    .replace(/&([a-z]+);/gi, (m, name) => (name.toLowerCase() in NAMED_ENTITIES ? NAMED_ENTITIES[name.toLowerCase()] : m));
+}
+const stripTags = (html) => decodeEntities(String(html || '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+
+const MONTH_INDEX = Object.fromEntries(['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'].map((name, i) => [name, i + 1]));
+const pad2 = (n) => String(n).padStart(2, '0');
+
+/**
+ * "Friday 2, October" + "7:00 PM" (Veezi's date labels carry no year) ->
+ * "YYYY-MM-DDT19:00:00". The year is the one that puts the date within a
+ * week before `now` or any time after; a January listing seen in December
+ * is next year, a "yesterday" is this year.
+ */
+function veeziDateTime (dateLabel, timeLabel, now = Date.now()) {
+  const dm = /(\d{1,2}),?\s+([A-Za-z]+)/.exec(dateLabel || '');
+  if (!dm) return null;
+  const day = Number(dm[1]);
+  const month = MONTH_INDEX[dm[2].toLowerCase()];
+  if (!month) return null;
+  const tm = /(\d{1,2}):(\d{2})\s*([AP]M)/i.exec(timeLabel || '');
+  let hour = 0; let minute = 0;
+  if (tm) {
+    hour = Number(tm[1]) % 12 + (tm[3].toUpperCase() === 'PM' ? 12 : 0);
+    minute = Number(tm[2]);
+  }
+  const nowDate = new Date(now);
+  let year = nowDate.getUTCFullYear();
+  if (Date.UTC(year, month - 1, day) < now - 7 * ONE_DAY_MS) year += 1;
+  return `${year}-${pad2(month)}-${pad2(day)}T${pad2(hour)}:${pad2(minute)}:00`;
+}
+
+/**
+ * A Veezi "Show Times" page (the Miracle Theatre's ticketing). Films are
+ * keyed by Veezi's film code (from the poster URL), which survives a title
+ * edit. The page lists every film under every date and again by film, so
+ * the same code appears several times: keep the earliest showing and the
+ * first ticket link seen for it.
+ */
+function veeziListings (html, { now = Date.now(), fallbackUrl = null } = {}) {
+  const films = new Map();
+  const blocks = String(html || '').split(/<div\s+class="film[\s"]/).slice(1);
+  for (const block of blocks) {
+    const code = (/\bcode=(\d+)/.exec(block) || [])[1];
+    const title = stripTags((/<h3 class="title">([\s\S]*?)<\/h3>/.exec(block) || [])[1]);
+    if (!code || !title) continue;
+    const purchase = (/href="(https?:\/\/[^"]*\/purchase\/[^"]+)"/.exec(block) || [])[1];
+    const entry = films.get(code) || { slug: code, title, firstShowTime: null, url: purchase ? decodeEntities(purchase) : fallbackUrl };
+    const re = /<h4 class="date">([^<]+)<\/h4>[\s\S]*?<time>([^<]+)<\/time>/g;
+    let m;
+    while ((m = re.exec(block))) {
+      const when = veeziDateTime(m[1], m[2], now);
+      if (when && (!entry.firstShowTime || when < entry.firstShowTime)) entry.firstShowTime = when;
+    }
+    films.set(code, entry);
+  }
+  return [...films.values()].sort((a, b) => a.slug.localeCompare(b.slug));
+}
+
+/**
+ * AFI Silver's "Now Playing" page: one `movie_item` per film, linking to
+ * movies/detail/<Vista film id>. The page carries no dates, so
+ * firstShowTime is null and the push simply names the film.
+ */
+function afiListings (html) {
+  const out = new Map();
+  const re = /<div class="movie_item[^"]*">([\s\S]*?)<h3 class="item-title">\s*<a href="https?:\/\/silver\.afi\.com\/movies\/detail\/(\d+)"[^>]*>([\s\S]*?)<\/a>/g;
+  let m;
+  while ((m = re.exec(String(html || '')))) {
+    const [, , id, rawTitle] = m;
+    const title = stripTags(rawTitle);
+    if (!title || out.has(id)) continue;
+    out.set(id, { slug: id, title, firstShowTime: null, url: `https://silver.afi.com/movies/detail/${id}` });
+  }
+  return [...out.values()].sort((a, b) => a.slug.localeCompare(b.slug));
+}
+
+/**
+ * A Webedia/Boxoffice cinema site (Cinema Arts Theatre): the live
+ * `scheduledMovies` call says which movie ids have showtimes and on which
+ * days; the site's static movie list supplies titles and paths. A scheduled
+ * id missing from the static list still counts - the site rebuilds later
+ * than its schedule updates - it just gets its id as a title.
+ */
+function boxofficeListings (scheduled, movies, siteUrl) {
+  const days = (scheduled && scheduled.scheduledDays) || {};
+  const byId = new Map(((movies && movies.nodes) || movies || []).filter((m) => m && m.id).map((m) => [String(m.id), m]));
+  const base = String(siteUrl || '').replace(/\/$/, '');
+  return Object.keys(days).sort().map((id) => {
+    const movie = byId.get(id);
+    const dates = (days[id] || []).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+    return {
+      slug: id,
+      title: movie && typeof movie.title === 'string' && movie.title.trim() ? movie.title.trim() : `Movie ${id}`,
+      firstShowTime: dates[0] || null,
+      url: movie && movie.path ? `${base}${movie.path}` : base
+    };
+  });
 }
 
 /**
@@ -671,7 +787,7 @@ function composeListingMessages (fresh, theater) {
     const when = showTimeLabel(entry.firstShowTime);
     return {
       title: `New at ${name}`,
-      body: when ? `${entry.title} · first showing ${when}` : entry.title,
+      body: when ? `${entry.title} · ${/,/.test(when) ? 'first showing' : 'from'} ${when}` : entry.title,
       tag: `listing-${key}-${entry.slug}`,
       navigate: entry.url || (theater && theater.url) || '/'
     };
@@ -684,6 +800,11 @@ module.exports = {
   alamoListings,
   listingsDue,
   showTimeLabel,
+  decodeEntities,
+  veeziDateTime,
+  veeziListings,
+  afiListings,
+  boxofficeListings,
   composeListingMessages,
   SIGNUP_MAX_PER_SWEEP,
   signupsDue,

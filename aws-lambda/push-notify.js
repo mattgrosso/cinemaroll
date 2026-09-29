@@ -36,7 +36,7 @@ const {
   gamesDue, shouldSendGames, composeGamesMessage,
   externalWatches, externalLogsDue,
   signupsDue, composeSignupMessages,
-  alamoListings, listingsDue, composeListingMessages
+  alamoListings, veeziListings, afiListings, boxofficeListings, listingsDue, composeListingMessages
 } = require('./pushCadence');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
@@ -65,18 +65,74 @@ const QA_ACCOUNT_KEYS = new Set(['cinemaroll-tester-example-com']);
 const OWNER_ACCOUNT_KEY = 'mattgrosso-gmail-com';
 
 // Theaters whose new listings the owner is told about (Matt, 2026-09-28:
-// "notify me when new movies are listed for my local Alamo"). Each one's
-// seen-listings map lives at `push/state/theaters/<key>`; `listings` turns
-// the theater's feed into [{ slug, title, firstShowTime, url }]. Adding a
-// theater is adding an entry here. Alamo market ids are numeric and
-// sequential (0500 northern-virginia, 1100 dc-metro-area, ...).
+// "notify me when new movies are listed for my local Alamo", then "the AFI
+// in Silver Spring … the Miracle Theater … a really small independent
+// theater in Fairfax" - Cinema Arts). Each one's seen-listings map lives at
+// `push/state/theaters/<key>`; `listings()` fetches its public feed or page
+// and returns [{ slug, title, firstShowTime, url }] via the pure parsers in
+// pushCadence.js. Adding a theater is adding an entry here. Alamo market
+// ids are numeric and sequential (0500 northern-virginia, 1100 dc-metro-area).
+const FETCH_HEADERS = { 'user-agent': 'Mozilla/5.0 (compatible; cinemaroll-push; mailto:mattgrosso@gmail.com)' };
+const fetchText = async (url, accept = 'text/html') => {
+  const res = await fetch(url, { cache: 'no-store', headers: { ...FETCH_HEADERS, accept } });
+  if (!res.ok) throw new Error(`${url} -> ${res.status}`);
+  return res.text();
+};
+const fetchJson = async (url) => JSON.parse(await fetchText(url, 'application/json'));
+
+const CINEMA_ARTS_URL = 'https://www.cinemaartstheatre.com';
+// Gatsby static-query hash of the site's movie list; stable until the
+// query text changes. If it 404s, the index page's hash list is scanned.
+const CINEMA_ARTS_MOVIES_HASH = '3836549025';
+const cinemaArtsMovies = async () => {
+  const load = async (hash) => (await fetchJson(`${CINEMA_ARTS_URL}/page-data/sq/d/${hash}.json`)).data;
+  try {
+    const data = await load(CINEMA_ARTS_MOVIES_HASH);
+    if (data && data.allMovie) return data.allMovie;
+  } catch (error) {
+    console.warn('Cinema Arts movie list moved:', error.message);
+  }
+  const index = await fetchJson(`${CINEMA_ARTS_URL}/page-data/index/page-data.json`);
+  for (const hash of index.staticQueryHashes || []) {
+    const data = await load(hash).catch(() => null);
+    if (data && data.allMovie) return data.allMovie;
+  }
+  return { nodes: [] };
+};
+
 const THEATERS = [
   {
     key: 'alamo-bryant-street',
     name: 'Alamo Bryant Street',
     url: 'https://drafthouse.com/dc/theater/dc-bryant-street',
-    feedUrl: 'https://drafthouse.com/s/mother/v2/schedule/market/dc-metro-area',
-    listings: (feed) => alamoListings(feed, '1101')
+    listings: async () => alamoListings(await fetchJson('https://drafthouse.com/s/mother/v2/schedule/market/dc-metro-area'), '1101')
+  },
+  {
+    key: 'afi-silver',
+    name: 'AFI Silver',
+    url: 'https://silver.afi.com/now-playing/',
+    listings: async () => afiListings(await fetchText('https://silver.afi.com/now-playing/'))
+  },
+  {
+    key: 'miracle-theatre',
+    name: 'the Miracle Theatre',
+    url: 'https://ticketing.useast.veezi.com/sessions/?siteToken=m8rg867jdpj1g3vn7sq1f1wfg4',
+    listings: async (now) => veeziListings(
+      await fetchText('https://ticketing.useast.veezi.com/sessions/?siteToken=m8rg867jdpj1g3vn7sq1f1wfg4'),
+      { now, fallbackUrl: 'https://themiracletheatre.com/' }
+    )
+  },
+  {
+    key: 'cinema-arts',
+    name: 'Cinema Arts',
+    url: `${CINEMA_ARTS_URL}/`,
+    listings: async () => {
+      const [scheduled, movies] = await Promise.all([
+        fetchJson(`${CINEMA_ARTS_URL}/api/gatsby-source-boxofficeapi/scheduledMovies?theaters=X050X`),
+        cinemaArtsMovies()
+      ]);
+      return boxofficeListings(scheduled, movies, CINEMA_ARTS_URL);
+    }
   }
 ];
 
@@ -420,12 +476,7 @@ const notifySignups = async (accounts, now) => {
 // repertory film be news again. Send first, then record.
 const notifyTheaterListings = async (theater, now) => {
   const statePath = `${OWNER_ACCOUNT_KEY}/push/state/theaters/${theater.key}`;
-  const res = await fetch(theater.feedUrl, {
-    cache: 'no-store',
-    headers: { accept: 'application/json', 'user-agent': 'cinemaroll-push (mailto:mattgrosso@gmail.com)' }
-  });
-  if (!res.ok) throw new Error(`${theater.feedUrl} -> ${res.status}`);
-  const current = theater.listings(await res.json());
+  const current = await theater.listings(now);
   // An empty board is a broken fetch until proven otherwise - never let it
   // age everything out and re-announce the whole schedule later.
   if (!current.length) throw new Error('feed returned no listings');
