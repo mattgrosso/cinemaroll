@@ -36,7 +36,8 @@ const {
   gamesDue, shouldSendGames, composeGamesMessage,
   externalWatches, externalLogsDue,
   signupsDue, composeSignupMessages,
-  alamoListings, veeziListings, afiListings, boxofficeListings, listingsDue, composeListingMessages
+  alamoListings, veeziListings, afiListings, boxofficeListings, afiFirstShowtime,
+  cinemaclockListings, uncovered, listingsDue, composeListingMessages, LISTINGS_MAX_PER_SWEEP
 } = require('./pushCadence');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
@@ -100,18 +101,31 @@ const cinemaArtsMovies = async () => {
   return { nodes: [] };
 };
 
+// The chains (Regal, AMC) and www.si.edu all refuse a plain fetch; CinemaClock
+// lists them all, and marks which showtimes are on the IMAX screen.
+const CINEMACLOCK_URL = 'https://www.cinemaclock.com/movie-theaters';
+const imaxOn = (key, name, page, { wholeTheaterIsImax = false } = {}) => ({
+  key,
+  name,
+  url: `${CINEMACLOCK_URL}/${page}`,
+  listings: async () => cinemaclockListings(await fetchText(`${CINEMACLOCK_URL}/${page}`), { imaxOnly: !wholeTheaterIsImax, url: `${CINEMACLOCK_URL}/${page}` }),
+  // The Smithsonian theaters publish in batches every few weeks; a quiet
+  // board there is real, not a broken fetch.
+  mayBeEmpty: wholeTheaterIsImax
+});
+
+// THE ORDER IS THE PECKING ORDER. A new listing is only news at the first
+// theater in this list that has it ("I'll always go to the Alamo first"; an
+// IMAX only when "there are no showtimes at the Alamo or any of the other
+// theaters"; among the IMAXs "Udvar-Hazy the best, then the Mall, then
+// Silver Spring"). AFI's place after Cinema Arts is a guess he hasn't
+// confirmed.
 const THEATERS = [
   {
     key: 'alamo-bryant-street',
     name: 'Alamo Bryant Street',
     url: 'https://drafthouse.com/dc/theater/dc-bryant-street',
     listings: async () => alamoListings(await fetchJson('https://drafthouse.com/s/mother/v2/schedule/market/dc-metro-area'), '1101')
-  },
-  {
-    key: 'afi-silver',
-    name: 'AFI Silver',
-    url: 'https://silver.afi.com/now-playing/',
-    listings: async () => afiListings(await fetchText('https://silver.afi.com/now-playing/'))
   },
   {
     key: 'miracle-theatre',
@@ -133,7 +147,22 @@ const THEATERS = [
       ]);
       return boxofficeListings(scheduled, movies, CINEMA_ARTS_URL);
     }
-  }
+  },
+  {
+    key: 'afi-silver',
+    name: 'AFI Silver',
+    url: 'https://silver.afi.com/now-playing/',
+    listings: async () => afiListings(await fetchText('https://silver.afi.com/now-playing/')),
+    // The grid has no dates; the film's own page does. Fetched only for
+    // listings about to be announced.
+    enrich: async (listing) => ({ ...listing, firstShowTime: afiFirstShowtime(await fetchText(listing.url)) })
+  },
+  imaxOn('imax-udvar-hazy', 'the Udvar-Hazy IMAX', 'airbus-imax-theater', { wholeTheaterIsImax: true }),
+  imaxOn('imax-air-and-space', 'the Air and Space IMAX', 'lockheed-martin-imax-theater', { wholeTheaterIsImax: true }),
+  imaxOn('imax-regal-majestic', 'the Silver Spring IMAX', 'regal-majestic-imax'),
+  imaxOn('imax-amc-georgetown', 'the Georgetown IMAX', 'amc-loews-georgetown-14'),
+  imaxOn('imax-amc-tysons', 'the Tysons IMAX', 'amc-tysons-corner-16'),
+  imaxOn('imax-amc-hoffman', 'the Hoffman Center IMAX', 'amc-hoffman-center-22')
 ];
 
 // Mirrors databaseKeyCharacters.json (FROZEN list - see that file).
@@ -346,13 +375,12 @@ const runSweep = async () => {
   } catch (error) {
     console.error('Sign-up check failed:', error.message);
   }
-  for (const theater of THEATERS) {
-    try {
-      const delivered = await notifyTheaterListings(theater, now);
-      if (delivered) results.push({ topKey: OWNER_ACCOUNT_KEY, delivered, reason: `listings:${theater.key}` });
-    } catch (error) {
-      console.error(`Listings check failed (${theater.key}):`, error.message);
+  try {
+    for (const [key, delivered] of Object.entries(await notifyTheaterListings(now))) {
+      if (delivered) results.push({ topKey: OWNER_ACCOUNT_KEY, delivered, reason: `listings:${key}` });
     }
+  } catch (error) {
+    console.error('Listings check failed:', error.message);
   }
 
   for (const topKey of accounts) {
@@ -470,34 +498,67 @@ const notifySignups = async (accounts, now) => {
 // --- New theater listings ---------------------------------------------------
 //
 // Matt refreshes his Alamo's showtimes page by hand to catch new films the
-// moment tickets open. The sweep reads the theater's own feed instead and
-// tells him what wasn't on the board last time; listingsDue (tested) decides,
+// moment tickets open. The sweep reads every theater's board instead and
+// tells him what wasn't on a board last time; listingsDue (tested) decides,
 // including the silent first run and the fortnight of memory that lets a
-// repertory film be news again. Send first, then record.
-const notifyTheaterListings = async (theater, now) => {
-  const statePath = `${OWNER_ACCOUNT_KEY}/push/state/theaters/${theater.key}`;
-  const current = await theater.listings(now);
-  // An empty board is a broken fetch until proven otherwise - never let it
-  // age everything out and re-announce the whole schedule later.
-  if (!current.length) throw new Error('feed returned no listings');
-
-  const known = await dbGet(statePath);
-  const { fresh, nextKnown, seeded } = listingsDue({ known, current, now });
-  if (seeded) {
-    await dbSet(statePath, nextKnown);
-    console.log(`Listings (${theater.key}): first run, recorded ${current.length} listing(s)`);
-    return 0;
-  }
-
-  let delivered = 0;
-  if (fresh.length) {
-    const subscriptions = await dbGet(`${OWNER_ACCOUNT_KEY}/push/subscriptions`);
-    for (const message of composeListingMessages(fresh, theater)) {
-      delivered += await sendToAccount(OWNER_ACCOUNT_KEY, subscriptions, buildPayload({ ...message, appBadge: 1 }));
+// repertory film be news again. Boards are all fetched first because the
+// pecking order needs them: a fresh listing is dropped when a better theater
+// currently has the film (uncovered, tested). If a better theater's board
+// could not be read this sweep, the lower theater waits - announcing
+// something the Alamo may well have is worse than a 15-minute delay. Send
+// first, then record; covered listings are recorded too.
+const notifyTheaterListings = async (now) => {
+  const boards = await Promise.all(THEATERS.map(async (theater) => {
+    try {
+      const listings = await theater.listings(now);
+      // An empty board is a broken fetch until proven otherwise - never let
+      // it age everything out and re-announce the whole schedule later.
+      if (!listings.length && !theater.mayBeEmpty) throw new Error('returned no listings');
+      return { theater, listings };
+    } catch (error) {
+      console.error(`Listings (${theater.key}) fetch failed:`, error.message);
+      return { theater, listings: null };
     }
-    console.log(`Listings (${theater.key}): ${fresh.length} new (${fresh.map((l) => l.slug).join(', ')}), ${delivered} push(es) delivered`);
+  }));
+
+  const delivered = {};
+  let subscriptions = null;
+  for (let i = 0; i < boards.length; i += 1) {
+    const { theater, listings } = boards[i];
+    if (!listings) continue;
+    const better = boards.slice(0, i);
+    if (better.some((b) => !b.listings)) {
+      console.log(`Listings (${theater.key}): waiting, a better theater's board is unreadable`);
+      continue;
+    }
+    const statePath = `${OWNER_ACCOUNT_KEY}/push/state/theaters/${theater.key}`;
+    try {
+      const known = await dbGet(statePath);
+      const { fresh, nextKnown, seeded } = listingsDue({ known, current: listings, now });
+      if (seeded) {
+        await dbSet(statePath, nextKnown);
+        console.log(`Listings (${theater.key}): first run, recorded ${listings.length} listing(s)`);
+        continue;
+      }
+      const { keep, dropped } = uncovered(fresh, better.map((b) => b.listings));
+      if (dropped.length) console.log(`Listings (${theater.key}): ${dropped.length} covered by a better theater (${dropped.map((l) => l.title).join(', ')})`);
+      let sent = 0;
+      if (keep.length) {
+        const detailed = theater.enrich && keep.length <= LISTINGS_MAX_PER_SWEEP
+          ? await Promise.all(keep.map((l) => theater.enrich(l).catch(() => l)))
+          : keep;
+        if (!subscriptions) subscriptions = await dbGet(`${OWNER_ACCOUNT_KEY}/push/subscriptions`);
+        for (const message of composeListingMessages(detailed, theater)) {
+          sent += await sendToAccount(OWNER_ACCOUNT_KEY, subscriptions, buildPayload({ ...message, appBadge: 1 }));
+        }
+        console.log(`Listings (${theater.key}): ${keep.length} new (${keep.map((l) => l.slug).join(', ')}), ${sent} push(es) delivered`);
+      }
+      await dbSet(statePath, nextKnown);
+      delivered[theater.key] = sent;
+    } catch (error) {
+      console.error(`Listings (${theater.key}) failed:`, error.message);
+    }
   }
-  await dbSet(statePath, nextKnown);
   return delivered;
 };
 

@@ -267,10 +267,31 @@ from the poster URL, dates carry no year so `veeziDateTime` infers it, the `<div
 Gatsby site: `/api/gatsby-source-boxofficeapi/scheduledMovies?theaters=X050X` gives ids +
 days, titles come from the static query `page-data/sq/d/3836549025.json`, with a scan of the
 index page's `staticQueryHashes` if that hash ever moves). All seeded 2026-09-28 from the
-Lambda itself, so none of the sites block AWS. **Not built:** an IMAX — Udvar-Hazy's Airbus
-IMAX has a feed (`dashboard.si.edu/showtimes/json/theater/53`, `52` = the Mall's Lockheed
-Martin; `www.si.edu` itself is bot-walled) but it was empty at the time, and AMC/Regal/
-imax.com all answer 403 to a plain fetch.
+Lambda itself, so none of the sites block AWS.
+
+**The pecking order, and the IMAXs** (later the same night: "if a movie is showing at more
+than one theater, there's sort of a hierarchy … I'll always go to the Alamo first … only show
+an IMAX listing if there are no showtimes at the Alamo or any of the other theaters … rank
+Udvar-Hazy the best, then the Mall, then Silver Spring"). `THEATERS` is ORDERED and the order
+is the rule: the sweep fetches every board first, then walks the list, and a fresh listing is
+dropped when any earlier theater's current board carries the same film (`uncovered` +
+`titleKey`, tested — case, bracketed years, "in 35mm", "New Restoration", Alamo's event
+suffixes all fold). If a better theater's board couldn't be read, the lower ones WAIT that
+sweep rather than announce something the Alamo may have. Covered listings are still recorded.
+Order: Alamo, Miracle, Cinema Arts, AFI (its slot is a guess Matt hasn't confirmed), then the
+IMAXs: Udvar-Hazy, Air and Space (the Mall), Regal Majestic (Silver Spring), AMC Georgetown,
+AMC Tysons, AMC Hoffman. Regal Gallery Place has 4DX and RPX, no IMAX.
+
+The IMAXs are read from **CinemaClock** (`cinemaclock.com/movie-theaters/<slug>`), the one
+source that isn't bot-walled: Regal, AMC, imax.com and www.si.edu all answer 403 to a plain
+fetch (dashboard.si.edu mirrors the Smithsonian site, but its showtimes JSON was empty and
+its per-date markup unseen). `cinemaclockListings` (tested against markup cut from the live
+page) joins each film's `btntim aw<id>` to the per-format sections `data-earliest-date=…
+class="… filimax … fie<id>"`, keeps only `filimax` sections for the chains (the whole
+theater is IMAX at the Smithsonian ones), and drops a section with no `data-time` (on the
+books, not scheduled). Note `data-mid` is a streaming id, NOT the showtimes id. AFI listings
+are enriched with a first showtime from the film's own page (`afiFirstShowtime`) only when
+about to be announced — the grid has no dates and 97 detail pages a sweep would be silly.
 
 **Tapping a chore notification opens that prompt** (2026-09-13: "took me to the home
 screen with the applicable notification already opened and ready to go").

@@ -764,6 +764,112 @@ function boxofficeListings (scheduled, movies, siteUrl) {
 }
 
 /**
+ * AFI Silver's film detail page carries the showtimes the grid doesn't:
+ * "<p>Monday, September 28, 2026</p> ... <span>9:00 p.m.<span>". Earliest
+ * one, as the cinema's local clock. Only fetched for a listing that is
+ * about to be announced - 97 detail pages a sweep would be silly.
+ */
+function afiFirstShowtime (html) {
+  let earliest = null;
+  const re = /<div class="show_wrap">\s*<p>([^<]+)<\/p>([\s\S]*?)<\/div>/g;
+  let m;
+  while ((m = re.exec(String(html || '')))) {
+    const dm = /([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})/.exec(m[1]);
+    if (!dm) continue;
+    const month = MONTH_INDEX[dm[1].toLowerCase()];
+    if (!month) continue;
+    const times = [...m[2].matchAll(/(\d{1,2}):(\d{2})\s*([ap])\.?m\.?/gi)];
+    for (const t of times) {
+      const hour = Number(t[1]) % 12 + (t[3].toLowerCase() === 'p' ? 12 : 0);
+      const when = `${dm[3]}-${pad2(month)}-${pad2(Number(dm[2]))}T${pad2(hour)}:${pad2(Number(t[2]))}:00`;
+      if (!earliest || when < earliest) earliest = when;
+    }
+  }
+  return earliest;
+}
+
+/**
+ * A CinemaClock theater page (cinemaclock.com/movie-theaters/<slug>) - the
+ * one readable source for the chains: Regal, AMC and imax.com all answer
+ * 403 to a plain fetch, and www.si.edu is bot-walled. Each film block has a
+ * showtimes button carrying its id (`btntim aw<id>`); below it, one
+ * section per format (`<div data-earliest-date="YYYYMMDD" class="... fie<id>">`)
+ * with `filimax` marking the IMAX screen and the day's times as
+ * `data-time="HHMM"`. With imaxOnly, only IMAX sections count - Matt wants
+ * "what's playing at the IMAX", not everything at Regal Majestic. A section
+ * with no times at all is a film on the books but not scheduled (the
+ * Smithsonian pages list their documentaries this way) and is skipped.
+ */
+function cinemaclockListings (html, { imaxOnly = false, url = null } = {}) {
+  const text = String(html || '');
+  const titles = new Map();
+  const blockRe = /<h3 class=['"]movietitle[^'"]*['"][^>]*>([\s\S]*?)<\/h3>([\s\S]*?)(?=<h3 class=['"]movietitle|$)/g;
+  let m;
+  while ((m = blockRe.exec(text))) {
+    const id = (/btntim aw(\d+)/.exec(m[2]) || [])[1];
+    const title = stripTags(m[1]);
+    if (id && title && !titles.has(id)) titles.set(id, title);
+  }
+  const films = new Map();
+  const sectionRe = /<div data-earliest-date="(\d{4})(\d{2})(\d{2})" class="([^"]*)">([\s\S]*?)(?=<div data-earliest-date=|<!--MoBl-->|<h3 class=['"]movietitle|$)/g;
+  while ((m = sectionRe.exec(text))) {
+    const [, y, mo, d, cls, body] = m;
+    if (imaxOnly && !/\bfilimax\b/.test(cls)) continue;
+    const id = (/\bfie(\d+)/.exec(cls) || [])[1];
+    const time = (/data-time="(\d{2})(\d{2})"/.exec(body) || []);
+    if (!id || !time[1]) continue;
+    const when = `${y}-${mo}-${d}T${time[1]}:${time[2]}:00`;
+    const entry = films.get(id) || { slug: id, title: titles.get(id) || `Film ${id}`, firstShowTime: when, url };
+    if (when < entry.firstShowTime) entry.firstShowTime = when;
+    films.set(id, entry);
+  }
+  return [...films.values()].sort((a, b) => a.slug.localeCompare(b.slug));
+}
+
+// --- The pecking order (Matt, 2026-09-28) ------------------------------------
+//
+// "If a movie is showing at more than one theater, there's sort of a hierarchy
+// of theaters that I care about … I don't really need to know if a movie is
+// showing at the Cinema Arts Theater if it's also showing at the Alamo … if
+// a movie is showing at one of the IMAXs but is also showing at Alamo, I'm
+// still going to go to the Alamo." So a new listing is only news at the best
+// theater that has it: THEATERS is ordered, and a fresh listing is dropped
+// when any earlier theater's CURRENT board carries the same title.
+
+/**
+ * The same film as different theaters spell it. Case, punctuation, a year
+ * in brackets, format notes ("in 35mm", "- New Restoration") and Alamo's
+ * event suffix all go; "HALLOWEEN (1978) in 35mm" and "Halloween (1978)"
+ * meet in the middle. False negatives cost one extra push, so this errs
+ * towards matching.
+ */
+function titleKey (title) {
+  return String(title || '')
+    .toLowerCase()
+    .replace(/\((?:[^()]*)\)/g, ' ')
+    .replace(/\b(?:in|on)\s+(?:35|70|16)\s*mm\b/g, ' ')
+    .replace(/\b(?:new\s+)?(?:4k\s+)?restoration\b/g, ' ')
+    .replace(/\b(?:dubbed|subtitled|encore|advance screening|the big show|insider screening)\b/g, ' ')
+    .replace(/[‘’'"`]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/**
+ * fresh: this theater's new listings; betterBoards: the current listings of
+ * every theater ranked above it. Returns what is still worth saying, and
+ * what was covered (kept for the log).
+ */
+function uncovered (fresh, betterBoards) {
+  const covered = new Set();
+  (betterBoards || []).forEach((board) => (board || []).forEach((l) => { const k = titleKey(l && l.title); if (k) covered.add(k); }));
+  const keep = []; const dropped = [];
+  (fresh || []).forEach((l) => (covered.has(titleKey(l && l.title)) ? dropped : keep).push(l));
+  return { keep, dropped };
+}
+
+/**
  * fresh: alamoListings entries. theater: { key, name, url }. Up to
  * LISTINGS_MAX_PER_SWEEP separate pushes, each tapping through to that
  * listing's ticket page; more than that is one summary that opens the
@@ -805,6 +911,10 @@ module.exports = {
   veeziListings,
   afiListings,
   boxofficeListings,
+  afiFirstShowtime,
+  cinemaclockListings,
+  titleKey,
+  uncovered,
   composeListingMessages,
   SIGNUP_MAX_PER_SWEEP,
   signupsDue,

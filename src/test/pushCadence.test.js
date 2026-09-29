@@ -28,6 +28,10 @@ import {
   veeziListings,
   afiListings,
   boxofficeListings,
+  afiFirstShowtime,
+  cinemaclockListings,
+  titleKey,
+  uncovered,
   LISTINGS_MAX_PER_SWEEP,
   LISTINGS_FORGET_MS
 } from '../../aws-lambda/pushCadence.js';
@@ -917,5 +921,83 @@ describe('theater listings — the parsed sites', () => {
 
   it('decodes the entities these pages actually use', () => {
     expect(decodeEntities('Sabrina &#8211; 1954 &amp; &quot;Glory&quot; &#x27;s &euml;')).toBe('Sabrina – 1954 & "Glory" \'s ë');
+  });
+});
+
+// Matt, later the same night: "if a movie is showing at more than one
+// theater, there's sort of a hierarchy of theaters that I care about … I'll
+// always go to the Alamo first", and the IMAXs only when nobody else has it.
+describe('the pecking order', () => {
+  it('folds the ways theaters spell the same film', () => {
+    expect(titleKey('HALLOWEEN (1978) in 35mm')).toBe(titleKey('Halloween (1978)'));
+    expect(titleKey('Dune: Part Three (Advance Screening)')).toBe(titleKey('Dune: Part Three'));
+    expect(titleKey("DON'T PLAY WITH FIRE - New Restoration")).toBe(titleKey("Don't Play With Fire"));
+    expect(titleKey('Spirited Away (Dubbed)')).toBe(titleKey('Spirited Away (Subtitled)'));
+    expect(titleKey('Superman')).not.toBe(titleKey('Superman 2'));
+    expect(titleKey('')).toBe('');
+  });
+
+  it('drops a fresh listing that a better theater currently has, keeps the rest', () => {
+    const fresh = [
+      { slug: 'a', title: 'Halloween (1978)' },
+      { slug: 'b', title: 'Daughters of the Dust' },
+      { slug: 'c', title: 'TENET' }
+    ];
+    const alamo = [{ slug: 'x', title: 'HALLOWEEN (1978) in 35mm' }];
+    const miracle = [{ slug: 'y', title: 'Tenet' }];
+    const { keep, dropped } = uncovered(fresh, [alamo, miracle]);
+    expect(keep.map((l) => l.slug)).toEqual(['b']);
+    expect(dropped.map((l) => l.slug)).toEqual(['a', 'c']);
+  });
+
+  it('with no better theaters everything is news', () => {
+    const fresh = [{ slug: 'a', title: 'Faust (1926)' }];
+    expect(uncovered(fresh, []).keep).toEqual(fresh);
+    expect(uncovered(fresh, [null, []]).keep).toEqual(fresh);
+  });
+});
+
+describe('theater listings — AFI showtimes and the IMAXs via CinemaClock', () => {
+  it('reads the earliest showtime off an AFI film page', () => {
+    const html = `<div class="movie_shows"><h2>Showtimes</h2>
+      <div class="show_wrap"> <p>Tuesday, September 29, 2026</p> <a class="select_show" data-sid="1"><span>9:00 p.m.<span></a> <a class="select_show" data-sid="2"><span>4:30 p.m.<span></a> </div>
+      <div class="show_wrap"> <p>Monday, September 28, 2026</p> <a class="select_show" data-sid="3"><span>11:15 a.m.<span></a> </div>
+      </div>`;
+    expect(afiFirstShowtime(html)).toBe('2026-09-28T11:15:00');
+    expect(afiFirstShowtime('<div class="show_wrap"><p>no date here</p></div>')).toBeNull();
+    expect(afiFirstShowtime('')).toBeNull();
+  });
+
+  // Cut from cinemaclock.com/movie-theaters/regal-majestic-imax on 2026-09-28.
+  const CINEMACLOCK = `
+    <h3 class='movietitle short' data-sort='avengersendgame2019'><a class='okienko' href='/movies/avengers-endgame-2019'>Avengers: Endgame</a></h3>
+    <p class='moviegenre'>2019</p><div class='streams' data-mid='177422'></div>
+    <a class='button16 btntim aw177422 okienko' href='/movie-times/avengers-endgame-2019'>showtimes</a>
+    <!--MoBl--></div>
+    <div data-earliest-date="20260928" class="filall fil2d filimax filcc filad fil0111010 fie177422"><h4 class="cinemaname insidem">Regal Majestic &amp;&nbsp;IMAX</h4>
+      <p class="timesalso">IMAX&nbsp;Screen</p>
+      <p class="times"><u>Today <span class="timesdate">Sep 28</span></u><i><span class="tix tod" data-time="1425">2:25 </span></i></p>
+      <p class="timesother"><s><u>Tue <span class="timesdate">Sep 29</span></u><i><span class="tix" data-time="1425">2:25 </span></i></s></p></div>
+    <div data-earliest-date="20260928" class="filall fil2d filexp filcc filad fil1110010 fie177422"><p class="timesalso">Recliner Seating</p>
+      <p class="times"><i><span class="tix tod" data-time="1100">11:00 </span></i></p></div>
+    <h3 class="movietitle"><a class='okienko' href='/movies/the-blackcoat-s-daughter-2015'>The Blackcoat&apos;s Daughter</a></h3>
+    <div class='streams' data-mid='126723'></div><a class='button16 btntim aw267764 okienko' href='/movie-times/the-blackcoat-s-daughter-2015'>showtimes</a>
+    <!--MoBl--></div>
+    <div data-earliest-date="20261001" class="filall fil2d filimax fie267764"><p class="times"><u>Thu <span class="timesdate">Oct 1</span></u><i><span class="tix" data-time="1520">3:20 </span></i></p></div>
+    <h3 class="movietitle">Apollo 11: First Steps</h3><a class='button16 btntim aw298452 okienko' href='/movie-times/apollo'>showtimes</a><!--MoBl--></div>
+    <div data-earliest-date="20260928" class="filall  fil2d fil0000011 fie298452"><p class="times">No showtimes</p></div>`;
+
+  it('CinemaClock: only the IMAX-screen sections, joined to titles by the showtimes id, not the streaming id', () => {
+    expect(cinemaclockListings(CINEMACLOCK, { imaxOnly: true, url: 'https://cc/majestic' })).toEqual([
+      { slug: '177422', title: 'Avengers: Endgame', firstShowTime: '2026-09-28T14:25:00', url: 'https://cc/majestic' },
+      { slug: '267764', title: "The Blackcoat's Daughter", firstShowTime: '2026-10-01T15:20:00', url: 'https://cc/majestic' }
+    ]);
+  });
+
+  it('CinemaClock: without the IMAX filter every scheduled section counts, but a film with no times is not on the board', () => {
+    const all = cinemaclockListings(CINEMACLOCK, { url: 'u' });
+    expect(all.map((l) => l.slug)).toEqual(['177422', '267764']);
+    expect(all[0].firstShowTime).toBe('2026-09-28T11:00:00');
+    expect(cinemaclockListings('', { imaxOnly: true })).toEqual([]);
   });
 });
