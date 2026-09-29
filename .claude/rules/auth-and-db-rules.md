@@ -317,8 +317,12 @@ misses cached in localStorage `showtimesPosters` for 30 days, module cache + sha
 like personLookup). A feed poster that 404s falls through to the lookup. Dismissals live at
 `theaters/dismissed/<theaterKey>/<slug> = at`, written by store `dismissListing` (optimistic;
 `restore: true` undoes), pruned to the current board by `loadTheaterBoard`, and excluded from
-the Insights "new" pill. The screen is a poster grid (3-up on a phone), X in the corner,
-swipe-left past 90px dismisses; horizontal intent is decided once so scrolling never fires it.
+the Insights "new" pill. The screen is one poster to a row on a phone (two/three on wide screens), X
+in the corner, swipe RIGHT past 110px or a third of the card dismisses (the back gesture owns
+the left 20px of the screen and the cards start 30px in); horizontal intent is decided once so
+scrolling never fires it. Verified with synthetic TouchEvents in the tester's iframe (v1.118.9).
+Dismissals are per listing and pruned when the film leaves the board, so a return years later
+is shown and pushed again — Matt asked for exactly that.
 
 **Testing it signed in** (2026-09-28, Matt: "you should be able to use the test user to test
 this"). The sweep mirrors the board to `cinemaroll-tester-example-com/theaters/board` on every

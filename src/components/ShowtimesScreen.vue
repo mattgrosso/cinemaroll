@@ -2,7 +2,7 @@
   <div class="showtimes">
     <BackLink/>
     <h1 class="st-title">Showtimes</h1>
-    <p class="st-subtitle">What's on the boards at the theaters you follow.</p>
+    <p class="st-subtitle">What's on the boards at the theaters you follow. Swipe a poster to the right to dismiss it.</p>
 
     <SkeletonBlock v-if="loading" :rows="6"/>
 
@@ -29,9 +29,10 @@
         <p v-else-if="!theater.shown.length" class="st-empty">
           {{ theater.listings.length ? 'Nothing here you haven\'t seen or a better theater lacks.' : 'Nothing listed.' }}
         </p>
-        <!-- Posters, not names (Matt: "I like posters more than text"). A
-             card is the film's poster with a thin caption; the X and a
-             swipe to the left both dismiss it. -->
+        <!-- Posters, not names (Matt: "I like posters more than text"), one
+             to a row ("make these posters be one across and swiping right
+             dismisses them", 2026-09-28). A card is the film's poster with a
+             thin caption; the X and a swipe to the right both dismiss it. -->
         <div v-else class="st-grid">
           <div
             v-for="item in theater.shown"
@@ -41,8 +42,8 @@
             :style="cardStyle(theater, item)"
             @touchstart.passive="touchStart($event, theater, item)"
             @touchmove.passive="touchMove($event, theater, item)"
-            @touchend="touchEnd(theater, item)"
-            @touchcancel="touchEnd(theater, item, true)"
+            @touchend="touchEnd($event, theater, item)"
+            @touchcancel="touchEnd($event, theater, item, true)"
           >
             <a class="st-card-link" :href="item.url || theater.url" target="_blank" rel="noopener" @click="blockIfSwiping($event)">
               <img
@@ -99,7 +100,9 @@ import { lookupPoster } from '../utils/posterLookup.js';
 
 export const SHOWTIMES_SEEN_KEY = 'showtimesSeenAt';
 const NEW_FOR_MS = 7 * 24 * 60 * 60 * 1000;
-const SWIPE_DISMISS_PX = 90;
+// A right swipe dismisses once it has travelled this far or a third of the
+// card, whichever is less - a flick on a phone, not a drag across it.
+const SWIPE_DISMISS_PX = 110;
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -231,9 +234,11 @@ export default {
         this.$store.dispatch('dismissListing', { theaterKey: theater.key, slug: item.slug }).catch(() => {});
       }, 180);
     },
-    // Swipe left to dismiss. Horizontal intent is decided once (a mostly
-    // vertical move is a scroll and the card stays put); a release past the
-    // threshold dismisses, short of it snaps back.
+    // Swipe RIGHT to dismiss (the back gesture owns the left 20px of the
+    // screen, and the cards start 30px in, so the two never meet).
+    // Horizontal intent is decided once (a mostly vertical move is a scroll
+    // and the card stays put); a release past the threshold dismisses,
+    // short of it snaps back.
     touchStart (event, theater, item) {
       if (item.dismissed || event.touches.length !== 1) return;
       const t = event.touches[0];
@@ -247,14 +252,15 @@ export default {
       const dy = t.clientY - s.y;
       if (s.horizontal === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) s.horizontal = Math.abs(dx) > Math.abs(dy);
       if (!s.horizontal) return;
-      this.swipe = { ...s, dx: Math.min(0, dx) };
+      this.swipe = { ...s, dx: Math.max(0, dx) };
     },
-    touchEnd (theater, item, cancelled = false) {
+    touchEnd (event, theater, item, cancelled = false) {
       const s = this.swipe;
       if (!s || s.id !== this.cardId(theater, item)) return;
       this.swipe = null;
       if (cancelled || !s.horizontal) return;
-      if (-s.dx >= SWIPE_DISMISS_PX) {
+      const width = (event && event.currentTarget && event.currentTarget.offsetWidth) || 0;
+      if (s.dx >= Math.min(SWIPE_DISMISS_PX, width ? width / 3 : SWIPE_DISMISS_PX)) {
         this.justSwiped = Date.now();
         this.toggleDismiss(theater, item);
       }
@@ -266,7 +272,7 @@ export default {
     cardStyle (theater, item) {
       const s = this.swipe;
       if (s && s.id === this.cardId(theater, item) && s.horizontal) {
-        return { transform: `translateX(${s.dx}px)`, opacity: String(Math.max(0.25, 1 + s.dx / 220)), transition: 'none' };
+        return { transform: `translateX(${s.dx}px)`, opacity: String(Math.max(0.25, 1 - s.dx / 260)), transition: 'none' };
       }
       return null;
     }
@@ -339,12 +345,19 @@ export default {
 
 .st-empty { color: #999; font-size: 0.82rem; margin: 0.2rem 0 0; }
 
-/* Three posters across on a phone (390px wide, inside the section's
-   padding), more as the screen allows. */
+/* One poster to a row, the width of the section, so a swipe has room to
+   be a swipe. Wider screens get two so a desktop isn't a wall of one. */
 .st-grid {
   display: grid;
-  gap: 0.5rem;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 0.75rem;
+  grid-template-columns: 1fr;
+
+  @media (min-width: 700px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  @media (min-width: 1100px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 .st-card {
@@ -357,7 +370,7 @@ export default {
 
   &.covered { opacity: 0.55; }
   &.dismissed { opacity: 0.4; }
-  &.leaving { transform: translateX(-120%); opacity: 0; }
+  &.leaving { transform: translateX(120%); opacity: 0; }
 }
 
 .st-card-link {
@@ -373,6 +386,8 @@ export default {
   object-fit: cover;
   width: 100%;
 }
+
+.st-poster-blank { font-size: 1.1rem; }
 
 .st-poster-blank {
   align-items: center;
@@ -397,7 +412,7 @@ export default {
   background: rgba(0, 0, 0, 0.75);
   border-radius: 3px;
   color: #eee;
-  font-size: 0.58rem;
+  font-size: 0.68rem;
   font-weight: 700;
   padding: 0.1rem 0.3rem;
   text-transform: uppercase;
@@ -412,13 +427,13 @@ export default {
   flex-direction: column;
   gap: 0.05rem;
   left: 0;
-  padding: 1.1rem 0.4rem 0.35rem;
+  padding: 1.6rem 0.7rem 0.55rem;
   position: absolute;
   right: 0;
 }
 
 .st-caption-title {
-  font-size: 0.7rem;
+  font-size: 0.95rem;
   font-weight: 600;
   line-height: 1.15;
   overflow: hidden;
@@ -426,8 +441,8 @@ export default {
   white-space: nowrap;
 }
 
-.st-caption-when { color: #ccc; font-size: 0.62rem; }
-.st-caption-also { color: #ffc107; font-size: 0.6rem; }
+.st-caption-when { color: #ccc; font-size: 0.78rem; }
+.st-caption-also { color: #ffc107; font-size: 0.74rem; }
 
 .st-dismiss {
   align-items: center;
@@ -436,12 +451,12 @@ export default {
   border-radius: 999px;
   color: #fff;
   display: flex;
-  font-size: 0.75rem;
-  height: 28px;
+  font-size: 0.95rem;
+  height: 36px;
   justify-content: center;
   position: absolute;
-  right: 0.25rem;
-  top: 0.25rem;
-  width: 28px;
+  right: 0.4rem;
+  top: 0.4rem;
+  width: 36px;
 }
 </style>
