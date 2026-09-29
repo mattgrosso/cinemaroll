@@ -32,6 +32,7 @@ import {
   cinemaclockListings,
   titleKey,
   uncovered,
+  boardForApp,
   LISTINGS_MAX_PER_SWEEP,
   LISTINGS_FORGET_MS
 } from '../../aws-lambda/pushCadence.js';
@@ -775,6 +776,7 @@ describe('theater listings', () => {
     expect(result.seeded).toBe(true);
     expect(result.fresh).toEqual([]);
     expect(Object.keys(result.nextKnown).sort()).toEqual(current.map((l) => l.slug));
+    expect(result.nextKnown[current[0].slug]).toEqual({ f: NOW, l: NOW });
   });
 
   it('a listing not on the stored board is news; the rest are not', () => {
@@ -782,14 +784,14 @@ describe('theater listings', () => {
     const known = { 'dune-part-three': NOW - HOUR, 'halloween-1978': NOW - HOUR };
     const result = listingsDue({ known, current, now: NOW });
     expect(result.fresh.map((l) => l.slug)).toEqual(['advance-screening-dune-part-three']);
-    expect(result.nextKnown['advance-screening-dune-part-three']).toBe(NOW);
-    expect(result.nextKnown['dune-part-three']).toBe(NOW);
+    expect(result.nextKnown['advance-screening-dune-part-three']).toEqual({ f: NOW, l: NOW });
+    expect(result.nextKnown['dune-part-three']).toEqual({ f: NOW - HOUR, l: NOW });
   });
 
   it('a listing that drops off the board for one sweep is not news when it returns', () => {
     const known = { 'dune-part-three': NOW - 2 * HOUR };
     const gone = listingsDue({ known, current: [], now: NOW - HOUR });
-    expect(gone.nextKnown['dune-part-three']).toBe(NOW - 2 * HOUR);
+    expect(gone.nextKnown['dune-part-three']).toEqual({ f: NOW - 2 * HOUR, l: NOW - 2 * HOUR });
     const back = listingsDue({ known: gone.nextKnown, current: alamoListings(feed, '1101'), now: NOW });
     expect(back.fresh.map((l) => l.slug)).not.toContain('dune-part-three');
   });
@@ -989,8 +991,8 @@ describe('theater listings — AFI showtimes and the IMAXs via CinemaClock', () 
 
   it('CinemaClock: only the IMAX-screen sections, joined to titles by the showtimes id, not the streaming id', () => {
     expect(cinemaclockListings(CINEMACLOCK, { imaxOnly: true, url: 'https://cc/majestic' })).toEqual([
-      { slug: '177422', title: 'Avengers: Endgame', firstShowTime: '2026-09-28T14:25:00', url: 'https://cc/majestic' },
-      { slug: '267764', title: "The Blackcoat's Daughter", firstShowTime: '2026-10-01T15:20:00', url: 'https://cc/majestic' }
+      { slug: '177422', title: 'Avengers: Endgame', firstShowTime: '2026-09-28T14:25:00', url: 'https://cc/majestic', imax: true },
+      { slug: '267764', title: "The Blackcoat's Daughter", firstShowTime: '2026-10-01T15:20:00', url: 'https://cc/majestic', imax: true }
     ]);
   });
 
@@ -998,6 +1000,32 @@ describe('theater listings — AFI showtimes and the IMAXs via CinemaClock', () 
     const all = cinemaclockListings(CINEMACLOCK, { url: 'u' });
     expect(all.map((l) => l.slug)).toEqual(['177422', '267764']);
     expect(all[0].firstShowTime).toBe('2026-09-28T11:00:00');
+    expect(all.map((l) => l.imax)).toEqual([true, true]);
     expect(cinemaclockListings('', { imaxOnly: true })).toEqual([]);
+  });
+});
+
+describe('the board the app shows', () => {
+  it('keeps pecking order, marks what a better theater also has, carries first-seen stamps, tolerates a failed board', () => {
+    const boards = [
+      { theater: { key: 'alamo', name: 'Alamo', url: 'a' }, listings: [{ slug: 'x', title: 'Halloween (1978)', firstShowTime: '2026-10-31T21:00:00', url: 'ax' }] },
+      { theater: { key: 'afi', name: 'AFI', url: 'f' }, listings: null },
+      { theater: { key: 'majestic', name: 'Regal Majestic', url: 'm' }, listings: [
+        { slug: '1', title: 'HALLOWEEN (1978) in 35mm', firstShowTime: null, imax: true },
+        { slug: '2', title: 'Digger', firstShowTime: '2026-10-02T15:20:00', url: 'm2' }
+      ] }
+    ];
+    const known = { alamo: { x: { f: NOW - HOUR, l: NOW } }, majestic: { 1: NOW - 2 * HOUR } };
+    const board = boardForApp(boards, known, NOW);
+    expect(board.updatedAt).toBe(NOW);
+    expect(board.theaters.map((t) => [t.key, t.ok, t.listings.length])).toEqual([['alamo', true, 1], ['afi', false, 0], ['majestic', true, 2]]);
+    expect(board.theaters[0].listings[0]).toEqual({ slug: 'x', title: 'Halloween (1978)', firstShowTime: '2026-10-31T21:00:00', url: 'ax', imax: false, firstSeenAt: NOW - HOUR, coveredBy: null });
+    expect(board.theaters[2].listings[0]).toMatchObject({ imax: true, url: 'm', firstSeenAt: NOW - 2 * HOUR, coveredBy: 'alamo' });
+    expect(board.theaters[2].listings[1]).toMatchObject({ url: 'm2', firstSeenAt: NOW, coveredBy: null });
+  });
+
+  it('an IMAX showing is named as one in the push', () => {
+    const [m] = composeListingMessages([{ slug: 'a', title: 'Digger', firstShowTime: '2026-10-02T15:20:00', url: 'u', imax: true }], { key: 'k', name: 'Regal Majestic' });
+    expect(m.body).toBe('Digger (IMAX) · first showing Fri Oct 2, 3:20 PM');
   });
 });

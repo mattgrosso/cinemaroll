@@ -423,6 +423,9 @@ export default createStore({
     // read has come back yet — `newsletterLoaded` exists so an empty issue and
     // an unread one can be told apart on screen.
     newsletterIssue: null,
+    // The theater board the push sweep publishes (aws-lambda/push-notify.js):
+    // every followed theater's upcoming listings, in pecking order.
+    theaterBoard: null,
     newsletterPrefs: null,
     newsletterLoaded: false,
     // When the user last opened the Film Club — drives the rainbow chip's
@@ -727,6 +730,9 @@ export default createStore({
     },
     setNewsletterIssue (state, value) {
       state.newsletterIssue = value || null;
+    },
+    setTheaterBoard (state, value) {
+      state.theaterBoard = value || null;
     },
     setNewsletterPrefs (state, value) {
       state.newsletterPrefs = value || null;
@@ -2553,6 +2559,16 @@ export default createStore({
     // The Lambda composes and writes; this only reads. `current` is the week
     // key of the latest issue, so one read finds it without listing every
     // issue ever written.
+    // The Showtimes screen and its Insights card. One read; the sweep
+    // rewrites the board every 15 minutes and nothing here edits it.
+    async loadTheaterBoard (context) {
+      const root = context.getters.databaseTopKey;
+      if (!root) return null;
+      const snap = await get(ref(db, `${root}/theaters/board`));
+      const board = snap.exists() ? snap.val() : null;
+      context.commit('setTheaterBoard', board);
+      return board;
+    },
     async loadNewsletter (context) {
       const root = context.getters.databaseTopKey;
       if (!root) return;

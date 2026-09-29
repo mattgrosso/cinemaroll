@@ -37,7 +37,7 @@ const {
   externalWatches, externalLogsDue,
   signupsDue, composeSignupMessages,
   alamoListings, veeziListings, afiListings, boxofficeListings, afiFirstShowtime,
-  cinemaclockListings, uncovered, listingsDue, composeListingMessages, LISTINGS_MAX_PER_SWEEP
+  cinemaclockListings, uncovered, boardForApp, listingsDue, composeListingMessages, LISTINGS_MAX_PER_SWEEP
 } = require('./pushCadence');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
@@ -104,14 +104,16 @@ const cinemaArtsMovies = async () => {
 // The chains (Regal, AMC) and www.si.edu all refuse a plain fetch; CinemaClock
 // lists them all, and marks which showtimes are on the IMAX screen.
 const CINEMACLOCK_URL = 'https://www.cinemaclock.com/movie-theaters';
-const imaxOn = (key, name, page, { wholeTheaterIsImax = false } = {}) => ({
+// Every screen counts ("I'd be interested in the non-IMAX screens at these
+// other theaters as well"); a film's `imax` flag says which ones are.
+const viaCinemaclock = (key, name, page, { smithsonian = false } = {}) => ({
   key,
   name,
   url: `${CINEMACLOCK_URL}/${page}`,
-  listings: async () => cinemaclockListings(await fetchText(`${CINEMACLOCK_URL}/${page}`), { imaxOnly: !wholeTheaterIsImax, url: `${CINEMACLOCK_URL}/${page}` }),
+  listings: async () => cinemaclockListings(await fetchText(`${CINEMACLOCK_URL}/${page}`), { url: `${CINEMACLOCK_URL}/${page}` }),
   // The Smithsonian theaters publish in batches every few weeks; a quiet
   // board there is real, not a broken fetch.
-  mayBeEmpty: wholeTheaterIsImax
+  mayBeEmpty: smithsonian
 });
 
 // THE ORDER IS THE PECKING ORDER. A new listing is only news at the first
@@ -157,12 +159,12 @@ const THEATERS = [
     // listings about to be announced.
     enrich: async (listing) => ({ ...listing, firstShowTime: afiFirstShowtime(await fetchText(listing.url)) })
   },
-  imaxOn('imax-udvar-hazy', 'the Udvar-Hazy IMAX', 'airbus-imax-theater', { wholeTheaterIsImax: true }),
-  imaxOn('imax-air-and-space', 'the Air and Space IMAX', 'lockheed-martin-imax-theater', { wholeTheaterIsImax: true }),
-  imaxOn('imax-regal-majestic', 'the Silver Spring IMAX', 'regal-majestic-imax'),
-  imaxOn('imax-amc-georgetown', 'the Georgetown IMAX', 'amc-loews-georgetown-14'),
-  imaxOn('imax-amc-tysons', 'the Tysons IMAX', 'amc-tysons-corner-16'),
-  imaxOn('imax-amc-hoffman', 'the Hoffman Center IMAX', 'amc-hoffman-center-22')
+  viaCinemaclock('imax-udvar-hazy', 'the Udvar-Hazy IMAX', 'airbus-imax-theater', { smithsonian: true }),
+  viaCinemaclock('imax-air-and-space', 'the Air and Space IMAX', 'lockheed-martin-imax-theater', { smithsonian: true }),
+  viaCinemaclock('imax-regal-majestic', 'Regal Majestic', 'regal-majestic-imax'),
+  viaCinemaclock('imax-amc-georgetown', 'AMC Georgetown', 'amc-loews-georgetown-14'),
+  viaCinemaclock('imax-amc-tysons', 'AMC Tysons', 'amc-tysons-corner-16'),
+  viaCinemaclock('imax-amc-hoffman', 'AMC Hoffman Center', 'amc-hoffman-center-22')
 ];
 
 // Mirrors databaseKeyCharacters.json (FROZEN list - see that file).
@@ -522,6 +524,7 @@ const notifyTheaterListings = async (now) => {
   }));
 
   const delivered = {};
+  const knownByKey = {};
   let subscriptions = null;
   for (let i = 0; i < boards.length; i += 1) {
     const { theater, listings } = boards[i];
@@ -537,6 +540,7 @@ const notifyTheaterListings = async (now) => {
       const { fresh, nextKnown, seeded } = listingsDue({ known, current: listings, now });
       if (seeded) {
         await dbSet(statePath, nextKnown);
+        knownByKey[theater.key] = nextKnown;
         console.log(`Listings (${theater.key}): first run, recorded ${listings.length} listing(s)`);
         continue;
       }
@@ -554,10 +558,20 @@ const notifyTheaterListings = async (now) => {
         console.log(`Listings (${theater.key}): ${keep.length} new (${keep.map((l) => l.slug).join(', ')}), ${sent} push(es) delivered`);
       }
       await dbSet(statePath, nextKnown);
+      knownByKey[theater.key] = nextKnown;
       delivered[theater.key] = sent;
     } catch (error) {
       console.error(`Listings (${theater.key}) failed:`, error.message);
     }
+  }
+
+  // The app's copy: everything on every board, in pecking order, with what
+  // a better theater also has marked rather than dropped (the screen has a
+  // toggle). Written even when a board failed - the screen says so.
+  try {
+    await dbSet(`${OWNER_ACCOUNT_KEY}/theaters/board`, boardForApp(boards, knownByKey, now));
+  } catch (error) {
+    console.error('Theater board publish failed:', error.message);
   }
   return delivered;
 };

@@ -56,6 +56,13 @@
           <span v-if="newsletterUnread" class="insights-link-new">new</span>
           <i class="bi bi-chevron-right link-chevron"></i>
         </button>
+        <!-- Showtimes across the theaters Matt follows (2026-09-28), fed by
+             the push sweep's board. Second because it changes daily. -->
+        <button type="button" class="insights-link-card" @click="$router.push('/showtimes')">
+          <i class="bi bi-ticket-perforated"></i><span>Showtimes</span>
+          <span v-if="showtimesUnread" class="insights-link-new">new</span>
+          <i class="bi bi-chevron-right link-chevron"></i>
+        </button>
         <button type="button" class="insights-link-card" @click="$router.push('/stats')">
           <i class="bi bi-graph-up-arrow"></i><span>Deep Stats</span><i class="bi bi-chevron-right link-chevron"></i>
         </button>
@@ -357,6 +364,7 @@
 
 <script>
 import { NEWSLETTER_READ_KEY } from "../assets/javascript/newsletterRead.js";
+import { SHOWTIMES_SEEN_KEY } from './ShowtimesScreen.vue';
 import { markRaw } from 'vue';
 import Outliers from "./Outliers.vue";
 import YearlyAverage from "./YearlyAverage.vue";
@@ -510,6 +518,7 @@ export default {
     // The directory card shows whether there is an unread issue, so this
     // page has to ask for it. No-ops without a signed-in account key.
     this.$store.dispatch('loadNewsletter')?.catch?.(() => {});
+    this.$store.dispatch('loadTheaterBoard')?.catch?.(() => {});
     // Places tab prep, in idle time: fetch the world map and resolve every
     // place to a country in small slices while the user reads whichever
     // tab they opened on. The tab used to do all of it on tap - 3.5s at
@@ -531,6 +540,15 @@ export default {
     // Mirrors NewsletterNotice's `unread` deliberately — the card here and
     // the notice on Home must never disagree about whether there is something
     // new, so both key off the same per-device stamp.
+    // A film first seen on a board since the last visit to the Showtimes
+    // screen, at a theater no better theater covers.
+    showtimesUnread () {
+      const theaters = this.$store.state.theaterBoard?.theaters;
+      if (!Array.isArray(theaters)) return false;
+      let seenAt = 0;
+      try { seenAt = Number(localStorage.getItem(SHOWTIMES_SEEN_KEY)) || 0; } catch { return false; }
+      return theaters.some((t) => (t.listings || []).some((l) => !l.coveredBy && Number(l.firstSeenAt) > seenAt));
+    },
     newsletterUnread () {
       if (!this.$store.state.newsletterPrefs?.newsletter) return false;
       const week = this.$store.state.newsletterIssue?.weekKey;

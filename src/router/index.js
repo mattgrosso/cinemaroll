@@ -10,6 +10,7 @@ const PickMedia = () => import(/* webpackChunkName: "pick-media" */ "../componen
 const RateMovie = () => import(/* webpackChunkName: "rate-movie" */ "../components/RateMovie.vue");
 const ReconcilePlaceholder = () => import(/* webpackChunkName: "reconcile-placeholder" */ "../components/ReconcilePlaceholder.vue");
 const Insights = () => import(/* webpackChunkName: "insights" */ "../components/Insights.vue");
+const ShowtimesScreen = () => import(/* webpackChunkName: "showtimes" */ "../components/ShowtimesScreen.vue");
 const WebScreen = () => import(/* webpackChunkName: "web" */ "../components/WebScreen.vue");
 const NewsletterScreen = () => import(/* webpackChunkName: "newsletter" */ "../components/NewsletterScreen.vue");
 const ShareDBResults = () => import(/* webpackChunkName: "share-db-results" */ "../components/ShareDBResults.vue");
@@ -551,6 +552,23 @@ const routes = [
       // goes when there is no history to go back to.
       title: 'Friend',
       parent: '/film-club',
+      requiresLogin: true
+    },
+    beforeEnter: (to, from, next) => {
+      if (!loggedIn()) {
+        next('/login');
+      } else {
+        next();
+      }
+    }
+  },
+  {
+    path: '/showtimes',
+    name: 'ShowtimesScreen',
+    component: ShowtimesScreen,
+    meta: {
+      title: 'Showtimes',
+      parent: '/insights',
       requiresLogin: true
     },
     beforeEnter: (to, from, next) => {

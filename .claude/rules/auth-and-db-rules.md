@@ -293,6 +293,20 @@ books, not scheduled). Note `data-mid` is a streaming id, NOT the showtimes id. 
 are enriched with a first showtime from the film's own page (`afiFirstShowtime`) only when
 about to be announced — the grid has no dates and 97 detail pages a sweep would be silly.
 
+**Every screen at the chains, and the Showtimes screen** (still 2026-09-28: "I'd be
+interested in the non-IMAX screens at these other theaters as well … it would also be great
+if I could see this somewhere on Cinemaroll"). The chain entries no longer pass `imaxOnly`;
+each film carries `imax` (any `filimax` section) and the push says "(IMAX)". The sweep ends by
+writing `mattgrosso-gmail-com/theaters/board` (`boardForApp`, tested): theaters in pecking
+order, each film with `firstShowTime`, `imax`, `firstSeenAt` and `coveredBy` (the better
+theater's key, or null) — marked, not dropped, because the screen has a toggle. Seen-state
+rows are `{ f: firstSeenAt, l: lastSeenAt }` (a bare number is an old row). The app side is
+`ShowtimesScreen.vue` at `/showtimes` (parent Insights; card on Insights with a "new" pill keyed
+to localStorage `showtimesSeenAt`), store `loadTheaterBoard` (one `get`, never a write),
+`showtimesScreen.test.js` pins the wiring. **Trap:** changing what a board counts without
+deleting `push/state/theaters/<key>` first announces the difference as news — the IMAX-only →
+all-screens switch sent five pushes. Delete the key, deploy, let the sweep re-seed.
+
 **Tapping a chore notification opens that prompt** (2026-09-13: "took me to the home
 screen with the applicable notification already opened and ready to go").
 `composeMessage` returns `open` — the chore its headline names, `stickiness` /

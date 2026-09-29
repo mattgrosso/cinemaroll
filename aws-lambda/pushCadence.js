@@ -612,24 +612,28 @@ function alamoListings (feed, cinemaId) {
 /**
  * Which listings are new since the stored map, and the map to store next.
  *
- * known: { [slug]: lastSeenAt }. The first run (nothing stored) announces
+ * known: { [slug]: { f: firstSeenAt, l: lastSeenAt } } (a bare number is an
+ * older row and counts as both). The first run (nothing stored) announces
  * nothing and records everything on the board. Every listing on the board
  * is re-stamped; one that has been off the board for LISTINGS_FORGET_MS is
  * dropped, so it can be news when it returns.
  */
+const seenStamp = (value) => (value && typeof value === 'object' ? { f: Number(value.f) || 0, l: Number(value.l) || 0 } : { f: Number(value) || 0, l: Number(value) || 0 });
+
 function listingsDue ({ known, current, now = Date.now() }) {
   const list = (current || []).filter((entry) => entry && typeof entry.slug === 'string' && entry.slug);
   if (!known || typeof known !== 'object') {
     const seededKnown = {};
-    list.forEach(({ slug }) => { seededKnown[slug] = now; });
+    list.forEach(({ slug }) => { seededKnown[slug] = { f: now, l: now }; });
     return { fresh: [], nextKnown: seededKnown, seeded: true };
   }
   const fresh = list.filter(({ slug }) => !(slug in known));
   const nextKnown = {};
-  Object.entries(known).forEach(([slug, seenAt]) => {
-    if (Number(seenAt) > now - LISTINGS_FORGET_MS) nextKnown[slug] = seenAt;
+  Object.entries(known).forEach(([slug, value]) => {
+    const stamp = seenStamp(value);
+    if (stamp.l > now - LISTINGS_FORGET_MS) nextKnown[slug] = stamp;
   });
-  list.forEach(({ slug }) => { nextKnown[slug] = now; });
+  list.forEach(({ slug }) => { nextKnown[slug] = { f: nextKnown[slug] ? nextKnown[slug].f : now, l: now }; });
   return { fresh, nextKnown, seeded: false };
 }
 
@@ -796,7 +800,9 @@ function afiFirstShowtime (html) {
  * section per format (`<div data-earliest-date="YYYYMMDD" class="... fie<id>">`)
  * with `filimax` marking the IMAX screen and the day's times as
  * `data-time="HHMM"`. With imaxOnly, only IMAX sections count - Matt wants
- * "what's playing at the IMAX", not everything at Regal Majestic. A section
+ * "what's playing at the IMAX". Without it every screen counts and `imax`
+ * says whether the film has an IMAX showing (2026-09-28, later: "I'd be
+ * interested in the non-IMAX screens at these other theaters as well"). A section
  * with no times at all is a film on the books but not scheduled (the
  * Smithsonian pages list their documentaries this way) and is skipped.
  */
@@ -819,8 +825,9 @@ function cinemaclockListings (html, { imaxOnly = false, url = null } = {}) {
     const time = (/data-time="(\d{2})(\d{2})"/.exec(body) || []);
     if (!id || !time[1]) continue;
     const when = `${y}-${mo}-${d}T${time[1]}:${time[2]}:00`;
-    const entry = films.get(id) || { slug: id, title: titles.get(id) || `Film ${id}`, firstShowTime: when, url };
+    const entry = films.get(id) || { slug: id, title: titles.get(id) || `Film ${id}`, firstShowTime: when, url, imax: false };
     if (when < entry.firstShowTime) entry.firstShowTime = when;
+    if (/\bfilimax\b/.test(cls)) entry.imax = true;
     films.set(id, entry);
   }
   return [...films.values()].sort((a, b) => a.slug.localeCompare(b.slug));
@@ -870,6 +877,37 @@ function uncovered (fresh, betterBoards) {
 }
 
 /**
+ * What the app shows (2026-09-28: "it would also be great if I could see this
+ * somewhere on Cinemaroll, besides just the push notification"). One
+ * document, theaters in pecking order, every listing with when it was first
+ * seen and which better theater (if any) also has the film. boards:
+ * [{ theater: { key, name, url }, listings|null }]; knownByKey: the stored
+ * seen-maps AFTER this sweep. Firebase rejects undefined, so nulls.
+ */
+function boardForApp (boards, knownByKey, now = Date.now()) {
+  const better = [];
+  const theaters = (boards || []).map(({ theater, listings }) => {
+    const known = (knownByKey && knownByKey[theater.key]) || {};
+    const rows = (listings || []).map((l) => {
+      const key = titleKey(l.title);
+      const cover = better.find((b) => b.keys.has(key));
+      return {
+        slug: l.slug,
+        title: l.title,
+        firstShowTime: l.firstShowTime || null,
+        url: l.url || theater.url || null,
+        imax: Boolean(l.imax),
+        firstSeenAt: seenStamp(known[l.slug]).f || now,
+        coveredBy: cover ? cover.key : null
+      };
+    });
+    if (listings) better.push({ key: theater.key, keys: new Set(rows.map((r) => titleKey(r.title)).filter(Boolean)) });
+    return { key: theater.key, name: theater.name, url: theater.url || null, ok: Boolean(listings), listings: rows };
+  });
+  return { updatedAt: now, theaters };
+}
+
+/**
  * fresh: alamoListings entries. theater: { key, name, url }. Up to
  * LISTINGS_MAX_PER_SWEEP separate pushes, each tapping through to that
  * listing's ticket page; more than that is one summary that opens the
@@ -891,9 +929,10 @@ function composeListingMessages (fresh, theater) {
   }
   return list.map((entry) => {
     const when = showTimeLabel(entry.firstShowTime);
+    const title = entry.imax ? `${entry.title} (IMAX)` : entry.title;
     return {
       title: `New at ${name}`,
-      body: when ? `${entry.title} · ${/,/.test(when) ? 'first showing' : 'from'} ${when}` : entry.title,
+      body: when ? `${title} · ${/,/.test(when) ? 'first showing' : 'from'} ${when}` : title,
       tag: `listing-${key}-${entry.slug}`,
       navigate: entry.url || (theater && theater.url) || '/'
     };
@@ -915,6 +954,7 @@ module.exports = {
   cinemaclockListings,
   titleKey,
   uncovered,
+  boardForApp,
   composeListingMessages,
   SIGNUP_MAX_PER_SWEEP,
   signupsDue,
