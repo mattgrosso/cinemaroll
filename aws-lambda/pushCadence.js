@@ -567,7 +567,124 @@ function composeSignupMessages (fresh) {
   }));
 }
 
+// --- New theater listings (Matt, 2026-09-28) --------------------------------
+//
+// "I find myself often going there and refreshing their showtimes listing so
+// that I can get tickets for movies that are upcoming." The sweep reads each
+// theater's public feed and tells the owner about presentations it hasn't
+// seen before. Same shape as sign-ups - silent first run, remembered list -
+// with one difference: a listing that leaves the schedule is forgotten after
+// LISTINGS_FORGET_MS, so next October's Halloween (1978) is news again, while
+// one feed hiccup (a presentation missing for a sweep) is not.
+
+const LISTINGS_MAX_PER_SWEEP = 3;
+const LISTINGS_FORGET_MS = 14 * ONE_DAY_MS;
+
+/**
+ * Alamo's market feed -> the presentations with at least one session at ONE
+ * cinema, each with the earliest local show time. A presentation is one
+ * bookable thing (Dune: Part Three, and separately its Big Show advance
+ * screening), which is exactly the unit tickets go on sale in.
+ */
+function alamoListings (feed, cinemaId) {
+  const data = (feed && feed.data) || feed || {};
+  const sessions = (data.sessions || []).filter((s) => s && s.cinemaId === cinemaId && s.presentationSlug);
+  const first = {};
+  sessions.forEach((s) => {
+    const when = typeof s.showTimeClt === 'string' ? s.showTimeClt : '';
+    if (!(s.presentationSlug in first) || (when && when < first[s.presentationSlug])) first[s.presentationSlug] = when;
+  });
+  const presentations = new Map((data.presentations || []).filter((p) => p && p.slug).map((p) => [p.slug, p]));
+  return Object.keys(first).sort().map((slug) => {
+    const p = presentations.get(slug);
+    const show = (p && p.show) || {};
+    const eventLabel = p && p.eventType && typeof p.eventType.title === 'string' ? p.eventType.title.trim() : '';
+    const title = typeof show.title === 'string' && show.title.trim() ? show.title.trim() : slug;
+    return {
+      slug,
+      title: eventLabel && slug !== show.slug ? `${title} (${eventLabel})` : title,
+      firstShowTime: first[slug] || null,
+      url: `https://drafthouse.com/dc/show/${slug}`
+    };
+  });
+}
+
+/**
+ * Which listings are new since the stored map, and the map to store next.
+ *
+ * known: { [slug]: lastSeenAt }. The first run (nothing stored) announces
+ * nothing and records everything on the board. Every listing on the board
+ * is re-stamped; one that has been off the board for LISTINGS_FORGET_MS is
+ * dropped, so it can be news when it returns.
+ */
+function listingsDue ({ known, current, now = Date.now() }) {
+  const list = (current || []).filter((entry) => entry && typeof entry.slug === 'string' && entry.slug);
+  if (!known || typeof known !== 'object') {
+    const seededKnown = {};
+    list.forEach(({ slug }) => { seededKnown[slug] = now; });
+    return { fresh: [], nextKnown: seededKnown, seeded: true };
+  }
+  const fresh = list.filter(({ slug }) => !(slug in known));
+  const nextKnown = {};
+  Object.entries(known).forEach(([slug, seenAt]) => {
+    if (Number(seenAt) > now - LISTINGS_FORGET_MS) nextKnown[slug] = seenAt;
+  });
+  list.forEach(({ slug }) => { nextKnown[slug] = now; });
+  return { fresh, nextKnown, seeded: false };
+}
+
+// "2026-12-15T18:00:00" (the cinema's own clock) -> "Tue Dec 15, 6:00 PM".
+// String arithmetic on purpose: the feed already speaks local time, and
+// Date would re-interpret it in the Lambda's zone.
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function showTimeLabel (clt) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(clt || '');
+  if (!m) return '';
+  const [, y, mo, d, h, min] = m.map(Number);
+  const weekday = WEEKDAYS[new Date(Date.UTC(y, mo - 1, d)).getUTCDay()];
+  const hour12 = h % 12 || 12;
+  return `${weekday} ${MONTHS[mo - 1]} ${d}, ${hour12}:${String(min).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
+/**
+ * fresh: alamoListings entries. theater: { key, name, url }. Up to
+ * LISTINGS_MAX_PER_SWEEP separate pushes, each tapping through to that
+ * listing's ticket page; more than that is one summary that opens the
+ * theater's schedule. Tags carry the slug so two listings never replace each
+ * other in Notification Center.
+ */
+function composeListingMessages (fresh, theater) {
+  const list = (fresh || []).filter((entry) => entry && entry.slug);
+  if (!list.length) return [];
+  const name = (theater && theater.name) || 'the theater';
+  const key = (theater && theater.key) || 'theater';
+  if (list.length > LISTINGS_MAX_PER_SWEEP) {
+    return [{
+      title: `${list.length} new listings at ${name}`,
+      body: list.map((entry) => entry.title).join(', '),
+      tag: `listing-${key}-batch-${list[0].slug}`,
+      navigate: (theater && theater.url) || '/'
+    }];
+  }
+  return list.map((entry) => {
+    const when = showTimeLabel(entry.firstShowTime);
+    return {
+      title: `New at ${name}`,
+      body: when ? `${entry.title} · first showing ${when}` : entry.title,
+      tag: `listing-${key}-${entry.slug}`,
+      navigate: entry.url || (theater && theater.url) || '/'
+    };
+  });
+}
+
 module.exports = {
+  LISTINGS_MAX_PER_SWEEP,
+  LISTINGS_FORGET_MS,
+  alamoListings,
+  listingsDue,
+  showTimeLabel,
+  composeListingMessages,
   SIGNUP_MAX_PER_SWEEP,
   signupsDue,
   emailGuessFromKey,

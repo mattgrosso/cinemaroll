@@ -240,6 +240,23 @@ and shows the raw key otherwise; the name is `settings/social/displayName` or th
 directory name when a brand-new account has one. The sign-in (Identity Toolkit) user
 list would give real emails, but was not wired up — the SA's scope for it is untested.
 
+**New Alamo listings ping the owner only** (2026-09-28: "notify me when new movies are
+listed for my local Alamo" — DC Bryant Street; he refreshes the showtimes page by hand to
+catch films the moment tickets open). Alamo has an open JSON feed per market,
+`drafthouse.com/s/mother/v2/schedule/market/dc-metro-area` (market ids are numeric and
+sequential; Bryant Street is cinema `1101`, Crystal City `1102`). `THEATERS` in the Lambda
+lists each theater's feed and a `listings` adapter (`alamoListings`, tested) that turns it
+into one entry per *presentation* — a film and its Big Show advance screening are separate
+bookable things, so both are separate news. `listingsDue` and `composeListingMessages` in
+`pushCadence.js` decide and word it: silent first run, seen map at
+`push/state/theaters/<key>` ({ slug: lastSeenAt }), more than three at once is one summary.
+Unlike sign-ups the map is NOT grow-only: a listing off the board for 14 days is forgotten,
+so a repertory return (next October's Halloween) is news again, while one feed hiccup is
+not. An empty board is treated as a failed fetch, never as "everything left". Each push
+`navigate`s straight to the listing's ticket page — `buildPayload` now passes absolute URLs
+through untouched — which is untested on iOS's declarative path; if a tap lands in the app
+instead, fall back to `/`. Adding a theater is adding a `THEATERS` entry with its own adapter.
+
 **Tapping a chore notification opens that prompt** (2026-09-13: "took me to the home
 screen with the applicable notification already opened and ready to go").
 `composeMessage` returns `open` — the chore its headline names, `stickiness` /

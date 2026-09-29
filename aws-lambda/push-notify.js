@@ -35,7 +35,8 @@ const {
   dueFromDigest, nextBaseline, shouldSend, composeMessage, friendLogBody, EMPTY_BASELINE,
   gamesDue, shouldSendGames, composeGamesMessage,
   externalWatches, externalLogsDue,
-  signupsDue, composeSignupMessages
+  signupsDue, composeSignupMessages,
+  alamoListings, listingsDue, composeListingMessages
 } = require('./pushCadence');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
@@ -62,6 +63,22 @@ const QA_ACCOUNT_KEYS = new Set(['cinemaroll-tester-example-com']);
 // The one account told about new sign-ups. The list of accounts already seen
 // lives in its own push state, which only this function writes.
 const OWNER_ACCOUNT_KEY = 'mattgrosso-gmail-com';
+
+// Theaters whose new listings the owner is told about (Matt, 2026-09-28:
+// "notify me when new movies are listed for my local Alamo"). Each one's
+// seen-listings map lives at `push/state/theaters/<key>`; `listings` turns
+// the theater's feed into [{ slug, title, firstShowTime, url }]. Adding a
+// theater is adding an entry here. Alamo market ids are numeric and
+// sequential (0500 northern-virginia, 1100 dc-metro-area, ...).
+const THEATERS = [
+  {
+    key: 'alamo-bryant-street',
+    name: 'Alamo Bryant Street',
+    url: 'https://drafthouse.com/dc/theater/dc-bryant-street',
+    feedUrl: 'https://drafthouse.com/s/mother/v2/schedule/market/dc-metro-area',
+    listings: (feed) => alamoListings(feed, '1101')
+  }
+];
 
 // Mirrors databaseKeyCharacters.json (FROZEN list - see that file).
 const UNSAFE_KEY_CHARACTERS = ['-', '!', '$', '%', '@', '^', '&', '*', '(', ')', '_', '+', '|', '~', '=', '`', '{', '}', '[', ']', ':', '"', ';', "'", '<', '>', '?', ',', '.', '/'];
@@ -205,7 +222,10 @@ const dbSet = async (path, value) => {
 // Declarative web push envelope. iOS 18.4+ renders this without running any
 // service worker JS; public/push-sw.js renders the same JSON elsewhere.
 const buildPayload = ({ title, body, navigate = '/', tag, appBadge }) => {
-  const notification = { title, body, navigate: `${APP_URL}/#${navigate}` };
+  // An absolute URL (a theater's ticket page) is opened as-is; anything else
+  // is a route inside the app.
+  const target = /^https?:\/\//.test(navigate) ? navigate : `${APP_URL}/#${navigate}`;
+  const notification = { title, body, navigate: target };
   if (tag) notification.tag = tag;
   if (typeof appBadge === 'number') notification.app_badge = appBadge;
   return JSON.stringify({ web_push: 8030, notification });
@@ -269,6 +289,14 @@ const runSweep = async () => {
     if (signups) results.push({ topKey: OWNER_ACCOUNT_KEY, delivered: signups, reason: 'signup' });
   } catch (error) {
     console.error('Sign-up check failed:', error.message);
+  }
+  for (const theater of THEATERS) {
+    try {
+      const delivered = await notifyTheaterListings(theater, now);
+      if (delivered) results.push({ topKey: OWNER_ACCOUNT_KEY, delivered, reason: `listings:${theater.key}` });
+    } catch (error) {
+      console.error(`Listings check failed (${theater.key}):`, error.message);
+    }
   }
 
   for (const topKey of accounts) {
@@ -380,6 +408,45 @@ const notifySignups = async (accounts, now) => {
   }
   await dbSet(`${OWNER_ACCOUNT_KEY}/push/state/knownAccounts`, nextKnown);
   console.log(`Sign-ups: ${fresh.length} new, ${delivered} push(es) delivered`);
+  return delivered;
+};
+
+// --- New theater listings ---------------------------------------------------
+//
+// Matt refreshes his Alamo's showtimes page by hand to catch new films the
+// moment tickets open. The sweep reads the theater's own feed instead and
+// tells him what wasn't on the board last time; listingsDue (tested) decides,
+// including the silent first run and the fortnight of memory that lets a
+// repertory film be news again. Send first, then record.
+const notifyTheaterListings = async (theater, now) => {
+  const statePath = `${OWNER_ACCOUNT_KEY}/push/state/theaters/${theater.key}`;
+  const res = await fetch(theater.feedUrl, {
+    cache: 'no-store',
+    headers: { accept: 'application/json', 'user-agent': 'cinemaroll-push (mailto:mattgrosso@gmail.com)' }
+  });
+  if (!res.ok) throw new Error(`${theater.feedUrl} -> ${res.status}`);
+  const current = theater.listings(await res.json());
+  // An empty board is a broken fetch until proven otherwise - never let it
+  // age everything out and re-announce the whole schedule later.
+  if (!current.length) throw new Error('feed returned no listings');
+
+  const known = await dbGet(statePath);
+  const { fresh, nextKnown, seeded } = listingsDue({ known, current, now });
+  if (seeded) {
+    await dbSet(statePath, nextKnown);
+    console.log(`Listings (${theater.key}): first run, recorded ${current.length} listing(s)`);
+    return 0;
+  }
+
+  let delivered = 0;
+  if (fresh.length) {
+    const subscriptions = await dbGet(`${OWNER_ACCOUNT_KEY}/push/subscriptions`);
+    for (const message of composeListingMessages(fresh, theater)) {
+      delivered += await sendToAccount(OWNER_ACCOUNT_KEY, subscriptions, buildPayload({ ...message, appBadge: 1 }));
+    }
+    console.log(`Listings (${theater.key}): ${fresh.length} new (${fresh.map((l) => l.slug).join(', ')}), ${delivered} push(es) delivered`);
+  }
+  await dbSet(statePath, nextKnown);
   return delivered;
 };
 

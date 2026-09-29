@@ -18,7 +18,13 @@ import {
   signupsDue,
   emailGuessFromKey,
   composeSignupMessages,
-  SIGNUP_MAX_PER_SWEEP
+  SIGNUP_MAX_PER_SWEEP,
+  alamoListings,
+  listingsDue,
+  showTimeLabel,
+  composeListingMessages,
+  LISTINGS_MAX_PER_SWEEP,
+  LISTINGS_FORGET_MS
 } from '../../aws-lambda/pushCadence.js';
 
 // Matt, 2026-08-28: notify "as the prompts come in", not once a day. The
@@ -707,5 +713,116 @@ describe('new sign-ups', () => {
     const messages = composeSignupMessages(fresh);
     expect(messages).toHaveLength(1);
     expect(messages[0].title).toBe(`${fresh.length} new Cinema Roll sign-ups`);
+  });
+});
+
+// Matt, 2026-09-28: "notify me when new movies are listed for my local
+// Alamo" - the one he keeps refreshing is DC Bryant Street. The feed is
+// Alamo's own market schedule; the risks are the same as sign-ups (announce
+// the whole board on day one) plus one of their own: a board that drifts.
+describe('theater listings', () => {
+  const BRYANT = { key: 'alamo-bryant-street', name: 'Alamo Bryant Street', url: 'https://drafthouse.com/dc/theater/dc-bryant-street' };
+  const feed = {
+    data: {
+      presentations: [
+        { slug: 'dune-part-three', show: { slug: 'dune-part-three', title: 'Dune: Part Three' }, eventType: null },
+        { slug: 'advance-screening-dune-part-three', show: { slug: 'dune-part-three', title: 'Dune: Part Three' }, eventType: { title: 'The Big Show Insider Screening' } },
+        { slug: 'halloween-1978', show: { slug: 'halloween-1978', title: 'Halloween (1978)' } },
+        { slug: 'crystal-city-only', show: { slug: 'crystal-city-only', title: 'Elsewhere' } }
+      ],
+      sessions: [
+        { cinemaId: '1101', presentationSlug: 'dune-part-three', showTimeClt: '2026-12-18T19:30:00' },
+        { cinemaId: '1101', presentationSlug: 'dune-part-three', showTimeClt: '2026-12-17T10:15:00' },
+        { cinemaId: '1101', presentationSlug: 'advance-screening-dune-part-three', showTimeClt: '2026-12-15T18:00:00' },
+        { cinemaId: '1102', presentationSlug: 'crystal-city-only', showTimeClt: '2026-10-01T18:00:00' },
+        { cinemaId: '1101', presentationSlug: 'halloween-1978', showTimeClt: '2026-10-31T21:00:00' }
+      ]
+    }
+  };
+
+  it('keeps only the chosen cinema, one entry per presentation, earliest showing first', () => {
+    const listings = alamoListings(feed, '1101');
+    expect(listings.map((l) => l.slug)).toEqual(['advance-screening-dune-part-three', 'dune-part-three', 'halloween-1978']);
+    expect(listings[1].firstShowTime).toBe('2026-12-17T10:15:00');
+    expect(listings[1].url).toBe('https://drafthouse.com/dc/show/dune-part-three');
+  });
+
+  it('a special presentation of a film is its own listing, named for what it is', () => {
+    const [advance, regular] = alamoListings(feed, '1101');
+    expect(advance.title).toBe('Dune: Part Three (The Big Show Insider Screening)');
+    expect(regular.title).toBe('Dune: Part Three');
+  });
+
+  it('survives an empty or malformed feed', () => {
+    expect(alamoListings(null, '1101')).toEqual([]);
+    expect(alamoListings({ data: {} }, '1101')).toEqual([]);
+    expect(alamoListings({ data: { sessions: [{ cinemaId: '1101', presentationSlug: 'x' }] } }, '1101'))
+      .toEqual([{ slug: 'x', title: 'x', firstShowTime: null, url: 'https://drafthouse.com/dc/show/x' }]);
+  });
+
+  it('the first run announces nothing and records the whole board', () => {
+    const current = alamoListings(feed, '1101');
+    const result = listingsDue({ known: null, current, now: NOW });
+    expect(result.seeded).toBe(true);
+    expect(result.fresh).toEqual([]);
+    expect(Object.keys(result.nextKnown).sort()).toEqual(current.map((l) => l.slug));
+  });
+
+  it('a listing not on the stored board is news; the rest are not', () => {
+    const current = alamoListings(feed, '1101');
+    const known = { 'dune-part-three': NOW - HOUR, 'halloween-1978': NOW - HOUR };
+    const result = listingsDue({ known, current, now: NOW });
+    expect(result.fresh.map((l) => l.slug)).toEqual(['advance-screening-dune-part-three']);
+    expect(result.nextKnown['advance-screening-dune-part-three']).toBe(NOW);
+    expect(result.nextKnown['dune-part-three']).toBe(NOW);
+  });
+
+  it('a listing that drops off the board for one sweep is not news when it returns', () => {
+    const known = { 'dune-part-three': NOW - 2 * HOUR };
+    const gone = listingsDue({ known, current: [], now: NOW - HOUR });
+    expect(gone.nextKnown['dune-part-three']).toBe(NOW - 2 * HOUR);
+    const back = listingsDue({ known: gone.nextKnown, current: alamoListings(feed, '1101'), now: NOW });
+    expect(back.fresh.map((l) => l.slug)).not.toContain('dune-part-three');
+  });
+
+  it('a listing gone for a fortnight is forgotten, so a repertory return is news again', () => {
+    const known = { 'halloween-1978': NOW - LISTINGS_FORGET_MS - 1 };
+    const forgotten = listingsDue({ known, current: [], now: NOW });
+    expect(forgotten.nextKnown).toEqual({});
+    const nextYear = listingsDue({ known: forgotten.nextKnown, current: alamoListings(feed, '1101'), now: NOW + HOUR });
+    expect(nextYear.fresh.map((l) => l.slug)).toContain('halloween-1978');
+  });
+
+  it('formats the cinema\'s local clock without touching the Lambda\'s timezone', () => {
+    expect(showTimeLabel('2026-12-15T18:00:00')).toBe('Tue Dec 15, 6:00 PM');
+    expect(showTimeLabel('2026-10-31T00:05:00')).toBe('Sat Oct 31, 12:05 AM');
+    expect(showTimeLabel('2026-07-04T12:00:00')).toBe('Sat Jul 4, 12:00 PM');
+    expect(showTimeLabel(null)).toBe('');
+  });
+
+  it('one push per new listing, tapping through to its ticket page, each with its own tag', () => {
+    const fresh = alamoListings(feed, '1101').slice(0, 2);
+    const messages = composeListingMessages(fresh, BRYANT);
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toEqual({
+      title: 'New at Alamo Bryant Street',
+      body: 'Dune: Part Three (The Big Show Insider Screening) · first showing Tue Dec 15, 6:00 PM',
+      tag: 'listing-alamo-bryant-street-advance-screening-dune-part-three',
+      navigate: 'https://drafthouse.com/dc/show/advance-screening-dune-part-three'
+    });
+    expect(messages[1].tag).not.toBe(messages[0].tag);
+  });
+
+  it('a burst of listings collapses into one summary that opens the schedule', () => {
+    const fresh = Array.from({ length: LISTINGS_MAX_PER_SWEEP + 1 }, (_, i) => ({ slug: `film-${i}`, title: `Film ${i}`, firstShowTime: null, url: `https://drafthouse.com/dc/show/film-${i}` }));
+    const messages = composeListingMessages(fresh, BRYANT);
+    expect(messages).toHaveLength(1);
+    expect(messages[0].title).toBe(`${LISTINGS_MAX_PER_SWEEP + 1} new listings at Alamo Bryant Street`);
+    expect(messages[0].body).toBe('Film 0, Film 1, Film 2, Film 3');
+    expect(messages[0].navigate).toBe(BRYANT.url);
+  });
+
+  it('nothing new means no messages', () => {
+    expect(composeListingMessages([], BRYANT)).toEqual([]);
   });
 });
