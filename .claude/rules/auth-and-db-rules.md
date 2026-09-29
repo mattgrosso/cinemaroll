@@ -307,6 +307,19 @@ to localStorage `showtimesSeenAt`), store `loadTheaterBoard` (one `get`, never a
 deleting `push/state/theaters/<key>` first announces the difference as news — the IMAX-only →
 all-screens switch sent five pushes. Delete the key, deploy, let the sweep re-seed.
 
+**Posters and dismissals** (same night: "I'd rather see movie posters than names … a way for
+me to dismiss things off of this screen … swipe it off or maybe hit an X"). Every adapter now
+carries `poster` where the source has one (Alamo `show.posterImages[0].uri`, Veezi
+`/Media/Poster?…code=`, AFI's Vista `FilmPosterGraphic/f-<id>`, Cinema Arts `movie.poster`);
+CinemaClock has no art, so its listings carry `year` from the genre line and the app asks
+TMDB (`src/utils/posterLookup.js`: `/search/movie` with the bracketed or feed year, hits and
+misses cached in localStorage `showtimesPosters` for 30 days, module cache + shared in-flight
+like personLookup). A feed poster that 404s falls through to the lookup. Dismissals live at
+`theaters/dismissed/<theaterKey>/<slug> = at`, written by store `dismissListing` (optimistic;
+`restore: true` undoes), pruned to the current board by `loadTheaterBoard`, and excluded from
+the Insights "new" pill. The screen is a poster grid (3-up on a phone), X in the corner,
+swipe-left past 90px dismisses; horizontal intent is decided once so scrolling never fires it.
+
 **Tapping a chore notification opens that prompt** (2026-09-13: "took me to the home
 screen with the applicable notification already opened and ready to go").
 `composeMessage` returns `open` — the chore its headline names, `stickiness` /

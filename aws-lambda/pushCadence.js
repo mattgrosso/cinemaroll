@@ -600,11 +600,13 @@ function alamoListings (feed, cinemaId) {
     const show = (p && p.show) || {};
     const eventLabel = p && p.eventType && typeof p.eventType.title === 'string' ? p.eventType.title.trim() : '';
     const title = typeof show.title === 'string' && show.title.trim() ? show.title.trim() : slug;
+    const poster = Array.isArray(show.posterImages) && show.posterImages[0] && typeof show.posterImages[0].uri === 'string' ? show.posterImages[0].uri : null;
     return {
       slug,
       title: eventLabel && slug !== show.slug ? `${title} (${eventLabel})` : title,
       firstShowTime: first[slug] || null,
-      url: `https://drafthouse.com/dc/show/${slug}`
+      url: `https://drafthouse.com/dc/show/${slug}`,
+      poster
     };
   });
 }
@@ -714,7 +716,14 @@ function veeziListings (html, { now = Date.now(), fallbackUrl = null } = {}) {
     const title = stripTags((/<h3 class="title">([\s\S]*?)<\/h3>/.exec(block) || [])[1]);
     if (!code || !title) continue;
     const purchase = (/href="(https?:\/\/[^"]*\/purchase\/[^"]+)"/.exec(block) || [])[1];
-    const entry = films.get(code) || { slug: code, title, firstShowTime: null, url: purchase ? decodeEntities(purchase) : fallbackUrl };
+    const posterPath = (/src="(\/Media\/Poster\?[^"]+)"/.exec(block) || [])[1];
+    const entry = films.get(code) || {
+      slug: code,
+      title,
+      firstShowTime: null,
+      url: purchase ? decodeEntities(purchase) : fallbackUrl,
+      poster: posterPath ? `https://ticketing.useast.veezi.com${decodeEntities(posterPath)}` : null
+    };
     const re = /<h4 class="date">([^<]+)<\/h4>[\s\S]*?<time>([^<]+)<\/time>/g;
     let m;
     while ((m = re.exec(block))) {
@@ -739,7 +748,13 @@ function afiListings (html) {
     const [, , id, rawTitle] = m;
     const title = stripTags(rawTitle);
     if (!title || out.has(id)) continue;
-    out.set(id, { slug: id, title, firstShowTime: null, url: `https://silver.afi.com/movies/detail/${id}` });
+    out.set(id, {
+      slug: id,
+      title,
+      firstShowTime: null,
+      url: `https://silver.afi.com/movies/detail/${id}`,
+      poster: `https://vista.afi.com/CDN/media/entity/get/FilmPosterGraphic/f-${id}?referenceScheme=HeadOffice&allowPlaceHolder=true`
+    });
   }
   return [...out.values()].sort((a, b) => a.slug.localeCompare(b.slug));
 }
@@ -762,7 +777,8 @@ function boxofficeListings (scheduled, movies, siteUrl) {
       slug: id,
       title: movie && typeof movie.title === 'string' && movie.title.trim() ? movie.title.trim() : `Movie ${id}`,
       firstShowTime: dates[0] || null,
-      url: movie && movie.path ? `${base}${movie.path}` : base
+      url: movie && movie.path ? `${base}${movie.path}` : base,
+      poster: movie && typeof movie.poster === 'string' && movie.poster ? movie.poster : null
     };
   });
 }
@@ -811,10 +827,14 @@ function cinemaclockListings (html, { imaxOnly = false, url = null } = {}) {
   const titles = new Map();
   const blockRe = /<h3 class=['"]movietitle[^'"]*['"][^>]*>([\s\S]*?)<\/h3>([\s\S]*?)(?=<h3 class=['"]movietitle|$)/g;
   let m;
+  const years = new Map();
   while ((m = blockRe.exec(text))) {
     const id = (/btntim aw(\d+)/.exec(m[2]) || [])[1];
     const title = stripTags(m[1]);
     if (id && title && !titles.has(id)) titles.set(id, title);
+    const genre = (/<p class=['"]moviegenre['"]>([\s\S]*?)<\/p>/.exec(m[2]) || [])[1];
+    const year = (/\b((?:19|20)\d{2})\b/.exec(stripTags(genre)) || [])[1];
+    if (id && year && !years.has(id)) years.set(id, Number(year));
   }
   const films = new Map();
   const sectionRe = /<div data-earliest-date="(\d{4})(\d{2})(\d{2})" class="([^"]*)">([\s\S]*?)(?=<div data-earliest-date=|<!--MoBl-->|<h3 class=['"]movietitle|$)/g;
@@ -825,7 +845,7 @@ function cinemaclockListings (html, { imaxOnly = false, url = null } = {}) {
     const time = (/data-time="(\d{2})(\d{2})"/.exec(body) || []);
     if (!id || !time[1]) continue;
     const when = `${y}-${mo}-${d}T${time[1]}:${time[2]}:00`;
-    const entry = films.get(id) || { slug: id, title: titles.get(id) || `Film ${id}`, firstShowTime: when, url, imax: false };
+    const entry = films.get(id) || { slug: id, title: titles.get(id) || `Film ${id}`, firstShowTime: when, url, imax: false, year: years.get(id) || null };
     if (when < entry.firstShowTime) entry.firstShowTime = when;
     if (/\bfilimax\b/.test(cls)) entry.imax = true;
     films.set(id, entry);
@@ -897,6 +917,8 @@ function boardForApp (boards, knownByKey, now = Date.now()) {
         firstShowTime: l.firstShowTime || null,
         url: l.url || theater.url || null,
         imax: Boolean(l.imax),
+        poster: typeof l.poster === 'string' && l.poster ? l.poster : null,
+        year: Number.isInteger(l.year) ? l.year : null,
         firstSeenAt: seenStamp(known[l.slug]).f || now,
         coveredBy: cover ? cover.key : null
       };

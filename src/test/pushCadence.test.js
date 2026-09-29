@@ -755,6 +755,8 @@ describe('theater listings', () => {
     expect(listings.map((l) => l.slug)).toEqual(['advance-screening-dune-part-three', 'dune-part-three', 'halloween-1978']);
     expect(listings[1].firstShowTime).toBe('2026-12-17T10:15:00');
     expect(listings[1].url).toBe('https://drafthouse.com/dc/show/dune-part-three');
+    expect(listings[1].poster).toBeNull();
+    expect(alamoListings({ data: { presentations: [{ slug: 'p', show: { slug: 'p', title: 'P', posterImages: [{ uri: 'https://img/p.jpg' }] } }], sessions: [{ cinemaId: '1101', presentationSlug: 'p' }] } }, '1101')[0].poster).toBe('https://img/p.jpg');
   });
 
   it('a special presentation of a film is its own listing, named for what it is', () => {
@@ -767,7 +769,7 @@ describe('theater listings', () => {
     expect(alamoListings(null, '1101')).toEqual([]);
     expect(alamoListings({ data: {} }, '1101')).toEqual([]);
     expect(alamoListings({ data: { sessions: [{ cinemaId: '1101', presentationSlug: 'x' }] } }, '1101'))
-      .toEqual([{ slug: 'x', title: 'x', firstShowTime: null, url: 'https://drafthouse.com/dc/show/x' }]);
+      .toEqual([{ slug: 'x', title: 'x', firstShowTime: null, url: 'https://drafthouse.com/dc/show/x', poster: null }]);
   });
 
   it('the first run announces nothing and records the whole board', () => {
@@ -864,8 +866,8 @@ describe('theater listings — the parsed sites', () => {
   it('a Veezi page yields one film per film code with its earliest showing and a ticket link', () => {
     const listings = veeziListings(VEEZI, { now: SEPT_28 });
     expect(listings).toEqual([
-      { slug: '0000002468', title: 'Glory', firstShowTime: '2026-10-02T19:00:00', url: 'https://ticketing.useast.veezi.com/purchase/2907?siteToken=tok' },
-      { slug: '0000002470', title: 'Selma & Friends', firstShowTime: '2026-11-06T19:00:00', url: 'https://ticketing.useast.veezi.com/purchase/2910?siteToken=tok' }
+      { slug: '0000002468', title: 'Glory', firstShowTime: '2026-10-02T19:00:00', url: 'https://ticketing.useast.veezi.com/purchase/2907?siteToken=tok', poster: 'https://ticketing.useast.veezi.com/Media/Poster?siteToken=tok&code=0000002468' },
+      { slug: '0000002470', title: 'Selma & Friends', firstShowTime: '2026-11-06T19:00:00', url: 'https://ticketing.useast.veezi.com/purchase/2910?siteToken=tok', poster: 'https://ticketing.useast.veezi.com/Media/Poster?siteToken=tok&code=0000002470' }
     ]);
   });
 
@@ -894,19 +896,19 @@ describe('theater listings — the parsed sites', () => {
 
   it('AFI Silver: one listing per Vista film id, first title wins, no dates on the page', () => {
     expect(afiListings(AFI)).toEqual([
-      { slug: '0100005647', title: '"Fallen Angels" by Noël Coward', firstShowTime: null, url: 'https://silver.afi.com/movies/detail/0100005647' },
-      { slug: '0100005662', title: 'THE CONDOR DAUGHTER', firstShowTime: null, url: 'https://silver.afi.com/movies/detail/0100005662' }
+      { slug: '0100005647', title: '"Fallen Angels" by Noël Coward', firstShowTime: null, url: 'https://silver.afi.com/movies/detail/0100005647', poster: 'https://vista.afi.com/CDN/media/entity/get/FilmPosterGraphic/f-0100005647?referenceScheme=HeadOffice&allowPlaceHolder=true' },
+      { slug: '0100005662', title: 'THE CONDOR DAUGHTER', firstShowTime: null, url: 'https://silver.afi.com/movies/detail/0100005662', poster: 'https://vista.afi.com/CDN/media/entity/get/FilmPosterGraphic/f-0100005662?referenceScheme=HeadOffice&allowPlaceHolder=true' }
     ]);
     expect(afiListings('')).toEqual([]);
   });
 
   it('Cinema Arts: scheduled ids joined to the static movie list, earliest day first', () => {
     const scheduled = { movieIds: {}, scheduledDays: { 3690: ['2026-10-26'], 327174: ['2026-10-03', '2026-10-02', 'garbage'], 999: ['2026-10-05'] } };
-    const movies = { nodes: [{ id: '3690', title: "All the President's Men", path: '/movies/3690-all-the-presidents-men' }, { id: '327174', title: 'Digger', path: '/movies/327174-digger' }] };
+    const movies = { nodes: [{ id: '3690', title: "All the President's Men", path: '/movies/3690-all-the-presidents-men', poster: 'https://cms/p.jpg' }, { id: '327174', title: 'Digger', path: '/movies/327174-digger' }] };
     expect(boxofficeListings(scheduled, movies, 'https://www.cinemaartstheatre.com/')).toEqual([
-      { slug: '327174', title: 'Digger', firstShowTime: '2026-10-02', url: 'https://www.cinemaartstheatre.com/movies/327174-digger' },
-      { slug: '3690', title: "All the President's Men", firstShowTime: '2026-10-26', url: 'https://www.cinemaartstheatre.com/movies/3690-all-the-presidents-men' },
-      { slug: '999', title: 'Movie 999', firstShowTime: '2026-10-05', url: 'https://www.cinemaartstheatre.com' }
+      { slug: '327174', title: 'Digger', firstShowTime: '2026-10-02', url: 'https://www.cinemaartstheatre.com/movies/327174-digger', poster: null },
+      { slug: '3690', title: "All the President's Men", firstShowTime: '2026-10-26', url: 'https://www.cinemaartstheatre.com/movies/3690-all-the-presidents-men', poster: 'https://cms/p.jpg' },
+      { slug: '999', title: 'Movie 999', firstShowTime: '2026-10-05', url: 'https://www.cinemaartstheatre.com', poster: null }
     ]);
     expect(boxofficeListings(null, null, 'https://x.test')).toEqual([]);
   });
@@ -991,8 +993,8 @@ describe('theater listings — AFI showtimes and the IMAXs via CinemaClock', () 
 
   it('CinemaClock: only the IMAX-screen sections, joined to titles by the showtimes id, not the streaming id', () => {
     expect(cinemaclockListings(CINEMACLOCK, { imaxOnly: true, url: 'https://cc/majestic' })).toEqual([
-      { slug: '177422', title: 'Avengers: Endgame', firstShowTime: '2026-09-28T14:25:00', url: 'https://cc/majestic', imax: true },
-      { slug: '267764', title: "The Blackcoat's Daughter", firstShowTime: '2026-10-01T15:20:00', url: 'https://cc/majestic', imax: true }
+      { slug: '177422', title: 'Avengers: Endgame', firstShowTime: '2026-09-28T14:25:00', url: 'https://cc/majestic', imax: true, year: 2019 },
+      { slug: '267764', title: "The Blackcoat's Daughter", firstShowTime: '2026-10-01T15:20:00', url: 'https://cc/majestic', imax: true, year: null }
     ]);
   });
 
@@ -1012,16 +1014,16 @@ describe('the board the app shows', () => {
       { theater: { key: 'afi', name: 'AFI', url: 'f' }, listings: null },
       { theater: { key: 'majestic', name: 'Regal Majestic', url: 'm' }, listings: [
         { slug: '1', title: 'HALLOWEEN (1978) in 35mm', firstShowTime: null, imax: true },
-        { slug: '2', title: 'Digger', firstShowTime: '2026-10-02T15:20:00', url: 'm2' }
+        { slug: '2', title: 'Digger', firstShowTime: '2026-10-02T15:20:00', url: 'm2', poster: 'https://p/2.jpg', year: 2026 }
       ] }
     ];
     const known = { alamo: { x: { f: NOW - HOUR, l: NOW } }, majestic: { 1: NOW - 2 * HOUR } };
     const board = boardForApp(boards, known, NOW);
     expect(board.updatedAt).toBe(NOW);
     expect(board.theaters.map((t) => [t.key, t.ok, t.listings.length])).toEqual([['alamo', true, 1], ['afi', false, 0], ['majestic', true, 2]]);
-    expect(board.theaters[0].listings[0]).toEqual({ slug: 'x', title: 'Halloween (1978)', firstShowTime: '2026-10-31T21:00:00', url: 'ax', imax: false, firstSeenAt: NOW - HOUR, coveredBy: null });
+    expect(board.theaters[0].listings[0]).toEqual({ slug: 'x', title: 'Halloween (1978)', firstShowTime: '2026-10-31T21:00:00', url: 'ax', imax: false, poster: null, year: null, firstSeenAt: NOW - HOUR, coveredBy: null });
     expect(board.theaters[2].listings[0]).toMatchObject({ imax: true, url: 'm', firstSeenAt: NOW - 2 * HOUR, coveredBy: 'alamo' });
-    expect(board.theaters[2].listings[1]).toMatchObject({ url: 'm2', firstSeenAt: NOW, coveredBy: null });
+    expect(board.theaters[2].listings[1]).toMatchObject({ url: 'm2', poster: 'https://p/2.jpg', year: 2026, firstSeenAt: NOW, coveredBy: null });
   });
 
   it('an IMAX showing is named as one in the push', () => {

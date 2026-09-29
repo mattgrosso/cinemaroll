@@ -426,6 +426,9 @@ export default createStore({
     // The theater board the push sweep publishes (aws-lambda/push-notify.js):
     // every followed theater's upcoming listings, in pecking order.
     theaterBoard: null,
+    // { [theaterKey]: { [slug]: dismissedAt } } - films Matt has waved off the
+    // Showtimes screen. Pruned to what is still on the board when it loads.
+    theaterDismissed: {},
     newsletterPrefs: null,
     newsletterLoaded: false,
     // When the user last opened the Film Club — drives the rainbow chip's
@@ -736,6 +739,9 @@ export default createStore({
     },
     setTheaterBoard (state, value) {
       state.theaterBoard = value || null;
+    },
+    setTheaterDismissed (state, value) {
+      state.theaterDismissed = value && typeof value === 'object' ? value : {};
     },
     setNewsletterPrefs (state, value) {
       state.newsletterPrefs = value || null;
@@ -2570,10 +2576,42 @@ export default createStore({
     async loadTheaterBoard (context) {
       const root = context.getters.databaseTopKey;
       if (!root) return null;
-      const snap = await get(ref(db, `${root}/theaters/board`));
-      const board = snap.exists() ? snap.val() : null;
+      const [boardSnap, dismissedSnap] = await Promise.all([
+        get(ref(db, `${root}/theaters/board`)),
+        get(ref(db, `${root}/theaters/dismissed`))
+      ]);
+      const board = boardSnap.exists() ? boardSnap.val() : null;
+      const dismissed = dismissedSnap.exists() ? dismissedSnap.val() || {} : {};
+      // A dismissed film that has since left the board is forgotten, so the
+      // node stays the size of the board and a repertory return is fresh.
+      const onBoard = new Set();
+      (board?.theaters || []).forEach((t) => (t.listings || []).forEach((l) => onBoard.add(`${t.key}/${l.slug}`)));
+      const kept = {};
+      const removals = {};
+      Object.entries(dismissed).forEach(([theaterKey, slugs]) => {
+        Object.entries(slugs || {}).forEach(([slug, at]) => {
+          if (board && !onBoard.has(`${theaterKey}/${slug}`)) removals[`${theaterKey}/${slug}`] = null;
+          else (kept[theaterKey] = kept[theaterKey] || {})[slug] = at;
+        });
+      });
       context.commit('setTheaterBoard', board);
+      context.commit('setTheaterDismissed', kept);
+      if (Object.keys(removals).length) {
+        update(ref(db, `${root}/theaters/dismissed`), removals).catch(() => {});
+      }
       return board;
+    },
+    // "a way for me to dismiss things off of this screen … I see that, I'm
+    // not more interested or I've already seen it" (2026-09-28). Optimistic:
+    // the card goes at once, the write follows.
+    async dismissListing (context, { theaterKey, slug, restore = false }) {
+      const root = context.getters.databaseTopKey;
+      if (!root || !theaterKey || !slug) return;
+      const next = { ...context.state.theaterDismissed, [theaterKey]: { ...(context.state.theaterDismissed[theaterKey] || {}) } };
+      if (restore) delete next[theaterKey][slug];
+      else next[theaterKey][slug] = Date.now();
+      context.commit('setTheaterDismissed', next);
+      await update(ref(db, `${root}/theaters/dismissed/${theaterKey}`), { [slug]: restore ? null : next[theaterKey][slug] });
     },
     async loadNewsletter (context) {
       const root = context.getters.databaseTopKey;

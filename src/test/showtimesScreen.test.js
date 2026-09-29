@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { showtimeLabel } from '../components/ShowtimesScreen.vue';
+import { posterQuery } from '../utils/posterLookup.js';
 
 // The Showtimes screen (2026-09-28) is a read-only view of the board the
 // push sweep publishes. These pin the wiring that would otherwise fail
@@ -25,6 +26,9 @@ describe('Showtimes screen wiring', () => {
     expect(lambda).toContain('/theaters/board`');
     const screen = read('../components/ShowtimesScreen.vue');
     expect(screen).not.toMatch(/\bset\(|\bupdate\(/);
+    // Dismissals go through the store, to their own node, never the board.
+    expect(screen).toContain("dispatch('dismissListing'");
+    expect(store).toContain('`${root}/theaters/dismissed/${theaterKey}`');
   });
 
   it('labels a showing on the cinema clock without a timezone getting a say', () => {
@@ -32,5 +36,13 @@ describe('Showtimes screen wiring', () => {
     expect(showtimeLabel('2026-10-26')).toBe('Mon Oct 26');
     expect(showtimeLabel('2026-10-31T00:05:00')).toBe('Sat Oct 31, 12:05 AM');
     expect(showtimeLabel(null)).toBe('');
+  });
+
+  it('asks TMDB for the film, not the format note or the event suffix', () => {
+    expect(posterQuery('HALLOWEEN (1978) in 35mm')).toEqual({ query: 'HALLOWEEN', year: 1978 });
+    expect(posterQuery("DON'T PLAY WITH FIRE - New Restoration")).toEqual({ query: "DON'T PLAY WITH FIRE", year: null });
+    expect(posterQuery('Dune: Part Three (Advance Screening)', 2026)).toEqual({ query: 'Dune: Part Three', year: 2026 });
+    expect(posterQuery('Avengers: Endgame', 2019).year).toBe(2019);
+    expect(posterQuery('').query).toBe('');
   });
 });
