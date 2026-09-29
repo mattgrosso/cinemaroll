@@ -37,7 +37,7 @@ const {
   externalWatches, externalLogsDue,
   signupsDue, composeSignupMessages,
   alamoListings, veeziListings, afiListings, boxofficeListings, afiFirstShowtime,
-  cinemaclockListings, uncovered, boardForApp, remindersDue, composeReminderMessage, listingsDue, composeListingMessages, LISTINGS_MAX_PER_SWEEP
+  cinemaclockListings, uncovered, boardForApp, remindersDue, composeReminderMessage, listingsDue, composeListingMessages
 } = require('./pushCadence');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
@@ -382,9 +382,8 @@ const runSweep = async () => {
     console.error('Sign-up check failed:', error.message);
   }
   try {
-    for (const [key, delivered] of Object.entries(await notifyTheaterListings(now))) {
-      if (delivered) results.push({ topKey: OWNER_ACCOUNT_KEY, delivered, reason: `listings:${key}` });
-    }
+    const listingsDelivered = await notifyTheaterListings(now);
+    if (listingsDelivered) results.push({ topKey: OWNER_ACCOUNT_KEY, delivered: listingsDelivered, reason: 'listings' });
   } catch (error) {
     console.error('Listings check failed:', error.message);
   }
@@ -517,8 +516,10 @@ const notifySignups = async (accounts, now) => {
 // pecking order needs them: a fresh listing is dropped when a better theater
 // currently has the film (uncovered, tested). If a better theater's board
 // could not be read this sweep, the lower theater waits - announcing
-// something the Alamo may well have is worse than a 15-minute delay. Send
-// first, then record; covered listings are recorded too.
+// something the Alamo may well have is worse than a 15-minute delay. Every
+// theater's news goes out as ONE push a sweep (2026-09-29: "too many
+// notifications"). Send first, then record; covered listings are recorded
+// too, and a theater whose news failed to send is not, so it comes again.
 const notifyTheaterListings = async (now) => {
   const boards = await Promise.all(THEATERS.map(async (theater) => {
     try {
@@ -533,9 +534,8 @@ const notifyTheaterListings = async (now) => {
     }
   }));
 
-  const delivered = {};
   const knownByKey = {};
-  let subscriptions = null;
+  const pending = [];
   for (let i = 0; i < boards.length; i += 1) {
     const { theater, listings } = boards[i];
     if (!listings) continue;
@@ -555,8 +555,7 @@ const notifyTheaterListings = async (now) => {
         continue;
       }
       // A grid without dates: learn a few showtimes a sweep into the seen-
-      // state, so the app's board fills in and reminders have a time to aim
-      // at. Fresh listings about to be announced are done below regardless.
+      // state, so the app's board fills in and reminders have a time to aim at.
       if (theater.enrich) {
         const missing = listings.filter((l) => !l.firstShowTime && !(nextKnown[l.slug] && nextKnown[l.slug].s)).slice(0, SHOWTIME_BACKFILL_PER_SWEEP);
         await Promise.all(missing.map(async (l) => {
@@ -570,22 +569,35 @@ const notifyTheaterListings = async (now) => {
       }
       const { keep, dropped } = uncovered(fresh, better.map((b) => b.listings));
       if (dropped.length) console.log(`Listings (${theater.key}): ${dropped.length} covered by a better theater (${dropped.map((l) => l.title).join(', ')})`);
-      let sent = 0;
-      if (keep.length) {
-        const detailed = theater.enrich && keep.length <= LISTINGS_MAX_PER_SWEEP
-          ? await Promise.all(keep.map((l) => theater.enrich(l).catch(() => l)))
-          : keep;
-        if (!subscriptions) subscriptions = await dbGet(`${OWNER_ACCOUNT_KEY}/push/subscriptions`);
-        for (const message of composeListingMessages(detailed, theater)) {
-          sent += await sendToAccount(OWNER_ACCOUNT_KEY, subscriptions, buildPayload({ ...message, appBadge: 1 }));
-        }
-        console.log(`Listings (${theater.key}): ${keep.length} new (${keep.map((l) => l.slug).join(', ')}), ${sent} push(es) delivered`);
-      }
-      await dbSet(statePath, nextKnown);
-      knownByKey[theater.key] = nextKnown;
-      delivered[theater.key] = sent;
+      if (keep.length) console.log(`Listings (${theater.key}): ${keep.length} new (${keep.map((l) => l.slug).join(', ')})`);
+      pending.push({ theater, statePath, nextKnown, keep });
     } catch (error) {
       console.error(`Listings (${theater.key}) failed:`, error.message);
+    }
+  }
+
+  const announced = pending.flatMap((p) => p.keep);
+  let delivered = 0;
+  let sendFailed = false;
+  if (announced.length) {
+    try {
+      const subscriptions = await dbGet(`${OWNER_ACCOUNT_KEY}/push/subscriptions`);
+      for (const message of composeListingMessages(announced)) {
+        delivered += await sendToAccount(OWNER_ACCOUNT_KEY, subscriptions, buildPayload({ ...message, appBadge: 1 }));
+      }
+      console.log(`Listings: ${announced.length} new across ${pending.filter((p) => p.keep.length).length} theater(s), ${delivered} push(es) delivered`);
+    } catch (error) {
+      sendFailed = true;
+      console.error('Listings push failed:', error.message);
+    }
+  }
+  for (const { theater, statePath, nextKnown, keep } of pending) {
+    if (sendFailed && keep.length) continue;
+    try {
+      await dbSet(statePath, nextKnown);
+      knownByKey[theater.key] = nextKnown;
+    } catch (error) {
+      console.error(`Listings (${theater.key}) record failed:`, error.message);
     }
   }
 

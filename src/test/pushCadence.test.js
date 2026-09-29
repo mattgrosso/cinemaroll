@@ -35,7 +35,7 @@ import {
   boardForApp,
   remindersDue,
   composeReminderMessage,
-  LISTINGS_MAX_PER_SWEEP,
+  LISTINGS_TITLES_SHOWN,
   LISTINGS_FORGET_MS
 } from '../../aws-lambda/pushCadence.js';
 
@@ -826,30 +826,41 @@ describe('theater listings', () => {
     expect(showTimeLabel(null)).toBe('');
   });
 
-  it('one push per new listing, tapping through to its card on the Showtimes screen, each with its own tag', () => {
-    const fresh = alamoListings(feed, '1101').slice(0, 2);
-    const messages = composeListingMessages(fresh, BRYANT);
-    expect(messages).toHaveLength(2);
+  // Matt, 2026-09-29: "When a bunch of movies get found at theaters there
+  // are too many notifications" - and "I don't think the notification needs
+  // to mention the theater". One push a sweep, titles only, onto Showtimes.
+  it('every new listing in a sweep, from every theater, is ONE push that opens the Showtimes screen', () => {
+    const fresh = [
+      ...alamoListings(feed, '1101').slice(0, 2),
+      { slug: 'glory', title: 'Glory', firstShowTime: '2026-10-02T19:00:00', url: 'u' },
+      { slug: 'digger', title: 'Digger', firstShowTime: null, url: 'u', imax: true }
+    ];
+    const messages = composeListingMessages(fresh);
+    expect(messages).toHaveLength(1);
     expect(messages[0]).toEqual({
-      title: 'New at Alamo Bryant Street',
-      body: 'Dune: Part Three (The Big Show Insider Screening) · first showing Tue Dec 15, 6:00 PM',
-      tag: 'listing-alamo-bryant-street-advance-screening-dune-part-three',
-      navigate: '/showtimes?focus=alamo-bryant-street/advance-screening-dune-part-three'
+      title: 'New showtimes',
+      body: `${fresh[0].title}, ${fresh[1].title}, Glory, Digger`,
+      tag: 'listings-advance-screening-dune-part-three',
+      navigate: '/showtimes'
     });
-    expect(messages[1].tag).not.toBe(messages[0].tag);
   });
 
-  it('a burst of listings collapses into one summary that opens the Showtimes screen', () => {
-    const fresh = Array.from({ length: LISTINGS_MAX_PER_SWEEP + 1 }, (_, i) => ({ slug: `film-${i}`, title: `Film ${i}`, firstShowTime: null, url: `https://drafthouse.com/dc-metro-area/show/film-${i}?cinemaId=1101` }));
-    const messages = composeListingMessages(fresh, BRYANT);
-    expect(messages).toHaveLength(1);
-    expect(messages[0].title).toBe(`${LISTINGS_MAX_PER_SWEEP + 1} new listings at Alamo Bryant Street`);
-    expect(messages[0].body).toBe('Film 0, Film 1, Film 2, Film 3');
-    expect(messages[0].navigate).toBe('/showtimes');
+  it('a lone listing still says just its title - no theater, no date', () => {
+    const [m] = composeListingMessages([{ slug: 'a', title: 'Faust', firstShowTime: '2026-10-02T19:00:00', url: 'u' }]);
+    expect(m).toEqual({ title: 'New showtimes', body: 'Faust', tag: 'listings-a', navigate: '/showtimes' });
+  });
+
+  it('a long list is cut short with a count of the rest, and a film at two theaters is named once', () => {
+    const fresh = Array.from({ length: LISTINGS_TITLES_SHOWN + 3 }, (_, i) => ({ slug: `film-${i}`, title: `Film ${i}` }));
+    fresh.push({ slug: 'dupe', title: 'Film 0' });
+    const [m] = composeListingMessages(fresh);
+    const shown = fresh.slice(0, LISTINGS_TITLES_SHOWN).map((l) => l.title).join(', ');
+    expect(m.body).toBe(`${shown} and 3 more`);
   });
 
   it('nothing new means no messages', () => {
-    expect(composeListingMessages([], BRYANT)).toEqual([]);
+    expect(composeListingMessages([])).toEqual([]);
+    expect(composeListingMessages(null)).toEqual([]);
   });
 });
 
@@ -926,14 +937,9 @@ describe('theater listings — the parsed sites', () => {
     expect(boxofficeListings(null, null, 'https://x.test')).toEqual([]);
   });
 
-  it('a date-only showing reads "from", a timed one "first showing"', () => {
+  it('a date-only showing reads "from", a timed one has a time', () => {
     expect(showTimeLabel('2026-10-26')).toBe('Mon Oct 26');
-    const [dated] = composeListingMessages([{ slug: 'a', title: 'Digger', firstShowTime: '2026-10-02', url: 'u' }], { key: 'k', name: 'Cinema Arts' });
-    expect(dated.body).toBe('Digger · from Fri Oct 2');
-    const [timed] = composeListingMessages([{ slug: 'a', title: 'Glory', firstShowTime: '2026-10-02T19:00:00', url: 'u' }], { key: 'k', name: 'the Miracle' });
-    expect(timed.body).toBe('Glory · first showing Fri Oct 2, 7:00 PM');
-    const [bare] = composeListingMessages([{ slug: 'a', title: 'Faust', firstShowTime: null, url: 'u' }], { key: 'k', name: 'AFI Silver' });
-    expect(bare.body).toBe('Faust');
+    expect(showTimeLabel('2026-10-02T19:00:00')).toBe('Fri Oct 2, 7:00 PM');
   });
 
   it('decodes the entities these pages actually use', () => {
@@ -1037,11 +1043,6 @@ describe('the board the app shows', () => {
     expect(board.theaters[0].listings[0]).toEqual({ slug: 'x', title: 'Halloween (1978)', firstShowTime: '2026-10-31T21:00:00', url: 'ax', imax: false, poster: null, year: null, firstSeenAt: NOW - HOUR, coveredBy: null });
     expect(board.theaters[2].listings[0]).toMatchObject({ imax: true, url: 'm', firstSeenAt: NOW - 2 * HOUR, coveredBy: 'alamo' });
     expect(board.theaters[2].listings[1]).toMatchObject({ url: 'm2', poster: 'https://p/2.jpg', year: 2026, firstSeenAt: NOW, coveredBy: null });
-  });
-
-  it('an IMAX showing is named as one in the push', () => {
-    const [m] = composeListingMessages([{ slug: 'a', title: 'Digger', firstShowTime: '2026-10-02T15:20:00', url: 'u', imax: true }], { key: 'k', name: 'Regal Majestic' });
-    expect(m.body).toBe('Digger (IMAX) · first showing Fri Oct 2, 3:20 PM');
   });
 });
 

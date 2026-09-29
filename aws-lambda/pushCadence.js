@@ -577,7 +577,8 @@ function composeSignupMessages (fresh) {
 // LISTINGS_FORGET_MS, so next October's Halloween (1978) is news again, while
 // one feed hiccup (a presentation missing for a sweep) is not.
 
-const LISTINGS_MAX_PER_SWEEP = 3;
+// A push body shows this many titles, then "and N more".
+const LISTINGS_TITLES_SHOWN = 6;
 const LISTINGS_FORGET_MS = 14 * ONE_DAY_MS;
 
 /**
@@ -987,40 +988,29 @@ function composeReminderMessage (reminder) {
 }
 
 /**
- * fresh: alamoListings entries. theater: { key, name, url }. Up to
- * LISTINGS_MAX_PER_SWEEP separate pushes; more than that is one summary.
- * Every tap lands on the app's Showtimes screen, a single one with that
- * card scrolled into view - never on a theater's site ("that's useless to
- * me. It's with ads", 2026-09-28). Tags carry the slug so two listings
- * never replace each other in Notification Center.
+ * fresh: every listing announced this sweep, from every theater. ONE push,
+ * titles only ("When a bunch of movies get found at theaters there are too
+ * many notifications … I don't think the notification needs to mention the
+ * theater", 2026-09-29); a film named twice is named once, and a long list
+ * ends "and N more". The tap lands on the Showtimes screen - never on a
+ * theater's site ("that's useless to me. It's with ads", 2026-09-28).
  */
-function composeListingMessages (fresh, theater) {
+function composeListingMessages (fresh) {
   const list = (fresh || []).filter((entry) => entry && entry.slug);
   if (!list.length) return [];
-  const name = (theater && theater.name) || 'the theater';
-  const key = (theater && theater.key) || 'theater';
-  if (list.length > LISTINGS_MAX_PER_SWEEP) {
-    return [{
-      title: `${list.length} new listings at ${name}`,
-      body: list.map((entry) => entry.title).join(', '),
-      tag: `listing-${key}-batch-${list[0].slug}`,
-      navigate: '/showtimes'
-    }];
-  }
-  return list.map((entry) => {
-    const when = showTimeLabel(entry.firstShowTime);
-    const title = entry.imax ? `${entry.title} (IMAX)` : entry.title;
-    return {
-      title: `New at ${name}`,
-      body: when ? `${title} · ${/,/.test(when) ? 'first showing' : 'from'} ${when}` : title,
-      tag: `listing-${key}-${entry.slug}`,
-      navigate: `/showtimes?focus=${key}/${entry.slug}`
-    };
-  });
+  const titles = [...new Set(list.map((entry) => entry.title || entry.slug))];
+  const rest = titles.length - LISTINGS_TITLES_SHOWN;
+  const body = titles.slice(0, LISTINGS_TITLES_SHOWN).join(', ') + (rest > 0 ? ` and ${rest} more` : '');
+  return [{
+    title: 'New showtimes',
+    body,
+    tag: `listings-${list[0].slug}`,
+    navigate: '/showtimes'
+  }];
 }
 
 module.exports = {
-  LISTINGS_MAX_PER_SWEEP,
+  LISTINGS_TITLES_SHOWN,
   LISTINGS_FORGET_MS,
   alamoListings,
   listingsDue,

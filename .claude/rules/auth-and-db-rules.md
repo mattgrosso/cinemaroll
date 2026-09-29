@@ -368,6 +368,14 @@ it publishes none, and the App Store won't install it on a Mac (`isIOSBinaryMacO
 false), so its Info.plist can't be read. If a scheme ever turns up, swap `ALAMO_APP_LINK`. The
 lambda's `url` fields stay web pages (reminders, the board); only the screen maps them.
 
+**One push a sweep for new listings** (2026-09-29: "When a bunch of movies get found at theaters
+there are too many notifications … I don't think the notification needs to mention the theater").
+The sweep walks every theater first, then sends a single "New showtimes" push listing just the
+titles (deduped, `LISTINGS_TITLES_SHOWN` then "and N more"), tap → `/showtimes`, and only then
+writes each theater's seen-state. If that send throws, theaters with news are NOT recorded, so it
+comes again next sweep. The earlier per-listing pushes, their `?focus=` taps and the "first
+showing" wording are gone from listings (reminders keep all three).
+
 **Years in captions** (v1.118.11: "it would be nice if the year of the movie was always listed …
 sometimes it's in the title so let's not duplicate"). `lookupFilm` in `posterLookup.js` returns
 { poster, year } from the same TMDB search (cache rows without a `year` key are re-fetched once);
