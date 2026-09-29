@@ -33,7 +33,6 @@ const GameStatsScreen = () => import(/* webpackChunkName: "games" */ "../compone
 const WatchlistScreen = () => import(/* webpackChunkName: "watchlist" */ "../components/WatchlistScreen.vue");
 const LibraryPoster = () => import(/* webpackChunkName: "library-poster" */ "../components/LibraryPoster.vue");
 const PersonalAwardsScreen = () => import(/* webpackChunkName: "awards" */ "../components/PersonalAwardsScreen.vue");
-const DeepStats = () => import(/* webpackChunkName: "deep-stats" */ "../components/DeepStats.vue");
 const FilmClubScreen = () => import(/* webpackChunkName: "film-club" */ "../components/FilmClubScreen.vue");
 const FriendComparison = () => import(/* webpackChunkName: "film-club" */ "../components/FriendComparison.vue");
 const ClubCharts = () => import(/* webpackChunkName: "film-club" */ "../components/ClubCharts.vue");
@@ -568,7 +567,7 @@ const routes = [
     component: ShowtimesScreen,
     meta: {
       title: 'Showtimes',
-      parent: '/insights',
+      parent: '/watchlist',
       requiresLogin: true
     },
     beforeEnter: (to, from, next) => {
@@ -580,23 +579,11 @@ const routes = [
     }
   },
   {
+    // Deep Stats was folded into the Insights tabs (2026-09-29). An old
+    // bookmark or history entry lands on Eras, where the Crown and the
+    // Decade Championship now live.
     path: '/stats',
-    name: 'DeepStats',
-    component: DeepStats,
-    meta: {
-      // Back-link identity: what this screen is called, and where back
-      // goes when there is no history to go back to.
-      title: 'Deep Stats',
-      parent: '/insights',
-      requiresLogin: true
-    },
-    beforeEnter: (to, from, next) => {
-      if (!loggedIn()) {
-        next('/login');
-      } else {
-        next();
-      }
-    }
+    redirect: { path: '/insights', query: { tab: 'eras' } }
   },
   {
     path: '/games/stats',

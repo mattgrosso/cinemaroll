@@ -44,28 +44,12 @@
       <!-- Pulled above the fun facts: these are the way OUT of this page, and
            they were buried under a scroll ("maybe they should be pulled
            further up"). -->
+      <!-- Only pages about your own library (2026-09-29 regroup). Showtimes
+           moved to the Watchlist (both answer "what should I go see") and
+           the Newsletter to Settings (Home's notice is the way in to a new
+           issue; Settings is the way back to old ones). Deep Stats is gone:
+           its sections live on the tabs whose question they answer. -->
       <div class="insights-links">
-        <!-- The newsletter lives in this directory, which is the app's list
-             of "ways out of Home". It was briefly a chip in the rainbow row
-             instead; that row has a test asserting the sort chip stays last,
-             and Matt's call was this page (2026-09-20: "just put it in
-             Insights… with things like the"). First in the list because it is
-             the only one of these that changes week to week. -->
-        <button type="button" class="insights-link-card" @click="$router.push('/newsletter')">
-          <i class="bi bi-envelope-paper"></i><span>Newsletter</span>
-          <span v-if="newsletterUnread" class="insights-link-new">new</span>
-          <i class="bi bi-chevron-right link-chevron"></i>
-        </button>
-        <!-- Showtimes across the theaters Matt follows (2026-09-28), fed by
-             the push sweep's board. Second because it changes daily. -->
-        <button type="button" class="insights-link-card" @click="$router.push('/showtimes')">
-          <i class="bi bi-ticket-perforated"></i><span>Showtimes</span>
-          <span v-if="showtimesUnread" class="insights-link-new">new</span>
-          <i class="bi bi-chevron-right link-chevron"></i>
-        </button>
-        <button type="button" class="insights-link-card" @click="$router.push('/stats')">
-          <i class="bi bi-graph-up-arrow"></i><span>Deep Stats</span><i class="bi bi-chevron-right link-chevron"></i>
-        </button>
         <button type="button" class="insights-link-card" @click="$router.push('/year-in-review')">
           <i class="bi bi-calendar-heart"></i><span>Year in Review</span><i class="bi bi-chevron-right link-chevron"></i>
         </button>
@@ -91,7 +75,10 @@
       <FunFactsRow/>
     </template>
 
-    <!-- RATINGS: how you rate. -->
+    <!-- RATINGS: how you score films. What used to be split between here
+         and Deep Stats (2026-09-29): the curve, then what you rate high and
+         low, then perfection, ties and genres, and the free-form scatter
+         last because it asks you to do the work. -->
     <template v-else-if="renderedTab === 'ratings'">
     <InsightsPane>
       <RatingCurvePlayback
@@ -102,24 +89,13 @@
     </InsightsPane>
 
     <InsightsPane>
-      <YearlyAverage :resultsWithRatings="resultsWithRatings" @updateSearchValue="updateSearchValue"/>
-    </InsightsPane>
-
-    <!-- The same years, ranked by money instead of score (bug report,
-         2026-09-13: "look at years from my financial perspective"). -->
-    <InsightsPane>
-      <BoxOfficeYears :resultsWithRatings="resultsWithRatings" @updateSearchValue="updateSearchValue"/>
-    </InsightsPane>
-
-    <!-- And the people behind that money (bug report, 2026-09-15: "highest
-         grossing directors and highest grossing performers... maybe even crew"). -->
-    <InsightsPane>
-      <BoxOfficePeople :resultsWithRatings="resultsWithRatings" @updateSearchValue="updateSearchValue"/>
-    </InsightsPane>
-
-    <InsightsPane>
       <Outliers :resultsWithRatings="resultsWithRatings" :allCounts="allCounts" @updateSearchValue="updateSearchValue"/>
     </InsightsPane>
+
+    <InsightsPane><StandoutsSection/></InsightsPane>
+    <InsightsPane><PantheonSection/></InsightsPane>
+    <InsightsPane><TiesSection/></InsightsPane>
+    <InsightsPane><GenresSection/></InsightsPane>
 
     <InsightsPane>
       <ScatterChart :chartData="scatterPlotData" :options="scatterPlotOptions"/>
@@ -244,12 +220,38 @@
         </p>
       </div>
 
+      <!-- From Deep Stats (2026-09-29): the years of WATCHING scored, the
+           biggest stretches, and the films you go back to. All "when". -->
+      <InsightsPane><WatchYearsSection/></InsightsPane>
+      <InsightsPane><MarathonSection/></InsightsPane>
+      <InsightsPane><RewatchesSection/></InsightsPane>
+
       <InsightsPane>
         <FullCalendarView :results="allEntriesWithFlatKeywordsAdded" :open="true" />
       </InsightsPane>
     </template>
 
-    <!-- PEOPLE: the eight Favorite sections behind one chip selector. -->
+    <!-- ERAS: the release years and decades you like (2026-09-29). The
+         release-year cards came from Ratings, the Crown and the Decade
+         Championship from Deep Stats; together they answer one question,
+         "which eras of film are mine?". -->
+    <template v-else-if="renderedTab === 'eras'">
+      <InsightsPane>
+        <YearlyAverage :resultsWithRatings="resultsWithRatings" @updateSearchValue="updateSearchValue"/>
+      </InsightsPane>
+
+      <!-- The same years, ranked by money instead of score (bug report,
+           2026-09-13: "look at years from my financial perspective"). -->
+      <InsightsPane>
+        <BoxOfficeYears :resultsWithRatings="resultsWithRatings" @updateSearchValue="updateSearchValue"/>
+      </InsightsPane>
+
+      <InsightsPane><CrownSection/></InsightsPane>
+      <InsightsPane><DecadeChampionship/></InsightsPane>
+    </template>
+
+    <!-- PEOPLE: the eight Favorite sections, plus the box office ranking,
+         behind one chip selector. -->
     <!-- PLACES: where the films are set and shot (Matt, 2026-09-08: "see
          what movies are set where", "I really like movies set in Paris",
          "a coverage map that shows me how much of the world I've explored
@@ -354,7 +356,7 @@
     <InsightsPane :key="peopleCategory">
       <component
         :is="activePeopleComponent"
-        :allEntriesWithFlatKeywordsAdded="allEntriesWithFlatKeywordsAdded"
+        v-bind="activePeopleProps"
         @updateSearchValue="updateSearchValue"
       />
     </InsightsPane>
@@ -363,8 +365,6 @@
 </template>
 
 <script>
-import { NEWSLETTER_READ_KEY } from "../assets/javascript/newsletterRead.js";
-import { SHOWTIMES_SEEN_KEY } from './ShowtimesScreen.vue';
 import { markRaw } from 'vue';
 import Outliers from "./Outliers.vue";
 import YearlyAverage from "./YearlyAverage.vue";
@@ -379,8 +379,20 @@ import FavoriteEditors from "./FavoriteEditors.vue";
 import FavoriteCinematographers from "./FavoriteCinematographers.vue";
 import FavoriteComposers from "./FavoriteComposers.vue";
 import FavoriteProducers from "./FavoriteProducers.vue";
+import CrownSection from "./stats/CrownSection.vue";
+import PantheonSection from "./stats/PantheonSection.vue";
+import TiesSection from "./stats/TiesSection.vue";
+import StandoutsSection from "./stats/StandoutsSection.vue";
+import GenresSection from "./stats/GenresSection.vue";
+import RewatchesSection from "./stats/RewatchesSection.vue";
+import MarathonSection from "./stats/MarathonSection.vue";
+import WatchYearsSection from "./stats/WatchYearsSection.vue";
+import DecadeChampionship from "./stats/DecadeChampionship.vue";
 
 // Module-level (not data) so the component objects never become reactive.
+// `props` says what each one is fed: the Favorite sections take the whole
+// library, the box office ranking takes the rated films as its twins on
+// Eras do.
 const PEOPLE_CATEGORIES = [
   { key: 'directors', label: 'Directors', component: FavoriteDirectors },
   { key: 'actors', label: 'Actors', component: FavoriteActors },
@@ -389,7 +401,10 @@ const PEOPLE_CATEGORIES = [
   { key: 'cinematographers', label: 'Cinematographers', component: FavoriteCinematographers },
   { key: 'editors', label: 'Editors', component: FavoriteEditors },
   { key: 'composers', label: 'Composers', component: FavoriteComposers },
-  { key: 'producers', label: 'Producers', component: FavoriteProducers }
+  { key: 'producers', label: 'Producers', component: FavoriteProducers },
+  // Moved from Ratings (2026-09-29): it ranks people, so it lives with the
+  // people. Last because it's a different question — money, not taste.
+  { key: 'boxOffice', label: 'Box Office', component: BoxOfficePeople, props: 'resultsWithRatings' }
 ];
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import { allViewings, calendarCoverage } from "../assets/javascript/yearInReview.js";
@@ -404,6 +419,19 @@ import { placeRows, favouritePlaces, mostVisitedPlaces, placeSummary, countryCov
 import { memoByIdentity } from "../utils/memoByIdentity.js";
 import { afterFrame } from "../utils/nextFrame.js";
 import SkeletonBlock from "./SkeletonBlock.vue";
+
+const TAB_KEYS = ['overview', 'ratings', 'activity', 'eras', 'people', 'places'];
+
+// A link can name the tab (?tab=eras — the old /stats address does); else
+// the last one you were on; else Overview. A stored key from a tab that no
+// longer exists falls back rather than rendering an empty page.
+function initialTab (route) {
+  const asked = route?.query?.tab;
+  if (TAB_KEYS.includes(asked)) return asked;
+  let stored = null;
+  try { stored = localStorage.getItem('cinemaRoll.insights.tab'); } catch { /* private mode */ }
+  return TAB_KEYS.includes(stored) ? stored : 'overview';
+}
 
 // See allEntriesWithFlatKeywordsAdded. The mapping closure is passed in
 // because it reads component helpers; it is only ever run on a cache miss.
@@ -447,20 +475,30 @@ export default {
     FavoriteCinematographers,
     FavoriteComposers,
     FavoriteProducers,
+    CrownSection,
+    PantheonSection,
+    TiesSection,
+    StandoutsSection,
+    GenresSection,
+    RewatchesSection,
+    MarathonSection,
+    WatchYearsSection,
+    DecadeChampionship,
     BackLink
   },
   data () {
     return {
       // Tabbed layout state; both persist across visits.
-      activeTab: localStorage.getItem('cinemaRoll.insights.tab') || 'overview',
+      activeTab: initialTab(this.$route),
       // The pane actually rendered; trails activeTab by one frame (setTab).
-      renderedTab: localStorage.getItem('cinemaRoll.insights.tab') || 'overview',
+      renderedTab: initialTab(this.$route),
       peopleCategory: localStorage.getItem('cinemaRoll.insights.people') || 'directors',
       monthAbbreviations: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
       tabs: [
         { key: 'overview', label: 'Overview' },
         { key: 'ratings', label: 'Ratings' },
         { key: 'activity', label: 'Activity' },
+        { key: 'eras', label: 'Eras' },
         { key: 'people', label: 'People' },
         { key: 'places', label: 'Places' }
       ],
@@ -515,10 +553,6 @@ export default {
   mounted () {
     // Set random axes on page load
     this.randomizeAxes();
-    // The directory card shows whether there is an unread issue, so this
-    // page has to ask for it. No-ops without a signed-in account key.
-    this.$store.dispatch('loadNewsletter')?.catch?.(() => {});
-    this.$store.dispatch('loadTheaterBoard')?.catch?.(() => {});
     // Places tab prep, in idle time: fetch the world map and resolve every
     // place to a country in small slices while the user reads whichever
     // tab they opened on. The tab used to do all of it on tap - 3.5s at
@@ -537,32 +571,6 @@ export default {
     if (this.cancelWarmup) this.cancelWarmup();
   },
   computed: {
-    // Mirrors NewsletterNotice's `unread` deliberately — the card here and
-    // the notice on Home must never disagree about whether there is something
-    // new, so both key off the same per-device stamp.
-    // A film first seen on a board since the last visit to the Showtimes
-    // screen, at a theater no better theater covers.
-    showtimesUnread () {
-      const theaters = this.$store.state.theaterBoard?.theaters;
-      if (!Array.isArray(theaters)) return false;
-      let seenAt = 0;
-      try { seenAt = Number(localStorage.getItem(SHOWTIMES_SEEN_KEY)) || 0; } catch { return false; }
-      const dismissed = this.$store.state.theaterDismissed || {};
-      const reminders = this.$store.state.theaterReminders || {};
-      const waiting = (t, l) => reminders[t.key]?.[l.slug] && !reminders[t.key][l.slug].sentAt;
-      return theaters.some((t) => (t.listings || []).some((l) => !l.coveredBy && !dismissed[t.key]?.[l.slug] && !waiting(t, l) && Number(l.firstSeenAt) > seenAt));
-    },
-    newsletterUnread () {
-      if (!this.$store.state.newsletterPrefs?.newsletter) return false;
-      const week = this.$store.state.newsletterIssue?.weekKey;
-      if (!week) return false;
-      try {
-        return localStorage.getItem(NEWSLETTER_READ_KEY) !== week;
-      } catch {
-        return true;
-      }
-    },
-
     // Every viewing ever, for the all-time calendar coverage grid. Shorts are
     // included here deliberately: the question is "did I watch something on
     // this date", and a short absolutely counts as having watched something.
@@ -600,6 +608,12 @@ export default {
     },
     activePeopleComponent () {
       return (PEOPLE_CATEGORIES.find(c => c.key === this.peopleCategory) || PEOPLE_CATEGORIES[0]).component;
+    },
+    activePeopleProps () {
+      const category = PEOPLE_CATEGORIES.find(c => c.key === this.peopleCategory) || PEOPLE_CATEGORIES[0];
+      return category.props === 'resultsWithRatings'
+        ? { resultsWithRatings: this.resultsWithRatings }
+        : { allEntriesWithFlatKeywordsAdded: this.allEntriesWithFlatKeywordsAdded };
     },
     activePeopleLabel () {
       return (PEOPLE_CATEGORIES.find(c => c.key === this.peopleCategory) || PEOPLE_CATEGORIES[0]).label;
@@ -746,7 +760,7 @@ export default {
         if (this.currentLogIsTVLog) {
           director = result.tvShow.created_by?.[0].name;
         } else {
-          director = result.movie.crew?.find((person) => person.job === "Director").name;
+          director = result.movie.crew?.find((person) => person.job === "Director")?.name;
         }
 
         if (director) {
@@ -3008,6 +3022,12 @@ export default {
     --accent-deep: #14663a;
   }
 
+  /* Coral, the one hue the other five leave free. Black on it is ~7:1. */
+  &.insights-accent-eras {
+    --accent: #ff7a6b;
+    --accent-deep: #7f3129;
+  }
+
   &.insights-accent-people {
     --accent: #cd7fe8;
     --accent-deep: #6d3b7f;
@@ -3022,14 +3042,18 @@ export default {
   &.insights-accent-overview .alt .glance-label,
   &.insights-accent-ratings .alt .glance-label,
   &.insights-accent-activity .alt .glance-label,
+  &.insights-accent-eras .alt .glance-label,
   &.insights-accent-people .alt .glance-label,
   &.insights-accent-places .alt .glance-label {
     color: white;
   }
 
+  /* Six tabs in two rows of three: one row of six left ~57px a tab at
+     phone width, too narrow for "Overview" at a readable size. */
   .insights-tabs {
-    display: flex;
+    display: grid;
     gap: 0.35rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     margin: 0.25rem 0 0.75rem;
     width: 100%;
 
@@ -3070,6 +3094,7 @@ export default {
       &.insights-tab-overview.active { background: #FFD700; }
       &.insights-tab-ratings.active { background: #1D8BF1; }
       &.insights-tab-activity.active { background: #24d776; }
+      &.insights-tab-eras.active { background: #ff7a6b; }
       &.insights-tab-people.active { background: #cd7fe8; }
       &.insights-tab-places.active { background: #f0ad4e; }
 
@@ -3176,23 +3201,6 @@ export default {
         /* #9aa0a6 on #33383d is ~4.6:1 — a hint, but still a legible one. */
         color: #9aa0a6;
         font-size: 0.9rem;
-      }
-
-      /* The unread flag on the newsletter row. `flex: 0 0 auto` is
-         load-bearing: the rule above gives every span in a card
-         `flex: 1 1 auto`, so without this the badge would split the row's
-         width with the label and push the title into a second line.
-         #ffc107 on #33383d is ~8:1. */
-      .insights-link-new {
-        background: rgba(255, 193, 7, 0.16);
-        border-radius: 999px;
-        color: #ffc107;
-        flex: 0 0 auto;
-        font-size: 0.62rem;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        padding: 0.1rem 0.4rem;
-        text-transform: uppercase;
       }
 
       &:active {

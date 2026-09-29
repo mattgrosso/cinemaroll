@@ -733,3 +733,113 @@ describe('Places tab', () => {
     expect(wrapper.find('.place-row').exists()).toBe(false)
   })
 })
+
+// The 2026-09-29 regroup (Matt: "What distinguishes between regular stats
+// and deep stats?... it's sort of haphazardly assembled"). Deep Stats is
+// gone as a page; each tab answers one question and holds everything that
+// answers it. These pin which section lives where, so a later addition has
+// to choose a tab on purpose.
+describe('Insights — one question per tab', () => {
+  function mountWithPanes ({ route = { query: {} } } = {}) {
+    const pushSpy = vi.fn()
+    const wrapper = shallowMount(Insights, {
+      global: {
+        mocks: {
+          $store: {
+            state: { currentLog: 'movieLog', settings: {} },
+            getters: { allMediaAsArray: [entry({ movie: { crew: [{ job: 'Director', name: 'Agnès Varda' }] } })] },
+            commit: vi.fn(),
+            dispatch: vi.fn(() => Promise.resolve())
+          },
+          $route: route,
+          $router: { push: pushSpy }
+        },
+        stubs: { InsightsPane: { template: '<div><slot /></div>' }, CoverageMap: true }
+      }
+    })
+    return { wrapper, pushSpy }
+  }
+
+  beforeEach(() => window.localStorage.clear())
+
+  const has = (wrapper, name) => wrapper.findComponent({ name }).exists()
+
+  it('has six tabs, Eras between Activity and People', () => {
+    const { wrapper } = mountWithPanes()
+    expect(wrapper.findAll('.insights-tab').map((t) => t.text()))
+      .toEqual(['Overview', 'Ratings', 'Activity', 'Eras', 'People', 'Places'])
+  })
+
+  const PLACEMENT = {
+    ratings: ['RatingCurvePlayback', 'Outliers', 'StandoutsSection', 'PantheonSection', 'TiesSection', 'GenresSection'],
+    activity: ['WatchYearsSection', 'MarathonSection', 'RewatchesSection', 'FullCalendarView'],
+    eras: ['YearlyAverage', 'BoxOfficeYears', 'CrownSection', 'DecadeChampionship']
+  }
+  const everySection = Object.values(PLACEMENT).flat()
+
+  Object.entries(PLACEMENT).forEach(([tab, names]) => {
+    it(`puts ${names.join(', ')} on ${tab}, and nothing from another tab`, async () => {
+      const { wrapper } = mountWithPanes()
+      await wrapper.setData({ activeTab: tab })
+      names.forEach((name) => expect(has(wrapper, name), name).toBe(true))
+      everySection.filter((name) => !names.includes(name))
+        .forEach((name) => expect(has(wrapper, name), name).toBe(false))
+    })
+  })
+
+  it('keeps the box office people ranking with the people, fed the rated films', async () => {
+    const { wrapper } = mountWithPanes()
+    await wrapper.setData({ activeTab: 'ratings' })
+    expect(has(wrapper, 'BoxOfficePeople')).toBe(false)
+
+    await wrapper.setData({ activeTab: 'people' })
+    const pill = wrapper.findAll('.people-chip').find((c) => c.text() === 'Box Office')
+    await pill.trigger('click')
+    const people = wrapper.findComponent({ name: 'BoxOfficePeople' })
+    expect(people.exists()).toBe(true)
+    expect(people.props('resultsWithRatings')).toHaveLength(1)
+    // Not handed the Favorite sections' prop as a stray attribute.
+    expect(people.attributes('allentrieswithflatkeywordsadded')).toBeUndefined()
+  })
+
+  it('lists only pages about your library in the Overview directory', () => {
+    const { wrapper } = mountWithPanes()
+    const labels = wrapper.findAll('.insights-link-card').map((c) => c.text())
+    expect(labels).toEqual(['Year in Review', 'Trophy Case', 'Awards', 'Game Stats', 'Library Poster', 'The Web'])
+  })
+
+  it('opens the tab a link names — the old /stats address sends ?tab=eras', () => {
+    window.localStorage.setItem('cinemaRoll.insights.tab', 'activity')
+    const { wrapper } = mountWithPanes({ route: { query: { tab: 'eras' } } })
+    expect(wrapper.vm.activeTab).toBe('eras')
+    expect(has(wrapper, 'CrownSection')).toBe(true)
+  })
+
+  // Found writing the tests above: a film with a crew but no Director
+  // credit threw inside countDirectors and blanked the Ratings tab.
+  it('opens Ratings for a library with a film that has no director', async () => {
+    const wrapper = shallowMount(Insights, {
+      global: {
+        mocks: {
+          $store: {
+            state: { currentLog: 'movieLog', settings: {} },
+            getters: { allMediaAsArray: [entry({ movie: { crew: [{ job: 'Editor', name: 'Thelma Schoonmaker' }] } })] },
+            commit: vi.fn(),
+            dispatch: vi.fn(() => Promise.resolve())
+          },
+          $route: { query: {} },
+          $router: { push: vi.fn() }
+        },
+        stubs: { InsightsPane: { template: '<div><slot /></div>' } }
+      }
+    })
+    await wrapper.setData({ activeTab: 'ratings' })
+    expect(wrapper.findComponent({ name: 'Outliers' }).exists()).toBe(true)
+  })
+
+  it('falls back to Overview when the remembered tab no longer exists', () => {
+    window.localStorage.setItem('cinemaRoll.insights.tab', 'deepstats')
+    const { wrapper } = mountWithPanes()
+    expect(wrapper.vm.activeTab).toBe('overview')
+  })
+})

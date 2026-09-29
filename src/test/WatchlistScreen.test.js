@@ -66,14 +66,14 @@ function tmdbImpl (url) {
   return Promise.reject(new Error(`unexpected url ${url}`));
 }
 
-function factory ({ isOnline = true, movies = library(), dispatch = vi.fn(), movieHatMovieIds = {}, movieHatContentsComplete = true, linkedMovieHats = [] } = {}) {
+function factory ({ isOnline = true, movies = library(), dispatch = vi.fn(), movieHatMovieIds = {}, movieHatContentsComplete = true, linkedMovieHats = [], state = {} } = {}) {
   const pushSpy = vi.fn();
   const commitSpy = vi.fn();
   const wrapper = mount(WatchlistScreen, {
     global: {
       mocks: {
         $store: {
-          state: { isOnline, movieHatMovieIds, movieHatContentsComplete },
+          state: { isOnline, movieHatMovieIds, movieHatContentsComplete, ...state },
           getters: { allMoviesAsArray: movies, linkedMovieHats },
           commit: commitSpy,
           dispatch
@@ -816,5 +816,38 @@ describe('WatchlistScreen — the filmography box autocompletes people from your
     expect(wrapper.find('.person-section .typeahead-panel').exists()).toBe(true);
     await input.trigger('blur');
     expect(wrapper.find('.person-section .typeahead-panel').exists()).toBe(false);
+  });
+});
+
+// Showtimes moved here from the Insights directory (2026-09-29): this
+// screen's question is what to go and see, and the theaters answer it too.
+describe('WatchlistScreen Showtimes card', () => {
+  beforeEach(() => {
+    axios.get.mockReset();
+    axios.get.mockImplementation(tmdbImpl);
+    window.localStorage.clear();
+  });
+
+  const board = (firstSeenAt) => ({ theaters: [{ key: 'alamo', listings: [{ slug: 'nosferatu', firstSeenAt }] }] });
+
+  it('opens Showtimes, and asks for the board so it can say whether anything is new', async () => {
+    const dispatch = vi.fn();
+    const { wrapper, pushSpy } = factory({ dispatch });
+    await flushPromises();
+    expect(dispatch).toHaveBeenCalledWith('loadTheaterBoard');
+    await wrapper.find('.showtimes-card').trigger('click');
+    expect(pushSpy).toHaveBeenCalledWith('/showtimes');
+  });
+
+  it('flags a film first seen since the last visit, and only then', async () => {
+    window.localStorage.setItem('showtimesSeenAt', '1000');
+    const fresh = factory({ state: { theaterBoard: board(2000) } });
+    await flushPromises();
+    expect(fresh.wrapper.find('.showtimes-card-new').exists()).toBe(true);
+
+    const seen = factory({ state: { theaterBoard: board(500) } });
+    await flushPromises();
+    expect(seen.wrapper.find('.showtimes-card').exists()).toBe(true);
+    expect(seen.wrapper.find('.showtimes-card-new').exists()).toBe(false);
   });
 });

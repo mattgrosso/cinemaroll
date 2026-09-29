@@ -618,6 +618,11 @@
               <!-- Grouped into consistent SettingsSection cards (feedback:
                    the pane had grown patchwork). Ordered by everyday
                    relevance; rarely-used groups collapse by default. -->
+              <!-- The way back to this week's issue and the newsletter's
+                   settings. It sat in the Insights directory until
+                   2026-09-29, the one entry there not about your library;
+                   a new issue still announces itself in .home-notices. -->
+              <SettingsSection title="Newsletter" hint="This week's issue, and turning it on or off" to="/newsletter"/>
               <SettingsSection title="Library" hint="Short films, your rating curve, and personal awards" collapsible :startOpen="false">
 
                 <!-- "I should be able to set a default sort order somewhere in

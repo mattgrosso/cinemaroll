@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import DeepStats from '@/components/DeepStats.vue'
+import TiesSection from '@/components/stats/TiesSection.vue'
 
 // Bug report 2026-09-06: "Would be cool if I could see how many ties there
 // are in the whole database." Driven through the DOM: the strip, the
@@ -21,9 +21,8 @@ function film (id, rating) {
 
 function mountWith (library) {
   const pushSpy = vi.fn()
-  const wrapper = mount(DeepStats, {
+  const wrapper = mount(TiesSection, {
     global: {
-      stubs: { BackLink: true },
       mocks: {
         $store: { state: { settings: {}, isOnline: true }, getters: { allMoviesAsArray: library } },
         $router: { push: pushSpy }
@@ -33,7 +32,7 @@ function mountWith (library) {
   return { wrapper, pushSpy }
 }
 
-describe('Deep Stats — Ties', () => {
+describe('Ties (Ratings tab)', () => {
   // Three at 7.1234 (biggest), two at 9 (highest, so next up), one alone.
   const tied = [film(1, 9), film(2, 9), film(3, 7.1234), film(4, 7.1234), film(5, 7.1234), film(6, 5)]
 

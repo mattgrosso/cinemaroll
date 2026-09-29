@@ -65,6 +65,29 @@ are silent no-ops (this dropped new users' typed usernames).
 
 ## Insights
 
+**One question per tab (2026-09-29 regroup, "what distinguishes between regular stats
+and deep stats?" — nothing did).** Deep Stats is no longer a page; `/stats` redirects to
+`/insights?tab=eras`. Six tabs, two rows of three:
+
+- **Overview** — headline numbers, the directory (only pages about YOUR LIBRARY: Year in
+  Review, Trophy Case, Awards, Game Stats, Library Poster, The Web), fun facts.
+- **Ratings** (how you score) — curve replay, Outliers, Standouts, Pantheon, Ties,
+  Genres, scatter last.
+- **Activity** (when you watch) — pace, tappable counts, calendar coverage, watching
+  years, Marathon Club, Rewatches, full calendar.
+- **Eras** (which release years are yours, accent `#ff7a6b`) — best release years, box
+  office by year, the Crown, Decade Championship.
+- **People** — the eight Favorite sections plus a ninth pill, Box Office
+  (`BoxOfficePeople`, fed `resultsWithRatings` via the category's `props`).
+- **Places**.
+
+Showtimes lives on the **Watchlist** (a card at the top; `showtimesUnread.js` is the
+pure "anything new?" check) and the Newsletter is a link row at the top of **Settings**
+(`SettingsSection`'s `to` prop). Neither is about your library, which is why they left.
+`Insights.test.js` ("one question per tab") pins every section to its tab — adding one
+means choosing a tab on purpose. `?tab=<key>` opens a tab; a remembered key for a tab
+that no longer exists falls back to Overview.
+
 `estimatedMoviesThisYear` blends four movies-per-day rates equally — whole-year-to-date,
 recent 2 weeks, recent 2 months, plus last year's seasonal shape — projected across the
 remaining days.
@@ -83,7 +106,7 @@ TODO rather than rewritten — that logic has a documented bug history and no co
 
 ## Places tab (2026-09-08)
 
-Fifth tab, accent `#f0ad4e`. Three pure sources in `places.js`, tested directly:
+Sixth tab, accent `#f0ad4e`. Three pure sources in `places.js`, tested directly:
 `placeRows` → `favouritePlaces` (ranked by the average shrunk toward the library's own,
 `RANK_SHRINK`, three films minimum — "I really like movies set in Paris" is a pattern,
 one great film isn't) and `mostVisitedPlaces`; `countryCoverage` rolls set/filmed points
@@ -102,7 +125,7 @@ opens — `world` is a required prop, never imported by the component. The set/f
 persists in `localStorage` (`cinemaRoll.insights.placeType`) — tests must clear it.
 Every tap on a place hands Home a real `place` chip (`searchPlace`), the MovieDetail way.
 
-## Years by box office (Ratings tab, 2026-09-13)
+## Years by box office (Eras tab since 2026-09-29; built 2026-09-13)
 
 `BoxOfficeYears.vue` sits directly under `YearlyAverage` and is its deliberate twin —
 same card, same rows, the other question: "a rank of years based on total box office
@@ -114,7 +137,7 @@ dollars quietly favours the recent decades. Choice persists in `localStorage`
 (`cinemaRoll.insights.boxOfficeDollars`) — tests must clear it. Tapping a year runs the
 same year search the best-years list does.
 
-## People by box office (Ratings tab, 2026-09-16)
+## People by box office (People tab's Box Office pill since 2026-09-29; built 2026-09-16)
 
 `BoxOfficePeople.vue` sits directly under `BoxOfficeYears` and is its twin one more time
 ("highest grossing directors and highest grossing performers, and maybe even crew"):
@@ -125,10 +148,14 @@ matched by JOB the way `deepStats.js` does, performers by `TOP_BILLING` (5) only
 credit per person per film. Tapping a name runs a plain search for it, so the sections
 answer which roles the money came from.
 
-## Deep Stats
+## The library-stats sections (formerly Deep Stats)
 
-`/stats` renders only; every section is a pure function in `deepStats.js` or
-`decadeChampionship.js`, tested directly. Log Score for every group, whole-library
+One component per section in `src/components/stats/`, spread across the Insights tabs
+(see above). They only render; every section is a pure function in `deepStats.js` or
+`decadeChampionship.js`, tested directly. Shared look in `scss/_stats-section.scss`
+(highlights take the tab's `--accent`); `statsSection.js` memoizes each result on the
+library getter's identity plus the Log Score weights as JSON, because a tab switch
+remounts them. Log Score for every group, whole-library
 average as the Bayesian anchor throughout.
 
 **Decade Championship (2026-09-02)** buckets by RELEASE decade, not watch year — it's

@@ -1,19 +1,20 @@
 <template>
   <section class="settings-section">
     <component
-      :is="collapsible ? 'button' : 'div'"
-      :type="collapsible ? 'button' : null"
+      :is="collapsible || to ? 'button' : 'div'"
+      :type="collapsible || to ? 'button' : null"
       class="settings-section-header"
-      :class="{ collapsible }"
-      @click="collapsible && (open = !open)"
+      :class="{ collapsible: collapsible || to }"
+      @click="headerTapped"
     >
       <span class="settings-section-heading">
         <span class="settings-section-title">{{ title }}</span>
         <span v-if="hint" class="settings-section-hint">{{ hint }}</span>
       </span>
-      <i v-if="collapsible" class="bi bi-chevron-down settings-section-chevron" :class="{ open }"></i>
+      <i v-if="to" class="bi bi-chevron-right settings-section-chevron"></i>
+      <i v-else-if="collapsible" class="bi bi-chevron-down settings-section-chevron" :class="{ open }"></i>
     </component>
-    <div v-show="open" class="settings-section-body">
+    <div v-if="!to" v-show="open" class="settings-section-body">
       <slot></slot>
     </div>
   </section>
@@ -34,12 +35,22 @@ export default {
     // carries a line saying what's inside.
     hint: { type: String, default: '' },
     collapsible: { type: Boolean, default: false },
+    // A group that is a way somewhere else rather than a set of controls
+    // (the Newsletter, 2026-09-29): the header becomes a link to this route
+    // and there is no body.
+    to: { type: String, default: '' },
     startOpen: { type: Boolean, default: true }
   },
   data () {
     return {
       open: this.collapsible ? this.startOpen : true
     };
+  },
+  methods: {
+    headerTapped () {
+      if (this.to) this.$router.push(this.to);
+      else if (this.collapsible) this.open = !this.open;
+    }
   }
 };
 </script>

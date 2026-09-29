@@ -12,12 +12,15 @@ import { theaterHref, opensInNewTab, ALAMO_APP_LINK } from '../assets/javascript
 const read = (path) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8');
 
 describe('Showtimes screen wiring', () => {
-  it('is routed under Insights and linked from its directory', () => {
+  // Moved from the Insights directory to the Watchlist (2026-09-29): both
+  // answer "what should I go and see".
+  it('is routed under the Watchlist and linked from it', () => {
     const router = read('../router/index.js');
-    expect(router).toMatch(/path: '\/showtimes',[\s\S]*?parent: '\/insights'/);
-    const insights = read('../components/Insights.vue');
-    expect(insights).toContain("$router.push('/showtimes')");
-    expect(insights).toContain("dispatch('loadTheaterBoard')");
+    expect(router).toMatch(/path: '\/showtimes',[\s\S]*?parent: '\/watchlist'/);
+    const watchlist = read('../components/WatchlistScreen.vue');
+    expect(watchlist).toContain("$router.push('/showtimes')");
+    expect(watchlist).toContain("dispatch('loadTheaterBoard')");
+    expect(read('../components/Insights.vue')).not.toContain('/showtimes');
   });
 
   it('reads the board the sweep writes, and only reads it', () => {

@@ -1,0 +1,84 @@
+// The look shared by the sections that used to make up Deep Stats (/stats),
+// now spread across the Insights tabs (2026-09-29: "what distinguishes
+// between regular stats and deep stats?" — nothing principled, so the page
+// went and its sections joined the tabs whose question they answer).
+// Imported into each section's scoped style, so every rule here is scoped
+// to the component that imports it.
+//
+// Highlights take the tab's accent (--accent, set on the Insights root) so a
+// section wears the colour of the tab it sits on; gold is the fallback for a
+// section mounted anywhere else. Every accent is legible on #161616.
+
+.ds-section {
+  background: #161616;
+  border: 1px solid #2e2e2e;
+  border-radius: 10px;
+  color: #eee;
+  padding: 0.9rem 1rem;
+  width: 100%;
+}
+
+.ds-section-title { font-size: 1.1rem; font-weight: 700; margin: 0 0 0.25rem; }
+.ds-section-caption { color: #ccc; font-size: 0.78rem; margin: 0 0 0.75rem; }
+
+.ds-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.ds-strip-item {
+  background: #101010;
+  border: 1px solid #2e2e2e;
+  border-radius: 10px;
+  display: flex;
+  flex: 1 1 100px;
+  flex-direction: column;
+  padding: 0.5rem 0.75rem;
+}
+
+.ds-strip-value { color: var(--accent, #ffc107); font-size: 1.15rem; font-weight: 700; }
+.ds-strip-label { color: #ccc; font-size: 0.7rem; letter-spacing: 0.4px; text-transform: uppercase; }
+
+.pantheon-category { margin-top: 0.75rem; }
+.pantheon-label { color: #eee; font-size: 0.85rem; font-weight: 700; margin: 0 0 0.4rem; }
+.pantheon-count { color: #999; font-size: 0.72rem; font-weight: 400; margin-left: 0.35rem; }
+
+/* Sideways rows carry most of these sections: a section is one row tall
+   however much is in it. Images edge-aligned, text flows. */
+.ds-poster-row {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.6rem;
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+}
+
+.ds-poster-card { cursor: pointer; flex: 0 0 92px; width: 92px; }
+.ds-poster-card:active { opacity: 0.7; }
+.ds-poster { border-radius: 6px; display: block; height: 138px; object-fit: cover; width: 92px; }
+
+.ds-poster-blank {
+  align-items: center;
+  background: #2b2b2b;
+  color: #ccc;
+  display: flex;
+  font-size: 0.68rem;
+  justify-content: center;
+  padding: 0.3rem;
+  text-align: center;
+}
+
+/* Left, not centred: these sit under a fixed-width poster, and centring made
+   the label and the note under it disagree about where the card starts. */
+.ds-poster-note { color: #ccc; display: block; font-size: 0.7rem; line-height: 1.25; margin-top: 0.25rem; }
+.ds-poster-note.gold { color: var(--accent, #ffc107); }
+
+.crown-card-year {
+  color: #fff;
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-top: 0.2rem;
+}

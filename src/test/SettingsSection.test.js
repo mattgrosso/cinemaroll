@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { vi } from 'vitest';
 import { nextTick } from 'vue';
 import SettingsSection from '@/components/SettingsSection.vue';
 
@@ -49,5 +50,22 @@ describe('SettingsSection', () => {
 
     expect(bodyDisplay(wrapper)).toBe('');
     expect(wrapper.find('.settings-section-chevron').exists()).toBe(false);
+  });
+});
+
+// A group that is a way somewhere rather than a set of controls — the
+// Newsletter, moved here from the Insights directory on 2026-09-29.
+describe('SettingsSection as a link', () => {
+  it('navigates on a header tap, with a sideways chevron and no body', async () => {
+    const push = vi.fn();
+    const wrapper = mount(SettingsSection, {
+      props: { title: 'Newsletter', hint: "This week's issue", to: '/newsletter' },
+      global: { mocks: { $router: { push } } }
+    });
+    expect(wrapper.find('.settings-section-body').exists()).toBe(false);
+    expect(wrapper.find('.bi-chevron-right').exists()).toBe(true);
+    expect(wrapper.find('.bi-chevron-down').exists()).toBe(false);
+    await wrapper.find('button.settings-section-header').trigger('click');
+    expect(push).toHaveBeenCalledWith('/newsletter');
   });
 });

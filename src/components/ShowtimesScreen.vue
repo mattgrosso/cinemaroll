@@ -110,6 +110,7 @@ import SkeletonBlock from './SkeletonBlock.vue';
 import { lookupFilm, titleWithYear } from '../utils/posterLookup.js';
 import { reminderTimeFor } from '../utils/reminderTime.js';
 import { theaterHref, opensInNewTab } from '../assets/javascript/theaterLinks.js';
+import { SHOWTIMES_SEEN_KEY } from '../assets/javascript/showtimesUnread.js';
 
 // Matt, 2026-09-28: "it would also be great if I could see this somewhere on
 // Cinemaroll, besides just the push notification … a page … that would show
@@ -124,7 +125,7 @@ import { theaterHref, opensInNewTab } from '../assets/javascript/theaterLinks.js
 // default, a film a better theater also has is hidden - the rule the pushes
 // follow.
 
-export const SHOWTIMES_SEEN_KEY = 'showtimesSeenAt';
+export { SHOWTIMES_SEEN_KEY };
 const NEW_FOR_MS = 7 * 24 * 60 * 60 * 1000;
 // A right swipe dismisses once it has travelled this far or a third of the
 // card, whichever is less - a flick on a phone, not a drag across it.

@@ -577,3 +577,39 @@ Three of the ideas offered after the sweep, Matt's picks:
   faster keystroke means changing that pipeline, which is a design
   question, not a rendering one - left alone on purpose.
 
+
+## Insights regrouped; Deep Stats folded in (2026-09-29)
+
+Matt, from the in-app bug button: "What distinguishes between regular stats and
+deep stats? ... take a holistic look at the entire insights tab ... it's sort of
+haphazardly assembled." The honest answer was nothing principled. Deep Stats was
+a port of Brian's Movie Log stats suite that got its own page on 2026-08-15; the
+Insights tabs grew one bug report at a time. So both pages answered "how do I
+rate" and "when do I watch", and release years were split between Ratings
+(best years, box office years) and Deep Stats (the Crown, the Decade
+Championship).
+
+The fix gives each tab one question. Ratings = how you score; Activity = when you
+watch (Deep Stats' watch-year Years, Marathon, Rewatches joined it); a new Eras
+tab = which release years are yours; the box office people ranking became the
+People tab's ninth pill. Deep Stats' nine sections became nine components under
+`src/components/stats/`, memoized because a tab switch remounts them. `/stats`
+redirects to Eras.
+
+The Insights directory also lost the two entries that weren't about the
+library. Showtimes went to the Watchlist ("what should I go see" is that
+screen's question) and the Newsletter to a link row at the top of Settings
+(Home's notice is how a new issue announces itself). The rainbow row was
+explicitly left alone ("we're not messing with the rainbow here").
+
+Six tabs don't fit one row at phone width (~57px each, too narrow for
+"Overview"), so the bar is a 3×2 grid.
+
+Found on the way: `countDirectors` threw on a film with a crew but no
+Director credit, which would have blanked the Ratings tab. It had never fired
+on the real library; now guarded and tested.
+
+Noted, not done: Outliers ("You love these more than most things") and
+Standouts overlap — both rank the corners of the library you rate above your
+average, by different maths. They now sit next to each other on Ratings, which
+makes the overlap visible; merging them is Matt's call.

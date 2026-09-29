@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import DeepStats from '@/components/DeepStats.vue'
+import DecadeChampionship from '@/components/stats/DecadeChampionship.vue'
 import { lookupPerson } from '@/utils/personLookup.js'
 
 // Bug report 2026-09-02: a decade-by-decade championship in Deep Stats.
@@ -57,9 +57,9 @@ function library () {
   ]
 }
 
-function mountDeepStats ({ isOnline = true } = {}) {
+function mountSection ({ isOnline = true } = {}) {
   const pushSpy = vi.fn()
-  const wrapper = mount(DeepStats, {
+  const wrapper = mount(DecadeChampionship, {
     global: {
       stubs: { BackLink: true },
       mocks: {
@@ -81,7 +81,7 @@ const winnerName = (wrapper, key) => card(wrapper, key).find('.champion-name').t
 const field = (wrapper) => section(wrapper).find('.competitors')
 const fieldNames = (wrapper) => field(wrapper).findAll('.competitor-name').map((n) => n.text())
 
-describe('DeepStats — Decade Championship', () => {
+describe('Decade Championship (Eras tab)', () => {
   beforeEach(() => {
     lookupPerson.mockClear()
     // PersonModal looks up a biography on open.
@@ -89,7 +89,7 @@ describe('DeepStats — Decade Championship', () => {
   })
 
   it('offers every decade as a pill, newest first, with the biggest decade selected', async () => {
-    const { wrapper } = mountDeepStats()
+    const { wrapper } = mountSection()
     await flushPromises()
 
     const pills = section(wrapper).findAll('.ds-decade-pill')
@@ -100,7 +100,7 @@ describe('DeepStats — Decade Championship', () => {
   })
 
   it('is one sideways row of winners: a poster for the film, a portrait for each person', async () => {
-    const { wrapper } = mountDeepStats()
+    const { wrapper } = mountSection()
     await flushPromises()
 
     // Writer/Cinematographer/Composer/Editor have nobody with two films here;
@@ -124,7 +124,7 @@ describe('DeepStats — Decade Championship', () => {
   })
 
   it('a person TMDB knows but has no photo for gets the not-available image, never a poster', async () => {
-    const { wrapper } = mountDeepStats()
+    const { wrapper } = mountSection()
     await flushPromises()
     await section(wrapper).findAll('.ds-decade-pill')[0].trigger('click')
     await flushPromises()
@@ -136,7 +136,7 @@ describe('DeepStats — Decade Championship', () => {
   })
 
   it('tapping a winner unfolds the field beneath the row; tapping again folds it', async () => {
-    const { wrapper } = mountDeepStats()
+    const { wrapper } = mountSection()
     await flushPromises()
 
     await card(wrapper, 'film').trigger('click')
@@ -154,7 +154,7 @@ describe('DeepStats — Decade Championship', () => {
   })
 
   it('the cast walk goes only as deep as asked: one of each for the row, further on unfold', async () => {
-    const { wrapper } = mountDeepStats()
+    const { wrapper } = mountSection()
     await flushPromises()
 
     // Tom Hanks fills Actor, Meg Ryan fills Actress; the walk stops there.
@@ -171,7 +171,7 @@ describe('DeepStats — Decade Championship', () => {
   })
 
   it('a competitor who is a person opens the shared PersonModal with their decade credits', async () => {
-    const { wrapper } = mountDeepStats()
+    const { wrapper } = mountSection()
     await flushPromises()
 
     await card(wrapper, 'director').trigger('click')
@@ -187,7 +187,7 @@ describe('DeepStats — Decade Championship', () => {
   })
 
   it('a competitor that is a film goes to the movie', async () => {
-    const { wrapper, pushSpy } = mountDeepStats()
+    const { wrapper, pushSpy } = mountSection()
     await flushPromises()
 
     await card(wrapper, 'film').trigger('click')
@@ -196,7 +196,7 @@ describe('DeepStats — Decade Championship', () => {
   })
 
   it('switching decade folds the field and re-crowns everything', async () => {
-    const { wrapper } = mountDeepStats()
+    const { wrapper } = mountSection()
     await flushPromises()
     await card(wrapper, 'film').trigger('click')
 
@@ -219,7 +219,7 @@ describe('DeepStats — Decade Championship', () => {
   // plain writable value on the row; the assertion is that the component
   // writes 0 to it when the decade changes.
   it('switching decade scrolls the winners row back to its left edge', async () => {
-    const { wrapper } = mountDeepStats()
+    const { wrapper } = mountSection()
     await flushPromises()
 
     const row = section(wrapper).find('.ds-poster-row.champions').element
@@ -238,7 +238,7 @@ describe('DeepStats — Decade Championship', () => {
   })
 
   it('offline, actors and actresses share one Performer card and nothing is looked up', async () => {
-    const { wrapper } = mountDeepStats({ isOnline: false })
+    const { wrapper } = mountSection({ isOnline: false })
     await flushPromises()
 
     expect(lookupPerson).not.toHaveBeenCalled()

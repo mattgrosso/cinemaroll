@@ -4,6 +4,17 @@
     <h1 class="watchlist-title">Watchlist</h1>
     <p class="watchlist-subtitle">Built from your own ratings — what to revisit, and what to see next.</p>
 
+    <!-- Showtimes lived in the Insights directory until 2026-09-29, where
+         it was the odd one out: everything else there is about your
+         library, and this is about what to go and see — this screen's
+         question. Above the skeleton, so it's there on the first frame. -->
+    <button type="button" class="showtimes-card" @click="$router.push('/showtimes')">
+      <i class="bi bi-ticket-perforated"></i>
+      <span class="showtimes-card-label">Showtimes</span>
+      <span v-if="showtimesUnread" class="showtimes-card-new">new</span>
+      <i class="bi bi-chevron-right showtimes-card-chevron"></i>
+    </button>
+
     <!-- Painted for one frame before the real content (nextFrame): the
          tap that opened this screen is acknowledged at once instead of
          after the ~0.5-1s the sections below take to build. -->
@@ -307,6 +318,7 @@ import { personCandidates, filmographyFrom, filmographyProgress } from '../asset
 import { buildCatalog, typeaheadEntries } from '../assets/javascript/catalog.js';
 import { rankTypeahead, describeSuggestion } from '../assets/javascript/searchSuggestions.js';
 import { postToAi } from '../utils/aiRequest.js';
+import { hasUnseenShowtimes, SHOWTIMES_SEEN_KEY } from '../assets/javascript/showtimesUnread.js';
 
 // Long enough to read the "added to <hat>" confirmation before the card that
 // owns it leaves the list.
@@ -397,6 +409,16 @@ export default {
     };
   },
   computed: {
+    showtimesUnread () {
+      let seenAt = 0;
+      try { seenAt = Number(localStorage.getItem(SHOWTIMES_SEEN_KEY)) || 0; } catch { return false; }
+      return hasUnseenShowtimes({
+        board: this.$store.state.theaterBoard,
+        dismissed: this.$store.state.theaterDismissed || {},
+        reminders: this.$store.state.theaterReminders || {},
+        seenAt
+      });
+    },
     rewatchItems () {
       return this.rewatchList.map((candidate) => ({
         key: candidate.entry.dbKey,
@@ -659,6 +681,8 @@ export default {
     this.puntTimers = [];
   },
   created () {
+    // For the Showtimes card's "new" flag. No-ops without an account key.
+    this.$store.dispatch('loadTheaterBoard')?.catch?.(() => {});
     // Film Club picks need friends' published profiles; the watchlist is
     // reachable without ever visiting the club, so bootstrap them here too.
     this.$store.dispatch('attachSocialListeners');
@@ -1201,6 +1225,41 @@ export default {
   color: #adb5bd;
   font-size: 0.85rem;
   margin: 0.25rem 0 1.25rem;
+}
+
+.showtimes-card {
+  align-items: center;
+  background: #161616;
+  border: 1px solid #2e2e2e;
+  border-radius: 10px;
+  color: #eee;
+  display: flex;
+  gap: 0.6rem;
+  margin: 0 0 1.25rem;
+  min-height: 48px;
+  padding: 0.5rem 0.9rem;
+  text-align: left;
+  width: 100%;
+
+  .bi-ticket-perforated { color: #ffc107; font-size: 1.15rem; }
+  .showtimes-card-label { flex: 1 1 auto; font-size: 0.95rem; font-weight: 600; }
+  /* #9aa0a6 on #161616 is ~7:1. */
+  .showtimes-card-chevron { color: #9aa0a6; font-size: 0.9rem; }
+
+  &:active { background: #101010; }
+}
+
+/* #ffc107 on #161616 is ~11:1. */
+.showtimes-card-new {
+  background: rgba(255, 193, 7, 0.16);
+  border-radius: 999px;
+  color: #ffc107;
+  flex: 0 0 auto;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.1rem 0.4rem;
+  text-transform: uppercase;
 }
 
 .hat-check-note {
