@@ -1581,6 +1581,7 @@
 </template>
 
 <script>
+import { isShort } from '../assets/javascript/shorts.js';
 import axios from 'axios';
 import { scrollWindowTo } from '../utils/scrollWindowTo.js';
 import { indexOfMovie, resultElementId, resultsNeededToReveal, scrollOffsetFor } from '../assets/javascript/revealInList.js';
@@ -3308,7 +3309,7 @@ export default {
       const allResults = this.showShorts
         ? this.allEntriesWithFlatKeywordsAdded
         : this.allEntriesWithFlatKeywordsAdded.filter(result =>
-          !(result.movie.runtime && result.movie.runtime <= 40) ||
+          !isShort(result.movie) ||
             titleNamedByFilters(result, groupSearchFilters));
 
       // Step 1: Compute candidate matches for each fixed-type group. Done in a
@@ -4129,8 +4130,7 @@ export default {
       // so those don't resurface hidden shorts — only naming one does.
       if (!this.showShorts) {
         results = results.filter(result => {
-          // Consider as short if runtime <= 40 min
-          return !(result.movie.runtime && result.movie.runtime <= 40) ||
+          return !isShort(result.movie) ||
             titleNamedByFilters(result, this.allActiveFilters);
         });
       }

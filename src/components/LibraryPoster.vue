@@ -122,6 +122,7 @@
 import BackLink from './games/BackLink.vue';
 import { getRating } from '../assets/javascript/GetRating.js';
 import { pickPosterEntries, gridLayout, tilePosition, posterCaption, entryMatchesHighlight, assignMosaicCells, collectHighlightOptions, suggestHighlights } from '../assets/javascript/posterArtifact.js';
+import { withoutShorts, includeShortsSetting } from '../assets/javascript/shorts.js';
 
 const TILE_SOURCE_SIZE = 'w185';
 const LOAD_CONCURRENCY = 12;
@@ -148,7 +149,7 @@ export default {
   },
   computed: {
     library () {
-      return this.$store.getters.allMoviesAsArray || [];
+      return withoutShorts(this.$store.getters.allMoviesAsArray, includeShortsSetting(this.$store.state));
     },
     modes () {
       return [

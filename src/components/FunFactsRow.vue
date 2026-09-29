@@ -20,12 +20,16 @@
 // Insights; fully offline (store reads only).
 import { getRating } from '../assets/javascript/GetRating.js';
 import { allFunFacts } from '../assets/javascript/funFacts.js';
+import { withoutShorts, includeShortsSetting } from '../assets/javascript/shorts.js';
 
 export default {
   name: 'FunFactsRow',
   computed: {
     facts () {
-      return allFunFacts(this.$store.getters.allMoviesAsArray || [], getRating);
+      // Shorts by the setting, like every other screen: "Biggest movie day"
+      // counted a run of shorts with shorts switched off (2026-09-29).
+      const library = withoutShorts(this.$store.getters.allMoviesAsArray, includeShortsSetting(this.$store.state));
+      return allFunFacts(library, getRating);
     }
   }
 };

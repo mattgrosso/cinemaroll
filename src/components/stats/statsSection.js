@@ -10,6 +10,7 @@ import { memoByIdentity } from '../../utils/memoByIdentity.js';
 import { getRating } from '../../assets/javascript/GetRating.js';
 import { logScoreSettings } from '../../assets/javascript/logScore.js';
 import { formatScore } from '../../assets/javascript/formatScore.js';
+import { withoutShorts, includeShortsSetting } from '../../assets/javascript/shorts.js';
 
 // fn(library, getRating, weights, ...rest), remembered for the last
 // (library, weights, ...rest).
@@ -20,8 +21,10 @@ export function libraryMemo (fn) {
 
 export default {
   computed: {
+    // Shorts by the setting. withoutShorts hands back the same array for the
+    // same library, so the identity memos above still hit.
     library () {
-      return this.$store.getters.allMoviesAsArray || [];
+      return withoutShorts(this.$store.getters.allMoviesAsArray, includeShortsSetting(this.$store.state));
     },
     weights () {
       return logScoreSettings(this.$store.state.settings);

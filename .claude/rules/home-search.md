@@ -237,4 +237,4 @@ read `homeLive` in a report, not those.
 Count directors with `.filter()`, not `.find()` — `.find` credits only the first-listed
 of a co-directed film. Count crew by **job**, not array position: TMDB orders crew by
 department, so a composer routinely sits past index 10. All counts respect
-`settings.includeShorts` (`runtime <= 40`).
+`settings.includeShorts` through `isShort` in `shorts.js` — never an inline `runtime <= 40`.

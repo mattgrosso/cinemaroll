@@ -10,6 +10,8 @@
 //   - rankWatchlistCandidates: turns those people's TMDB filmographies into
 //     one deduped, unseen-only, quality-ranked list.
 
+import { isShort } from './shorts.js';
+
 const YEAR_MS = 365.25 * 24 * 3600 * 1000;
 
 // Tolerates ms-epoch numbers and date strings; null when nothing parses.
@@ -399,7 +401,7 @@ export function nearThresholdYears (entries, threshold = 10, { reach = Infinity,
   (entries || []).forEach((entry) => {
     const date = entry?.movie?.release_date;
     if (!date) return;
-    if (entry.movie.runtime && entry.movie.runtime <= 40) return; // shorts don't count for awards
+    if (isShort(entry.movie)) return; // shorts don't count for awards
     const year = new Date(date).getFullYear();
     if (!Number.isFinite(year)) return;
     counts[year] = (counts[year] || 0) + 1;

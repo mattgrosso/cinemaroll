@@ -9,6 +9,8 @@
 // user's "include shorts" library setting (default excluded) — same
 // runtime<=40min threshold Home.vue's own filtering uses — so a short that's
 // hidden everywhere else on the site doesn't still turn up in a game.
+import { isShort } from '../shorts.js';
+
 export function getEligibleEntries (allMediaAsArray, includeShorts = false) {
   return (allMediaAsArray || []).filter((entry) => {
     const isEligible = Boolean(
@@ -21,7 +23,7 @@ export function getEligibleEntries (allMediaAsArray, includeShorts = false) {
     );
     if (!isEligible) return false;
     if (includeShorts) return true;
-    return !(entry.movie.runtime && entry.movie.runtime <= 40);
+    return !isShort(entry.movie);
   });
 }
 

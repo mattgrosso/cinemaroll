@@ -13,6 +13,8 @@
 // `byId` is an optional Map(movie id -> entry) for callers expanding many
 // nominees at once: the linear find below is fine for one nominee and was
 // ~230ms of the Trophy Case open for a few hundred (2026-09-23 speed sweep).
+
+import { isShort } from './shorts.js';
 export function libraryIndexById (entriesLibrary) {
   const byId = new Map();
   (entriesLibrary || []).forEach((entry) => { if (entry?.movie?.id != null) byId.set(entry.movie.id, entry); });
@@ -218,7 +220,7 @@ export function awardsYearCounts (entries) {
   (entries || []).forEach((entry) => {
     const releaseDate = entry?.movie?.release_date;
     if (!releaseDate) return;
-    if (entry.movie.runtime && entry.movie.runtime <= 40) return;
+    if (isShort(entry.movie)) return;
 
     const year = new Date(releaseDate).getFullYear();
     if (!Number.isFinite(year)) return;

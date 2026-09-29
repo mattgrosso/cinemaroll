@@ -21,6 +21,7 @@
 // doesn't turn every film into a neighbour of every other; directors are
 // always in, never capped (same reasoning as sixDegrees.js).
 
+import { isShortEntry } from './shorts.js';
 import { entryKey, movieCastNames, movieDirectors, movieYear, hashString } from './games/gameUtils.js';
 
 export const CAST_LIMIT = 10;
@@ -29,13 +30,9 @@ export const MIN_FILMS_PER_PERSON = 2;
 export const movieNodeId = (key) => `m:${key}`;
 export const personNodeId = (name) => `p:${name}`;
 
-function isShort (entry) {
-  return Boolean(entry?.movie?.runtime && entry.movie.runtime <= 40);
-}
-
 /** The rated films the web is built from: everything with a movie record, shorts by preference. */
 export function webEntries (allMediaAsArray, includeShorts = false) {
-  return (allMediaAsArray || []).filter((entry) => entry?.movie && entryKey(entry) && (includeShorts || !isShort(entry)));
+  return (allMediaAsArray || []).filter((entry) => entry?.movie && entryKey(entry) && (includeShorts || !isShortEntry(entry)));
 }
 
 /**

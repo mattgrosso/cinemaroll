@@ -1,6 +1,7 @@
 import uniq from 'lodash/uniq';
 import { placeNames } from './places.js';
 import { memoByIdentity } from '../../utils/memoByIdentity.js';
+import { isShort } from './shorts.js';
 
 // Pure counting logic shared by Home.vue's "add filter" dropdown counts and
 // MovieDetail.vue's parenthetical (N) badges next to cast/director/genre/
@@ -11,10 +12,6 @@ import { memoByIdentity } from '../../utils/memoByIdentity.js';
 // Every function takes the already-flatKeywords-added entries array plus
 // whether short films should be counted, so callers control both inputs
 // explicitly rather than reading from a store.
-
-function isShort (movie) {
-  return Boolean(movie?.runtime && movie.runtime <= 40);
-}
 
 function eligibleEntries (entries, includeShorts) {
   return includeShorts ? entries : entries.filter((result) => !isShort(result.movie));

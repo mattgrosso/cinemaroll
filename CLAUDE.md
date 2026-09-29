@@ -165,6 +165,13 @@ rebuilt per mount; never sort a getter's array in place; never key an identity m
 object that is mutated in place (settings sub-objects, personalAwards — key those by JSON);
 big static data (the world map, catalogs) is `markRaw`. `scripts/perf-tour.mjs` is the ruler.
 
+**Shorts (2026-09-29): one rule, one filter.** "Include short films" off means off on
+every screen that summarises the library — `src/assets/javascript/shorts.js` is the rule
+(runtime ≤ 40; the "Short" genre tag does NOT count, matching Home) and `withoutShorts`
+the cached filter. Deliberate exceptions: Insights' calendar-gaps grid (a short still
+means you watched something that day), and per-film tools (rating, Stickiness, Film Club,
+award lookups). New library-wide stats go through `withoutShorts`.
+
 **Preference: extract pure logic into `src/assets/javascript/` and unit-test it directly**
 rather than only through component mounts. That's why `searchFiltering.js`,
 `entityCounts.js`, `tieBreakTournament.js`, `awardStats.js`, `storedEntry.js`,

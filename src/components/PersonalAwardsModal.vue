@@ -493,6 +493,7 @@
 </template>
 
 <script>
+import { isShort } from '../assets/javascript/shorts.js';
 import Modal from './Modal.vue';
 import { getRating } from '../assets/javascript/GetRating.js';
 import ErrorLogService from '../services/ErrorLogService.js';
@@ -768,7 +769,7 @@ export default {
       if (!entry) {
         const candidates = (this.allEntriesWithFlatKeywordsAdded || []).filter((candidate) => {
           if (!candidate?.movie?.release_date) return false;
-          if (candidate.movie.runtime && candidate.movie.runtime <= 40) return false;
+          if (isShort(candidate.movie)) return false;
           return new Date(candidate.movie.release_date).getFullYear() === this.currentYear;
         });
         entry = candidates.reduce((best, candidate) => {

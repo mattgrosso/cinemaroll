@@ -92,7 +92,10 @@ describe('YearInReview', () => {
     expect(wrapper.vm.viewings).toHaveLength(2)
   })
 
-  it('excludes shorts (Short genre or runtime <= 40) when includeShorts is false', async () => {
+  // One rule app-wide since 2026-09-29 (shorts.js): 40 minutes or under,
+  // Home's cutoff. A feature-length film TMDB happens to tag "Short" is not
+  // a short — this screen used to disagree with Home about that.
+  it('excludes shorts (runtime <= 40, the Home rule) when includeShorts is false', async () => {
     const entries = [
       entry(1, { year: 2023, runtime: 100 }),
       entry(2, { year: 2023, runtime: 30 }),
@@ -101,7 +104,7 @@ describe('YearInReview', () => {
     const wrapper = factory(entries, { includeShorts: false })
     wrapper.vm.selectedYear = 2023
     await wrapper.vm.$nextTick()
-    expect(wrapper.vm.viewings.map((v) => v.movie.id)).toEqual([1])
+    expect(wrapper.vm.viewings.map((v) => v.movie.id)).toEqual([1, 3])
   })
 
   it('includeShorts true keeps everything', async () => {

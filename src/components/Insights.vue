@@ -227,7 +227,7 @@
       <InsightsPane><RewatchesSection/></InsightsPane>
 
       <InsightsPane>
-        <FullCalendarView :results="allEntriesWithFlatKeywordsAdded" :open="true" />
+        <FullCalendarView :results="filteredEntriesWithFlatKeywordsAdded" :open="true" />
       </InsightsPane>
     </template>
 
@@ -408,6 +408,7 @@ const PEOPLE_CATEGORIES = [
 ];
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import { allViewings, calendarCoverage } from "../assets/javascript/yearInReview.js";
+import { withoutShorts, includeShortsSetting } from "../assets/javascript/shorts.js";
 import { monthlyBreakdown, weeklyBreakdown, yearlyBreakdown } from "../assets/javascript/activityBreakdown.js";
 
 import { Chart, registerables } from "chart.js";
@@ -613,7 +614,7 @@ export default {
       const category = PEOPLE_CATEGORIES.find(c => c.key === this.peopleCategory) || PEOPLE_CATEGORIES[0];
       return category.props === 'resultsWithRatings'
         ? { resultsWithRatings: this.resultsWithRatings }
-        : { allEntriesWithFlatKeywordsAdded: this.allEntriesWithFlatKeywordsAdded };
+        : { allEntriesWithFlatKeywordsAdded: this.filteredEntriesWithFlatKeywordsAdded };
     },
     activePeopleLabel () {
       return (PEOPLE_CATEGORIES.find(c => c.key === this.peopleCategory) || PEOPLE_CATEGORIES[0]).label;
@@ -621,8 +622,7 @@ export default {
 
 
     includeShorts () {
-      // Default to false if not set
-      return this.$store.state.settings.includeShorts === true;
+      return includeShortsSetting(this.$store.state);
     },
     placeTypeOptions () {
       return [
@@ -652,15 +652,12 @@ export default {
       return this.worldCoverage.rows.find((row) => row.iso === this.selectedCountry.iso) || null;
     },
     filteredEntriesWithFlatKeywordsAdded () {
-      if (this.includeShorts) return this.allEntriesWithFlatKeywordsAdded;
-      // Exclude shorts: genre 'Short' or runtime <= 40
-      return this.allEntriesWithFlatKeywordsAdded.filter(result => {
-        const structure = this.topStructure(result);
-        const genres = structure.genres || [];
-        const isShortGenre = genres.some(g => g.name && g.name.toLowerCase() === 'short');
-        const runtime = structure.runtime;
-        return !isShortGenre && !(runtime && runtime <= 40);
-      });
+      // What every section on this page reads, shorts by the setting
+      // (2026-09-29: "shouldn't include shorts if I have shorts turned off,
+      // and in fact that should be true of all things everywhere"). The
+      // counts, ratings charts and People tab used to read the unfiltered
+      // table. The one deliberate exception is `coverage` above.
+      return withoutShorts(this.allEntriesWithFlatKeywordsAdded, this.includeShorts);
     },
     currentLogIsTVLog () {
       return this.$store.state.currentLog === "tvLog";
@@ -707,7 +704,7 @@ export default {
     countedKeywords () {
       const counts = {};
 
-      this.allEntriesWithFlatKeywordsAdded.forEach((result) => {
+      this.filteredEntriesWithFlatKeywordsAdded.forEach((result) => {
         if (this.topStructure(result).flatKeywords) {
           this.topStructure(result).flatKeywords.forEach((keyword) => {
             if (counts[keyword]) {
@@ -724,7 +721,7 @@ export default {
     countedGenres () {
       const counts = {};
 
-      this.allEntriesWithFlatKeywordsAdded.forEach((result) => {
+      this.filteredEntriesWithFlatKeywordsAdded.forEach((result) => {
         if (this.topStructure(result).genres) {
           this.topStructure(result).genres.forEach((genre) => {
             if (counts[genre.name]) {
@@ -741,7 +738,7 @@ export default {
     countedYears () {
       const counts = {};
 
-      this.allEntriesWithFlatKeywordsAdded.forEach((result) => {
+      this.filteredEntriesWithFlatKeywordsAdded.forEach((result) => {
         const year = this.getYear(result);
         if (counts[year]) {
           counts[year]++;
@@ -755,7 +752,7 @@ export default {
     countDirectors () {
       const counts = {};
 
-      this.allEntriesWithFlatKeywordsAdded.forEach((result) => {
+      this.filteredEntriesWithFlatKeywordsAdded.forEach((result) => {
         let director;
         if (this.currentLogIsTVLog) {
           director = result.tvShow.created_by?.[0].name;
@@ -777,7 +774,7 @@ export default {
     countCastCrew () {
       const counts = {};
 
-      this.allEntriesWithFlatKeywordsAdded.forEach((result) => {
+      this.filteredEntriesWithFlatKeywordsAdded.forEach((result) => {
         const cast = this.topStructure(result).cast?.filter((person, index) => index < 10).map(person => person.name) || [];
         const crew = this.topStructure(result).crew?.filter((person, index) => index < 10).map(person => person.name) || [];
         const castCrewCombined = uniq([...cast, ...crew]);
@@ -796,7 +793,7 @@ export default {
     countStudios () {
       const counts = {};
 
-      this.allEntriesWithFlatKeywordsAdded.forEach((result) => {
+      this.filteredEntriesWithFlatKeywordsAdded.forEach((result) => {
         const productionCompanies = this.topStructure(result).production_companies?.map(company => company.name) || [];
 
         productionCompanies.forEach((company) => {
@@ -818,7 +815,7 @@ export default {
       // One pass to index stored filmographies, instead of a find over the
       // whole library per director (~150ms of the Ratings tab, 2026-09-23).
       const filmographies = {};
-      this.allEntriesWithFlatKeywordsAdded.forEach((entry) => {
+      this.filteredEntriesWithFlatKeywordsAdded.forEach((entry) => {
         (entry.movie.crew || []).forEach((person) => {
           if (person.job === "Director" && person.filmography && !filmographies[person.name]) {
             filmographies[person.name] = person.filmography;
@@ -838,7 +835,7 @@ export default {
     allMediums () {
       const mediums = {};
 
-      this.allEntriesWithFlatKeywordsAdded.forEach((result) => {
+      this.filteredEntriesWithFlatKeywordsAdded.forEach((result) => {
         if (!this.currentLogIsTVLog) {
           result.ratings.forEach((rating) => {
             if (!rating.medium) {
@@ -1137,7 +1134,7 @@ export default {
       return count;
     },
     resultsWithRatings () {
-      return this.allEntriesWithFlatKeywordsAdded.filter((result) => getRating(result).calculatedTotal);
+      return this.filteredEntriesWithFlatKeywordsAdded.filter((result) => getRating(result).calculatedTotal);
     },
     ratingsCountData () {
       const rounded = this.resultsWithRatings.map((result) => {

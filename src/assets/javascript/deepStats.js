@@ -5,6 +5,7 @@
 
 import { logScore, globalAverage } from './logScore.js';
 import { findTiedGroup } from './tieBreakTournament.js';
+import { isShortEntry } from './shorts.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const YEAR_MS = 365.25 * DAY_MS;
@@ -168,7 +169,7 @@ export function marathonStats (entries, { includeShorts = false, topDays = 3 } =
 
   (entries || []).forEach((entry) => {
     const runtime = entry?.movie?.runtime;
-    if (!includeShorts && Number.isFinite(runtime) && runtime <= 40) return;
+    if (!includeShorts && isShortEntry(entry)) return;
     viewingTimes(entry).forEach((time) => {
       admissions += 1;
       if (Number.isFinite(runtime) && runtime > 0) screenMinutes += runtime;

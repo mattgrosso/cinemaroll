@@ -55,14 +55,16 @@ describe('viewingsInYear', () => {
     expect(viewing.score).toBe(4);
   });
 
-  it('excludes shorts by genre and by runtime unless asked for them', () => {
+  // One rule app-wide (shorts.js, 2026-09-29): runtime alone, Home's cutoff.
+  // A feature TMDB tags "Short" stays in, as it does on Home.
+  it('excludes shorts by runtime unless asked for them — not by genre tag', () => {
     const entries = [
       watched(1, at(2026, 5, 5), 7),
       watched(2, at(2026, 5, 6), 7, { genres: [{ name: 'Short' }] }),
       watched(3, at(2026, 5, 7), 7, { runtime: 12 })
     ];
 
-    expect(viewingsInYear(entries, getAllRatings, 2026)).toHaveLength(1);
+    expect(viewingsInYear(entries, getAllRatings, 2026).map((v) => v.movie.id)).toEqual([1, 2]);
     expect(viewingsInYear(entries, getAllRatings, 2026, { includeShorts: true })).toHaveLength(3);
   });
 

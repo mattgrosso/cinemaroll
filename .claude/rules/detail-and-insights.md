@@ -88,6 +88,12 @@ pure "anything new?" check) and the Newsletter is a link row at the top of **Set
 means choosing a tab on purpose. `?tab=<key>` opens a tab; a remembered key for a tab
 that no longer exists falls back to Overview.
 
+**Every section reads `filteredEntriesWithFlatKeywordsAdded`** (shorts by the setting,
+via `shorts.js`), and the stats sections' `library` and FunFactsRow do the same. Only
+`coverage` (the calendar-gaps grid) reads shorts on purpose. Before 2026-09-29 the fun
+facts, counts, ratings charts and People tab read the unfiltered table, so a night of
+shorts became the "Biggest movie day" with shorts off. `shortsEverywhere.test.js` guards it.
+
 `estimatedMoviesThisYear` blends four movies-per-day rates equally — whole-year-to-date,
 recent 2 weeks, recent 2 months, plus last year's seasonal shape — projected across the
 remaining days.

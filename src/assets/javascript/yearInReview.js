@@ -14,19 +14,13 @@
 // imports from here: Insights uses `allViewings` + `calendarCoverage` for the
 // all-time version of the heatmap.
 
-const SHORT_RUNTIME = 40;
+import { isShort } from './shorts.js';
 
 /** Ratings store `date` as an epoch-ms number or a string of one. */
 function timeOf (rating) {
   if (rating?.date == null) return null;
   const ms = typeof rating.date === 'number' ? rating.date : parseInt(rating.date, 10);
   return Number.isFinite(ms) ? ms : null;
-}
-
-function isShort (movie) {
-  const genres = movie?.genres || [];
-  if (genres.some((genre) => genre?.name?.toLowerCase() === 'short')) return true;
-  return Number.isFinite(movie?.runtime) && movie.runtime > 0 && movie.runtime <= SHORT_RUNTIME;
 }
 
 /** Local midnight, so a viewing lands on the day the user experienced it. */

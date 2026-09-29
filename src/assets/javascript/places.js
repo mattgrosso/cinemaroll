@@ -14,6 +14,7 @@
 
 import { countryForPoint, countryForIso, isPointResolved } from './countryLookup.js';
 import { memoByIdentity } from '../../utils/memoByIdentity.js';
+import { isShort } from './shorts.js';
 
 export const PLACE_TYPES = { FILMING: 'filming', NARRATIVE: 'narrative' };
 
@@ -49,10 +50,6 @@ export function placeNames (movie, type = 'all') {
     names.push(location.name);
   });
   return names;
-}
-
-function isShort (movie) {
-  return Boolean(movie?.runtime && movie.runtime <= 40);
 }
 
 function eligible (entries, includeShorts) {
