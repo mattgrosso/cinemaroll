@@ -21,10 +21,11 @@ describe('reminderTimeFor', () => {
     expect(reminderTimeFor('2026-10-02T19:00:00', local(2026, 10, 2, 17))).toBeNull();
   });
 
-  it('a bare date means noon that day; no date means no reminder', () => {
+  it('a bare date means noon that day; no date at all means a week\'s snooze from now', () => {
     expect(showingEpoch('2026-10-26')).toBe(local(2026, 10, 26, 12));
     expect(reminderTimeFor('2026-10-26', local(2026, 10, 1))).toEqual({ remindAt: local(2026, 10, 19, 12), label: 'a week before' });
-    expect(reminderTimeFor(null, local(2026, 10, 1))).toBeNull();
+    expect(reminderTimeFor(null, local(2026, 10, 1))).toEqual({ remindAt: local(2026, 10, 8), label: 'in a week' });
+    expect(reminderTimeFor('soon', local(2026, 10, 1)).label).toBe('in a week');
     expect(showingEpoch('soon')).toBeNull();
   });
 

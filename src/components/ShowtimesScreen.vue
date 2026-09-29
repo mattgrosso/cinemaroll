@@ -284,11 +284,11 @@ export default {
       return `${WEEKDAYS[d.getDay()]} ${MONTHS[d.getMonth()]} ${d.getDate()}`;
     },
     // Swipe left: a reminder a week before the showing, else the day before,
-    // else three hours before; a film with no time known yet can't be.
+    // else three hours before; a film with no date yet is snoozed a week.
     remind (theater, item) {
       const choice = reminderTimeFor(item.firstShowTime, Date.now());
       if (!choice) {
-        this.say(item.firstShowTime ? `${item.title} is too soon to remind you about` : `No showtime known yet for ${item.title}`);
+        this.say(`${item.title} plays too soon to remind you about`);
         return;
       }
       const reminder = {

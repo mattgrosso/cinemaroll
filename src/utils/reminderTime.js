@@ -23,10 +23,18 @@ export function showingEpoch (firstShowTime) {
   return new Date(y, mo - 1, d, h, min).getTime();
 }
 
-/** -> { remindAt, label } for the first rung still ahead of now, or null. */
+// No date at all (AFI's grid, until the sweep learns it): "just snooze for a
+// week, you can represent it then" (2026-09-28).
+export const SNOOZE_MS = 7 * DAY;
+
+/**
+ * -> { remindAt, label } for the first rung still ahead of now; a week's
+ * snooze when the showing has no date; null only when every rung has
+ * passed (the film plays within three hours).
+ */
 export function reminderTimeFor (firstShowTime, now = Date.now()) {
   const showing = showingEpoch(firstShowTime);
-  if (!showing) return null;
+  if (!showing) return { remindAt: now + SNOOZE_MS, label: 'in a week' };
   for (const rung of REMINDER_RUNGS) {
     const remindAt = showing - rung.before;
     if (remindAt > now) return { remindAt, label: rung.label };

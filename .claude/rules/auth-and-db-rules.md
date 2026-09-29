@@ -328,7 +328,8 @@ is shown and pushed again — Matt asked for exactly that.
 it's already within one week, remind me again the day before"). `src/utils/reminderTime.js`
 picks the first rung still ahead — a week before, the day before, three hours before — reading
 the cinema-clock stamp as local time (a bare date is noon); no rung left or no showtime known
-means a toast and a snap back. The screen writes `theaters/reminders/<theater>/<slug>` =
+means a toast and a snap back — except NO date at all, which is a week's snooze from now
+(v1.118.13: "if there isn't a date, snooze for a week, you can represent it then"). The screen writes `theaters/reminders/<theater>/<slug>` =
 { remindAt, setAt, title, theaterName, url, firstShowTime } via store `remindListing`
 (`reminder: null` cancels); the card is hidden while it waits (a "n reminders" chip shows them,
 bell-slash cancels) and returns once the sweep stamps `sentAt`. Lambda: `remindersDue` +
