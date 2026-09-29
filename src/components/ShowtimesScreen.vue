@@ -10,21 +10,24 @@
     <SkeletonBlock v-if="loading" :rows="6"/>
 
     <template v-else-if="board">
+      <!-- One line, never wrapping (Matt, 2026-09-29: "streamline that down
+           to one line"): short icon+word pills sharing the width as one
+           segmented bar; the long wording lives in aria-label. -->
       <div class="st-controls">
-        <button type="button" class="st-toggle" :class="{ on: onlyUnique }" @click="onlyUnique = !onlyUnique" :aria-pressed="onlyUnique">
-          <i class="bi" :class="onlyUnique ? 'bi-check-square-fill' : 'bi-square'"></i>
-          <span>Only films no better theater has</span>
+        <button type="button" class="st-toggle" :class="{ on: onlyUnique }" @click="onlyUnique = !onlyUnique" :aria-pressed="onlyUnique" aria-label="Only films no better theater has">
+          <i class="bi" :class="onlyUnique ? 'bi-funnel-fill' : 'bi-funnel'"></i>
+          <span>Unique</span>
         </button>
-        <button v-if="dismissedCount" type="button" class="st-toggle" :class="{ on: showDismissed }" @click="showDismissed = !showDismissed" :aria-pressed="showDismissed">
+        <button v-if="dismissedCount" type="button" class="st-toggle" :class="{ on: showDismissed }" @click="showDismissed = !showDismissed" :aria-pressed="showDismissed" :aria-label="`Show ${dismissedCount} dismissed`">
           <i class="bi" :class="showDismissed ? 'bi-eye-fill' : 'bi-eye-slash'"></i>
-          <span>{{ dismissedCount }} dismissed</span>
+          <span>{{ dismissedCount }}</span>
         </button>
-        <button v-if="waitingCount" type="button" class="st-toggle" :class="{ on: showWaiting }" @click="showWaiting = !showWaiting" :aria-pressed="showWaiting">
+        <button v-if="waitingCount" type="button" class="st-toggle" :class="{ on: showWaiting }" @click="showWaiting = !showWaiting" :aria-pressed="showWaiting" :aria-label="`Show ${waitingCount} reminder${waitingCount === 1 ? '' : 's'}`">
           <i class="bi" :class="showWaiting ? 'bi-bell-fill' : 'bi-bell'"></i>
-          <span>{{ waitingCount }} reminder{{ waitingCount === 1 ? '' : 's' }}</span>
+          <span>{{ waitingCount }}</span>
         </button>
-        <span class="st-updated">Checked {{ ago(board.updatedAt) }}</span>
       </div>
+      <p class="st-updated">Checked {{ ago(board.updatedAt) }}</p>
 
       <section v-for="theater in theaters" :key="theater.key" class="st-theater">
         <h2 class="st-theater-name">
@@ -424,11 +427,10 @@ export default {
 .st-subtitle { color: #ccc; font-size: 0.85rem; margin: 0.25rem 0 0.9rem; }
 
 .st-controls {
-  align-items: center;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 0.75rem;
-  margin-bottom: 0.9rem;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
 }
 
 .st-toggle {
@@ -438,16 +440,22 @@ export default {
   border-radius: 999px;
   color: #ccc;
   display: inline-flex;
+  flex: 1 1 0;
   font-size: 0.78rem;
   gap: 0.4rem;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 0;
   padding: 0.35rem 0.7rem;
+  white-space: nowrap;
 
   i { color: #777; }
   &.on { color: #fff; border-color: #ffc107; }
   &.on i { color: #ffc107; }
+  &:active { background: #222; }
 }
 
-.st-updated { color: #888; font-size: 0.72rem; margin-left: auto; }
+.st-updated { color: #999; font-size: 0.72rem; margin: 0 0 0.9rem; }
 
 .st-theater {
   background: #161616;

@@ -98,3 +98,28 @@ describe('Showtimes links', () => {
     expect(screen).not.toMatch(/:href="item\.url|:href="theater\.url/);
   });
 });
+
+// Matt, 2026-09-29: the three pills at the top wrapped onto two lines on a
+// phone; "streamline that down to one line". Pin the no-wrap row and the
+// short visible labels, with the long wording kept for screen readers.
+describe('Showtimes controls row', () => {
+  const screen = read('../components/ShowtimesScreen.vue');
+  const controls = screen.slice(screen.indexOf('<div class="st-controls">'), screen.indexOf('</div>', screen.indexOf('<div class="st-controls">')));
+  const css = (selector) => screen.slice(screen.indexOf(`\n${selector} {`), screen.indexOf('\n}', screen.indexOf(`\n${selector} {`)));
+
+  it('never wraps, and the pills share the width with 40px taps', () => {
+    expect(css('.st-controls')).toContain('flex-wrap: nowrap');
+    const toggle = css('.st-toggle');
+    expect(toggle).toContain('flex: 1 1 0');
+    expect(toggle).toContain('white-space: nowrap');
+    expect(toggle).toContain('min-height: 40px');
+  });
+
+  it('keeps visible labels short and the long wording in aria-label', () => {
+    const labels = [...controls.matchAll(/<span>([^<]*)<\/span>/g)].map((m) => m[1].trim());
+    expect(labels).toEqual(['Unique', '{{ dismissedCount }}', '{{ waitingCount }}']);
+    expect(controls).toContain('aria-label="Only films no better theater has"');
+    expect(controls).not.toContain('st-updated');
+  });
+});
+
