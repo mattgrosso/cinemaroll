@@ -286,6 +286,23 @@ describe('App - noticing a new deploy without the service worker', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  // 2026-09-29 refresh loop: a stuck `waiting` worker must lead to a real
+  // comparison, and a matching bundle must clear things rather than flag.
+  it('a service-worker update signal runs the bundle comparison', async () => {
+    const commit = vi.fn();
+    global.fetch = vi.fn(() => Promise.resolve({
+      ok: true,
+      text: () => Promise.resolve('<script src="/js/app.samehash.js"></script>')
+    }));
+
+    const wrapper = mountWithBundle('/js/app.samehash.js', commit);
+    wrapper.vm.$options.watch['$store.state.updateCheckRequests'].call(wrapper.vm);
+    await vi.waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    await Promise.resolve();
+
+    expect(commit).not.toHaveBeenCalledWith('setUpdateAvailable', true);
+  });
+
   it('survives the check failing, e.g. offline', async () => {
     const commit = vi.fn();
     global.fetch = vi.fn(() => Promise.reject(new Error('offline')));

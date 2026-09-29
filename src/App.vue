@@ -80,6 +80,12 @@ export default {
       if (!available) return;
       this.armAutoUpdate();
     },
+    // A new service worker was seen. That alone is not an update (a worker
+    // stuck in `waiting` reports itself on every launch, 2026-09-29 loop) -
+    // only a real bundle mismatch is.
+    '$store.state.updateCheckRequests' () {
+      this.checkDeployedBundle();
+    },
     // Cold boot on a non-home route: Home (the usual banner resolver) never
     // mounts, so once the library arrives, pick the fallback banner here.
     // Home still owns banner choice whenever it runs — this only fills a

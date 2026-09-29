@@ -76,9 +76,12 @@ export async function reloadForUpdate ({
   hard = hardReload,
   wait = waitForNewWorker
 } = {}) {
+  // No known target still counts (2026-09-29 loop): a null target used to
+  // go unremembered, so every attempt looked like the first.
+  const key = target || 'unknown';
   const previous = readAttempt(storage);
-  const repeat = Boolean(target) && previous?.target === target;
-  try { storage.setItem(RELOAD_KEY, JSON.stringify({ target, at: Date.now() })); } catch { /* still reload */ }
+  const repeat = previous?.target === key;
+  try { storage.setItem(RELOAD_KEY, JSON.stringify({ target: key, at: Date.now() })); } catch { /* still reload */ }
 
   if (repeat) return hard();
   const outcome = await wait();

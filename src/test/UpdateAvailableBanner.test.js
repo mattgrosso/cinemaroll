@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { shallowMount } from '@vue/test-utils'
 import UpdateAvailableBanner from '@/components/UpdateAvailableBanner.vue'
 
@@ -13,6 +13,10 @@ function factory (updateAvailable) {
 }
 
 describe('UpdateAvailableBanner', () => {
+  // reloadForUpdate remembers each attempt (even with no known target) in
+  // localStorage; a previous test's click must not make this one a repeat.
+  beforeEach(() => { window.localStorage.clear() })
+
   it('renders nothing when no update is available', () => {
     const wrapper = factory(false)
 

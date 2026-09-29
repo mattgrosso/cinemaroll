@@ -46,11 +46,28 @@ describe('registerServiceWorker - updated hook', () => {
     delete window.location
     window.location = { ...originalLocation, reload: reloadSpy }
 
-    capturedConfig.updated()
+    capturedConfig.updated({ waiting: null })
 
-    expect(commitMock).toHaveBeenCalledWith('setUpdateAvailable', true)
     expect(reloadSpy).not.toHaveBeenCalled()
 
     window.location = originalLocation
+  })
+
+  // Bug report (Matt, 2026-09-29): "I'm stuck in the new app refresh loop."
+  // A worker parked in `waiting` fires updated() on every launch, even when
+  // the page already runs the live deploy - so it must only ask for the
+  // bundle comparison, never flag an update by itself.
+  it('a waiting worker asks for a bundle check instead of flagging an update', () => {
+    const postMessage = vi.fn()
+    capturedConfig.updated({ waiting: { postMessage } })
+
+    expect(commitMock).toHaveBeenCalledWith('requestUpdateCheck')
+    expect(commitMock).not.toHaveBeenCalledWith('setUpdateAvailable', true)
+    expect(postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
+  })
+
+  it('survives being called without a registration', () => {
+    expect(() => capturedConfig.updated()).not.toThrow()
+    expect(commitMock).toHaveBeenCalledWith('requestUpdateCheck')
   })
 })

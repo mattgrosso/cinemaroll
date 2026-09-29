@@ -482,6 +482,9 @@ export default createStore({
     // reload path can tell a second attempt at the SAME update from a new
     // one (appUpdate.js).
     updateTargetBundle: null,
+    // Bumped when the service worker reports a new worker; App.vue watches
+    // it and runs the bundle comparison (registerServiceWorker.js).
+    updateCheckRequests: 0,
   },
   getters: {
     allMediaAsArray: (state) => {
@@ -892,6 +895,9 @@ export default createStore({
     },
     setUpdateTargetBundle (state, value) {
       state.updateTargetBundle = value;
+    },
+    requestUpdateCheck (state) {
+      state.updateCheckRequests = (state.updateCheckRequests || 0) + 1;
     },
     setDBSearchValue (state, value) {
       state.DBSearchValue = value;

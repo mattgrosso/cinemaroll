@@ -83,6 +83,16 @@ describe('reloadForUpdate', () => {
     expect(h.hard).toHaveBeenCalledTimes(1)
   })
 
+  // 2026-09-29 refresh loop: with no known target, every attempt used to
+  // look like the first, so the escalation never kicked in.
+  it('a repeat attempt with no known target still counts as a repeat', async () => {
+    const h = harness()
+    await reloadForUpdate({ target: null, ...h })
+    await reloadForUpdate({ target: null, ...h })
+    expect(h.reload).toHaveBeenCalledTimes(1)
+    expect(h.hard).toHaveBeenCalledTimes(1)
+  })
+
   it('a NEWER deploy starts over with an ordinary reload', async () => {
     const h = harness()
     await reloadForUpdate({ target: 'js/app.one.js', ...h })
@@ -105,14 +115,6 @@ describe('reloadForUpdate', () => {
     await reloadForUpdate({ target: 'js/app.new.js', ...h })
     expect(h.reload).not.toHaveBeenCalled()
     expect(h.hard).toHaveBeenCalledTimes(1)
-  })
-
-  it('without a known target it never escalates (nothing to compare)', async () => {
-    const h = harness()
-    await reloadForUpdate({ ...h })
-    await reloadForUpdate({ ...h })
-    expect(h.reload).toHaveBeenCalledTimes(2)
-    expect(h.hard).not.toHaveBeenCalled()
   })
 })
 
