@@ -202,6 +202,15 @@ new section, offline support); MAJOR only for a breaking change. When in doubt, 
 
 **After deploying, always tell the user the resulting version.**
 
+**Deploying from a worktree (2026-09-29).** Bug Desk sessions run in the background and
+are fenced into `.claude/worktrees/`. `yarn deploy` works from there: it links the main
+checkout's `.env` / `.env.local` / `node_modules` in (`scripts/worktreeSetup.mjs` —
+symlinks, so there is ONE version counter), then requires a clean, committed branch that
+already contains `main`, fast-forwards the main checkout onto it, pushes main, and
+builds + uploads from the worktree with the working aws binary (`scripts/deploy.mjs`).
+The fence stays up while work happens; only shipping crosses it. Never copy `.env` into
+a worktree — a copy forks the version number.
+
 The version reaches the screen as the **house build stamp** (2026-08-22, a blanket
 policy across all of Matt's apps): one muted line reading
 `v1.96.4 · built Aug 22, 1:32 AM`, rendered in the footer — on screen everywhere — with
