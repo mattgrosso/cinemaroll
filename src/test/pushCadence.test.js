@@ -757,6 +757,7 @@ describe('theater listings', () => {
     expect(listings[1].url).toBe('https://drafthouse.com/dc/show/dune-part-three');
     expect(listings[1].poster).toBeNull();
     expect(alamoListings({ data: { presentations: [{ slug: 'p', show: { slug: 'p', title: 'P', posterImages: [{ uri: 'https://img/p.jpg' }] } }], sessions: [{ cinemaId: '1101', presentationSlug: 'p' }] } }, '1101')[0].poster).toBe('https://img/p.jpg');
+    expect(alamoListings({ data: { presentations: [{ slug: 'q', show: { slug: 'q', title: 'Q', posterImages: [{ uri: 'https://img/q.jpg?auto=compress&fit=clip&h=1620&q=80&w=1080' }] } }], sessions: [{ cinemaId: '1101', presentationSlug: 'q' }] } }, '1101')[0].poster).toBe('https://img/q.jpg?auto=compress&fit=clip&h=513&q=70&w=342');
   });
 
   it('a special presentation of a film is its own listing, named for what it is', () => {

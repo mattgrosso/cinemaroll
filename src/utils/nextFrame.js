@@ -12,7 +12,16 @@ export function nextFrame () {
       queueMicrotask(resolve);
       return;
     }
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    // A hidden document never paints, so its frames never come: a tab in
+    // the background (or an installed app put away mid-navigation) would
+    // hang every route change on this await until it was looked at again
+    // (found 2026-09-28 driving the app in a background tab: the router's
+    // beforeEach never returned). Hidden, resolve on a short timer instead;
+    // there is nothing to paint before anyway.
+    let settled = false;
+    const done = () => { if (!settled) { settled = true; resolve(); } };
+    requestAnimationFrame(() => requestAnimationFrame(done));
+    if (typeof document !== 'undefined' && document.hidden) setTimeout(done, 32);
   });
 }
 

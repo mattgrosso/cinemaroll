@@ -339,11 +339,12 @@ export default {
 
 .st-empty { color: #999; font-size: 0.82rem; margin: 0.2rem 0 0; }
 
-/* Three posters across on a phone, more as the screen allows. */
+/* Three posters across on a phone (390px wide, inside the section's
+   padding), more as the screen allows. */
 .st-grid {
   display: grid;
-  gap: 0.55rem;
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
 }
 
 .st-card {

@@ -61,6 +61,7 @@ const NON_ACCOUNT_ROOTS = new Set([
 // Mirrors QA_ACCOUNT_KEYS in src/assets/javascript/databaseKey.js - the QA
 // account never gets real notifications.
 const QA_ACCOUNT_KEYS = new Set(['cinemaroll-tester-example-com']);
+const QA_BOARD_ACCOUNT_KEY = 'cinemaroll-tester-example-com';
 // The one account told about new sign-ups. The list of accounts already seen
 // lives in its own push state, which only this function writes.
 const OWNER_ACCOUNT_KEY = 'mattgrosso-gmail-com';
@@ -569,7 +570,11 @@ const notifyTheaterListings = async (now) => {
   // a better theater also has marked rather than dropped (the screen has a
   // toggle). Written even when a board failed - the screen says so.
   try {
-    await dbSet(`${OWNER_ACCOUNT_KEY}/theaters/board`, boardForApp(boards, knownByKey, now));
+    const board = boardForApp(boards, knownByKey, now);
+    await dbSet(`${OWNER_ACCOUNT_KEY}/theaters/board`, board);
+    // The QA account gets the same board, so the Showtimes screen can be
+    // driven signed in as the tester (scripts/mint-test-token.mjs).
+    await dbSet(`${QA_BOARD_ACCOUNT_KEY}/theaters/board`, board);
   } catch (error) {
     console.error('Theater board publish failed:', error.message);
   }

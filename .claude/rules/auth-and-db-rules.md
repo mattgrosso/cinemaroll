@@ -320,6 +320,18 @@ like personLookup). A feed poster that 404s falls through to the lookup. Dismiss
 the Insights "new" pill. The screen is a poster grid (3-up on a phone), X in the corner,
 swipe-left past 90px dismisses; horizontal intent is decided once so scrolling never fires it.
 
+**Testing it signed in** (2026-09-28, Matt: "you should be able to use the test user to test
+this"). The sweep mirrors the board to `cinemaroll-tester-example-com/theaters/board` on every
+run, and `scripts/copy-theater-board.mjs` does it on demand (Admin SDK; also prints poster
+counts per theater). Then `yarn mint-test-token` and open the URL in Claude's own Chrome.
+**Gotcha found doing this:** the router's `beforeEach` awaits `nextFrame()`, and a HIDDEN tab
+never paints — the Login page sat on "Working…" and `#/showtimes` rendered nothing, with no
+error anywhere. `nextFrame` now falls back to a 32ms timer when `document.hidden`
+(`nextFrameHidden.test.js`); a backgrounded PWA mid-navigation had the same freeze. Lazy
+images (`loading="lazy"`) also never load in a hidden document — flip them to eager from the
+javascript tool before judging posters. Alamo's feed posters are 1080px wide; `alamoListings`
+rewrites the imgix params to 342px (19KB vs 100KB each).
+
 **Tapping a chore notification opens that prompt** (2026-09-13: "took me to the home
 screen with the applicable notification already opened and ready to go").
 `composeMessage` returns `open` — the chore its headline names, `stickiness` /

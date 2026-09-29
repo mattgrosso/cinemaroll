@@ -600,7 +600,10 @@ function alamoListings (feed, cinemaId) {
     const show = (p && p.show) || {};
     const eventLabel = p && p.eventType && typeof p.eventType.title === 'string' ? p.eventType.title.trim() : '';
     const title = typeof show.title === 'string' && show.title.trim() ? show.title.trim() : slug;
-    const poster = Array.isArray(show.posterImages) && show.posterImages[0] && typeof show.posterImages[0].uri === 'string' ? show.posterImages[0].uri : null;
+    // The feed's poster is 1080x1620; the grid shows it at ~120px wide, and
+    // its imgix-style params take a smaller size (19KB instead of 100KB).
+    const rawPoster = Array.isArray(show.posterImages) && show.posterImages[0] && typeof show.posterImages[0].uri === 'string' ? show.posterImages[0].uri : null;
+    const poster = rawPoster ? rawPoster.replace(/([?&])h=\d+/, '$1h=513').replace(/([?&])w=\d+/, '$1w=342').replace(/([?&])q=\d+/, '$1q=70') : null;
     return {
       slug,
       title: eventLabel && slug !== show.slug ? `${title} (${eventLabel})` : title,
