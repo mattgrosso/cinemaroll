@@ -33,6 +33,8 @@ import {
   titleKey,
   uncovered,
   boardForApp,
+  remindersDue,
+  composeReminderMessage,
   LISTINGS_MAX_PER_SWEEP,
   LISTINGS_FORGET_MS
 } from '../../aws-lambda/pushCadence.js';
@@ -780,6 +782,8 @@ describe('theater listings', () => {
     expect(result.fresh).toEqual([]);
     expect(Object.keys(result.nextKnown).sort()).toEqual(current.map((l) => l.slug));
     expect(result.nextKnown[current[0].slug]).toEqual({ f: NOW, l: NOW });
+    const later = listingsDue({ known: result.nextKnown, current, now: NOW + HOUR });
+    expect(later.nextKnown[current[0].slug]).toEqual({ f: NOW, l: NOW + HOUR, s: current[0].firstShowTime });
   });
 
   it('a listing not on the stored board is news; the rest are not', () => {
@@ -787,8 +791,8 @@ describe('theater listings', () => {
     const known = { 'dune-part-three': NOW - HOUR, 'halloween-1978': NOW - HOUR };
     const result = listingsDue({ known, current, now: NOW });
     expect(result.fresh.map((l) => l.slug)).toEqual(['advance-screening-dune-part-three']);
-    expect(result.nextKnown['advance-screening-dune-part-three']).toEqual({ f: NOW, l: NOW });
-    expect(result.nextKnown['dune-part-three']).toEqual({ f: NOW - HOUR, l: NOW });
+    expect(result.nextKnown['advance-screening-dune-part-three']).toEqual({ f: NOW, l: NOW, s: '2026-12-15T18:00:00' });
+    expect(result.nextKnown['dune-part-three']).toEqual({ f: NOW - HOUR, l: NOW, s: '2026-12-17T10:15:00' });
   });
 
   it('a listing that drops off the board for one sweep is not news when it returns', () => {
@@ -1030,5 +1034,39 @@ describe('the board the app shows', () => {
   it('an IMAX showing is named as one in the push', () => {
     const [m] = composeListingMessages([{ slug: 'a', title: 'Digger', firstShowTime: '2026-10-02T15:20:00', url: 'u', imax: true }], { key: 'k', name: 'Regal Majestic' });
     expect(m.body).toBe('Digger (IMAX) · first showing Fri Oct 2, 3:20 PM');
+  });
+});
+
+describe('reminders', () => {
+  const reminders = {
+    alamo: {
+      a: { remindAt: NOW - 60, title: 'Glory', theaterName: 'the Miracle Theatre', url: 'https://t/a', firstShowTime: '2026-10-02T19:00:00' },
+      b: { remindAt: NOW + HOUR, title: 'Later', url: 'u' },
+      c: { remindAt: NOW - HOUR, sentAt: NOW - HOUR, title: 'Sent', url: 'u' },
+      d: null
+    },
+    afi: { e: { remindAt: NOW - 2 * HOUR, title: 'Faust (1926)', theaterName: 'AFI Silver', url: 'https://t/e', firstShowTime: '2026-10-26' } }
+  };
+
+  it('sends the ones whose time has come and are not yet sent, earliest first', () => {
+    expect(remindersDue(reminders, NOW).map((r) => `${r.theaterKey}/${r.slug}`)).toEqual(['afi/e', 'alamo/a']);
+    expect(remindersDue(null, NOW)).toEqual([]);
+  });
+
+  it('words the reminder with the showing and the theater, tapping to tickets', () => {
+    const [e, a] = remindersDue(reminders, NOW);
+    expect(composeReminderMessage(a)).toEqual({
+      title: 'Reminder: Glory',
+      body: 'First showing Fri Oct 2, 7:00 PM at the Miracle Theatre',
+      tag: `remind-alamo-a-${NOW - 60}`,
+      navigate: 'https://t/a'
+    });
+    expect(composeReminderMessage(e).body).toBe('From Mon Oct 26 at AFI Silver');
+  });
+
+  it('the board carries a showtime learned into the seen-state when the feed has none', () => {
+    const boards = [{ theater: { key: 'afi', name: 'AFI', url: 'f' }, listings: [{ slug: '1', title: 'Faust (1926)', firstShowTime: null }] }];
+    const known = { afi: { 1: { f: NOW - HOUR, l: NOW, s: '2026-10-31T19:00:00' } } };
+    expect(boardForApp(boards, known, NOW).theaters[0].listings[0].firstShowTime).toBe('2026-10-31T19:00:00');
   });
 });

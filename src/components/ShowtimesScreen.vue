@@ -2,7 +2,10 @@
   <div class="showtimes">
     <BackLink/>
     <h1 class="st-title">Showtimes</h1>
-    <p class="st-subtitle">What's on the boards at the theaters you follow. Swipe a poster to the right to dismiss it.</p>
+    <p class="st-subtitle">What's on the boards at the theaters you follow. Swipe right to dismiss, left to be reminded before it plays.</p>
+    <transition name="st-toast">
+      <div v-if="toast" class="st-toast" role="status">{{ toast }}</div>
+    </transition>
 
     <SkeletonBlock v-if="loading" :rows="6"/>
 
@@ -16,6 +19,10 @@
           <i class="bi" :class="showDismissed ? 'bi-eye-fill' : 'bi-eye-slash'"></i>
           <span>{{ dismissedCount }} dismissed</span>
         </button>
+        <button v-if="waitingCount" type="button" class="st-toggle" :class="{ on: showWaiting }" @click="showWaiting = !showWaiting" :aria-pressed="showWaiting">
+          <i class="bi" :class="showWaiting ? 'bi-bell-fill' : 'bi-bell'"></i>
+          <span>{{ waitingCount }} reminder{{ waitingCount === 1 ? '' : 's' }}</span>
+        </button>
         <span class="st-updated">Checked {{ ago(board.updatedAt) }}</span>
       </div>
 
@@ -27,7 +34,7 @@
         </h2>
         <p v-if="!theater.ok" class="st-empty">Couldn't read this board last time.</p>
         <p v-else-if="!theater.shown.length" class="st-empty">
-          {{ theater.listings.length ? 'Nothing here you haven\'t seen or a better theater lacks.' : 'Nothing listed.' }}
+          {{ theater.listings.length ? 'Nothing here you haven\'t handled or a better theater lacks.' : 'Nothing listed.' }}
         </p>
         <!-- Posters, not names (Matt: "I like posters more than text"), one
              to a row ("make these posters be one across and swiping right
@@ -38,7 +45,7 @@
             v-for="item in theater.shown"
             :key="item.slug"
             class="st-card"
-            :class="{ covered: item.coveredBy, dismissed: item.dismissed, leaving: leaving === cardId(theater, item) }"
+            :class="{ covered: item.coveredBy, dismissed: item.dismissed, waiting: item.waiting, leaving: leaving === cardId(theater, item), 'leaving-left': leavingLeft === cardId(theater, item) }"
             :style="cardStyle(theater, item)"
             @touchstart.passive="touchStart($event, theater, item)"
             @touchmove.passive="touchMove($event, theater, item)"
@@ -58,7 +65,11 @@
               <div class="st-tags">
                 <span v-if="item.imax" class="st-tag">IMAX</span>
                 <span v-if="isNew(item)" class="st-tag new">new</span>
+                <span v-if="item.waiting" class="st-tag remind"><i class="bi bi-bell-fill"></i> {{ remindLabel(item.reminder) }}</span>
+                <span v-else-if="item.reminded" class="st-tag reminded">reminded</span>
               </div>
+              <div class="st-swipe-hint left" :style="hintStyle(theater, item, 'left')"><i class="bi bi-bell-fill"></i> Remind me</div>
+              <div class="st-swipe-hint right" :style="hintStyle(theater, item, 'right')"><i class="bi bi-x-lg"></i> Dismiss</div>
               <div class="st-caption">
                 <span class="st-caption-title">{{ item.title }}</span>
                 <span class="st-caption-when">{{ when(item) }}</span>
@@ -66,6 +77,16 @@
               </div>
             </a>
             <button
+              v-if="item.waiting"
+              type="button"
+              class="st-dismiss"
+              :aria-label="`Cancel the reminder for ${item.title}`"
+              @click.stop="cancelReminder(theater, item)"
+            >
+              <i class="bi bi-bell-slash"></i>
+            </button>
+            <button
+              v-else
               type="button"
               class="st-dismiss"
               :aria-label="item.dismissed ? `Bring back ${item.title}` : `Dismiss ${item.title}`"
@@ -86,12 +107,15 @@
 import BackLink from './games/BackLink.vue';
 import SkeletonBlock from './SkeletonBlock.vue';
 import { lookupPoster } from '../utils/posterLookup.js';
+import { reminderTimeFor } from '../utils/reminderTime.js';
 
 // Matt, 2026-09-28: "it would also be great if I could see this somewhere on
 // Cinemaroll, besides just the push notification … a page … that would show
 // me the list of showtimes coming up." Then: "I'd rather see movie posters
 // than names … a way for me to dismiss things off of this screen … swipe it
-// off or maybe hit an X." The push sweep publishes the board
+// off or maybe hit an X." Then: "swipe right dismiss so it's gone. Swipe left
+// can be remind me again one week before the showtime." The push sweep
+// publishes the board
 // (aws-lambda/push-notify.js, boardForApp); this screen reads it, fills in
 // posters the feeds didn't carry (TMDB, cached on the device), and records
 // dismissals under theaters/dismissed. Theaters are in pecking order and, by
@@ -128,13 +152,17 @@ export default {
       loading: true,
       onlyUnique,
       showDismissed: false,
+      showWaiting: false,
+      toast: '',
+      toastTimer: null,
       now: Date.now(),
       // Posters the feeds didn't carry, looked up by title: { [key]: url|null }.
       lookedUp: {},
       failed: {},
       // Swipe state for the one card under a finger.
       swipe: null,
-      leaving: null
+      leaving: null,
+      leavingLeft: null
     };
   },
   computed: {
@@ -143,13 +171,26 @@ export default {
     dismissedCount () {
       return Object.values(this.dismissedMap).reduce((n, slugs) => n + Object.keys(slugs || {}).length, 0);
     },
+    remindersMap () { return this.$store.state.theaterReminders || {}; },
+    waitingCount () {
+      return Object.values(this.remindersMap).reduce((n, slugs) => n + Object.values(slugs || {}).filter((r) => r && !r.sentAt).length, 0);
+    },
     theaters () {
       const list = Array.isArray(this.board?.theaters) ? this.board.theaters : [];
       return list.map((t) => {
         const listings = (Array.isArray(t.listings) ? t.listings : [])
-          .map((l) => ({ ...l, dismissed: Boolean(this.dismissedMap[t.key]?.[l.slug]) }));
+          .map((l) => {
+            const reminder = this.remindersMap[t.key]?.[l.slug] || null;
+            return {
+              ...l,
+              dismissed: Boolean(this.dismissedMap[t.key]?.[l.slug]),
+              reminder,
+              waiting: Boolean(reminder && !reminder.sentAt),
+              reminded: Boolean(reminder && reminder.sentAt)
+            };
+          });
         listings.sort((a, b) => (a.firstShowTime || '9999').localeCompare(b.firstShowTime || '9999'));
-        const shown = listings.filter((l) => (this.showDismissed || !l.dismissed) && (!this.onlyUnique || !l.coveredBy));
+        const shown = listings.filter((l) => (this.showDismissed || !l.dismissed) && (this.showWaiting || !l.waiting) && (!this.onlyUnique || !l.coveredBy));
         return { ...t, listings, shown };
       });
     }
@@ -221,6 +262,50 @@ export default {
       const hours = Math.round(mins / 60);
       return hours < 24 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
     },
+    say (message) {
+      this.toast = message;
+      clearTimeout(this.toastTimer);
+      this.toastTimer = setTimeout(() => { this.toast = ''; }, 2600);
+    },
+    remindLabel (reminder) {
+      const at = Number(reminder && reminder.remindAt);
+      if (!at) return 'reminder set';
+      const d = new Date(at);
+      return `${WEEKDAYS[d.getDay()]} ${MONTHS[d.getMonth()]} ${d.getDate()}`;
+    },
+    // Swipe left: a reminder a week before the showing, else the day before,
+    // else three hours before; a film with no time known yet can't be.
+    remind (theater, item) {
+      const choice = reminderTimeFor(item.firstShowTime, Date.now());
+      if (!choice) {
+        this.say(item.firstShowTime ? `${item.title} is too soon to remind you about` : `No showtime known yet for ${item.title}`);
+        return;
+      }
+      const reminder = {
+        remindAt: choice.remindAt,
+        setAt: Date.now(),
+        title: item.title,
+        theaterName: theater.name,
+        url: item.url || theater.url || null,
+        firstShowTime: item.firstShowTime
+      };
+      this.leavingLeft = this.cardId(theater, item);
+      setTimeout(() => {
+        this.leavingLeft = null;
+        this.$store.dispatch('remindListing', { theaterKey: theater.key, slug: item.slug, reminder }).catch(() => {});
+        this.say(`Reminder ${choice.label}: ${this.remindLabel(reminder)}`);
+      }, 180);
+    },
+    cancelReminder (theater, item) {
+      this.$store.dispatch('remindListing', { theaterKey: theater.key, slug: item.slug, reminder: null }).catch(() => {});
+      this.say(`No reminder for ${item.title}`);
+    },
+    hintStyle (theater, item, side) {
+      const s = this.swipe;
+      if (!s || s.id !== this.cardId(theater, item) || !s.horizontal) return { opacity: 0 };
+      const toward = side === 'right' ? s.dx : -s.dx;
+      return { opacity: String(Math.min(1, Math.max(0, toward / 70))) };
+    },
     toggleDismiss (theater, item) {
       const id = this.cardId(theater, item);
       if (item.dismissed) {
@@ -234,8 +319,9 @@ export default {
         this.$store.dispatch('dismissListing', { theaterKey: theater.key, slug: item.slug }).catch(() => {});
       }, 180);
     },
-    // Swipe RIGHT to dismiss (the back gesture owns the left 20px of the
-    // screen, and the cards start 30px in, so the two never meet).
+    // Swipe RIGHT to dismiss, LEFT to be reminded (the back gesture owns the
+    // left 20px of the screen, and the cards start 30px in, so the two
+    // never meet).
     // Horizontal intent is decided once (a mostly vertical move is a scroll
     // and the card stays put); a release past the threshold dismisses,
     // short of it snaps back.
@@ -252,7 +338,7 @@ export default {
       const dy = t.clientY - s.y;
       if (s.horizontal === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) s.horizontal = Math.abs(dx) > Math.abs(dy);
       if (!s.horizontal) return;
-      this.swipe = { ...s, dx: Math.max(0, dx) };
+      this.swipe = { ...s, dx };
     },
     touchEnd (event, theater, item, cancelled = false) {
       const s = this.swipe;
@@ -260,9 +346,14 @@ export default {
       this.swipe = null;
       if (cancelled || !s.horizontal) return;
       const width = (event && event.currentTarget && event.currentTarget.offsetWidth) || 0;
-      if (s.dx >= Math.min(SWIPE_DISMISS_PX, width ? width / 3 : SWIPE_DISMISS_PX)) {
+      const threshold = Math.min(SWIPE_DISMISS_PX, width ? width / 3 : SWIPE_DISMISS_PX);
+      if (s.dx >= threshold) {
         this.justSwiped = Date.now();
         this.toggleDismiss(theater, item);
+      } else if (-s.dx >= threshold) {
+        this.justSwiped = Date.now();
+        if (item.waiting) this.say(`Already set: ${this.remindLabel(item.reminder)}`);
+        else this.remind(theater, item);
       }
     },
     blockIfSwiping (event) {
@@ -272,7 +363,7 @@ export default {
     cardStyle (theater, item) {
       const s = this.swipe;
       if (s && s.id === this.cardId(theater, item) && s.horizontal) {
-        return { transform: `translateX(${s.dx}px)`, opacity: String(Math.max(0.25, 1 - s.dx / 260)), transition: 'none' };
+        return { transform: `translateX(${s.dx}px)`, opacity: String(Math.max(0.35, 1 - Math.abs(s.dx) / 300)), transition: 'none' };
       }
       return null;
     }
@@ -370,7 +461,9 @@ export default {
 
   &.covered { opacity: 0.55; }
   &.dismissed { opacity: 0.4; }
+  &.waiting { opacity: 0.75; }
   &.leaving { transform: translateX(120%); opacity: 0; }
+  &.leaving-left { transform: translateX(-120%); opacity: 0; }
 }
 
 .st-card-link {
@@ -418,7 +511,47 @@ export default {
   text-transform: uppercase;
 
   &.new { background: #ffc107; color: #000; }
+  &.remind { background: #0d6efd; color: #fff; }
+  &.reminded { background: rgba(13, 110, 253, 0.35); color: #cfe2ff; }
 }
+
+/* What a swipe is about to do, fading in with the drag. */
+.st-swipe-hint {
+  align-items: center;
+  border-radius: 999px;
+  color: #fff;
+  display: flex;
+  font-size: 0.85rem;
+  font-weight: 700;
+  gap: 0.35rem;
+  opacity: 0;
+  padding: 0.35rem 0.7rem;
+  pointer-events: none;
+  position: absolute;
+  top: 45%;
+  transition: opacity 0.05s linear;
+
+  &.left { background: #0d6efd; right: 0.6rem; }
+  &.right { background: #dc3545; left: 0.6rem; }
+}
+
+.st-toast {
+  background: #2b2b2b;
+  border: 1px solid #444;
+  border-radius: 999px;
+  bottom: 1.5rem;
+  color: #fff;
+  font-size: 0.85rem;
+  left: 50%;
+  max-width: 90vw;
+  padding: 0.5rem 0.9rem;
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 50;
+}
+
+.st-toast-enter-active, .st-toast-leave-active { transition: opacity 0.2s ease; }
+.st-toast-enter-from, .st-toast-leave-to { opacity: 0; }
 
 .st-caption {
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.9) 45%);

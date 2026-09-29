@@ -429,6 +429,9 @@ export default createStore({
     // { [theaterKey]: { [slug]: dismissedAt } } - films Matt has waved off the
     // Showtimes screen. Pruned to what is still on the board when it loads.
     theaterDismissed: {},
+    // { [theaterKey]: { [slug]: { remindAt, sentAt?, ... } } } - films Matt swiped
+    // left on; the sweep sends each and stamps sentAt.
+    theaterReminders: {},
     newsletterPrefs: null,
     newsletterLoaded: false,
     // When the user last opened the Film Club — drives the rainbow chip's
@@ -742,6 +745,9 @@ export default createStore({
     },
     setTheaterDismissed (state, value) {
       state.theaterDismissed = value && typeof value === 'object' ? value : {};
+    },
+    setTheaterReminders (state, value) {
+      state.theaterReminders = value && typeof value === 'object' ? value : {};
     },
     setNewsletterPrefs (state, value) {
       state.newsletterPrefs = value || null;
@@ -2576,34 +2582,53 @@ export default createStore({
     async loadTheaterBoard (context) {
       const root = context.getters.databaseTopKey;
       if (!root) return null;
-      const [boardSnap, dismissedSnap] = await Promise.all([
+      const [boardSnap, dismissedSnap, remindersSnap] = await Promise.all([
         get(ref(db, `${root}/theaters/board`)),
-        get(ref(db, `${root}/theaters/dismissed`))
+        get(ref(db, `${root}/theaters/dismissed`)),
+        get(ref(db, `${root}/theaters/reminders`))
       ]);
       const board = boardSnap.exists() ? boardSnap.val() : null;
-      const dismissed = dismissedSnap.exists() ? dismissedSnap.val() || {} : {};
-      // A dismissed film that has since left the board is forgotten, so the
-      // node stays the size of the board and a repertory return is fresh.
+      // A dismissed film or reminder whose film has since left the board is
+      // forgotten, so the nodes stay the size of the board and a repertory
+      // return is fresh - Matt: "I don't want these to be dismissed for all
+      // time. Just for these showings."
       const onBoard = new Set();
       (board?.theaters || []).forEach((t) => (t.listings || []).forEach((l) => onBoard.add(`${t.key}/${l.slug}`)));
-      const kept = {};
-      const removals = {};
-      Object.entries(dismissed).forEach(([theaterKey, slugs]) => {
-        Object.entries(slugs || {}).forEach(([slug, at]) => {
-          if (board && !onBoard.has(`${theaterKey}/${slug}`)) removals[`${theaterKey}/${slug}`] = null;
-          else (kept[theaterKey] = kept[theaterKey] || {})[slug] = at;
+      const prune = (node) => {
+        const kept = {};
+        const removals = {};
+        Object.entries(node || {}).forEach(([theaterKey, slugs]) => {
+          Object.entries(slugs || {}).forEach(([slug, value]) => {
+            if (board && !onBoard.has(`${theaterKey}/${slug}`)) removals[`${theaterKey}/${slug}`] = null;
+            else (kept[theaterKey] = kept[theaterKey] || {})[slug] = value;
+          });
         });
-      });
+        return { kept, removals };
+      };
+      const dismissed = prune(dismissedSnap.exists() ? dismissedSnap.val() : {});
+      const reminders = prune(remindersSnap.exists() ? remindersSnap.val() : {});
       context.commit('setTheaterBoard', board);
-      context.commit('setTheaterDismissed', kept);
-      if (Object.keys(removals).length) {
-        update(ref(db, `${root}/theaters/dismissed`), removals).catch(() => {});
-      }
+      context.commit('setTheaterDismissed', dismissed.kept);
+      context.commit('setTheaterReminders', reminders.kept);
+      if (Object.keys(dismissed.removals).length) update(ref(db, `${root}/theaters/dismissed`), dismissed.removals).catch(() => {});
+      if (Object.keys(reminders.removals).length) update(ref(db, `${root}/theaters/reminders`), reminders.removals).catch(() => {});
       return board;
     },
     // "a way for me to dismiss things off of this screen … I see that, I'm
     // not more interested or I've already seen it" (2026-09-28). Optimistic:
     // the card goes at once, the write follows.
+    // "Swipe left can be remind me again one week before the showtime"
+    // (2026-09-28). The app picks the time (src/utils/reminderTime.js); the
+    // push sweep sends it and stamps sentAt. `reminder: null` cancels.
+    async remindListing (context, { theaterKey, slug, reminder }) {
+      const root = context.getters.databaseTopKey;
+      if (!root || !theaterKey || !slug) return;
+      const next = { ...context.state.theaterReminders, [theaterKey]: { ...(context.state.theaterReminders[theaterKey] || {}) } };
+      if (reminder) next[theaterKey][slug] = reminder;
+      else delete next[theaterKey][slug];
+      context.commit('setTheaterReminders', next);
+      await update(ref(db, `${root}/theaters/reminders/${theaterKey}`), { [slug]: reminder || null });
+    },
     async dismissListing (context, { theaterKey, slug, restore = false }) {
       const root = context.getters.databaseTopKey;
       if (!root || !theaterKey || !slug) return;

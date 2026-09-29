@@ -623,7 +623,14 @@ function alamoListings (feed, cinemaId) {
  * is re-stamped; one that has been off the board for LISTINGS_FORGET_MS is
  * dropped, so it can be news when it returns.
  */
-const seenStamp = (value) => (value && typeof value === 'object' ? { f: Number(value.f) || 0, l: Number(value.l) || 0 } : { f: Number(value) || 0, l: Number(value) || 0 });
+const seenStamp = (value) => {
+  if (value && typeof value === 'object') {
+    const stamp = { f: Number(value.f) || 0, l: Number(value.l) || 0 };
+    if (typeof value.s === 'string' && value.s) stamp.s = value.s;
+    return stamp;
+  }
+  return { f: Number(value) || 0, l: Number(value) || 0 };
+};
 
 function listingsDue ({ known, current, now = Date.now() }) {
   const list = (current || []).filter((entry) => entry && typeof entry.slug === 'string' && entry.slug);
@@ -638,7 +645,14 @@ function listingsDue ({ known, current, now = Date.now() }) {
     const stamp = seenStamp(value);
     if (stamp.l > now - LISTINGS_FORGET_MS) nextKnown[slug] = stamp;
   });
-  list.forEach(({ slug }) => { nextKnown[slug] = { f: nextKnown[slug] ? nextKnown[slug].f : now, l: now }; });
+  list.forEach(({ slug, firstShowTime }) => {
+    const prior = nextKnown[slug];
+    nextKnown[slug] = { f: prior ? prior.f : now, l: now };
+    // A showtime learned once (from a detail page) or carried by the feed is
+    // kept, so the app's board has it without asking again.
+    const showtime = (typeof firstShowTime === 'string' && firstShowTime) || (prior && prior.s);
+    if (showtime) nextKnown[slug].s = showtime;
+  });
   return { fresh, nextKnown, seeded: false };
 }
 
@@ -914,10 +928,13 @@ function boardForApp (boards, knownByKey, now = Date.now()) {
     const rows = (listings || []).map((l) => {
       const key = titleKey(l.title);
       const cover = better.find((b) => b.keys.has(key));
+      const stamp = known[l.slug];
       return {
         slug: l.slug,
         title: l.title,
-        firstShowTime: l.firstShowTime || null,
+        // A theater whose grid has no dates (AFI) gets them backfilled into
+        // the seen-state a few films a sweep; the board shows what's known.
+        firstShowTime: l.firstShowTime || (stamp && typeof stamp === 'object' && typeof stamp.s === 'string' ? stamp.s : null),
         url: l.url || theater.url || null,
         imax: Boolean(l.imax),
         poster: typeof l.poster === 'string' && l.poster ? l.poster : null,
@@ -930,6 +947,39 @@ function boardForApp (boards, knownByKey, now = Date.now()) {
     return { key: theater.key, name: theater.name, url: theater.url || null, ok: Boolean(listings), listings: rows };
   });
   return { updatedAt: now, theaters };
+}
+
+// --- Reminders (Matt, 2026-09-28) --------------------------------------------
+//
+// "Swipe left can be remind me again one week before the showtime. And if
+// it's already within one week, remind me again the day before." The app
+// writes `theaters/reminders/<theaterKey>/<slug>` = { remindAt, title,
+// theaterName, url, firstShowTime, setAt }; the sweep sends each one whose
+// time has come and stamps sentAt, so the card can return to the screen.
+
+/** reminders: { [theaterKey]: { [slug]: reminder } } -> the ones to send now. */
+function remindersDue (reminders, now = Date.now()) {
+  const due = [];
+  Object.entries(reminders || {}).forEach(([theaterKey, slugs]) => {
+    Object.entries(slugs || {}).forEach(([slug, r]) => {
+      if (!r || typeof r !== 'object') return;
+      const remindAt = Number(r.remindAt);
+      if (!remindAt || remindAt > now || r.sentAt) return;
+      due.push({ theaterKey, slug, ...r });
+    });
+  });
+  return due.sort((a, b) => a.remindAt - b.remindAt);
+}
+
+function composeReminderMessage (reminder) {
+  const when = showTimeLabel(reminder.firstShowTime);
+  const where = reminder.theaterName ? ` at ${reminder.theaterName}` : '';
+  return {
+    title: `Reminder: ${reminder.title || 'a film you flagged'}`,
+    body: when ? `${/,/.test(when) ? 'First showing' : 'From'} ${when}${where}` : `On the board${where}`,
+    tag: `remind-${reminder.theaterKey}-${reminder.slug}-${Number(reminder.remindAt) || 0}`,
+    navigate: reminder.url || '/'
+  };
 }
 
 /**
@@ -980,6 +1030,8 @@ module.exports = {
   titleKey,
   uncovered,
   boardForApp,
+  remindersDue,
+  composeReminderMessage,
   composeListingMessages,
   SIGNUP_MAX_PER_SWEEP,
   signupsDue,

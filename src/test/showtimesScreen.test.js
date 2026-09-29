@@ -29,6 +29,11 @@ describe('Showtimes screen wiring', () => {
     // Dismissals go through the store, to their own node, never the board.
     expect(screen).toContain("dispatch('dismissListing'");
     expect(store).toContain('`${root}/theaters/dismissed/${theaterKey}`');
+    // Reminders likewise: the screen chooses the time, the store writes it,
+    // the sweep sends it.
+    expect(screen).toContain("dispatch('remindListing'");
+    expect(store).toContain('`${root}/theaters/reminders/${theaterKey}`');
+    expect(lambda).toContain('/theaters/reminders`');
   });
 
   it('labels a showing on the cinema clock without a timezone getting a say', () => {

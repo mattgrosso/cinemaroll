@@ -324,6 +324,20 @@ scrolling never fires it. Verified with synthetic TouchEvents in the tester's if
 Dismissals are per listing and pruned when the film leaves the board, so a return years later
 is shown and pushed again — Matt asked for exactly that.
 
+**Swipe left = remind me** (2026-09-28: "remind me again one week before the showtime. And if
+it's already within one week, remind me again the day before"). `src/utils/reminderTime.js`
+picks the first rung still ahead — a week before, the day before, three hours before — reading
+the cinema-clock stamp as local time (a bare date is noon); no rung left or no showtime known
+means a toast and a snap back. The screen writes `theaters/reminders/<theater>/<slug>` =
+{ remindAt, setAt, title, theaterName, url, firstShowTime } via store `remindListing`
+(`reminder: null` cancels); the card is hidden while it waits (a "n reminders" chip shows them,
+bell-slash cancels) and returns once the sweep stamps `sentAt`. Lambda: `remindersDue` +
+`composeReminderMessage` (tested), tag `remind-<theater>-<slug>-<remindAt>`, tap goes to
+tickets; owner only. Pruned with dismissals when the film leaves the board. AFI's grid has no
+dates, so the sweep backfills `s` (first showtime) into the seen-state eight films a sweep
+(`SHOWTIME_BACKFILL_PER_SWEEP`, via the theater's `enrich`) and `boardForApp` shows it.
+Verified with synthetic touches on the tester (v1.118.10).
+
 **Testing it signed in** (2026-09-28, Matt: "you should be able to use the test user to test
 this"). The sweep mirrors the board to `cinemaroll-tester-example-com/theaters/board` on every
 run, and `scripts/copy-theater-board.mjs` does it on demand (Admin SDK; also prints poster

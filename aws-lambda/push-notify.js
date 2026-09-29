@@ -37,7 +37,7 @@ const {
   externalWatches, externalLogsDue,
   signupsDue, composeSignupMessages,
   alamoListings, veeziListings, afiListings, boxofficeListings, afiFirstShowtime,
-  cinemaclockListings, uncovered, boardForApp, listingsDue, composeListingMessages, LISTINGS_MAX_PER_SWEEP
+  cinemaclockListings, uncovered, boardForApp, remindersDue, composeReminderMessage, listingsDue, composeListingMessages, LISTINGS_MAX_PER_SWEEP
 } = require('./pushCadence');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
@@ -105,6 +105,7 @@ const cinemaArtsMovies = async () => {
 // The chains (Regal, AMC) and www.si.edu all refuse a plain fetch; CinemaClock
 // lists them all, and marks which showtimes are on the IMAX screen.
 const CINEMACLOCK_URL = 'https://www.cinemaclock.com/movie-theaters';
+const SHOWTIME_BACKFILL_PER_SWEEP = 8;
 // Every screen counts ("I'd be interested in the non-IMAX screens at these
 // other theaters as well"); a film's `imax` flag says which ones are.
 const viaCinemaclock = (key, name, page, { smithsonian = false } = {}) => ({
@@ -385,6 +386,12 @@ const runSweep = async () => {
   } catch (error) {
     console.error('Listings check failed:', error.message);
   }
+  try {
+    const delivered = await notifyReminders(now);
+    if (delivered) results.push({ topKey: OWNER_ACCOUNT_KEY, delivered, reason: 'reminders' });
+  } catch (error) {
+    console.error('Reminders check failed:', error.message);
+  }
 
   for (const topKey of accounts) {
     try {
@@ -545,6 +552,20 @@ const notifyTheaterListings = async (now) => {
         console.log(`Listings (${theater.key}): first run, recorded ${listings.length} listing(s)`);
         continue;
       }
+      // A grid without dates: learn a few showtimes a sweep into the seen-
+      // state, so the app's board fills in and reminders have a time to aim
+      // at. Fresh listings about to be announced are done below regardless.
+      if (theater.enrich) {
+        const missing = listings.filter((l) => !l.firstShowTime && !(nextKnown[l.slug] && nextKnown[l.slug].s)).slice(0, SHOWTIME_BACKFILL_PER_SWEEP);
+        await Promise.all(missing.map(async (l) => {
+          try {
+            const { firstShowTime } = await theater.enrich(l);
+            if (firstShowTime) nextKnown[l.slug].s = firstShowTime;
+          } catch (error) {
+            console.warn(`Listings (${theater.key}) showtime for ${l.slug}:`, error.message);
+          }
+        }));
+      }
       const { keep, dropped } = uncovered(fresh, better.map((b) => b.listings));
       if (dropped.length) console.log(`Listings (${theater.key}): ${dropped.length} covered by a better theater (${dropped.map((l) => l.title).join(', ')})`);
       let sent = 0;
@@ -578,6 +599,28 @@ const notifyTheaterListings = async (now) => {
   } catch (error) {
     console.error('Theater board publish failed:', error.message);
   }
+  return delivered;
+};
+
+// --- Reminders --------------------------------------------------------------
+//
+// A left swipe on the Showtimes screen writes theaters/reminders/<theater>/
+// <slug> with a remindAt the app chose (a week before the showing, else the
+// day before, else three hours before). Send, then stamp sentAt so the card
+// returns to the screen; a failed write repeats the reminder next sweep
+// rather than losing it.
+const notifyReminders = async (now) => {
+  const reminders = await dbGet(`${OWNER_ACCOUNT_KEY}/theaters/reminders`);
+  const due = remindersDue(reminders, now);
+  if (!due.length) return 0;
+  const subscriptions = await dbGet(`${OWNER_ACCOUNT_KEY}/push/subscriptions`);
+  let delivered = 0;
+  for (const reminder of due) {
+    const sent = await sendToAccount(OWNER_ACCOUNT_KEY, subscriptions, buildPayload({ ...composeReminderMessage(reminder), appBadge: 1 }));
+    delivered += sent;
+    await dbSet(`${OWNER_ACCOUNT_KEY}/theaters/reminders/${reminder.theaterKey}/${reminder.slug}/sentAt`, now);
+  }
+  console.log(`Reminders: ${due.length} due (${due.map((r) => r.title).join(', ')}), ${delivered} push(es) delivered`);
   return delivered;
 };
 

@@ -548,7 +548,9 @@ export default {
       let seenAt = 0;
       try { seenAt = Number(localStorage.getItem(SHOWTIMES_SEEN_KEY)) || 0; } catch { return false; }
       const dismissed = this.$store.state.theaterDismissed || {};
-      return theaters.some((t) => (t.listings || []).some((l) => !l.coveredBy && !dismissed[t.key]?.[l.slug] && Number(l.firstSeenAt) > seenAt));
+      const reminders = this.$store.state.theaterReminders || {};
+      const waiting = (t, l) => reminders[t.key]?.[l.slug] && !reminders[t.key][l.slug].sentAt;
+      return theaters.some((t) => (t.listings || []).some((l) => !l.coveredBy && !dismissed[t.key]?.[l.slug] && !waiting(t, l) && Number(l.firstSeenAt) > seenAt));
     },
     newsletterUnread () {
       if (!this.$store.state.newsletterPrefs?.newsletter) return false;
