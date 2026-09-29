@@ -45,6 +45,14 @@ describe('Showtimes screen wiring', () => {
     expect(screen).toContain('query?.focus');
   });
 
+  // Matt, 2026-09-29: "I don't really know where AMC Hoffman Center is. You
+  // should just remove that from my list."
+  it('no longer sweeps AMC Hoffman Center', () => {
+    const lambda = read('../../aws-lambda/push-notify.js');
+    expect(lambda).not.toMatch(/viaCinemaclock\('imax-amc-hoffman'/);
+    expect(lambda).toMatch(/viaCinemaclock\('imax-amc-tysons'/);
+  });
+
   it('labels a showing on the cinema clock without a timezone getting a say', () => {
     expect(showtimeLabel('2026-10-02T15:20:00')).toBe('Fri Oct 2, 3:20 PM');
     expect(showtimeLabel('2026-10-26')).toBe('Mon Oct 26');

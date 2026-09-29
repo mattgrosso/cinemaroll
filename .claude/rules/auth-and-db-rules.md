@@ -282,7 +282,11 @@ suffixes all fold). If a better theater's board couldn't be read, the lower ones
 sweep rather than announce something the Alamo may have. Covered listings are still recorded.
 Order: Alamo, Miracle, Cinema Arts, AFI (its slot is a guess Matt hasn't confirmed), then the
 IMAXs: Udvar-Hazy, Air and Space (the Mall), Regal Majestic (Silver Spring), AMC Georgetown,
-AMC Tysons, AMC Hoffman. Regal Gallery Place has 4DX and RPX, no IMAX.
+AMC Tysons. Regal Gallery Place has 4DX and RPX, no IMAX. AMC Hoffman Center was on the
+list until 2026-09-29, when Matt asked for it off ("I don't really know where AMC Hoffman
+Center is"); its `push/state/theaters/imax-amc-hoffman` seen map was deleted with it.
+Removing a theater is deleting its entry and that key — the board is rewritten each sweep,
+and `loadTheaterBoard` prunes the dismissals/reminders of films no longer on it.
 
 The IMAXs are read from **CinemaClock** (`cinemaclock.com/movie-theaters/<slug>`), the one
 source that isn't bot-walled: Regal, AMC, imax.com and www.si.edu all answer 403 to a plain

@@ -167,8 +167,9 @@ const THEATERS = [
   viaCinemaclock('imax-air-and-space', 'the Air and Space IMAX', 'lockheed-martin-imax-theater', 'https://www.si.edu/theaters/lockheedmartin', { smithsonian: true }),
   viaCinemaclock('imax-regal-majestic', 'Regal Majestic', 'regal-majestic-imax', 'https://www.regmovies.com/theatres/regal-majestic-1862'),
   viaCinemaclock('imax-amc-georgetown', 'AMC Georgetown', 'amc-loews-georgetown-14', 'https://www.amctheatres.com/movie-theatres/washington-d-c/amc-georgetown-14'),
-  viaCinemaclock('imax-amc-tysons', 'AMC Tysons', 'amc-tysons-corner-16', 'https://www.amctheatres.com/movie-theatres/washington-d-c/amc-tysons-corner-16'),
-  viaCinemaclock('imax-amc-hoffman', 'AMC Hoffman Center', 'amc-hoffman-center-22', 'https://www.amctheatres.com/movie-theatres/washington-d-c/amc-hoffman-center-22')
+  // AMC Hoffman Center was here until 2026-09-29: "I don't really know where
+  // AMC Hoffman Center is. You should just remove that from my list."
+  viaCinemaclock('imax-amc-tysons', 'AMC Tysons', 'amc-tysons-corner-16', 'https://www.amctheatres.com/movie-theatres/washington-d-c/amc-tysons-corner-16')
 ];
 
 // Mirrors databaseKeyCharacters.json (FROZEN list - see that file).
