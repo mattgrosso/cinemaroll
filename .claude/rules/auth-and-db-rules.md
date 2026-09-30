@@ -191,7 +191,10 @@ Input `{"letterboxdSweep":"reviews"}`) and `cinemaroll-letterboxd-films` (cron 0
 the newsletter API (`lpou4xxxng`, `$default` route, so no route to add). The Lambda's
 timeout was raised to **600s** for the film backfill; the handler now takes `context` for
 the deadline. `letterboxdFilms` is a shared root and is in `NON_ACCOUNT_ROOTS` in BOTH
-Lambdas — keep it there or the sweeps treat it as a person.
+Lambdas — keep it there or the sweeps treat it as a person. **Adding a shared root means
+redeploying `cinemaroll-push` in the same sitting:** the source list was updated but the
+push Lambda wasn't, and within fifteen minutes Matt's phone announced that "Letterboxd
+Films" had just signed up for Cinema Roll (2026-09-29).
 
 **Deploy with `yarn deploy:newsletter` and check the zip.** The bundle directory under
 `$TMPDIR` was once found with hollow `node_modules` (57 dirs, 83 KB zipped) and shipped a

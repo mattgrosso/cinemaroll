@@ -689,7 +689,7 @@ exports.handler = async (event, context) => {
         if (synced.error) return response(200, { error: synced.error });
         const existing = (await dbGet('letterboxdFilms').catch(() => null)) || {};
         const films = await letterboxd.refreshFilms({
-          tmdbIds: synced.tmdbIds, existing, db: letterboxdDb, now, cap: 6, deadline: now + 20000, log: console.log
+          tmdbIds: synced.tmdbIds, existing, db: letterboxdDb, now, cap: 6, deadline: now + 22000, margin: 3000, log: console.log
         });
         return response(200, { count: synced.count, films });
       }

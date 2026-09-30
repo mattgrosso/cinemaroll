@@ -106,13 +106,15 @@ const filmRecord = (stats, now) => {
 // three failures in a row. `existing` is the letterboxdFilms map (or the
 // subset the caller has); pass a `deadline` (ms epoch) from the Lambda's
 // remaining time so a long backfill ends cleanly instead of being killed.
-const refreshFilms = async ({ tmdbIds, existing, db, now, cap, deadline = Infinity, log = () => {} }) => {
+// `margin` is how long before the deadline to stop: 30s for a sweep, a few
+// seconds for the HTTP route, whose whole budget is API Gateway's 30s.
+const refreshFilms = async ({ tmdbIds, existing, db, now, cap, deadline = Infinity, margin = DEADLINE_MARGIN_MS, log = () => {} }) => {
   const due = filmsDue(tmdbIds, existing, now, { cap });
   const result = { due: due.length, fetched: 0, missing: 0, failed: 0, stopped: null };
   let consecutiveFailures = 0;
 
   for (let index = 0; index < due.length; index += 1) {
-    if (Date.now() > deadline - DEADLINE_MARGIN_MS) { result.stopped = 'deadline'; break; }
+    if (Date.now() > deadline - margin) { result.stopped = 'deadline'; break; }
     const tmdbId = due[index];
     try {
       const stats = await fetchFilm(tmdbId);
