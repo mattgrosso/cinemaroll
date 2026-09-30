@@ -206,7 +206,7 @@ describe('NewsletterScreen', () => {
         state: { newsletterIssue: issue({ picks: [pick({ rottenTomatoes: null, metacritic: null })] }) }
       });
       const scores = wrapper.find('.newsletter-scores').text();
-      expect(scores).toContain('No critic score yet');
+      expect(scores).toContain('No score yet');
       expect(scores).not.toContain('0%');
       expect(scores).not.toContain('RT');
     });
@@ -218,7 +218,7 @@ describe('NewsletterScreen', () => {
       const scores = wrapper.find('.newsletter-scores').text();
       expect(scores).toContain('52 Metacritic');
       expect(scores).not.toContain('RT');
-      expect(scores).not.toContain('No critic score yet');
+      expect(scores).not.toContain('No score yet');
     });
 
     // Matt, 2026-09-20: "it would be nice if there was a button at the bottom
@@ -375,5 +375,28 @@ describe('NewsletterScreen', () => {
       const wrapper = mountScreen({ state: { newsletterIssue: issue() } });
       expect(wrapper.find('.newsletter-testing').exists()).toBe(false);
     });
+  });
+});
+
+// The audience beside the critics (2026-09-29).
+describe('NewsletterScreen — Letterboxd', () => {
+  it('shows the crowd rating chip on a pick and the feature line with the reader\'s review date', () => {
+    const wrapper = mountScreen({
+      state: {
+        newsletterIssue: issue({
+          picks: [pick({ rottenTomatoes: null, metacritic: null, letterboxdRating: 3.85 })],
+          feature: { ...issue().feature, letterboxdRating: 4.32, yourReviewDate: '2026-09-27' }
+        })
+      }
+    });
+    expect(wrapper.text()).toContain('★ 3.85 Letterboxd');
+    expect(wrapper.text()).not.toContain('No score yet');
+    expect(wrapper.find('.newsletter-feature-crowd').text()).toContain('★ 4.32 on Letterboxd');
+    expect(wrapper.find('.newsletter-feature-crowd').text()).toContain('you reviewed it September 27, 2026');
+  });
+
+  it('says "No score yet" only when nobody — critics or crowd — has scored it', () => {
+    const wrapper = mountScreen({ state: { newsletterIssue: issue({ picks: [pick({ rottenTomatoes: null, metacritic: null, letterboxdRating: null })] }) } });
+    expect(wrapper.text()).toContain('No score yet');
   });
 });

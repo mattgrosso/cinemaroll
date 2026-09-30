@@ -340,6 +340,17 @@ Prefer variety across issues: a straight birthday is the least interesting of
 these reasons, not the default.
 ${JSON.stringify(brief.features, null, 1)}
 
+LETTERBOXD. "letterboxdRating" is the Letterboxd crowd's weighted average
+(0.5–5 stars) from "letterboxdRatings" members — the audience's verdict, as
+distinct from the critics'. You may cite it (as stars, e.g. "3.9 on
+Letterboxd"); null means the crowd hasn't spoken and you say nothing.
+
+THE READER'S OWN REVIEW. When a feature candidate carries "yourReview", that
+is the reader's own review of the film, written on "yourReviewDate". This is
+the ONE quotation you are permitted: quote a line of it verbatim, in
+quotation marks, attributed to the reader ("you wrote at the time..."), and
+let the article answer or build on it. Never paraphrase it as a critic's view.
+
 Return ONLY valid JSON, no markdown fence, in exactly this shape:
 
 {
@@ -377,6 +388,41 @@ Choose 4-6 picks, best first. If fewer than four releases are worth recommending
 };
 
 // --- Building one account's issue --------------------------------------------
+
+// Letterboxd stats for a handful of films: the shared cache first, a polite
+// fetch for the rest (which also fills the cache). Never throws — a film
+// without a rating is simply absent from the map.
+const letterboxdStatsFor = async (ids) => {
+  const stats = {};
+  const unique = [...new Set(ids.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+  const cached = (await dbGet('letterboxdFilms').catch(() => null)) || {};
+  const missing = [];
+  for (const id of unique) {
+    const film = cached[id];
+    if (film?.fetchedAt && !film.missing && Date.now() - film.fetchedAt < 30 * 86400000) stats[id] = film;
+    else if (!film?.failedAt || Date.now() - film.failedAt > 86400000) missing.push(id);
+  }
+  const fetched = await letterboxd.refreshFilms({ tmdbIds: missing, existing: cached, db: letterboxdDb, now: Date.now(), cap: 30, log: console.log }).catch(() => null);
+  if (fetched && missing.length) {
+    const fresh = (await dbGet('letterboxdFilms').catch(() => null)) || {};
+    for (const id of missing) if (fresh[id]?.rating != null) stats[id] = fresh[id];
+  }
+  return stats;
+};
+
+// The reader's own review of each film, if they wrote one — the most recent
+// entry with text. Quoted by the model as the ONE quotation it is allowed.
+const myReviewsFor = async (topKey, ids) => {
+  const result = {};
+  const node = (await dbGet(`${topKey}/letterboxd/reviews`).catch(() => null)) || {};
+  for (const id of new Set(ids)) {
+    const entries = Object.values(node[id] || {}).filter((entry) => entry?.review);
+    if (!entries.length) continue;
+    entries.sort((a, b) => String(b.watchedDate || '').localeCompare(String(a.watchedDate || '')));
+    result[id] = { review: String(entries[0].review).slice(0, 1200), watchedDate: entries[0].watchedDate || null };
+  }
+  return result;
+};
 
 const buildIssue = async ({ topKey, profile, pastIssues = null, now, alwaysOn }) => {
   const tmdbKey = process.env.TMDB_API_KEY;
@@ -441,7 +487,13 @@ const buildIssue = async ({ topKey, profile, pastIssues = null, now, alwaysOn })
     return { empty: true, reason: 'nothing available and nothing worth featuring' };
   }
 
-  const brief = issueBrief({ shortlist, features, profile, weekOf: weekKey(now) });
+  // The Letterboxd crowd's rating for every film the model will see, from
+  // the shared cache or fetched now (a new release is on Letterboxd within
+  // days), and the reader's own past review of any feature candidate.
+  const letterboxdStats = await letterboxdStatsFor([...shortlist.map((r) => r.id), ...features.map((f) => f.id)]);
+  const myReviews = await myReviewsFor(topKey, features.map((f) => f.id));
+
+  const brief = issueBrief({ shortlist, features, profile, weekOf: weekKey(now), letterboxd: letterboxdStats, myReviews });
   const written = await writeIssue({ brief, profile });
 
   // Re-attach the facts to the model's judgement by id. The model returns an
@@ -466,6 +518,8 @@ const buildIssue = async ({ topKey, profile, pastIssues = null, now, alwaysOn })
         rentOn: facts.where.rent,
         rottenTomatoes: facts.scores.rottenTomatoes,
         metacritic: facts.scores.metacritic,
+        letterboxdRating: letterboxdStats[facts.id]?.rating ?? null,
+        letterboxdCount: letterboxdStats[facts.id]?.ratingCount ?? null,
         why: String(pick.why || '').trim(),
         // TMDB's own field names, because SendToHat hands this straight to
         // movieHat.js's toHatMovie, which reads `poster_path` and
@@ -508,6 +562,10 @@ const buildIssue = async ({ topKey, profile, pastIssues = null, now, alwaysOn })
         headline: String(written.feature.headline || '').trim(),
         hook: String(written.feature.hook || '').trim(),
         article: String(written.feature.article || '').trim(),
+        letterboxdRating: letterboxdStats[chosen.id]?.rating ?? null,
+        letterboxdCount: letterboxdStats[chosen.id]?.ratingCount ?? null,
+        yourReview: myReviews[chosen.id]?.review || null,
+        yourReviewDate: myReviews[chosen.id]?.watchedDate || null,
         tmdb: featureCard
       }
     : null;

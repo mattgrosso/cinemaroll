@@ -80,11 +80,44 @@ differently lands in the "not imported" list rather than on the wrong film. The 
 sources can describe one viewing twice; `reviewsFromNode` collapses same-date-same-text
 pairs, preferring the feed's copy (it has the URL).
 
-MovieDetail's Letterboxd section (`.letterboxd-section`, after Ratings) shows the public
-line ("★ 4.32 · 1.3M ratings · 61K fans", linked) and my diary entries with the text,
-paragraphs kept via `white-space: pre-line`. Both load after the page renders and the
-page never waits on them (`loadLetterboxdExtras`; the utils in `utils/letterboxdData.js`
-resolve to something renderable on every failure).
+MovieDetail's Letterboxd section (`.letterboxd-section`, after Ratings) is the public
+line ("★ 4.32 · 1.3M ratings · 61K fans", linked) and ONE toggle, "Show your review(s)",
+whose pane is dates (linking to the entry) and review text, `white-space: pre-line`.
+**Never my own stars** (Matt: "my star rating from Letterboxd will always match my Cinema
+Roll rating") and never the watched date outside the pane — it sits under Ratings
+already. Both load after the page renders and the page never waits on them
+(`loadLetterboxdExtras`; `utils/letterboxdData.js` resolves to something renderable on
+every failure).
+
+**Everywhere my numbers meet the crowd's (2026-09-29, "anywhere where we're looking at
+my numbers, comparing them to the Letterboxd numbers seems like a worthwhile thing to
+do").** The store loads the shared film cache and my synced diary once per session on
+demand (`ensureLetterboxdData`; `state.letterboxdFilms` / `state.letterboxdReviews`,
+null until loaded — every reader `v-if`s on that). All maths in
+`letterboxdCompare.js` (pure, tested), and always by RANK within the films both sides
+rated: a 0–10 weighted score and a 0.5–5 star average can't be subtracted.
+
+- Ratings tab: `CrowdSection` (You vs Letterboxd) — rank correlation with a word for
+  it (`agreementLabel`), then the widest gaps each way in percentile points.
+- Year in Review: You vs the Crowd — the year's films, hottest take / the crowd's pick /
+  you both loved (`yearVsCrowd`).
+- Film Club: Running with the crowd (per member, from published `ratings` maps; a
+  shelf-only sharer has no row) and Club vs the crowd (`clubVsCrowd`).
+- Watchlist: "Give these another shot" takes the Letterboxd rating (doubled onto 0–10)
+  over TMDB's when the film has one, and the row says which (`anotherShotCandidates`'s
+  `crowdFor`).
+- Higher or Lower: a second start button plays on the crowd's ratings; own best-streak
+  key `higherLowerLetterboxdBestStreak`.
+- Home: sort "Letterboxd Rating" (`_crowd` on each decorated entry, unknowns sink both
+  ways), chips Crowd Loves / You Disagree / Cult Films, my review text in the plain search
+  (three characters up), and Not on Letterboxd + the logged-on icons read the synced
+  diary first — the CORS-proxy scraper (`LetterboxdScrapingService`) is only the fallback.
+- Newsletter: the crowd rating beside the critics' on every pick and the feature, and the
+  reader's own past review of the feature film handed to the model as the one quotation
+  it may use.
+
+Not done, on purpose: "most popular on Letterboxd this week" — `/*/popular/this/*` is
+disallowed in their robots.txt.
 
 Username-only, no OAuth — setting the username *is* the login. The
 `letterboxdUsername`/`letterboxdConnected` computeds need **setters**, or `v-model` writes

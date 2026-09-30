@@ -80,8 +80,13 @@
               <span v-if="pick.metacritic != null" class="newsletter-score">
                 {{ pick.metacritic }} Metacritic
               </span>
-              <span v-if="pick.rottenTomatoes == null && pick.metacritic == null" class="newsletter-score newsletter-score--none">
-                No critic score yet
+              <!-- The audience's verdict beside the critics' (2026-09-29):
+                   Letterboxd's weighted average, when the crowd has spoken. -->
+              <span v-if="pick.letterboxdRating != null" class="newsletter-score newsletter-score--crowd">
+                ★ {{ pick.letterboxdRating.toFixed(2) }} Letterboxd
+              </span>
+              <span v-if="pick.rottenTomatoes == null && pick.metacritic == null && pick.letterboxdRating == null" class="newsletter-score newsletter-score--none">
+                No score yet
               </span>
             </p>
 
@@ -103,6 +108,11 @@
         <p class="newsletter-feature-why">{{ featureWhy }}</p>
         <h3 class="newsletter-feature-headline">{{ issue.feature.headline }}</h3>
         <p v-if="issue.feature.hook" class="newsletter-hook">{{ issue.feature.hook }}</p>
+        <p v-if="issue.feature.letterboxdRating != null || issue.feature.yourReviewDate" class="newsletter-feature-crowd">
+          <span v-if="issue.feature.letterboxdRating != null">★ {{ issue.feature.letterboxdRating.toFixed(2) }} on Letterboxd</span>
+          <span v-if="issue.feature.letterboxdRating != null && issue.feature.yourReviewDate"> · </span>
+          <span v-if="issue.feature.yourReviewDate">you reviewed it {{ reviewDateLabel(issue.feature.yourReviewDate) }}</span>
+        </p>
         <p v-for="(para, index) in featureParagraphs" :key="index" class="newsletter-para">
           {{ para }}
         </p>
@@ -246,6 +256,11 @@ export default {
     this.$store.dispatch('loadPushState')?.catch?.(() => {});
   },
   methods: {
+    reviewDateLabel (value) {
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+      if (!match) return '';
+      return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    },
     posterUrl,
     longDate (iso) {
       if (!iso) return '';
@@ -478,6 +493,14 @@ export default {
   font-weight: 800;
   line-height: 1.25;
   margin: 0.4rem 0 0.5rem;
+}
+
+.newsletter-score--crowd { color: #00e054; }
+
+.newsletter-feature-crowd {
+  color: #ccc;
+  font-size: 0.8rem;
+  margin: -0.25rem 0 0.75rem;
 }
 
 .newsletter-hook {

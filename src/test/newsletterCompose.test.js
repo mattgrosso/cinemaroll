@@ -607,3 +607,28 @@ describe('previouslyIssued', () => {
     expect(rows.map((r) => r.id)).toEqual([103]);
   });
 });
+
+describe('issueBrief — Letterboxd', () => {
+  it('carries the crowd rating for releases and features, and the reader\'s own review for a feature', () => {
+    const row = { id: 7, title: 'X', year: 2026, director: null, genres: [], overview: '', scores: { rottenTomatoes: null, metacritic: null, imdb: null }, where: { summary: '', stream: [], rent: [] } };
+    const feature = { id: 9, title: 'Y', year: 1996, reason: 'anniversary', turning: 30 };
+    const brief = issueBrief({
+      shortlist: [row],
+      features: [feature],
+      letterboxd: { 7: { rating: 3.9, ratingCount: 12000 }, 9: { rating: 4.4, ratingCount: 500000 } },
+      myReviews: { 9: { review: 'Still the one.', watchedDate: '2024-01-02' } }
+    });
+    expect(brief.releases[0].letterboxdRating).toBe(3.9);
+    expect(brief.releases[0].letterboxdRatings).toBe(12000);
+    expect(brief.features[0].letterboxdRating).toBe(4.4);
+    expect(brief.features[0].yourReview).toBe('Still the one.');
+    expect(brief.features[0].yourReviewDate).toBe('2024-01-02');
+  });
+
+  it('is null, never zero, when the crowd has not spoken', () => {
+    const row = { id: 7, title: 'X', year: 2026, director: null, genres: [], overview: '', scores: { rottenTomatoes: null, metacritic: null, imdb: null }, where: { summary: '', stream: [], rent: [] } };
+    const brief = issueBrief({ shortlist: [row], features: [] });
+    expect(brief.releases[0].letterboxdRating).toBeNull();
+    expect(brief.releases[0].letterboxdRatings).toBeNull();
+  });
+});

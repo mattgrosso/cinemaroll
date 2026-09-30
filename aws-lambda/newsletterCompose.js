@@ -466,7 +466,17 @@ function featureCandidates ({
  * is null it stays null, so the prompt can say "no critic score" rather than
  * letting the model fill the hole from whatever it half-recalls.
  */
-function issueBrief ({ shortlist = [], features = [], profile = null, weekOf = null } = {}) {
+// `letterboxd` maps a film id to the Letterboxd crowd's { rating, ratingCount }
+// (aws-lambda/letterboxd.js, 2026-09-29); `myReviews` maps a film id to the
+// reader's own { review, watchedDate } from their synced diary. Both are
+// facts handed to the model, never remembered by it.
+function issueBrief ({ shortlist = [], features = [], profile = null, weekOf = null, letterboxd = {}, myReviews = {} } = {}) {
+  const crowd = (id) => {
+    const film = letterboxd?.[id];
+    return Number.isFinite(film?.rating)
+      ? { letterboxdRating: film.rating, letterboxdRatings: Number.isFinite(film.ratingCount) ? film.ratingCount : null }
+      : { letterboxdRating: null, letterboxdRatings: null };
+  };
   return {
     weekOf,
     profile,
@@ -480,6 +490,7 @@ function issueBrief ({ shortlist = [], features = [], profile = null, weekOf = n
       rottenTomatoes: r.scores.rottenTomatoes,
       metacritic: r.scores.metacritic,
       imdb: r.scores.imdb,
+      ...crowd(r.id),
       availability: r.where.summary,
       streamingOn: r.where.stream,
       rentOn: r.where.rent
@@ -504,7 +515,10 @@ function issueBrief ({ shortlist = [], features = [], profile = null, weekOf = n
       occasion: f.occasion || null,
       person: f.person || null,
       relatedTo: f.relatedTo || null,
-      alsoTrendingNow: f.alsoTrending
+      alsoTrendingNow: f.alsoTrending,
+      ...crowd(f.id),
+      yourReview: myReviews?.[f.id]?.review || null,
+      yourReviewDate: myReviews?.[f.id]?.watchedDate || null
     }))
   };
 }
