@@ -632,6 +632,7 @@ const seenStamp = (value) => {
   if (value && typeof value === 'object') {
     const stamp = { f: Number(value.f) || 0, l: Number(value.l) || 0 };
     if (typeof value.s === 'string' && value.s) stamp.s = value.s;
+    if (value.z) stamp.z = 1;
     return stamp;
   }
   return { f: Number(value) || 0, l: Number(value) || 0 };
@@ -641,7 +642,9 @@ function listingsDue ({ known, current, now = Date.now() }) {
   const list = (current || []).filter((entry) => entry && typeof entry.slug === 'string' && entry.slug);
   if (!known || typeof known !== 'object') {
     const seededKnown = {};
-    list.forEach(({ slug }) => { seededKnown[slug] = { f: now, l: now }; });
+    // z: on the board before anyone was watching - the baseline, not news,
+    // so the app never badges a new follower's whole first board as "new".
+    list.forEach(({ slug }) => { seededKnown[slug] = { f: now, l: now, z: 1 }; });
     return { fresh: [], nextKnown: seededKnown, seeded: true };
   }
   const fresh = list.filter(({ slug }) => !(slug in known));
@@ -653,6 +656,7 @@ function listingsDue ({ known, current, now = Date.now() }) {
   list.forEach(({ slug, firstShowTime }) => {
     const prior = nextKnown[slug];
     nextKnown[slug] = { f: prior ? prior.f : now, l: now };
+    if (prior && prior.z) nextKnown[slug].z = 1;
     // A showtime learned once (from a detail page) or carried by the feed is
     // kept, so the app's board has it without asking again.
     const showtime = (typeof firstShowTime === 'string' && firstShowTime) || (prior && prior.s);
@@ -879,6 +883,80 @@ function cinemaclockListings (html, { imaxOnly = false, url = null } = {}) {
   return [...films.values()].sort((a, b) => a.slug.localeCompare(b.slug));
 }
 
+// --- Anyone's theaters (2026-09-30) -------------------------------------------
+//
+// "We really built it just with me in mind … we should figure out how to get
+// this configured so that other people could set it up for their own local
+// theaters … give a zip code or something, and then it would have to present
+// them with a bunch of theaters, and then they would have to rank them." A zip
+// becomes a town (zippopotam.us), the town becomes CinemaClock's city page,
+// which lists every theater around it nearest first; a follower's pick is a
+// CinemaClock slug, read by cinemaclockListings like the IMAXs.
+
+const MAX_FOLLOWED_THEATERS = 12;
+const NEARBY_THEATERS_SHOWN = 40;
+
+/** "Takoma Park", "MD" -> "takoma-park-md", the city page's path. */
+function cinemaclockCitySlug (place, state) {
+  const slug = (value) => String(value || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const a = slug(place); const b = slug(state);
+  return a && /^[a-z]{2}$/.test(b) ? `${a}-${b}` : null;
+}
+
+/**
+ * CinemaClock's /<city>/movie-theaters page -> [{ key, name, address,
+ * distance, chain, films }] nearest first. Closed theaters go; one with no
+ * films on CinemaClock stays but says so (films: 0) - it may be a theater
+ * CinemaClock doesn't carry showtimes for, which the picker should admit.
+ */
+function cinemaclockCityTheaters (html) {
+  const text = String(html || '');
+  const seen = new Set();
+  const theaters = [];
+  const blockRe = /<div class="cinemablock(?: [^"]*)?"([^>]*)>([\s\S]*?)(?=<div class="cinemablock[ "]|$)/g;
+  let m;
+  while ((m = blockRe.exec(text))) {
+    const [, attrs, body] = m;
+    const key = (/href="\/movie-theaters\/([a-z0-9-]+)" class="cinemaname"/.exec(body) || [])[1];
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const head = (/<h3>([\s\S]*?)<\/h3>/.exec(body) || [])[1] || '';
+    if (/class="warning">\s*CLOSED/i.test(head)) continue;
+    const chain = stripTags((/<s class="chain">([\s\S]*?)<\/s>/.exec(head) || [])[1]);
+    const name = stripTags(head.replace(/<s class="chain">[\s\S]*?<\/s>/, '').replace(/<svg[\s\S]*?<\/svg>/g, ''));
+    const address = stripTags((/<em class="address">([\s\S]*?)<\/em>/.exec(body) || [])[1]);
+    const distance = Number((/data-distance="([\d.]+)"/.exec(attrs) || [])[1]);
+    const mids = (/data-mids="\[([^\]]*)\]"/.exec(attrs) || [])[1];
+    const films = mids === undefined ? null : mids.split(',').filter((id) => /\d/.test(id)).length;
+    if (!name) continue;
+    theaters.push({ key, name, address: address || null, distance: Number.isFinite(distance) ? Math.round(distance * 10) / 10 : null, chain: chain || null, films });
+  }
+  // The page is only roughly in order; a stable sort keeps its ties.
+  const far = (t) => (t.distance === null ? Infinity : t.distance);
+  return theaters.sort((a, b) => far(a) - far(b)).slice(0, NEARBY_THEATERS_SHOWN);
+}
+
+/**
+ * The follower's ranked list as stored ({ theaters: [{ key, name }] }) ->
+ * the clean ordered list the sweep walks: valid keys only, no repeats, the
+ * best theater first, at most MAX_FOLLOWED_THEATERS.
+ */
+function followedTheaters (follow) {
+  const raw = follow && Array.isArray(follow.theaters) ? follow.theaters
+    : follow && follow.theaters && typeof follow.theaters === 'object' ? Object.values(follow.theaters) : [];
+  const seen = new Set();
+  const out = [];
+  raw.forEach((t) => {
+    const key = t && typeof t.key === 'string' ? t.key : null;
+    if (!key || !/^[a-z0-9-]{1,80}$/.test(key) || seen.has(key)) return;
+    seen.add(key);
+    out.push({ key, name: typeof t.name === 'string' && t.name.trim() ? t.name.trim().slice(0, 80) : key });
+  });
+  return out.slice(0, MAX_FOLLOWED_THEATERS);
+}
+
 // --- The pecking order (Matt, 2026-09-28) ------------------------------------
 //
 // "If a movie is showing at more than one theater, there's sort of a hierarchy
@@ -948,7 +1026,8 @@ function boardForApp (boards, knownByKey, now = Date.now()) {
         imax: Boolean(l.imax),
         poster: typeof l.poster === 'string' && l.poster ? l.poster : null,
         year: Number.isInteger(l.year) ? l.year : null,
-        firstSeenAt: seenStamp(known[l.slug]).f || now,
+        // 0 = part of the first board recorded, never shown as new.
+        firstSeenAt: seenStamp(known[l.slug]).z ? 0 : (seenStamp(known[l.slug]).f || now),
         coveredBy: cover ? cover.key : null
       };
     });
@@ -1014,6 +1093,11 @@ function composeListingMessages (fresh) {
 }
 
 module.exports = {
+  MAX_FOLLOWED_THEATERS,
+  NEARBY_THEATERS_SHOWN,
+  cinemaclockCitySlug,
+  cinemaclockCityTheaters,
+  followedTheaters,
   LISTINGS_TITLES_SHOWN,
   LISTINGS_FORGET_MS,
   alamoListings,

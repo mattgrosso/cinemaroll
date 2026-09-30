@@ -143,6 +143,23 @@ async function postToPushApi (route, payload) {
   });
 }
 
+/**
+ * The Showtimes setup (2026-09-30): theaters near a zip, or near a
+ * "City, ST" when CinemaClock has no page for the zip's own town.
+ * Resolves { found, place, theaters: [{ key, name, address, distance,
+ * chain, readable }], reason }.
+ */
+export async function findTheatersNear ({ zip, city }) {
+  const { data } = await postToPushApi('/theaters/near', zip ? { zip } : { city });
+  return data;
+}
+
+/** After the list is saved: build this account's board now, not next sweep. */
+export async function refreshTheaterBoard () {
+  const { data } = await postToPushApi('/theaters/refresh', {});
+  return data;
+}
+
 /** Settings screen's "Send a test notification" button. */
 export function sendTestNotification () {
   return postToPushApi('/push/test', {});

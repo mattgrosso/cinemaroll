@@ -36,7 +36,11 @@ import {
   remindersDue,
   composeReminderMessage,
   LISTINGS_TITLES_SHOWN,
-  LISTINGS_FORGET_MS
+  LISTINGS_FORGET_MS,
+  cinemaclockCitySlug,
+  cinemaclockCityTheaters,
+  followedTheaters,
+  MAX_FOLLOWED_THEATERS
 } from '../../aws-lambda/pushCadence.js';
 
 // Matt, 2026-08-28: notify "as the prompts come in", not once a day. The
@@ -789,9 +793,10 @@ describe('theater listings', () => {
     expect(result.seeded).toBe(true);
     expect(result.fresh).toEqual([]);
     expect(Object.keys(result.nextKnown).sort()).toEqual(current.map((l) => l.slug));
-    expect(result.nextKnown[current[0].slug]).toEqual({ f: NOW, l: NOW });
+    // z marks the baseline (2026-09-30), kept for as long as the listing is.
+    expect(result.nextKnown[current[0].slug]).toEqual({ f: NOW, l: NOW, z: 1 });
     const later = listingsDue({ known: result.nextKnown, current, now: NOW + HOUR });
-    expect(later.nextKnown[current[0].slug]).toEqual({ f: NOW, l: NOW + HOUR, s: current[0].firstShowTime });
+    expect(later.nextKnown[current[0].slug]).toEqual({ f: NOW, l: NOW + HOUR, s: current[0].firstShowTime, z: 1 });
   });
 
   it('a listing not on the stored board is news; the rest are not', () => {
@@ -1046,6 +1051,14 @@ describe('the board the app shows', () => {
     expect(board.theaters[2].listings[0]).toMatchObject({ imax: true, url: 'm', firstSeenAt: NOW - 2 * HOUR, coveredBy: 'alamo' });
     expect(board.theaters[2].listings[1]).toMatchObject({ url: 'm2', poster: 'https://p/2.jpg', year: 2026, firstSeenAt: NOW, coveredBy: null });
   });
+
+  it('never calls a first board new: the baseline reads as seen at 0', () => {
+    const boards = [{ theater: { key: 'regal', name: 'Regal' }, listings: [{ slug: '1', title: 'A' }, { slug: '2', title: 'B' }] }];
+    const seeded = listingsDue({ known: null, current: boards[0].listings, now: NOW }).nextKnown;
+    const next = listingsDue({ known: seeded, current: [...boards[0].listings, { slug: '3', title: 'C' }], now: NOW + HOUR }).nextKnown;
+    const board = boardForApp([{ ...boards[0], listings: [...boards[0].listings, { slug: '3', title: 'C' }] }], { regal: next }, NOW + HOUR);
+    expect(board.theaters[0].listings.map((l) => [l.slug, l.firstSeenAt])).toEqual([['1', 0], ['2', 0], ['3', NOW + HOUR]]);
+  });
 });
 
 describe('reminders', () => {
@@ -1079,5 +1092,79 @@ describe('reminders', () => {
     const boards = [{ theater: { key: 'afi', name: 'AFI', url: 'f' }, listings: [{ slug: '1', title: 'Faust (1926)', firstShowTime: null }] }];
     const known = { afi: { 1: { f: NOW - HOUR, l: NOW, s: '2026-10-31T19:00:00' } } };
     expect(boardForApp(boards, known, NOW).theaters[0].listings[0].firstShowTime).toBe('2026-10-31T19:00:00');
+  });
+});
+
+// Cut from cinemaclock.com/washington-dc/movie-theaters (2026-09-30), film
+// id lists shortened. The page is only roughly nearest-first ("1.45" sits
+// above "1"), a closed theater is still listed, and a theater CinemaClock
+// has no showtimes for carries an empty data-mids.
+const CITY_PAGE = `
+<div class="cinemablock allchains regal" id="divall_1736" data-tid="1736" data-distance="1.45279726495337" data-mids="[110922,279251,277089]">
+			<div class="cinemablocktable">
+			<div class="onecinema noselect" onClick="clickAddFav(1736);return false;">
+			</div>
+			<a href="/movie-theaters/regal-gallery-place-4dx" class="cinemaname"><h3>Regal Gallery Place &amp; 4DX </h3>
+			<em class="address">701 Seventh Street Northwest, Washington, DC</em>
+			</a>
+			</div>
+			<div class="cinemadistance">nearby</div>
+<div class="cinemablock allchains landmarktheatres" id="divall_7511" data-tid="7511" data-distance="1" data-mids="[177422,279251]">
+			<div class="cinemablocktable">
+			<a href="/movie-theaters/landmark-atlantic-plumbing-cinema" class="cinemaname"><h3>Landmark Atlantic Plumbing Cinema <s class="chain">Landmark Theatres</s></h3>
+			<em class="address">807 V Street NW, Washington, DC</em>
+			</a>
+			</div>
+<div class="cinemablock allchains amc" id="divall_1720" data-tid="1720" data-distance="5" data-mids="[]">
+			<div class="cinemablocktable">
+			<a href="/movie-theaters/amc-mazza-gallerie" class="cinemaname"><h3>AMC Mazza Gallerie  <svg class="ph-icon warning" viewBox="0 0 256 256"><path d="M128,20Z"></path></svg><span class="warning"> CLOSED</span></h3>
+			<em class="address">5300 Wisconsin Ave. NW, Washington, DC</em>
+			</a>
+			</div>
+<div class="cinemablock allchains angelikafilmcenter" id="divall_9001" data-tid="9001" data-distance="2" data-mids="[]">
+			<div class="cinemablocktable">
+			<a href="/movie-theaters/angelika-pop-up-at-union-market" class="cinemaname"><h3>Angelika Pop-Up at Union Market <s class="chain">Angelika Film Center</s></h3>
+			<em class="address">550 Penn Street NE, Washington, DC</em>
+			</a>
+			</div>
+<div class="cinemablock mycinemas" id="divmy_7511" data-tid="7511" data-distance="1" data-mids="[177422]">
+			<a href="/movie-theaters/landmark-atlantic-plumbing-cinema" class="cinemaname"><h3>Landmark Atlantic Plumbing Cinema</h3></a>
+`;
+
+describe('anyone\'s theaters — finding and ranking them', () => {
+  it('turns a zip lookup\'s town into CinemaClock\'s city page', () => {
+    expect(cinemaclockCitySlug('Washington', 'DC')).toBe('washington-dc');
+    expect(cinemaclockCitySlug('Takoma Park', 'MD')).toBe('takoma-park-md');
+    expect(cinemaclockCitySlug("Coeur d'Alene", 'ID')).toBe('coeur-d-alene-id');
+    expect(cinemaclockCitySlug('San José', 'CA')).toBe('san-jose-ca');
+    expect(cinemaclockCitySlug('Washington', 'District of Columbia')).toBe(null);
+    expect(cinemaclockCitySlug('', 'DC')).toBe(null);
+  });
+
+  it('lists the open theaters nearest first, once each, saying which have no showtimes', () => {
+    expect(cinemaclockCityTheaters(CITY_PAGE)).toEqual([
+      { key: 'landmark-atlantic-plumbing-cinema', name: 'Landmark Atlantic Plumbing Cinema', address: '807 V Street NW, Washington, DC', distance: 1, chain: 'Landmark Theatres', films: 2 },
+      { key: 'regal-gallery-place-4dx', name: 'Regal Gallery Place & 4DX', address: '701 Seventh Street Northwest, Washington, DC', distance: 1.5, chain: null, films: 3 },
+      { key: 'angelika-pop-up-at-union-market', name: 'Angelika Pop-Up at Union Market', address: '550 Penn Street NE, Washington, DC', distance: 2, chain: 'Angelika Film Center', films: 0 }
+    ]);
+    expect(cinemaclockCityTheaters('')).toEqual([]);
+  });
+
+  it('cleans a stored ranking into the order the sweep walks', () => {
+    expect(followedTheaters(null)).toEqual([]);
+    expect(followedTheaters({ theaters: [
+      { key: 'alamo-bryant-street', name: 'Alamo Bryant Street' },
+      { key: 'regal-gallery-place-4dx' },
+      { key: 'alamo-bryant-street', name: 'again' },
+      { key: 'bad/key', name: 'x' },
+      null
+    ] })).toEqual([
+      { key: 'alamo-bryant-street', name: 'Alamo Bryant Street' },
+      { key: 'regal-gallery-place-4dx', name: 'regal-gallery-place-4dx' }
+    ]);
+    // Firebase hands an array back as an object when it has holes.
+    expect(followedTheaters({ theaters: { 0: { key: 'a', name: 'A' }, 2: { key: 'b', name: 'B' } } }).map((t) => t.key)).toEqual(['a', 'b']);
+    const many = Array.from({ length: 20 }, (_, i) => ({ key: `t${i}`, name: `T${i}` }));
+    expect(followedTheaters({ theaters: many })).toHaveLength(MAX_FOLLOWED_THEATERS);
   });
 });

@@ -45,6 +45,25 @@ describe('Showtimes screen wiring', () => {
     expect(screen).toContain('query?.focus');
   });
 
+  // Anyone's theaters (2026-09-30). The setup is reached from the screen,
+  // saves the list where the sweep reads it, and asks for the board at once.
+  it('lets anyone pick and rank their own theaters', () => {
+    const router = read('../router/index.js');
+    expect(router).toMatch(/path: '\/showtimes\/theaters',[\s\S]*?component: ShowtimesSetup[\s\S]*?parent: '\/showtimes'/);
+    const screen = read('../components/ShowtimesScreen.vue');
+    expect(screen.match(/\$router\.push\('\/showtimes\/theaters'\)/g)).toHaveLength(2);
+    const store = read('../store/index.js');
+    expect(store).toContain('`${root}/theaters/follow`');
+    const lambda = read('../../aws-lambda/push-notify.js');
+    expect(lambda).toContain('/theaters/follow`');
+    expect(lambda).toContain("path.endsWith('/theaters/near')");
+    expect(lambda).toContain("path.endsWith('/theaters/refresh')");
+    const setup = read('../components/ShowtimesSetup.vue');
+    expect(setup).toContain("dispatch('saveTheaterFollow'");
+    expect(setup).toContain('refreshTheaterBoard()');
+    expect(read('../utils/push.js')).toMatch(/postToPushApi\('\/theaters\/near'[\s\S]*postToPushApi\('\/theaters\/refresh'/);
+  });
+
   // Matt, 2026-09-29: "I don't really know where AMC Hoffman Center is. You
   // should just remove that from my list."
   it('no longer sweeps AMC Hoffman Center', () => {
@@ -85,8 +104,13 @@ describe('Showtimes links', () => {
 
   it('opens the Alamo app, with nothing attached ("I just need it to open")', () => {
     expect(ALAMO_APP_LINK).toBe('shortcuts://run-shortcut?name=Open%20Alamo');
-    expect(theaterHref(alamo)).toBe(ALAMO_APP_LINK);
-    expect(theaterHref(alamo, { url: 'https://drafthouse.com/dc-metro-area/show/x?cinemaId=1101' })).toBe(ALAMO_APP_LINK);
+    expect(theaterHref(alamo, null, { alamoApp: true })).toBe(ALAMO_APP_LINK);
+    expect(theaterHref(alamo, { url: 'https://drafthouse.com/dc-metro-area/show/x?cinemaId=1101' }, { alamoApp: true })).toBe(ALAMO_APP_LINK);
+    // The Shortcut is on Matt's phone only; anyone else's Alamo is a web link.
+    expect(theaterHref(alamo)).toBe(alamo.url);
+    expect(theaterHref({ key: 'alamo-drafthouse-south-lamar', url: 'https://g/x' }, { url: 'https://g/film' })).toBe('https://g/film');
+    const screen = read('../components/ShowtimesScreen.vue');
+    expect(screen).toMatch(/alamoApp \(\) \{ return this\.\$store\.state\.databaseTopKey === 'mattgrosso-gmail-com'/);
     // An app link in a new tab would leave a blank one behind.
     expect(opensInNewTab(ALAMO_APP_LINK)).toBe(false);
   });

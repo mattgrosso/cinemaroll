@@ -13,10 +13,14 @@ export const ALAMO_APP_LINK = `shortcuts://run-shortcut?name=${encodeURIComponen
 
 export const isAlamo = (theaterKey) => typeof theaterKey === 'string' && theaterKey.startsWith('alamo-');
 
-/** The href for a theater heading (item omitted) or one of its films. */
-export function theaterHref (theater, item = null) {
+/**
+ * The href for a theater heading (item omitted) or one of its films. The
+ * Shortcut only exists on Matt's phone, so anyone else's Alamo (2026-09-30:
+ * theaters are anyone's now) links to the web like every other theater.
+ */
+export function theaterHref (theater, item = null, { alamoApp = false } = {}) {
   if (!theater) return null;
-  if (isAlamo(theater.key)) return ALAMO_APP_LINK;
+  if (alamoApp && isAlamo(theater.key)) return ALAMO_APP_LINK;
   return (item && item.url) || theater.url || null;
 }
 

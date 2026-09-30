@@ -1,7 +1,12 @@
 <template>
   <div class="showtimes">
     <BackLink/>
-    <h1 class="st-title">Showtimes</h1>
+    <div class="st-head">
+      <h1 class="st-title">Showtimes</h1>
+      <button v-if="!loading && (board || following)" type="button" class="st-edit" @click="$router.push('/showtimes/theaters')">
+        <i class="bi bi-geo-alt"></i> Your theaters
+      </button>
+    </div>
     <p class="st-subtitle">What's on the boards at the theaters you follow. Swipe right to dismiss, left to be reminded before it plays.</p>
     <transition name="st-toast">
       <div v-if="toast" class="st-toast" role="status">{{ toast }}</div>
@@ -103,7 +108,17 @@
       </section>
     </template>
 
-    <p v-else class="st-empty">No board yet. The sweep publishes one every 15 minutes once it has run.</p>
+    <p v-else-if="following" class="st-empty">No board yet. It's built every 15 minutes; check back shortly.</p>
+    <!-- Anyone's theaters (2026-09-30): the way in for everyone but Matt. -->
+    <div v-else class="st-start">
+      <i class="bi bi-film st-start-icon"></i>
+      <h2 class="st-start-title">Follow your local theaters</h2>
+      <p class="st-start-text">
+        Pick the theaters near you and rank them. You'll see what's on their boards here, and get a
+        notification when a new film is listed at the best one showing it.
+      </p>
+      <button type="button" class="st-start-button" @click="$router.push('/showtimes/theaters')">Choose theaters</button>
+    </div>
   </div>
 </template>
 
@@ -177,6 +192,9 @@ export default {
   },
   computed: {
     board () { return this.$store.state.theaterBoard; },
+    following () { return Boolean(this.$store.state.theaterFollow?.theaters?.length); },
+    // The "Open Alamo" Shortcut is on Matt's phone only (theaterLinks.js).
+    alamoApp () { return this.$store.state.databaseTopKey === 'mattgrosso-gmail-com'; },
     dismissedMap () { return this.$store.state.theaterDismissed || {}; },
     dismissedCount () {
       return Object.values(this.dismissedMap).reduce((n, slugs) => n + Object.keys(slugs || {}).length, 0);
@@ -216,7 +234,10 @@ export default {
   },
   async mounted () {
     try {
-      await this.$store.dispatch('loadTheaterBoard');
+      await Promise.all([
+        this.$store.dispatch('loadTheaterBoard'),
+        this.$store.dispatch('loadTheaterFollow')
+      ]);
     } catch (error) {
       console.warn('Showtimes: board unavailable', error);
     }
@@ -229,7 +250,7 @@ export default {
   methods: {
     cardId (theater, item) { return `${theater.key}/${item.slug}`; },
     // Alamo opens its app, everything else the theater's page (theaterLinks.js).
-    hrefFor (theater, item) { return theaterHref(theater, item); },
+    hrefFor (theater, item) { return theaterHref(theater, item, { alamoApp: this.alamoApp }); },
     targetFor (href) { return opensInNewTab(href) ? '_blank' : null; },
     posterKey (item) { return `${item.title}|${item.year || ''}`; },
     posterFor (item) {
@@ -423,7 +444,57 @@ export default {
   padding: 0.75rem 1rem 2rem;
 }
 
-.st-title { margin: 0.25rem 0 0; }
+.st-head {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-top: 0.25rem;
+}
+
+.st-title { margin: 0; }
+
+.st-edit {
+  align-items: center;
+  background: #161616;
+  border: 1px solid #2e2e2e;
+  border-radius: 999px;
+  color: #ddd;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  gap: 0.35rem;
+  min-height: 40px;
+  padding: 0.35rem 0.8rem;
+
+  i { color: #ffc107; }
+  &:active { background: #222; }
+}
+
+.st-start {
+  background: #161616;
+  border: 1px solid #2e2e2e;
+  border-radius: 10px;
+  margin-top: 0.5rem;
+  padding: 1.4rem 1.1rem;
+  text-align: center;
+}
+
+.st-start-icon { color: #ffc107; font-size: 2rem; }
+.st-start-title { font-size: 1.1rem; font-weight: 700; margin: 0.4rem 0 0.4rem; }
+.st-start-text { color: #ccc; font-size: 0.86rem; margin: 0 0 1rem; }
+
+.st-start-button {
+  background: #ffc107;
+  border: 0;
+  border-radius: 8px;
+  color: #111;
+  font-weight: 700;
+  min-height: 44px;
+  padding: 0.5rem 1.4rem;
+
+  &:active { background: #e0a800; }
+}
 .st-subtitle { color: #ccc; font-size: 0.85rem; margin: 0.25rem 0 0.9rem; }
 
 .st-controls {

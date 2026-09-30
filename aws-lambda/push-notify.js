@@ -37,7 +37,8 @@ const {
   externalWatches, externalLogsDue,
   signupsDue, composeSignupMessages,
   alamoListings, veeziListings, afiListings, boxofficeListings, afiFirstShowtime,
-  cinemaclockListings, uncovered, boardForApp, remindersDue, composeReminderMessage, listingsDue, composeListingMessages
+  cinemaclockListings, uncovered, boardForApp, remindersDue, composeReminderMessage, listingsDue, composeListingMessages,
+  cinemaclockCitySlug, cinemaclockCityTheaters, followedTheaters
 } = require('./pushCadence');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
@@ -112,6 +113,7 @@ const SHOWTIME_BACKFILL_PER_SWEEP = 8;
 // other theaters as well"); a film's `imax` flag says which ones are.
 const viaCinemaclock = (key, name, page, site, { smithsonian = false } = {}) => ({
   key,
+  cinemaclock: page,
   name,
   url: site,
   listings: async () => cinemaclockListings(await fetchText(`${CINEMACLOCK_URL}/${page}`), { url: site }),
@@ -129,12 +131,14 @@ const viaCinemaclock = (key, name, page, site, { smithsonian = false } = {}) => 
 const THEATERS = [
   {
     key: 'alamo-bryant-street',
+    cinemaclock: 'alamo-drafthouse-dc-bryant-street',
     name: 'Alamo Bryant Street',
     url: 'https://drafthouse.com/dc-metro-area/theater/dc-bryant-street',
     listings: async () => alamoListings(await fetchJson('https://drafthouse.com/s/mother/v2/schedule/market/dc-metro-area'), '1101')
   },
   {
     key: 'miracle-theatre',
+    cinemaclock: 'miracle-theatre',
     name: 'the Miracle Theatre',
     url: 'https://ticketing.useast.veezi.com/sessions/?siteToken=m8rg867jdpj1g3vn7sq1f1wfg4',
     listings: async (now) => veeziListings(
@@ -144,6 +148,7 @@ const THEATERS = [
   },
   {
     key: 'cinema-arts',
+    cinemaclock: 'cinema-arts-theatre',
     name: 'Cinema Arts',
     url: `${CINEMA_ARTS_URL}/`,
     listings: async () => {
@@ -156,6 +161,7 @@ const THEATERS = [
   },
   {
     key: 'afi-silver',
+    cinemaclock: 'afi-silver-theatre-cultural-center',
     name: 'AFI Silver',
     url: 'https://silver.afi.com/now-playing/',
     listings: async () => afiListings(await fetchText('https://silver.afi.com/now-playing/')),
@@ -171,6 +177,29 @@ const THEATERS = [
   // AMC Hoffman Center is. You should just remove that from my list."
   viaCinemaclock('imax-amc-tysons', 'AMC Tysons', 'amc-tysons-corner-16', 'https://www.amctheatres.com/movie-theatres/washington-d-c/amc-tysons-corner-16')
 ];
+
+// Anyone's theaters (2026-09-30: "other people could set it up for their own
+// local theaters"). A follower's list lives at `<account>/theaters/follow` =
+// { zip, place, theaters: [{ key, name }] }, best first. A key is a
+// CinemaClock slug, or one of the theaters above (their `cinemaclock` alias is
+// swapped for their own key when the picker offers them, so a DC friend who
+// picks the Alamo gets the Alamo's own feed and posters). The owner with no
+// list follows THEATERS, exactly as before.
+const THEATER_BY_KEY = new Map();
+THEATERS.forEach((t) => { THEATER_BY_KEY.set(t.key, t); THEATER_BY_KEY.set(t.cinemaclock, t); });
+const googleShowtimes = (...words) => `https://www.google.com/search?q=${encodeURIComponent([...words, 'showtimes'].join(' '))}`;
+const theaterFor = ({ key, name }) => {
+  const known = THEATER_BY_KEY.get(key);
+  if (known) return known;
+  // CinemaClock is only ever read; the links go to Google's showtimes card
+  // for the film at that theater, which knows every theater's own site.
+  const generic = viaCinemaclock(key, name, key, googleShowtimes(name));
+  const read = generic.listings;
+  return {
+    ...generic,
+    listings: async (now) => (await read(now)).map((l) => ({ ...l, url: googleShowtimes(l.title, name) }))
+  };
+};
 
 // Mirrors databaseKeyCharacters.json (FROZEN list - see that file).
 const UNSAFE_KEY_CHARACTERS = ['-', '!', '$', '%', '@', '^', '&', '*', '(', ')', '_', '+', '|', '~', '=', '`', '{', '}', '[', ']', ':', '"', ';', "'", '<', '>', '?', ',', '.', '/'];
@@ -382,17 +411,21 @@ const runSweep = async () => {
   } catch (error) {
     console.error('Sign-up check failed:', error.message);
   }
+  let followers = [];
   try {
-    const listingsDelivered = await notifyTheaterListings(now);
-    if (listingsDelivered) results.push({ topKey: OWNER_ACCOUNT_KEY, delivered: listingsDelivered, reason: 'listings' });
+    const listings = await notifyTheaterListings(accounts, now);
+    followers = listings.followers;
+    results.push(...listings.results);
   } catch (error) {
     console.error('Listings check failed:', error.message);
   }
-  try {
-    const delivered = await notifyReminders(now);
-    if (delivered) results.push({ topKey: OWNER_ACCOUNT_KEY, delivered, reason: 'reminders' });
-  } catch (error) {
-    console.error('Reminders check failed:', error.message);
+  for (const { topKey } of followers) {
+    try {
+      const delivered = await notifyReminders(topKey, now);
+      if (delivered) results.push({ topKey, delivered, reason: 'reminders' });
+    } catch (error) {
+      console.error(`Reminders check for ${topKey} failed:`, error.message);
+    }
   }
 
   for (const topKey of accounts) {
@@ -521,38 +554,81 @@ const notifySignups = async (accounts, now) => {
 // theater's news goes out as ONE push a sweep (2026-09-29: "too many
 // notifications"). Send first, then record; covered listings are recorded
 // too, and a theater whose news failed to send is not, so it comes again.
-const notifyTheaterListings = async (now) => {
-  const boards = await Promise.all(THEATERS.map(async (theater) => {
-    try {
-      const listings = await theater.listings(now);
-      // An empty board is a broken fetch until proven otherwise - never let
-      // it age everything out and re-announce the whole schedule later.
-      if (!listings.length && !theater.mayBeEmpty) throw new Error('returned no listings');
-      return { theater, listings };
-    } catch (error) {
-      console.error(`Listings (${theater.key}) fetch failed:`, error.message);
-      return { theater, listings: null };
-    }
-  }));
+const fetchBoards = async (theaters, now) => Promise.all(theaters.map(async (theater) => {
+  try {
+    const listings = await theater.listings(now);
+    // An empty board is a broken fetch until proven otherwise - never let
+    // it age everything out and re-announce the whole schedule later.
+    if (!listings.length && !theater.mayBeEmpty) throw new Error('returned no listings');
+    return { theater, listings };
+  } catch (error) {
+    console.error(`Listings (${theater.key}) fetch failed:`, error.message);
+    return { theater, listings: null };
+  }
+}));
 
+// Everyone who follows theaters, each with their list in pecking order. The
+// owner without a list of his own follows THEATERS.
+const theaterFollowers = async (accounts) => {
+  // The tester counts once it has picked theaters, so the setup can be
+  // driven end to end signed in as it.
+  const followers = await Promise.all([...new Set([OWNER_ACCOUNT_KEY, QA_BOARD_ACCOUNT_KEY, ...accounts])].map(async (topKey) => {
+    const follow = await dbGet(`${topKey}/theaters/follow`).catch(() => null);
+    const list = followedTheaters(follow);
+    if (list.length) return { topKey, theaters: list.map(theaterFor) };
+    return topKey === OWNER_ACCOUNT_KEY ? { topKey, theaters: THEATERS } : null;
+  }));
+  return followers.filter(Boolean);
+};
+
+// Every followed theater is fetched once a sweep, however many follow it.
+const notifyTheaterListings = async (accounts, now) => {
+  const followers = await theaterFollowers(accounts);
+  const unique = new Map();
+  followers.forEach((f) => f.theaters.forEach((t) => { if (!unique.has(t.key)) unique.set(t.key, t); }));
+  const fetched = await fetchBoards([...unique.values()], now);
+  const boardByKey = new Map(fetched.map((b) => [b.theater.key, b.listings]));
+  const results = [];
+  for (const { topKey, theaters } of followers) {
+    try {
+      const boards = theaters.map((theater) => ({ theater, listings: boardByKey.get(theater.key) || null }));
+      const delivered = await notifyAccountListings(topKey, boards, now);
+      if (delivered) results.push({ topKey, delivered, reason: 'listings' });
+    } catch (error) {
+      console.error(`Listings for ${topKey} failed:`, error.message);
+    }
+  }
+  return { results, followers };
+};
+
+// One account's boards, in its pecking order. `announce: false` is the
+// app's "build my board now" after a follower edits the list: theaters new to
+// the list are recorded (silently, as any first run is), and nothing else is
+// sent or recorded, so the next sweep still owns the news.
+const notifyAccountListings = async (topKey, boards, now, { announce = true } = {}) => {
   const knownByKey = {};
   const pending = [];
   for (let i = 0; i < boards.length; i += 1) {
     const { theater, listings } = boards[i];
     if (!listings) continue;
     const better = boards.slice(0, i);
-    if (better.some((b) => !b.listings)) {
-      console.log(`Listings (${theater.key}): waiting, a better theater's board is unreadable`);
-      continue;
-    }
-    const statePath = `${OWNER_ACCOUNT_KEY}/push/state/theaters/${theater.key}`;
+    const statePath = `${topKey}/push/state/theaters/${theater.key}`;
     try {
       const known = await dbGet(statePath);
+      if (!announce && known) {
+        knownByKey[theater.key] = known;
+        continue;
+      }
       const { fresh, nextKnown, seeded } = listingsDue({ known, current: listings, now });
+      // A first run says nothing, so it needs no better board to check.
       if (seeded) {
         await dbSet(statePath, nextKnown);
         knownByKey[theater.key] = nextKnown;
-        console.log(`Listings (${theater.key}): first run, recorded ${listings.length} listing(s)`);
+        console.log(`Listings (${topKey}/${theater.key}): first run, recorded ${listings.length} listing(s)`);
+        continue;
+      }
+      if (better.some((b) => !b.listings)) {
+        console.log(`Listings (${topKey}/${theater.key}): waiting, a better theater's board is unreadable`);
         continue;
       }
       // A grid without dates: learn a few showtimes a sweep into the seen-
@@ -569,11 +645,11 @@ const notifyTheaterListings = async (now) => {
         }));
       }
       const { keep, dropped } = uncovered(fresh, better.map((b) => b.listings));
-      if (dropped.length) console.log(`Listings (${theater.key}): ${dropped.length} covered by a better theater (${dropped.map((l) => l.title).join(', ')})`);
-      if (keep.length) console.log(`Listings (${theater.key}): ${keep.length} new (${keep.map((l) => l.slug).join(', ')})`);
+      if (dropped.length) console.log(`Listings (${topKey}/${theater.key}): ${dropped.length} covered by a better theater (${dropped.map((l) => l.title).join(', ')})`);
+      if (keep.length) console.log(`Listings (${topKey}/${theater.key}): ${keep.length} new (${keep.map((l) => l.slug).join(', ')})`);
       pending.push({ theater, statePath, nextKnown, keep });
     } catch (error) {
-      console.error(`Listings (${theater.key}) failed:`, error.message);
+      console.error(`Listings (${topKey}/${theater.key}) failed:`, error.message);
     }
   }
 
@@ -582,14 +658,17 @@ const notifyTheaterListings = async (now) => {
   let sendFailed = false;
   if (announced.length) {
     try {
-      const subscriptions = await dbGet(`${OWNER_ACCOUNT_KEY}/push/subscriptions`);
-      for (const message of composeListingMessages(announced)) {
-        delivered += await sendToAccount(OWNER_ACCOUNT_KEY, subscriptions, buildPayload({ ...message, appBadge: 1 }));
+      const subscriptions = await dbGet(`${topKey}/push/subscriptions`);
+      // A follower who never turned notifications on still gets the board.
+      if (subscriptions) {
+        for (const message of composeListingMessages(announced)) {
+          delivered += await sendToAccount(topKey, subscriptions, buildPayload({ ...message, appBadge: 1 }));
+        }
       }
-      console.log(`Listings: ${announced.length} new across ${pending.filter((p) => p.keep.length).length} theater(s), ${delivered} push(es) delivered`);
+      console.log(`Listings (${topKey}): ${announced.length} new across ${pending.filter((p) => p.keep.length).length} theater(s), ${delivered} push(es) delivered`);
     } catch (error) {
       sendFailed = true;
-      console.error('Listings push failed:', error.message);
+      console.error(`Listings push to ${topKey} failed:`, error.message);
     }
   }
   for (const { theater, statePath, nextKnown, keep } of pending) {
@@ -598,7 +677,7 @@ const notifyTheaterListings = async (now) => {
       await dbSet(statePath, nextKnown);
       knownByKey[theater.key] = nextKnown;
     } catch (error) {
-      console.error(`Listings (${theater.key}) record failed:`, error.message);
+      console.error(`Listings (${topKey}/${theater.key}) record failed:`, error.message);
     }
   }
 
@@ -607,12 +686,15 @@ const notifyTheaterListings = async (now) => {
   // toggle). Written even when a board failed - the screen says so.
   try {
     const board = boardForApp(boards, knownByKey, now);
-    await dbSet(`${OWNER_ACCOUNT_KEY}/theaters/board`, board);
-    // The QA account gets the same board, so the Showtimes screen can be
-    // driven signed in as the tester (scripts/mint-test-token.mjs).
-    await dbSet(`${QA_BOARD_ACCOUNT_KEY}/theaters/board`, board);
+    await dbSet(`${topKey}/theaters/board`, board);
+    // The QA account gets the owner's board, so the Showtimes screen can be
+    // driven signed in as the tester (scripts/mint-test-token.mjs) - unless
+    // the tester has picked theaters of its own.
+    if (topKey === OWNER_ACCOUNT_KEY && !(await dbGet(`${QA_BOARD_ACCOUNT_KEY}/theaters/follow`))) {
+      await dbSet(`${QA_BOARD_ACCOUNT_KEY}/theaters/board`, board);
+    }
   } catch (error) {
-    console.error('Theater board publish failed:', error.message);
+    console.error(`Theater board publish for ${topKey} failed:`, error.message);
   }
   return delivered;
 };
@@ -624,18 +706,18 @@ const notifyTheaterListings = async (now) => {
 // day before, else three hours before). Send, then stamp sentAt so the card
 // returns to the screen; a failed write repeats the reminder next sweep
 // rather than losing it.
-const notifyReminders = async (now) => {
-  const reminders = await dbGet(`${OWNER_ACCOUNT_KEY}/theaters/reminders`);
+const notifyReminders = async (topKey, now) => {
+  const reminders = await dbGet(`${topKey}/theaters/reminders`);
   const due = remindersDue(reminders, now);
   if (!due.length) return 0;
-  const subscriptions = await dbGet(`${OWNER_ACCOUNT_KEY}/push/subscriptions`);
+  const subscriptions = await dbGet(`${topKey}/push/subscriptions`);
   let delivered = 0;
   for (const reminder of due) {
-    const sent = await sendToAccount(OWNER_ACCOUNT_KEY, subscriptions, buildPayload({ ...composeReminderMessage(reminder), appBadge: 1 }));
+    const sent = subscriptions ? await sendToAccount(topKey, subscriptions, buildPayload({ ...composeReminderMessage(reminder), appBadge: 1 })) : 0;
     delivered += sent;
-    await dbSet(`${OWNER_ACCOUNT_KEY}/theaters/reminders/${reminder.theaterKey}/${reminder.slug}/sentAt`, now);
+    await dbSet(`${topKey}/theaters/reminders/${reminder.theaterKey}/${reminder.slug}/sentAt`, now);
   }
-  console.log(`Reminders: ${due.length} due (${due.map((r) => r.title).join(', ')}), ${delivered} push(es) delivered`);
+  console.log(`Reminders (${topKey}): ${due.length} due (${due.map((r) => r.title).join(', ')}), ${delivered} push(es) delivered`);
   return delivered;
 };
 
@@ -762,6 +844,39 @@ const notifyFriendsOfLog = async (myKey, { tmdbId, title, score }) => {
   return { notified };
 };
 
+// --- Finding theaters -------------------------------------------------------
+//
+// zip -> town (zippopotam.us, free, no key) -> CinemaClock's page for that
+// town, which lists every theater around it, nearest first. A town CinemaClock
+// has no page for redirects to its index; the app then asks for a nearby city.
+const theatersNear = async ({ zip, city }) => {
+  let place = null;
+  let state = null;
+  if (typeof zip === 'string' && /^\d{5}$/.test(zip.trim())) {
+    try {
+      const found = await fetchJson(`https://api.zippopotam.us/us/${zip.trim()}`);
+      const first = found.places && found.places[0];
+      if (first) { place = first['place name']; state = first['state abbreviation']; }
+    } catch (error) {
+      return { found: false, reason: 'zip' };
+    }
+  } else if (typeof city === 'string') {
+    const m = /^\s*(.+?)\s*,\s*([a-z]{2})\s*$/i.exec(city);
+    if (m) { place = m[1]; state = m[2]; }
+  }
+  const slug = cinemaclockCitySlug(place, state);
+  if (!slug) return { found: false, reason: zip ? 'zip' : 'city' };
+  const res = await fetch(`https://www.cinemaclock.com/${slug}/movie-theaters`, { redirect: 'manual', headers: FETCH_HEADERS });
+  if (res.status !== 200) return { found: false, reason: 'town', place: `${place}, ${state.toUpperCase()}` };
+  const theaters = cinemaclockCityTheaters(await res.text()).map((t) => {
+    // A theater with its own reader here (Matt's list) is offered under
+    // that key and counts as readable whatever CinemaClock carries.
+    const own = THEATER_BY_KEY.get(t.key);
+    return own ? { ...t, key: own.key, readable: true } : { ...t, readable: t.films !== 0 };
+  });
+  return { found: true, place: `${place}, ${state.toUpperCase()}`, theaters };
+};
+
 // --- Handler ----------------------------------------------------------------
 
 exports.handler = async (event) => {
@@ -803,6 +918,31 @@ exports.handler = async (event) => {
       });
       const delivered = await sendToAccount(myKey, push.subscriptions, payload);
       return response(200, { delivered });
+    }
+
+    // The Showtimes setup: theaters near a zip (or a "City, ST" when
+    // CinemaClock has no page for the zip's own town).
+    if (path.endsWith('/theaters/near')) {
+      return response(200, await theatersNear(body));
+    }
+
+    // Right after a follower saves their list: build their board now rather
+    // than in up to 15 minutes. Records new theaters silently, sends nothing.
+    if (path.endsWith('/theaters/refresh')) {
+      const list = followedTheaters(await dbGet(`${myKey}/theaters/follow`));
+      const theaters = list.length ? list.map(theaterFor) : myKey === OWNER_ACCOUNT_KEY ? THEATERS : [];
+      // A theater taken off the list forgets what it had seen, so putting it
+      // back later is a quiet first run, not a fortnight's worth of news.
+      const states = await dbGet(`${myKey}/push/state/theaters`, 'shallow=true');
+      const keep = new Set(theaters.map((t) => t.key));
+      await Promise.all(Object.keys(states || {}).filter((key) => !keep.has(key)).map((key) => dbSet(`${myKey}/push/state/theaters/${key}`, null)));
+      if (!theaters.length) {
+        await dbSet(`${myKey}/theaters/board`, null);
+        return response(200, { theaters: 0 });
+      }
+      const boards = await fetchBoards(theaters, Date.now());
+      await notifyAccountListings(myKey, boards, Date.now(), { announce: false });
+      return response(200, { theaters: boards.length, read: boards.filter((b) => b.listings).length });
     }
 
     if (path.endsWith('/push/friend-logged')) {

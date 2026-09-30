@@ -455,6 +455,10 @@ export default createStore({
     // { [theaterKey]: { [slug]: { remindAt, sentAt?, ... } } } - films Matt swiped
     // left on; the sweep sends each and stamps sentAt.
     theaterReminders: {},
+    // { zip, place, theaters: [{ key, name }] } - the theaters this account
+    // follows, best first (ShowtimesSetup.vue). null until loaded; absent
+    // for most accounts, and for Matt means "the sweep's own list".
+    theaterFollow: null,
     newsletterPrefs: null,
     newsletterLoaded: false,
     // When the user last opened the Film Club — drives the rainbow chip's
@@ -775,6 +779,9 @@ export default createStore({
     },
     setTheaterDismissed (state, value) {
       state.theaterDismissed = value && typeof value === 'object' ? value : {};
+    },
+    setTheaterFollow (state, value) {
+      state.theaterFollow = value && typeof value === 'object' ? value : null;
     },
     setTheaterReminders (state, value) {
       state.theaterReminders = value && typeof value === 'object' ? value : {};
@@ -2692,6 +2699,27 @@ export default createStore({
       else next[theaterKey][slug] = Date.now();
       context.commit('setTheaterDismissed', next);
       await update(ref(db, `${root}/theaters/dismissed/${theaterKey}`), { [slug]: restore ? null : next[theaterKey][slug] });
+    },
+    // Anyone's theaters (2026-09-30: "other people could set it up for their
+    // own local theaters"). The sweep reads theaters/follow; saving asks the
+    // push Lambda to build the board at once, so the Showtimes screen isn't
+    // empty for up to 15 minutes after setup.
+    async loadTheaterFollow (context) {
+      const root = context.getters.databaseTopKey;
+      if (!root) return null;
+      const snap = await get(ref(db, `${root}/theaters/follow`));
+      const follow = snap.exists() ? snap.val() : null;
+      context.commit('setTheaterFollow', follow);
+      return follow;
+    },
+    async saveTheaterFollow (context, { zip = null, place = null, theaters = [] }) {
+      const root = context.getters.databaseTopKey;
+      if (!root) return;
+      const follow = theaters.length
+        ? { zip: zip || null, place: place || null, theaters: theaters.map(({ key, name }) => ({ key, name })), updatedAt: Date.now() }
+        : null;
+      await set(ref(db, `${root}/theaters/follow`), follow);
+      context.commit('setTheaterFollow', follow);
     },
     async loadNewsletter (context) {
       const root = context.getters.databaseTopKey;
