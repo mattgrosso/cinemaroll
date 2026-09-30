@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { totalWatchTime, decadeDna, busiestMonth, genreSplit, biggestDay, oldestMovie, leastSeenMovie, allFunFacts } from '@/assets/javascript/funFacts.js';
+import { totalWatchTime, decadeDna, busiestMonth, genreSplit, biggestDay, movieNight, oldestMovie, leastSeenMovie, allFunFacts } from '@/assets/javascript/funFacts.js';
 
 function entry ({ runtime = 120, release = '1994-06-15', genres = ['Drama'], rating = 8, watches = ['2024-06-15T12:00:00'] } = {}) {
   return {
@@ -85,6 +85,41 @@ describe('funFacts', () => {
     expect(leastSeenMovie([voted(1, '2010-06-15'), voted(1, '1980-06-15')]).value).toBe('Movie 1980-06-15');
     expect(leastSeenMovie([voted(1)]).detail).toBe('Only 1 person has rated it on TMDB.');
     expect(leastSeenMovie([voted(0)]).detail).toBe('Nobody else has rated it on TMDB.');
+  });
+
+  it('leastSeenMovie skips anything released within the last year', () => {
+    const now = new Date('2026-09-29T12:00:00').getTime();
+    const fresh = voted(3, '2026-08-01');
+    fresh.ratings = [{ calculatedTotal: 8, date: '2026-09-20T12:00:00' }];
+    const fact = leastSeenMovie([fresh, voted(400, '1994-06-15')], { now });
+    expect(fact.value).toBe('Movie 1994-06-15');
+  });
+
+  it('leastSeenMovie skips films first rated within six months of release (vote count frozen at opening week)', () => {
+    const now = new Date('2026-09-29T12:00:00').getTime();
+    const early = voted(3, '2023-03-01');
+    early.ratings = [{ calculatedTotal: 8, date: '2023-03-20T12:00:00' }, { calculatedTotal: 8, date: '2025-01-01T12:00:00' }];
+    const late = voted(50, '2023-03-02');
+    late.ratings = [{ calculatedTotal: 8, date: '2024-06-01T12:00:00' }];
+    expect(leastSeenMovie([early, late], { now }).value).toBe('Movie 2023-03-02');
+  });
+
+  it('movieNight names the weekday with the most viewings and its share', () => {
+    const fact = movieNight([
+      entry({ watches: ['2024-06-14T20:00:00', '2024-06-21T20:00:00'] }), // Fridays
+      entry({ watches: ['2024-06-28T20:00:00'] }), // Friday
+      entry({ watches: ['2024-06-16T20:00:00'] }) // Sunday
+    ]);
+    expect(fact.label).toBe('Movie night');
+    expect(fact.value).toBe('Friday');
+    expect(fact.detail).toBe('75% of your viewings.');
+    expect(movieNight([entry({ watches: [] })])).toBeNull();
+  });
+
+  it('allFunFacts returns an even eight tiles for a full library', () => {
+    const e = entry({ watches: ['2024-06-15T09:00:00', '2024-06-15T14:00:00', '2024-06-15T20:00:00'] });
+    e.movie.vote_count = 10;
+    expect(allFunFacts([e], ratingOf)).toHaveLength(8);
   });
 
   it('allFunFacts drops facts an empty or sparse library cannot support', () => {

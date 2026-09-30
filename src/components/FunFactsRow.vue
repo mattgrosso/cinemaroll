@@ -65,6 +65,13 @@ export default {
   max-width: 100%;
 }
 
+/* An odd count (Biggest movie day hides on thin data) leaves the last
+   tile alone in its row; let it span both columns so there's never a gap
+   ("I don't like that we have an odd number of tiles", 2026-09-29). */
+.fun-fact-card:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
 /* Deliberately NOT the filled-header tile used above: Overview stacked ~17
    accent-filled strips and read as a wall of one colour (Matt, 2026-08-16:
    "we need to figure out how to break up the wall of yellow"). The accent

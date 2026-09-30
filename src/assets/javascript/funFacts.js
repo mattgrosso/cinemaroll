@@ -56,6 +56,31 @@ export function decadeDna (entries) {
   };
 }
 
+const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+// The night of the week you watch most. Every logged viewing counts,
+// rewatches included — it's about when you sit down, not what you pick.
+// Added 2026-09-29 so Overview's two-column grid has an even count
+// ("I don't like that we have an odd number of tiles").
+export function movieNight (entries) {
+  const counts = new Array(7).fill(0);
+  let total = 0;
+  (entries || []).forEach((entry) => {
+    watchTimes(entry).forEach((time) => {
+      counts[new Date(time).getDay()] += 1;
+      total += 1;
+    });
+  });
+  if (!total) return null;
+  const top = counts.indexOf(Math.max(...counts));
+  return {
+    key: 'movieNight',
+    label: 'Movie night',
+    value: WEEKDAY_LABELS[top],
+    detail: `${Math.round((counts[top] / total) * 100)}% of your viewings.`
+  };
+}
+
 // Busiest single calendar month of watching, ever.
 export function busiestMonth (entries) {
   const counts = new Map();
@@ -150,13 +175,32 @@ export function oldestMovie (entries) {
 // I've seen... not the popularity score but literally the number of people
 // who have seen it"). TMDB publishes no view counts; vote_count — how many
 // people rated it there — is the honest stand-in, and it's in the stored
-// shape (AddRating + the server-side backfill). Stale as of when it was
-// saved, which is fine for ranking obscurity. Entries without it are
+// shape (AddRating + the server-side backfill). Entries without it are
 // skipped, never treated as zero; ties go to the older release.
-export function leastSeenMovie (entries) {
+//
+// New releases are skipped (report 2026-09-29: "the deepest cut is just a
+// movie that just came out. That's not interesting"). Two rules, because
+// vote_count is frozen when the film is saved: anything released within a
+// year of now, AND anything first rated within six months of its release —
+// a film saved in its opening weeks keeps its opening-week count forever,
+// so it would stay "obscure" long after everyone has seen it.
+const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+const SIX_MONTHS_MS = YEAR_MS / 2;
+
+export function leastSeenMovie (entries, { now = Date.now() } = {}) {
   const counted = (entries || [])
     .filter((entry) => Number.isFinite(entry?.movie?.vote_count) && entry.movie.vote_count >= 0)
-    .map((entry) => ({ entry, votes: entry.movie.vote_count, time: new Date(entry.movie.release_date ?? NaN).getTime() }));
+    .map((entry) => ({
+      entry,
+      votes: entry.movie.vote_count,
+      time: new Date(entry.movie.release_date ?? NaN).getTime(),
+      firstWatch: Math.min(...watchTimes(entry))
+    }))
+    .filter(({ time, firstWatch }) => {
+      if (!Number.isFinite(time)) return true;
+      if (now - time < YEAR_MS) return false;
+      return !(Number.isFinite(firstWatch) && firstWatch - time < SIX_MONTHS_MS);
+    });
   if (!counted.length) return null;
   const least = counted.sort((a, b) => (a.votes - b.votes) ||
     ((Number.isFinite(a.time) ? a.time : Infinity) - (Number.isFinite(b.time) ? b.time : Infinity)))[0];
@@ -179,6 +223,7 @@ export function allFunFacts (entries, getRatingFn) {
     genreSplit(entries, getRatingFn),
     busiestMonth(entries),
     biggestDay(entries),
+    movieNight(entries),
     leastSeenMovie(entries),
     oldestMovie(entries)
   ].filter(Boolean);
