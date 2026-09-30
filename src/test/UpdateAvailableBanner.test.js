@@ -2,11 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { shallowMount } from '@vue/test-utils'
 import UpdateAvailableBanner from '@/components/UpdateAvailableBanner.vue'
 
-function factory (updateAvailable) {
+function factory (updateAvailable, extraState = {}) {
   return shallowMount(UpdateAvailableBanner, {
     global: {
       mocks: {
-        $store: { state: { updateAvailable } }
+        $store: { state: { updateAvailable, ...extraState } }
       }
     }
   })
@@ -29,6 +29,16 @@ describe('UpdateAvailableBanner', () => {
     expect(wrapper.find('.update-available-banner').exists()).toBe(true)
     expect(wrapper.text()).toContain('new version')
     expect(wrapper.find('button').text()).toContain('Refresh')
+  })
+
+  // Bug report (Matt, 2026-09-30): "should I push it? Should I not push
+  // it?" While the app is updating itself there's nothing to press.
+  it('says Updating, with no Refresh to press, while the app updates itself', async () => {
+    const wrapper = factory(true, { updateApplying: true })
+
+    expect(wrapper.text()).toContain('Updating')
+    expect(wrapper.find('button').text()).not.toContain('Refresh')
+    expect(wrapper.find('button').attributes('disabled')).toBeDefined()
   })
 
   it('only reloads when the user explicitly taps Refresh - never on its own', async () => {

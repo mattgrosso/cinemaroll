@@ -41,7 +41,8 @@ import RouteProgress from "./components/RouteProgress.vue";
 import SavedFlash from "./components/SavedFlash.vue";
 import { pickFallbackBanner } from "./assets/javascript/bannerFallback.js";
 import { flushStashedBugReports } from "./utils/bugReports.js";
-import { reloadForUpdate, isSafeMomentForReload, shouldAutoAttempt, markUpdateLanded, recordWorkerState } from "./utils/appUpdate.js";
+import { reloadForUpdate, isSafeMomentForReload, shouldAutoAttempt, markUpdateLanded, recordWorkerState, isFreshMoment, runUpdateCheck, QUIET_MS } from "./utils/appUpdate.js";
+import { fetchWithTimeout } from "./utils/networkHealth.js";
 import { refreshSubscriptionIfGranted } from "./utils/push.js";
 
 export default {
@@ -58,6 +59,10 @@ export default {
   data () {
     return {
       lastActivityAt: Date.now(),
+      // A real touch or keypress, as opposed to any activity (a scroll can be
+      // the page restoring its own position). Decides "right away" vs "wait
+      // for quiet" for an update (appUpdate.js isFreshMoment).
+      lastTouchAt: 0,
       lastBecameVisibleAt: Date.now(),
       deployedBundleSeen: null,
       autoUpdateTimer: null,
@@ -73,7 +78,7 @@ export default {
     // Auto-apply updates (bug report: "the user shouldn't have to take an
     // action... the banner could still be a fallback"). Immediately when
     // the update is spotted at a fresh moment (just launched/foregrounded —
-    // nothing is in progress yet), otherwise after ~25s of no interaction —
+    // nothing is in progress yet), otherwise after ~8s of no interaction —
     // and never while typing, mid-game, or in a modal (the July lesson:
     // an unconditional reload yanked the page out from under a backfill).
     '$store.state.updateAvailable' (available) {
@@ -143,19 +148,27 @@ export default {
         return;
       }
 
-      try {
-        const registration = await navigator.serviceWorker.getRegistration();
-        recordWorkerState(registration);
-        if (registration) {
-          await registration.update();
-          recordWorkerState(registration);
-        }
-      } catch {
-        // Best-effort - a failed check just means we try again on the next
-        // trigger rather than blocking anything the user is doing.
+      // An update already spotted but not applied (deferred on a weak
+      // connection, or the first try didn't land): coming back to the app is
+      // a fresh moment, so give it its second automatic try.
+      if (this.$store.state.updateAvailable && !this.$store.state.updateApplying && !this.autoUpdateTimer) {
+        this.armAutoUpdate();
       }
 
-      await this.checkDeployedBundle();
+      // Side by side, the worker's half capped (appUpdate.js runUpdateCheck):
+      // a failed or slow worker check just means we try again on the next
+      // trigger, and must never hold up spotting a new deploy.
+      await runUpdateCheck({
+        refreshWorker: async () => {
+          const registration = await navigator.serviceWorker.getRegistration();
+          recordWorkerState(registration);
+          if (registration) {
+            await registration.update();
+            recordWorkerState(registration);
+          }
+        },
+        checkBundle: () => this.checkDeployedBundle()
+      });
     },
     /**
      * Notices a new deploy by comparing bundle filenames, independent of any
@@ -186,7 +199,7 @@ export default {
       }
 
       try {
-        const response = await fetch(`${process.env.BASE_URL || '/'}index.html?updateCheck=${Date.now()}`, { cache: 'no-store' });
+        const response = await fetchWithTimeout(`${process.env.BASE_URL || '/'}index.html?updateCheck=${Date.now()}`, { cache: 'no-store' });
         if (!response.ok) {
           return;
         }
@@ -232,31 +245,42 @@ export default {
     handleOffline () {
       this.$store.commit('setIsOnline', false);
     },
-    noteActivity () {
+    noteActivity (event) {
       this.lastActivityAt = Date.now();
+      if (event?.type !== 'scroll') this.lastTouchAt = this.lastActivityAt;
+    },
+    async applyUpdate () {
+      // The banner reads this to say "Updating…" instead of offering a
+      // Refresh that would only get in the way.
+      this.$store.commit('setUpdateApplying', true);
+      const outcome = await reloadForUpdate({ target: this.deployedBundleSeen });
+      if (outcome === 'deferred') {
+        this.$store.commit('setUpdateApplying', false);
+        this.$store.commit('setUpdateDeferred', true);
+      }
     },
     armAutoUpdate () {
       const target = this.deployedBundleSeen || 'unknown';
-      if (!shouldAutoAttempt(target)) return; // once per version; banner remains
+      if (!shouldAutoAttempt(target)) return; // twice per version; then the banner
 
-      // Fresh moment (just launched or just foregrounded): nothing is in
-      // flight yet — apply right away.
-      const fresh = Date.now() - (this.lastBecameVisibleAt || 0) < 5000;
+      // Fresh moment (just launched or foregrounded, and not touched since):
+      // nothing is in flight yet — apply right away.
+      const fresh = isFreshMoment({ becameVisibleAt: this.lastBecameVisibleAt || 0, lastTouchAt: this.lastTouchAt });
       if (fresh && isSafeMomentForReload({ routePath: this.$route?.path || '' })) {
-        reloadForUpdate({ target: this.deployedBundleSeen });
+        this.applyUpdate();
         return;
       }
 
       // Otherwise: poll for a quiet stretch.
       if (this.autoUpdateTimer) clearInterval(this.autoUpdateTimer);
       this.autoUpdateTimer = setInterval(() => {
-        const quiet = Date.now() - this.lastActivityAt > 25000;
+        const quiet = Date.now() - this.lastActivityAt > QUIET_MS;
         if (quiet && isSafeMomentForReload({ routePath: this.$route?.path || '' })) {
           clearInterval(this.autoUpdateTimer);
           this.autoUpdateTimer = null;
-          reloadForUpdate({ target: this.deployedBundleSeen });
+          this.applyUpdate();
         }
-      }, 5000);
+      }, 2000);
     }
   },
   async mounted () {

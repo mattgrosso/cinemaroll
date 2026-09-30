@@ -77,7 +77,20 @@ export function markUpdateLanded (storage = window.localStorage) {
 // Resolves 'reloaded', 'hard', or 'deferred' - the last when a hard reload
 // was called for but the connection couldn't carry the new app, so the
 // running (cached) app stays put and the banner stays up.
-export async function reloadForUpdate ({
+// One update attempt at a time on this page. Bug report (Matt, 2026-09-30):
+// the notice still offered "Refresh" while the automatic update was already
+// under way, and a tap then counted as a SECOND attempt for the same version
+// - which means the slow hard reload. A call while one is running now joins
+// it instead.
+let attemptInFlight = null;
+
+export function reloadForUpdate (options = {}) {
+  if (attemptInFlight) return attemptInFlight;
+  attemptInFlight = runReloadForUpdate(options).finally(() => { attemptInFlight = null; });
+  return attemptInFlight;
+}
+
+async function runReloadForUpdate ({
   target = null,
   storage = window.localStorage,
   reload = () => window.location.reload(),
@@ -226,17 +239,57 @@ export function isSafeMomentForReload ({
   return true;
 }
 
-// One auto-attempt per detected target bundle, ever — if the reload doesn't
-// actually get us onto the new version (stuck worker, cache oddity), the
-// banner takes over rather than reloading in a loop.
+// Two auto-attempts per detected target bundle per session, then the banner
+// takes over rather than reloading in a loop. Bug report (Matt, 2026-09-30):
+// with only one, a first try that didn't land (a slow connection deferred
+// it, a check that came in late) left the notice sitting there for good.
+// The second try for the same version is a repeat as far as reloadForUpdate
+// is concerned, so it's the one that stops trusting the worker.
 const ATTEMPT_KEY = 'auto-update-attempted-for';
+export const AUTO_ATTEMPTS_PER_UPDATE = 2;
 
 export function shouldAutoAttempt (targetBundle, storage = window.sessionStorage) {
   try {
-    if (storage.getItem(ATTEMPT_KEY) === targetBundle) return false;
-    storage.setItem(ATTEMPT_KEY, targetBundle);
+    let previous = null;
+    try { previous = JSON.parse(storage.getItem(ATTEMPT_KEY)); } catch { previous = null; }
+    const count = previous?.target === targetBundle ? previous.count || 0 : 0;
+    if (count >= AUTO_ATTEMPTS_PER_UPDATE) return false;
+    storage.setItem(ATTEMPT_KEY, JSON.stringify({ target: targetBundle, count: count + 1 }));
     return true;
   } catch {
     return true; // storage unavailable: still better to try once than never
   }
+}
+
+// Apply right away, or wait for a quiet stretch? Bug report (Matt,
+// 2026-09-30): "that message used to flash for just an instant and then it
+// would always automatically refresh". It used to count as "right away" only
+// within 5 seconds of opening, so an update check that took longer than that
+// (one took 14 seconds) fell through to waiting for 25 untouched seconds.
+// Now: right away as long as nothing has been touched since the app came to
+// the front, however long the check took.
+export const QUIET_MS = 8000;
+
+export function isFreshMoment ({ now = Date.now(), becameVisibleAt = 0, lastTouchAt = 0 } = {}) {
+  if (now - becameVisibleAt < 5000) return true;
+  return lastTouchAt <= becameVisibleAt;
+}
+
+/**
+ * The update check. Asking the service worker to look for a new version
+ * and comparing the deployed bundle run side by side; the worker's half is
+ * capped. They used to run one after the other, with no cap, so a slow
+ * worker download held up noticing the update at all.
+ */
+export async function runUpdateCheck ({
+  refreshWorker,
+  checkBundle,
+  workerTimeoutMs = 5000,
+  sleep = defaultSleep
+}) {
+  const worker = Promise.race([
+    Promise.resolve().then(refreshWorker).catch(() => {}),
+    sleep(workerTimeoutMs)
+  ]);
+  await Promise.all([worker, Promise.resolve().then(checkBundle).catch(() => {})]);
 }

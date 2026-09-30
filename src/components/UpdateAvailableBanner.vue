@@ -8,10 +8,10 @@
     <span class="prompt-body">
       <span class="prompt-label">App update</span>
       <p class="prompt-text">
-        {{ updating ? 'Updating Cinema Roll…' : (deferred ? 'A new version of Cinema Roll is waiting for a better connection. This one keeps working.' : 'A new version of Cinema Roll is ready.') }}
+        {{ isUpdating ? 'Updating Cinema Roll…' : (isDeferred ? 'A new version of Cinema Roll is waiting for a better connection. This one keeps working.' : 'A new version of Cinema Roll is ready.') }}
       </p>
-      <button class="prompt-action prompt-action-app" :disabled="updating" @click.stop="reload">
-        {{ updating ? 'One moment' : (deferred ? 'Try again' : 'Refresh') }}
+      <button class="prompt-action prompt-action-app" :disabled="isUpdating" @click.stop="reload">
+        {{ isUpdating ? 'One moment' : (isDeferred ? 'Try again' : 'Refresh') }}
       </button>
     </span>
   </div>
@@ -41,9 +41,20 @@ export default {
       deferred: false
     };
   },
+  computed: {
+    // Also true while App.vue applies the update on its own (bug report
+    // 2026-09-30: a Refresh button during the automatic update left Matt
+    // wondering whether to tap it, and a tap only made it slower).
+    isUpdating () {
+      return this.updating || Boolean(this.$store.state.updateApplying);
+    },
+    isDeferred () {
+      return this.deferred || Boolean(this.$store.state.updateDeferred);
+    }
+  },
   methods: {
     async reload () {
-      if (this.updating) return;
+      if (this.isUpdating) return;
       this.updating = true;
       // The target lets a second tap for the SAME update escalate to a hard
       // reload instead of looping (appUpdate.js, bug report 2026-09-21).

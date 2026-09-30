@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { isSafeMomentForReload, shouldAutoAttempt, reloadForUpdate, hardReload, waitForNewWorker, markUpdateLanded, newAppIsReachable } from '@/utils/appUpdate.js'
+import { isSafeMomentForReload, shouldAutoAttempt, reloadForUpdate, hardReload, waitForNewWorker, markUpdateLanded, newAppIsReachable, isFreshMoment, runUpdateCheck } from '@/utils/appUpdate.js'
 
 // Auto-update ships reloads only at provably quiet moments (bug report:
 // "the user shouldn't have to take an action" — but the July lesson stands:
@@ -35,11 +35,22 @@ describe('shouldAutoAttempt', () => {
     return { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => map.set(k, String(v)) }
   }
 
-  it('attempts once per target bundle, then defers to the banner', () => {
+  // Bug report (Matt, 2026-09-30): one try per version meant a first try
+  // that didn't land left the notice sitting there for good.
+  it('attempts twice per target bundle, then defers to the banner', () => {
     const storage = memoryStorage()
     expect(shouldAutoAttempt('app.abc.js', storage)).toBe(true)
+    expect(shouldAutoAttempt('app.abc.js', storage)).toBe(true) // a second try
     expect(shouldAutoAttempt('app.abc.js', storage)).toBe(false) // no reload loop
-    expect(shouldAutoAttempt('app.def.js', storage)).toBe(true) // a NEWER deploy gets its own attempt
+    expect(shouldAutoAttempt('app.def.js', storage)).toBe(true) // a NEWER deploy gets its own attempts
+  })
+
+  it('reads the old one-string format as one attempt already made', () => {
+    const storage = memoryStorage()
+    storage.setItem('auto-update-attempted-for', 'app.abc.js')
+    expect(shouldAutoAttempt('app.abc.js', storage)).toBe(true)
+    expect(shouldAutoAttempt('app.abc.js', storage)).toBe(true)
+    expect(shouldAutoAttempt('app.abc.js', storage)).toBe(false)
   })
 
   it('still attempts when storage is unavailable', () => {
@@ -236,5 +247,62 @@ describe('hardReload', () => {
     const replace = vi.fn()
     await hardReload({ cacheStorage: null, replace, href: () => 'https://www.cinemaroll.org/' })
     expect(replace).toHaveBeenCalledTimes(1)
+  })
+})
+
+// Bug report (Matt, 2026-09-30): "that message used to flash for just an
+// instant and then it would always automatically refresh... now I feel like
+// sometimes I'm sitting there waiting."
+describe('isFreshMoment', () => {
+  it('is fresh just after opening, whatever the timing', () => {
+    expect(isFreshMoment({ now: 3000, becameVisibleAt: 0, lastTouchAt: 2000 })).toBe(true)
+  })
+
+  it('stays fresh past 5 seconds when nothing has been touched since opening (a slow check)', () => {
+    expect(isFreshMoment({ now: 14000, becameVisibleAt: 0, lastTouchAt: 0 })).toBe(true)
+  })
+
+  it('is not fresh once the user has touched the app since opening', () => {
+    expect(isFreshMoment({ now: 14000, becameVisibleAt: 0, lastTouchAt: 9000 })).toBe(false)
+  })
+})
+
+describe('runUpdateCheck', () => {
+  it('compares the deployed bundle without waiting for the worker check', async () => {
+    let checked = false
+    const refreshWorker = () => new Promise(() => {}) // a worker download that never finishes
+    const checkBundle = vi.fn(async () => { checked = true })
+    const done = runUpdateCheck({ refreshWorker, checkBundle, sleep: () => new Promise((resolve) => setTimeout(resolve, 20)) })
+    await Promise.resolve(); await Promise.resolve()
+    expect(checked).toBe(true)
+    await done // and the whole check still finishes, capped
+  })
+
+  it('a failing worker check never stops the bundle comparison', async () => {
+    const checkBundle = vi.fn(async () => {})
+    await runUpdateCheck({ refreshWorker: async () => { throw new Error('boom') }, checkBundle })
+    expect(checkBundle).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('reloadForUpdate while an attempt is already running', () => {
+  it('a tap during the automatic update joins it instead of forcing a hard reload', async () => {
+    const map = new Map()
+    const storage = { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => map.set(k, String(v)), removeItem: (k) => map.delete(k) }
+    let finishWait
+    const h = {
+      storage,
+      reload: vi.fn(),
+      hard: vi.fn(),
+      wait: vi.fn(() => new Promise((resolve) => { finishWait = resolve })),
+      canFetchNewApp: vi.fn(async () => true)
+    }
+    const automatic = reloadForUpdate({ target: 'js/app.new.js', ...h })
+    const tapped = reloadForUpdate({ target: 'js/app.new.js', ...h })
+    finishWait('settled')
+    expect(await automatic).toBe('reloaded')
+    expect(await tapped).toBe('reloaded')
+    expect(h.reload).toHaveBeenCalledTimes(1)
+    expect(h.hard).not.toHaveBeenCalled()
   })
 })

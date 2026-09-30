@@ -515,6 +515,11 @@ export default createStore({
     // reload path can tell a second attempt at the SAME update from a new
     // one (appUpdate.js).
     updateTargetBundle: null,
+    // App.vue is applying the update on its own right now, or tried and the
+    // connection couldn't carry it; the banner shows these instead of a
+    // Refresh button (UpdateAvailableBanner.vue).
+    updateApplying: false,
+    updateDeferred: false,
     // Bumped when the service worker reports a new worker; App.vue watches
     // it and runs the bundle comparison (registerServiceWorker.js).
     updateCheckRequests: 0,
@@ -944,6 +949,12 @@ export default createStore({
     },
     setUpdateTargetBundle (state, value) {
       state.updateTargetBundle = value;
+    },
+    setUpdateApplying (state, value) {
+      state.updateApplying = value;
+    },
+    setUpdateDeferred (state, value) {
+      state.updateDeferred = value;
     },
     requestUpdateCheck (state) {
       state.updateCheckRequests = (state.updateCheckRequests || 0) + 1;

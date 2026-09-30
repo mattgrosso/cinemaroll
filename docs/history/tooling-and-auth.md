@@ -327,3 +327,27 @@ to read it next time.
 Tests: `appUpdate.test.js` (escalation on repeat, reset on a newer deploy and on
 landing, stuck → hard, no target → never escalates, hardReload keeps the poster
 cache and preserves the hash).
+
+## The update got slow (2026-09-30)
+
+Matt: *"that message used to flash for just an instant and then it would always
+automatically refresh... now I feel like sometimes I'm sitting there waiting. Should
+I push it? Should I not push it?"* His report showed the worker check finishing 14s
+after launch. Four slow spots, all fixed in `appUpdate.js` + `App.vue`:
+
+- **The check was serial.** `registration.update()` (uncapped) ran before the bundle
+  comparison, so a slow worker download delayed even noticing the deploy.
+  `runUpdateCheck` runs both side by side, worker half capped at 5s; the
+  `index.html` fetch goes through `fetchWithTimeout`.
+- **"Right away" meant "within 5s of opening".** A check slower than that fell
+  through to a 25s quiet wait. `isFreshMoment` now also counts any moment with no
+  touch since the app came to the front (`lastTouchAt` ignores `scroll`, which the
+  page can fire by itself). The quiet wait is 8s (`QUIET_MS`), polled every 2s.
+- **One automatic try per session per version.** A deferred or missed first try left
+  the notice up for good. `shouldAutoAttempt` now allows two (the second is a repeat
+  to `reloadForUpdate`, so it's the one that stops trusting the worker), and
+  foregrounding with an unapplied update re-arms it.
+- **The notice offered Refresh while the app was already updating**, and a tap was a
+  second attempt — the hard reload. `state.updateApplying` makes the card say
+  "Updating…" with the button disabled, and `reloadForUpdate` joins an attempt
+  already in flight instead of starting another.
