@@ -411,6 +411,29 @@ sometimes it's in the title so let's not duplicate"). `lookupFilm` in `posterLoo
 `titleWithYear` appends " (year)" unless the title already carries any four-digit year.
 The lookup now runs for every card lacking a year, not just those lacking a poster.
 
+**Anyone's theaters** (2026-09-30: "we should figure out how to get this configured so that
+other people could set it up for their own local theaters … give a zip code … present them with
+a bunch of theaters, and then they would have to rank them"). `ShowtimesSetup.vue` at
+`/showtimes/theaters` (a "Your theaters" pill on the screen; a "Choose theaters" card when there's
+no board). The push Lambda's `POST /theaters/near` turns a zip into a town (api.zippopotam.us)
+and the town into CinemaClock's `/<town>-<st>/movie-theaters` page, parsed by
+`cinemaclockCityTheaters` (nearest first, CLOSED dropped, `films: 0` = CinemaClock carries no
+showtimes, offered but not addable). A small town has no page (301 to the index) and the screen
+asks for "City, ST". The ranked list lives at `<account>/theaters/follow` = { zip, place,
+theaters: [{ key, name }] }, max 12 (`followedTheaters`). A key is a CinemaClock slug, OR one of
+Matt's `THEATERS` via its `cinemaclock` alias (so a DC friend picking Bryant Street gets the
+Alamo feed; AFI and the Miracle are `films: 0` on CinemaClock and only work through the alias).
+The sweep fetches every followed theater ONCE, then runs `notifyAccountListings` per account in
+that account's order; Matt with no `follow` node still follows `THEATERS`. Generic theaters'
+links go to a Google "<film> <theater> showtimes" search (never CinemaClock). Saving calls
+`POST /theaters/refresh`, which builds that account's board at once (`announce: false`: seeds new
+theaters silently, sends nothing, deletes seen-state of theaters taken off the list). Seeded rows
+carry `z: 1` and the board reports them as `firstSeenAt: 0`, so a first board is never badged
+"new". The Alamo Shortcut link is Matt's only (`theaterHref(…, { alamoApp })`). Verified as the
+tester 2026-09-30 with 78704 (v1.120.22): save → board in ~8s. Known weak spot: CinemaClock has
+no art, and the TMDB title lookup can pick the wrong film (AFS's "The Devils" got "The Devil's
+Mouth").
+
 **Testing it signed in** (2026-09-28, Matt: "you should be able to use the test user to test
 this"). The sweep mirrors the board to `cinemaroll-tester-example-com/theaters/board` on every
 run, and `scripts/copy-theater-board.mjs` does it on demand (Admin SDK; also prints poster
