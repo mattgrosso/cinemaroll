@@ -389,7 +389,7 @@ export default {
 .su-near { margin-top: 0.8rem; }
 
 .su-save {
-  background: linear-gradient(to top, #000 70%, rgba(0, 0, 0, 0));
+  background: linear-gradient(to top, #212529 70%, rgba(33, 37, 41, 0));
   bottom: 0;
   left: 0;
   padding: 1.2rem 1rem calc(0.8rem + env(safe-area-inset-bottom));
