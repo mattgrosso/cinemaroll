@@ -152,9 +152,11 @@
 
         </div>
 
-        <!-- "Best since" as a sentence (2026-09-30: "people find it confusing").
-             lastHigherRatedMovie is the most recently RELEASED earlier film you
-             rated higher, so this film is the best thing released since it. -->
+        <!-- "Best in <span>" leads with the time span (2026-09-30, second try:
+             "on the date this movie was released, it was the best movie that
+             had come out for six weeks"). lastHigherRatedMovie is the most
+             recently RELEASED earlier film you rated higher; the poster is it.
+             "Rates higher", not "beats": a tie doesn't end the run. -->
         <button v-if="lastHigherRatedMovie" type="button" class="best-since-row" @click="navigateToMovie(lastHigherRatedMovie.movie.id)">
           <img
             v-if="getPosterPath(lastHigherRatedMovie)"
@@ -162,10 +164,9 @@
             :alt="lastHigherRatedMovie.movie.title"
             class="best-since-thumb">
           <span class="best-since-text">
-            <span class="best-since-label">Best since</span>
-            The highest you've rated anything released since
-            <strong>{{ lastHigherRatedMovie.movie.title }}</strong>,
-            {{ formatTimeDifference(lastHigherRatedMovie.movie.release_date, movie.release_date) }} earlier.
+            <span class="best-since-label">Best in {{ bestSinceSpan }}</span>
+            Nothing released in the {{ bestSinceSpan }} before it rates higher.
+            Last one that did: <strong>{{ lastHigherRatedMovie.movie.title }}</strong>.
           </span>
           <i class="bi bi-chevron-right best-since-chevron"></i>
         </button>
@@ -1116,6 +1117,11 @@ export default {
 
       // Return the most recent movie (first in the sorted array) that has a higher rating
       return earlierMovies.length > 0 ? earlierMovies[0] : null;
+    },
+
+    bestSinceSpan () {
+      if (!this.lastHigherRatedMovie) return '';
+      return this.formatTimeDifference(this.lastHigherRatedMovie.movie.release_date, this.movie.release_date);
     },
   },
   methods: {

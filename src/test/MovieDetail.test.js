@@ -570,3 +570,55 @@ describe('MovieDetail — rank rides only with the precise score', () => {
     expect(wrapper.find('.fact-score').text().toLowerCase()).not.toContain('your score')
   })
 })
+
+describe('MovieDetail — Best in <span>', () => {
+  // Bug report 2026-09-30 (second try): "on the date that this movie was
+  // released, it was the best movie that had come out for six weeks". The
+  // time span leads; the older film is named as the one that ended the run.
+  function mountWith (library) {
+    const store = {
+      state: { movieLog: {}, settings: { tags: { 'viewing-tags': {} } }, academyAwardWinners: {} },
+      getters: { allMoviesAsArray: [], allMediaAsArray: library, allMediaSortedByRating: [], customLists: [] },
+      commit: vi.fn(),
+      dispatch: vi.fn()
+    }
+    return shallowMount(MovieDetail, {
+      global: {
+        mocks: { $store: store, $route: { params: { tmdbId: '42' }, query: {} }, $router: { push: vi.fn() } },
+        stubs: { ToggleableRating: true, Modal: true, DetailSection: { template: '<section class="detail-section-stub"><slot name="actions"/><slot/></section>' } }
+      }
+    })
+  }
+  const film = (id, title, release_date, calculatedTotal) => makeResult({
+    dbKey: `k${id}`,
+    movie: { id, title, release_date },
+    ratings: [{ calculatedTotal, normalizedRating: calculatedTotal, date: Date.now() }]
+  })
+
+  it('leads with the span and names the last film released that rates higher', async () => {
+    const current = film(42, 'Test Movie', '2019-05-20', 8.5)
+    const library = [
+      current,
+      film(1, 'Older Better', '2019-04-08', 9.0), // six weeks earlier, higher
+      film(2, 'Newer Worse', '2019-05-01', 7.0), // in the run, lower
+      film(3, 'Tied', '2019-05-10', 8.5), // a tie doesn't end the run
+      film(4, 'Much Older Better', '2010-01-01', 9.5)
+    ]
+    const wrapper = mountWith(library)
+    await wrapper.setData({ result: current, movie: current.movie })
+
+    const row = wrapper.find('.best-since-row')
+    expect(row.find('.best-since-label').text()).toBe('Best in 6 weeks')
+    const text = row.find('.best-since-text').text().replace(/\s+/g, ' ')
+    expect(text).toContain('Nothing released in the 6 weeks before it rates higher.')
+    expect(text).toContain('Last one that did: Older Better.')
+    expect(text).not.toContain('Best since')
+  })
+
+  it('shows nothing when no earlier film rates higher', async () => {
+    const current = film(42, 'Test Movie', '2019-05-20', 8.5)
+    const wrapper = mountWith([current, film(2, 'Worse', '2019-05-01', 7.0)])
+    await wrapper.setData({ result: current, movie: current.movie })
+    expect(wrapper.find('.best-since-row').exists()).toBe(false)
+  })
+})

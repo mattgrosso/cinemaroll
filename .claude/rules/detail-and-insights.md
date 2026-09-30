@@ -36,10 +36,13 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
   pass, same night: the facts strip is THREE across (year, runtime, your score — the
   Letterboxd crowd tile was "too prominent" and lives as the Letterboxd row's summary
   when there is no review), the three actions are tiles in the same style, the Ratings
-  accordion is dark, and **Best since is a sentence** — "The highest you've rated
-  anything released since <film>, N earlier" — because the orphan poster confused
-  people (`lastHigherRatedMovie` is by RELEASE date, so that sentence is the exact
-  meaning). The score tile has no "your score" label (2026-09-30): `ToggleableRating`'s
+  accordion is dark, and **Best since leads with the span**: label "Best in 6 weeks",
+  then "Nothing released in the 6 weeks before it rates higher. Last one that did:
+  <film>." (`bestSinceSpan`). The orphan poster confused people, and a first sentence
+  ("The highest you've rated anything released since <film>, N earlier") buried the
+  span at the end and was still unclear (report, 2026-09-30). `lastHigherRatedMovie` is
+  by RELEASE date and strictly higher, so a tie doesn't end the run — say "rates
+  higher", never "beats". The score tile has no "your score" label (2026-09-30): `ToggleableRating`'s
   `stacked` prop puts the rank / "(normalized rating)" on a second line under the
   number, with an empty line of the same height under the stars (and for an unranked
   film) so nothing jumps while tapping. The details popup doesn't pass `stacked`. Band titles are white sentence-case headings so they can't be mistaken for
