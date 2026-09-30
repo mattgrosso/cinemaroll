@@ -25,12 +25,29 @@ const SHORT_UNITS = { minute: 'm', hour: 'h', day: 'd' };
  * `timestamp` is epoch milliseconds. Returns null for anything unusable, so
  * callers render nothing rather than "Invalid Date" or "56 years ago".
  * `{ short: true }` gives the compact form ("3h", "5d") for tight spaces.
+ * `{ dayOnly: true }` is for a friend's end-of-day copy (2026-09-30), whose
+ * times are noon UTC of the day they watched: counted in calendar days,
+ * never hours, so the time of day can't be read back out.
  */
-export function timeAgo (timestamp, now = Date.now(), { short = false } = {}) {
+export function timeAgo (timestamp, now = Date.now(), { short = false, dayOnly = false } = {}) {
   if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
 
-  const elapsed = now - timestamp;
   const ago = (count, noun) => (short ? `${count}${SHORT_UNITS[noun]}` : plural(count, noun));
+
+  if (dayOnly) {
+    const watched = new Date(timestamp);
+    const today = new Date(now);
+    const days = Math.max(0, Math.round((
+      Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) -
+      Date.UTC(watched.getUTCFullYear(), watched.getUTCMonth(), watched.getUTCDate())
+    ) / DAY));
+    if (days === 0) return 'today';
+    if (days === 1) return 'yesterday';
+    if (days < DATE_AFTER_DAYS) return ago(days, 'day');
+    return dateLabel(timestamp, now, short, 'UTC');
+  }
+
+  const elapsed = now - timestamp;
 
   // A clock skewed a little ahead shouldn't read as a negative age.
   if (elapsed < MINUTE) return short ? 'now' : 'just now';
@@ -41,12 +58,17 @@ export function timeAgo (timestamp, now = Date.now(), { short = false } = {}) {
   if (days === 1) return 'yesterday';
   if (days < DATE_AFTER_DAYS) return ago(days, 'day');
 
-  const date = new Date(timestamp);
-  const sameYear = date.getFullYear() === new Date(now).getFullYear();
+  return dateLabel(timestamp, now, short);
+}
 
-  if (sameYear) return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+function dateLabel (timestamp, now, short, timeZone = undefined) {
+  const date = new Date(timestamp);
+  const year = timeZone === 'UTC' ? date.getUTCFullYear() : date.getFullYear();
+  const sameYear = year === new Date(now).getFullYear();
+
+  if (sameYear) return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone });
 
   return date.toLocaleDateString('en-US', short
-    ? { month: 'numeric', day: 'numeric', year: '2-digit' }
-    : { month: 'short', day: 'numeric', year: 'numeric' });
+    ? { month: 'numeric', day: 'numeric', year: '2-digit', timeZone }
+    : { month: 'short', day: 'numeric', year: 'numeric', timeZone });
 }

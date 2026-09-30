@@ -18,7 +18,7 @@ function myMovie (id, title, rating) {
   };
 }
 
-function factory ({ profiles = {}, myEntries = [] } = {}) {
+function factory ({ profiles = {}, myEntries = [], edges = {} } = {}) {
   return shallowMount(FilmClubScreen, {
     global: {
       stubs: { SettingsSection: false, BackLink: true },
@@ -30,6 +30,7 @@ function factory ({ profiles = {}, myEntries = [] } = {}) {
             federatedDirectoryLoading: false,
             socialDirectory: {},
             socialRequests: {},
+            socialEdges: edges,
             clubInbox: {}
           },
           getters: {
@@ -423,5 +424,38 @@ describe('FilmClubScreen — "Has anybody seen…"', () => {
     wrapper.vm.clearSeenPick();
     expect(wrapper.vm.seenPick).toBe(null);
     expect(wrapper.vm.seenSearch).toBe('');
+  });
+
+  // 2026-09-30: coworkers in the club, "I would rather not see exactly when I
+  // watch a movie". Each friend row says when that friend finds out.
+  describe('right away / end of day', () => {
+    it('shows each friend\'s setting from my own edge to them', () => {
+      const wrapper = factory({ profiles: PROFILES, edges: { me: { brian: 'day' }, brian: { me: true } } });
+      const on = wrapper.find('.cs-timing-toggle .is-on');
+      expect(on.text()).toBe('End of day');
+      expect(factory({ profiles: PROFILES, edges: { me: { brian: true } } }).find('.cs-timing-toggle .is-on').text()).toBe('Right away');
+    });
+
+    it('switches a friend without opening their page', async () => {
+      const wrapper = factory({ profiles: PROFILES, edges: { me: { brian: true } } });
+      const [, endOfDay] = wrapper.findAll('.cs-timing-toggle button');
+      await endOfDay.trigger('click');
+      expect(wrapper.vm.$store.dispatch).toHaveBeenCalledWith('setFriendTiming', { friendKey: 'brian', timing: 'day' });
+      expect(wrapper.vm.$router.push).not.toHaveBeenCalled();
+    });
+
+    it('dates an end-of-day friend\'s films instead of timing them', () => {
+      const wrapper = factory({ profiles: PROFILES });
+      // Half past midnight: yesterday's noon-UTC stamp is only hours old, so
+      // an hours count would print a time-shaped "16h".
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(2026, 8, 30, 0, 30));
+      try {
+        expect(wrapper.vm.feedWhen({ at: Date.UTC(2026, 8, 29, 12), d: 1 })).toBe('yesterday');
+        expect(wrapper.vm.watchedAgo(Date.UTC(2026, 8, 29, 12), true)).toBe('yesterday');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

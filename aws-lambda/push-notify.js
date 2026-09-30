@@ -33,6 +33,7 @@ const crypto = require('crypto');
 const webpush = require('web-push');
 const {
   dueFromDigest, nextBaseline, shouldSend, composeMessage, friendLogBody, EMPTY_BASELINE,
+  DAY_FRIEND, localDayStart, dayProfileFrom, dayFriendsByOwner, dayCopyDue, dayNews, composeDayMessage,
   gamesDue, shouldSendGames, composeGamesMessage,
   externalWatches, externalLogsDue,
   signupsDue, composeSignupMessages,
@@ -428,6 +429,12 @@ const runSweep = async () => {
     }
   }
 
+  try {
+    results.push(...await releaseDayProfiles(now));
+  } catch (error) {
+    console.error('End-of-day copies failed:', error.message);
+  }
+
   for (const topKey of accounts) {
     try {
       const push = await dbGet(`${topKey}/push`);
@@ -801,8 +808,9 @@ const notifyFriendsOfLog = async (myKey, { tmdbId, title, score }) => {
   ]);
 
   const name = myProfileName || myDirectory || 'A friend';
+  // End-of-day friends hear after midnight instead (releaseDayProfiles).
   const mutuals = Object.keys(edges?.[myKey] || {}).filter(
-    (key) => edges?.[key]?.[myKey] && !QA_ACCOUNT_KEYS.has(key) && key !== myKey
+    (key) => edges?.[key]?.[myKey] && edges[myKey][key] !== DAY_FRIEND && !QA_ACCOUNT_KEYS.has(key) && key !== myKey
   );
 
   const navigate = tmdbId ? `/movie/${tmdbId}` : '/';
@@ -842,6 +850,84 @@ const notifyFriendsOfLog = async (myKey, { tmdbId, title, score }) => {
     }
   }));
   return { notified };
+};
+
+// --- End-of-day friends -----------------------------------------------------
+//
+// "I would rather not see exactly when I watch a movie" (Matt, 2026-09-30).
+// A friend on an owner's 'day' edge reads social/dayProfiles/<owner> (the
+// rules keep them out of the live profile). Each sweep rebuilds that copy
+// when the owner's midnight has passed or they republished, and tells their
+// end-of-day friends, in one push, about anything the new copy newly shows.
+// Everything about WHAT the copy holds is dayProfileFrom's, tested.
+const releaseDayProfiles = async (now) => {
+  const [edges, existing] = await Promise.all([
+    dbGet('social/friends'),
+    dbGet('social/dayProfiles', 'shallow=true')
+  ]);
+  const owners = dayFriendsByOwner(edges);
+
+  // A copy nobody may read any more (the last end-of-day friend was switched
+  // back, or unfriended) is deleted rather than left to go stale.
+  await Promise.all(Object.keys(existing || {}).filter((owner) => !owners[owner])
+    .map((owner) => dbSet(`social/dayProfiles/${owner}`, null)));
+
+  const results = [];
+  for (const [owner, friends] of Object.entries(owners)) {
+    try {
+      const [tzPref, source, release] = await Promise.all([
+        dbGet(`${owner}/push/prefs/tz`),
+        dbGet(`social/profiles/${owner}/updatedAt`),
+        dbGet(`social/dayProfiles/${owner}/release`)
+      ]);
+      if (!source) {
+        // Sharing turned off: the copy goes with the profile.
+        if (release) await dbSet(`social/dayProfiles/${owner}`, null);
+        continue;
+      }
+      const tz = typeof tzPref === 'string' && tzPref ? tzPref : 'America/New_York';
+      const cutoff = localDayStart(tz, now);
+      const due = dayCopyDue({ release, cutoff, source });
+      if (!due.rebuild) continue;
+
+      const [live, previousRecent] = await Promise.all([
+        dbGet(`social/profiles/${owner}`),
+        due.announce ? dbGet(`social/dayProfiles/${owner}/recent`) : null
+      ]);
+      const copy = dayProfileFrom(live, { cutoff, tz });
+      if (!copy) continue;
+      await dbSet(`social/dayProfiles/${owner}`, copy);
+      if (!due.announce) continue;
+
+      const news = dayNews(previousRecent, copy.recent, { since: cutoff - 7 * 24 * 60 * 60 * 1000 });
+      const message = composeDayMessage(live.name || 'A friend', news);
+      if (!message) continue;
+
+      let delivered = 0;
+      await Promise.all(friends.filter((key) => !QA_ACCOUNT_KEYS.has(key)).map(async (friendKey) => {
+        try {
+          const push = await dbGet(`${friendKey}/push`);
+          if (!push || !push.subscriptions) return;
+          const prefs = push.prefs || {};
+          if (prefs.enabled === false || prefs.friendLogs === false) return;
+          const chores = dueFromDigest(push.digest, prefs, now);
+          const appBadge = chores.stickinessCount + (chores.tiebreak ? 1 : 0) + chores.awardYears.length + 1;
+          delivered += await sendToAccount(friendKey, push.subscriptions, buildPayload({
+            ...message,
+            tag: `friend-day-${owner}-${cutoff}`,
+            appBadge
+          }));
+        } catch (error) {
+          console.error(`End-of-day push to ${friendKey} failed:`, error.message);
+        }
+      }));
+      console.log(`End-of-day copy for ${owner}: ${news.length} new, ${delivered} sent`);
+      if (delivered) results.push({ topKey: owner, delivered, reason: 'friend-day' });
+    } catch (error) {
+      console.error(`End-of-day copy for ${owner} failed:`, error.message);
+    }
+  }
+  return results;
 };
 
 // --- Finding theaters -------------------------------------------------------

@@ -394,6 +394,213 @@ function friendLogBody (scoreLine, prefs) {
   return prefs && prefs.friendLogScores === false ? quiet : scoreLine;
 }
 
+// --- End-of-day friends -----------------------------------------------------
+//
+// Matt, 2026-09-30: some of his Film Club are coworkers, and "I would rather
+// not see exactly when I watch a movie, cause sometimes I watch it during the
+// day". Each outgoing friend edge `social/friends/<owner>/<friend>` is `true`
+// (right away) or 'day' (end of day). The database rules keep a 'day' friend
+// out of `social/profiles/<owner>`; they read `social/dayProfiles/<owner>`
+// instead — the copy built here, holding nothing watched since the owner's
+// last midnight and no time of day on anything. Their friend-log pushes skip
+// the instant fan-out and arrive as one push after midnight.
+
+const DAY_FRIEND = 'day';
+
+/** How far `tz`'s wall clock is ahead of UTC at `at`, in ms. */
+function tzOffsetMs (tz, at) {
+  try {
+    const parts = {};
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    }).formatToParts(new Date(at)).forEach((part) => { parts[part.type] = part.value; });
+    const wall = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+      Number(parts.hour) % 24, Number(parts.minute), Number(parts.second));
+    return wall - Math.floor(at / 1000) * 1000;
+  } catch {
+    return 0;
+  }
+}
+
+/** Epoch ms of the local midnight that starts `at`'s day in `tz`. */
+function localDayStart (tz, at) {
+  const [y, m, d] = localDateKey(tz, at).split('-').map(Number);
+  const wallMidnight = Date.UTC(y, m - 1, d);
+  // Twice, so a DST change between midnight and `at` can't skew it.
+  return wallMidnight - tzOffsetMs(tz, wallMidnight - tzOffsetMs(tz, at));
+}
+
+/** The midnight after `at` — when an end-of-day friend first sees it. */
+function nextLocalMidnight (tz, at) {
+  return localDayStart(tz, localDayStart(tz, at) + 26 * 60 * 60 * 1000);
+}
+
+// A viewing's time with the time of day taken out: noon UTC of the OWNER's
+// local date, which is the same calendar date for any reader between UTC-11
+// and UTC+11. Readers treat an item marked `d` as a date, never "3h ago".
+function dayStamp (tz, at) {
+  const [y, m, d] = localDateKey(tz, at).split('-').map(Number);
+  return Date.UTC(y, m - 1, d, 12);
+}
+
+/**
+ * The end-of-day copy of a published profile (social.js buildSocialProfile's
+ * shape). `cutoff` is the owner's most recent midnight: anything watched at
+ * or after it is withheld — a rewatch falls back to its previous viewing, a
+ * first watch disappears (from the feed, the ratings map, the top shelf,
+ * the crown and the counts). Every remaining time becomes a date.
+ */
+function dayProfileFrom (profile, { cutoff, tz }) {
+  if (!profile) return null;
+  const hidden = (at) => Number(at) >= cutoff;
+  const dated = (views) => (Array.isArray(views) ? views : [])
+    .filter((view) => view && Number.isFinite(Number(view.at)));
+
+  // The last viewing before midnight, from the ratings map's per-viewing
+  // list (only a ratings sharer publishes one).
+  const earlierViewing = (id) => {
+    const kept = dated(profile.ratings?.[String(id)]?.v).filter((view) => !hidden(view.at));
+    return kept.sort((a, b) => b.at - a.at)[0] || null;
+  };
+
+  const withheld = new Set();   // ids that exist only because of today
+  let withheldViewings = 0;
+
+  let ratings;
+  if (profile.ratings) {
+    ratings = {};
+    Object.entries(profile.ratings).forEach(([id, row]) => {
+      if (!row) return;
+      const views = dated(row.v);
+      const kept = views.filter((view) => !hidden(view.at));
+      withheldViewings += views.length - kept.length;
+      let at = row.at;
+      if (hidden(at)) {
+        if (!kept.length) { withheld.add(String(id)); return; }
+        at = Math.max(...kept.map((view) => Number(view.at)));
+      }
+      const next = { ...row, at: Number.isFinite(Number(at)) ? dayStamp(tz, at) : at };
+      if (row.v) next.v = kept.map((view) => ({ ...view, at: dayStamp(tz, view.at) }));
+      ratings[id] = next;
+    });
+  }
+
+  const recent = [];
+  (profile.recent || []).forEach((item) => {
+    if (!item || !Number.isFinite(Number(item.at))) return;
+    let at = item.at;
+    let medium = item.m;
+    if (hidden(at)) {
+      const earlier = earlierViewing(item.id);
+      if (!earlier) {
+        if (!ratings) { withheld.add(String(item.id)); withheldViewings += 1; }
+        return;
+      }
+      at = earlier.at;
+      medium = earlier.m;
+    }
+    const { m, ...rest } = item;
+    recent.push({
+      ...rest,
+      ...(medium ? { m: medium } : {}),
+      at: dayStamp(tz, at),
+      d: 1,
+      // When an end-of-day reader first saw it: the Film Club badge counts
+      // from here, since `at` (a date) would read as already seen.
+      pub: nextLocalMidnight(tz, at)
+    });
+  });
+  recent.sort((a, b) => b.at - a.at);
+
+  const counts = profile.counts ? {
+    titles: ratings ? Object.keys(ratings).length : Math.max(0, (profile.counts.titles || 0) - withheld.size),
+    viewings: Math.max(0, (profile.counts.viewings || 0) - withheldViewings)
+  } : profile.counts;
+
+  const withheldTitles = new Set();
+  (profile.recent || []).forEach((item) => {
+    if (withheld.has(String(item?.id))) withheldTitles.add(`${item.t}|${item.p}`);
+  });
+  const crown = profile.crown && withheldTitles.has(`${profile.crown.t}|${profile.crown.p}`) ? null : (profile.crown || null);
+
+  const copy = {
+    ...profile,
+    updatedAt: Math.min(Number(profile.updatedAt) || cutoff, cutoff),
+    counts,
+    topShelf: (profile.topShelf || []).filter((item) => !withheld.has(String(item?.id))),
+    recent,
+    crown,
+    dayOnly: true,
+    release: { cutoff, source: profile.updatedAt || null }
+  };
+  if (ratings) copy.ratings = ratings;
+  else delete copy.ratings;
+  return copy;
+}
+
+/**
+ * Every owner with at least one MUTUAL end-of-day friend:
+ * { [ownerKey]: [friendKey, ...] }. A one-sided 'day' edge is a pending
+ * request, which grants nothing to hide from.
+ */
+function dayFriendsByOwner (edges) {
+  const owners = {};
+  Object.entries(edges || {}).forEach(([owner, outgoing]) => {
+    const friends = Object.keys(outgoing || {}).filter((friend) =>
+      friend !== owner && outgoing[friend] === DAY_FRIEND && edges?.[friend]?.[owner]);
+    if (friends.length) owners[owner] = friends;
+  });
+  return owners;
+}
+
+/**
+ * Should the sweep rebuild an owner's copy, and may it announce? Rebuilt when
+ * the owner's midnight has passed or they republished; never announced on
+ * the first copy (switching a friend to end of day is not news).
+ */
+function dayCopyDue ({ release, cutoff, source }) {
+  if (!release) return { rebuild: true, announce: false };
+  if (release.cutoff !== cutoff || release.source !== source) return { rebuild: true, announce: true };
+  return { rebuild: false, announce: false };
+}
+
+/**
+ * What an end-of-day friend hasn't been told about: feed items in the new
+ * copy that weren't in the old one, oldest first. Keyed by film AND date, so
+ * a rewatch released tonight is news even though the film was already there.
+ * `since` bounds it, so a long-stale copy can't announce a backlog.
+ */
+function dayNews (previousRecent, nextRecent, { since = 0 } = {}) {
+  const seen = new Set((previousRecent || []).filter(Boolean).map((item) => `${item.id}|${item.at}`));
+  return (nextRecent || [])
+    .filter((item) => item && !seen.has(`${item.id}|${item.at}`) && Number(item.pub || item.at) >= since)
+    // The feed is newest first and a day's films share one date, so reverse
+    // before the (stable) sort to keep the order they were watched in.
+    .reverse()
+    .sort((a, b) => a.at - b.at);
+}
+
+/** The one push an end-of-day friend gets, after the owner's midnight. */
+function composeDayMessage (name, films) {
+  if (!films || !films.length) return null;
+  if (films.length === 1) {
+    return {
+      title: `${name} logged ${films[0].t}`,
+      body: friendLogBody(null),
+      navigate: films[0].id ? `/movie/${films[0].id}` : '/film-club'
+    };
+  }
+  const titles = films.map((film) => film.t);
+  const shown = titles.slice(0, 4);
+  const rest = titles.length - shown.length;
+  return {
+    title: `${name} logged ${films.length} films`,
+    body: rest > 0 ? `${shown.join(', ')} and ${rest} more.` : `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}.`,
+    navigate: '/film-club'
+  };
+}
+
 // --- Friends on other apps --------------------------------------------------
 //
 // A Cinema Roll friend's log reaches you because THEIR client announces it
@@ -1121,6 +1328,15 @@ module.exports = {
   emailGuessFromKey,
   composeSignupMessages,
   friendLogBody,
+  DAY_FRIEND,
+  localDayStart,
+  nextLocalMidnight,
+  dayStamp,
+  dayProfileFrom,
+  dayFriendsByOwner,
+  dayCopyDue,
+  dayNews,
+  composeDayMessage,
   EXTERNAL_MAX_AGE_MS,
   EXTERNAL_MAX_PER_FRIEND,
   externalWatches,

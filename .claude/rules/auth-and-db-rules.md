@@ -525,6 +525,33 @@ Friend-log body: `prefs.friendLogScores` (default on) is the RECIPIENT's choice 
 about the film without the number; a null score is the rater's sharing tier. Both cases
 live in `pushCadence.friendLogBody`, where the tests are.
 
+### End-of-day friends (2026-09-30)
+
+"People at work who use this, who I would rather not see exactly when I watch a movie."
+Each friend row on the Film Club screen has **Right away / End of day**; it is stored ON
+the owner's own edge: `social/friends/<owner>/<friend>` is `true` or `'day'` (every edge
+check is truthiness, so `'day'` still counts as a friendship). Three things read it:
+
+- **The rules**: `social/profiles/<owner>` denies a friend whose edge is `'day'`; they
+  may read `social/dayProfiles/<owner>` (any mutual friend may; the owner may only
+  delete it — a client can never write the copy).
+- **The Lambda**: `notifyFriendsOfLog` skips `'day'` friends. Every sweep,
+  `releaseDayProfiles` rebuilds an owner's copy when their midnight (`push/prefs/tz`,
+  default New York) has passed or their live profile's `updatedAt` moved, and pushes
+  each end-of-day friend ONE notification naming what the new copy shows that the old
+  didn't (`dayNews`, keyed id+date so a released rewatch counts). The first copy is
+  silent; a copy with no end-of-day friends left is deleted.
+- **The reader**: `fetchFriendProfiles` reads `dayProfiles` for a friend whose edge to
+  ME is `'day'`.
+
+`dayProfileFrom` (pushCadence.js, tested in `dayFriends.test.js`) withholds everything
+watched since the owner's midnight — a rewatch falls back to its previous viewing (only
+possible with a ratings map), a first watch leaves the feed, ratings, top shelf, crown
+and counts — and turns every time into noon UTC of the owner's local date, marking feed
+items `d: 1` with `pub` (the midnight it was released, which the Film Club badge counts
+from). Readers show `d` items with `timeAgo(…, { dayOnly: true })`: calendar days, never
+hours. Friends on other apps (Movie Log) read the Interchange feed and have no switch.
+
 ## The newsletter Lambda (`aws-lambda/newsletter.js`, deployed as `cinemaroll-newsletter`)
 
 The Friday newsletter (Matt, 2026-09-20, after Brian's system). Same auth

@@ -718,3 +718,33 @@ is a pure local lookup and its not-found branch pushed `/` — so the tap looked
 like it did nothing. The fallback is now `/film-club`: in practice a friend's
 activity is the only way to arrive at an unrated id. One-line change, one test
 (`MovieDetail.test.js`).
+
+## End-of-day friends (2026-09-30)
+
+Matt: some of his Film Club are coworkers, and "sometimes I watch it during the day and I
+don't really need them to think, oh, why isn't he at his desk?" He asked for a per-friend
+switch: most friends right away, some "as a digest at the end of the night".
+
+Friends learned the time two ways, and hiding one alone would have done nothing: the
+instant friend-log push, and the profile itself, whose feed says "3h ago" and whose
+ratings map carries every viewing's exact timestamp. So the fix is a second published
+copy rather than a delay on the push.
+
+Choices made and why:
+
+- **The setting lives on the friend edge** (`true` / `'day'`), not in a new node. The
+  rules already read that edge for profile access, the Lambda already reads the whole
+  edge map for the fan-out, and the reader already holds it from the edges listener — so
+  all three learn the setting with no extra reads. Every existing edge check was
+  truthiness, so `'day'` didn't break friendship anywhere.
+- **The Lambda builds the copy, not the client.** A client-built copy is only as fresh
+  as the owner's last app open: film watched Tuesday afternoon, app not opened Wednesday,
+  and the coworker never sees it. The copy is a pure filter of the live profile (no
+  rating maths, so the "never port scoring to the Lambda" rule holds).
+- **Dates as noon UTC of the owner's local date**, flagged `d`, because a plain rounded
+  timestamp still rendered as "14h ago" — which is a time of day again.
+- Cost: three tiny reads per owner with end-of-day friends per sweep, plus one profile
+  read (~100KB) when the owner republishes or passes midnight.
+
+Open: Movie Log friends read the Interchange feed and have no switch; Matt hasn't said
+whether they need one.

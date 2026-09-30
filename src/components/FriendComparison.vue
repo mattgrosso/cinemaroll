@@ -48,7 +48,7 @@
             <img v-if="item.p" :src="poster(item.p)" :alt="item.t" class="fc-poster">
             <div v-else class="fc-poster fc-poster-blank">{{ item.t }}</div>
             <span class="fc-poster-note">{{ formatScore(item.r) }}</span>
-            <span v-if="watchedAgo(item.at)" class="fc-poster-when">{{ watchedAgo(item.at) }}</span>
+            <span v-if="watchedAgo(item)" class="fc-poster-when">{{ watchedAgo(item) }}</span>
           </div>
         </div>
       </section>
@@ -211,8 +211,9 @@ export default {
     // Template-exposed; two decimals on every score (bug report).
     formatScore,
     formatScoreGap,
-    watchedAgo (at) {
-      return timeAgo(at);
+    // `d`: from a friend's end-of-day copy — a day, never "3 hours ago".
+    watchedAgo (item) {
+      return timeAgo(item.at, Date.now(), { dayOnly: Boolean(item.d) });
     },
     criterionLabel (key) {
       return key.charAt(0).toUpperCase() + key.slice(1);

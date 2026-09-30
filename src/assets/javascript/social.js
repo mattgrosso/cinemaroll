@@ -331,7 +331,9 @@ function round2 (n) {
 export function countNewFriendUpdates (friendProfiles, lastSeen) {
   const since = Number(lastSeen) || 0;
   return Object.values(friendProfiles || {}).reduce((count, profile) => {
-    const fresh = (profile?.recent || []).filter((item) => Number(item?.at) > since);
+    // An end-of-day copy's `at` is a date (noon UTC), so it would read as
+    // already seen; `pub` is the midnight it was released to this reader.
+    const fresh = (profile?.recent || []).filter((item) => Number(item?.pub ?? item?.at) > since);
     return count + fresh.length;
   }, 0);
 }
@@ -447,6 +449,8 @@ export function friendSnapshot (myRatingsById, profile, { recentCount = Infinity
     // opens can't disagree: 10 minus the average absolute disagreement.
     alignment: shared ? round2(Math.max(0, 10 - gapTotal / shared)) : null,
     lastWatchedAt: recent[0]?.at ?? null,
+    // True for a friend's end-of-day copy: show a day, never "3h ago".
+    lastWatchedDayOnly: Boolean(recent[0]?.d),
     recent: recent.slice(0, recentCount)
   };
 }

@@ -93,6 +93,20 @@ describe('database.rules.json', () => {
       expect(rules.bugReports['.read']).toBe(false);
     });
 
+    // 2026-09-30: an end-of-day friend (my edge to them is 'day') may not
+    // read my live profile — it would say what I watched this afternoon —
+    // only the end-of-day copy the push Lambda builds.
+    it('keeps an end-of-day friend out of the live profile, and lets them read the copy', () => {
+      const live = rules.social.profiles.$userKey['.read'];
+      expect(live).toContain(".val() !== 'day'");
+      const copy = rules.social.dayProfiles.$userKey;
+      expect(copy['.read']).not.toContain("'day'");
+      expect(copy['.read']).toContain("root.child('social/friends/' + $userKey)");
+      // The owner can delete their copy but never write one: it must come
+      // from the sweep's filter, not from a client.
+      expect(copy['.write']).toContain('!newData.exists()');
+    });
+
     it('scopes the dev-mode sandbox to its owner', () => {
       expect(rules['testing-database']['.read']).toContain('mattgrosso-gmail-com');
       expect(rules['testing-database']['.write']).toContain('mattgrosso-gmail-com');

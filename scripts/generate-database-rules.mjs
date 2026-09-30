@@ -106,10 +106,23 @@ const rules = {
         }
       },
       // Published profiles: owner-write; readable by the owner and by
-      // MUTUAL friends only (both edges must exist).
+      // MUTUAL friends only (both edges must exist) — except a friend the
+      // owner shares with at the END OF THE DAY (their edge is 'day', not
+      // true; 2026-09-30, "I would rather not see exactly when I watch a
+      // movie"). That friend reads dayProfiles below instead.
       profiles: {
         $userKey: {
           '.write': `auth != null && $userKey === ${sanitizedAuthEmail}`,
+          '.read': `auth != null && ($userKey === ${sanitizedAuthEmail} || (root.child('social/friends/' + $userKey).child(${sanitizedAuthEmail}).exists() && root.child('social/friends/' + $userKey).child(${sanitizedAuthEmail}).val() !== 'day' && root.child('social/friends/' + ${sanitizedAuthEmail}).child($userKey).exists()))`
+        }
+      },
+      // The end-of-day copy: nothing watched since the owner's last midnight,
+      // no time of day on anything. Built by the push Lambda's sweep (admin);
+      // the owner may only delete it. Any mutual friend may read it — it is
+      // strictly less than the live profile.
+      dayProfiles: {
+        $userKey: {
+          '.write': `auth != null && $userKey === ${sanitizedAuthEmail} && !newData.exists()`,
           '.read': `auth != null && ($userKey === ${sanitizedAuthEmail} || (root.child('social/friends/' + $userKey).child(${sanitizedAuthEmail}).exists() && root.child('social/friends/' + ${sanitizedAuthEmail}).child($userKey).exists()))`
         }
       }

@@ -70,7 +70,7 @@
                   <i v-if="hasHalfStar(item.s)" class="bi bi-star-half"/>
                 </span>
                 <span v-else class="cs-poster-score">{{ formatScore(item.r) }}</span>
-                <span class="cs-poster-when">{{ feedWhen(item.at) }}</span>
+                <span class="cs-poster-when">{{ feedWhen(item) }}</span>
               </span>
             </span>
           </div>
@@ -165,7 +165,7 @@
               <strong>{{ friend.titles }}</strong> titles
               <template v-if="friend.sharedCount"> · <strong>{{ friend.sharedCount }}</strong> in common</template>
               <template v-if="friend.alignment != null"> · <strong>{{ formatScore(friend.alignment) }}</strong> aligned</template>
-              <template v-if="friend.lastWatchedAt"> · last watched {{ watchedAgo(friend.lastWatchedAt) }}</template>
+              <template v-if="friend.lastWatchedAt"> · last watched {{ watchedAgo(friend.lastWatchedAt, friend.lastWatchedDayOnly) }}</template>
             </template>
           </p>
 
@@ -188,6 +188,29 @@
               class="cs-friend-poster"
               loading="lazy"
             >
+          </div>
+
+          <!-- When this friend finds out what I watched (2026-09-30: coworkers
+               in the club, "I would rather not see exactly when I watch a
+               movie"). End of day: they see it after my midnight, dated but
+               never timed, in one notification. Native friends only — a
+               friend on another app reads my Interchange feed. -->
+          <div v-if="!friend.external" class="cs-friend-timing" @click.stop>
+            <span class="cs-friend-timing-label">They see what you watch</span>
+            <span class="cs-timing-toggle" role="group" :aria-label="`When ${friend.name} sees what you watch`">
+              <button
+                type="button"
+                :class="{ 'is-on': friend.timing !== 'day' }"
+                :aria-pressed="friend.timing !== 'day'"
+                @click="setTiming(friend, 'now')"
+              >Right away</button>
+              <button
+                type="button"
+                :class="{ 'is-on': friend.timing === 'day' }"
+                :aria-pressed="friend.timing === 'day'"
+                @click="setTiming(friend, 'day')"
+              >End of day</button>
+            </span>
           </div>
         </div>
       </section>
@@ -476,6 +499,9 @@ export default {
     friendKeys () {
       return this.$store.getters.socialFriendKeys;
     },
+    myEdges () {
+      return this.$store.state.socialEdges?.[this.me] || {};
+    },
     profiles () {
       return this.$store.state.socialFriendProfiles || {};
     },
@@ -501,6 +527,7 @@ export default {
           external: friend.external,
           source: friend.source,
           error: friend.error,
+          timing: this.myEdges[friend.key] === 'day' ? 'day' : 'now',
           ...snapshot,
           // A poster-less recent item would render a broken image.
           recent: snapshot.recent.filter((item) => item.p)
@@ -574,12 +601,19 @@ export default {
     hasHalfStar (stars) {
       return stars % 1 !== 0;
     },
-    watchedAgo (at) {
-      return timeAgo(at);
+    watchedAgo (at, dayOnly = false) {
+      return timeAgo(at, Date.now(), { dayOnly });
     },
-    // The feed's compact form ("3h", "5d") so it fits beside the stars.
-    feedWhen (at) {
-      return timeAgo(at, Date.now(), { short: true });
+    // The feed's compact form ("3h", "5d") so it fits beside the stars. An
+    // item from a friend's end-of-day copy (`d`) is a date, never hours.
+    feedWhen (item) {
+      return timeAgo(item.at, Date.now(), { short: true, dayOnly: Boolean(item.d) });
+    },
+    setTiming (friend, timing) {
+      if (friend.timing === timing) return;
+      this.$store.dispatch('setFriendTiming', { friendKey: friend.key, timing }).catch((error) => {
+        console.warn('Could not change when a friend sees your films:', error?.message);
+      });
     },
     async requestFriend (person) {
       this.externalError = '';
@@ -757,6 +791,37 @@ export default {
      swipe hands the gesture up and the strip feels stuck. */
   overscroll-behavior-x: contain;
   padding-bottom: 0.25rem;
+}
+
+/* Right away / End of day, per friend. Two buttons rather than a switch:
+   both outcomes are named, so nobody has to guess what "off" means. */
+.cs-friend-timing {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+  margin-top: 0.4rem;
+}
+
+.cs-friend-timing-label { color: #b9b9b9; font-size: 0.72rem; }
+
+.cs-timing-toggle {
+  border: 1px solid #3a3a3a;
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  overflow: hidden;
+
+  button {
+    background: none;
+    border: none;
+    color: #ccc;
+    font-size: 0.72rem;
+    padding: 0.25rem 0.65rem;
+
+    &.is-on { background: #ffc107; color: #111; font-weight: 700; }
+    &:active { opacity: 0.75; }
+  }
 }
 
 .cs-friend-poster {

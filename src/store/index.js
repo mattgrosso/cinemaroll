@@ -2578,7 +2578,9 @@ export default createStore({
       if (!me) return;
       await Promise.all([
         set(ref(db, `social/profiles/${me}`), null),
-        set(ref(db, `social/directory/${me}`), null)
+        set(ref(db, `social/directory/${me}`), null),
+        // The end-of-day copy goes with it (the sweep would also catch it).
+        set(ref(db, `social/dayProfiles/${me}`), null).catch(() => {})
       ]);
     },
     async fetchSocialDirectory (context) {
@@ -2862,6 +2864,17 @@ export default createStore({
       if (!me || !fromKey) return;
       await set(ref(db, `social/requests/${me}/${fromKey}`), null);
     },
+    // "Right away" or "end of day" for one friend (2026-09-30: "I would
+    // rather not see exactly when I watch a movie"). It rides on my own
+    // friend edge — `true` or 'day' — which the database rules read to keep
+    // an end-of-day friend out of my live profile, and the push Lambda reads
+    // to hold their notifications until my midnight. See dayProfileFrom in
+    // aws-lambda/pushCadence.js.
+    async setFriendTiming (context, { friendKey, timing }) {
+      const me = context.getters.socialUserKey;
+      if (!me || !friendKey || !context.state.socialEdges?.[me]?.[friendKey]) return;
+      await set(ref(db, `social/friends/${me}/${friendKey}`), timing === 'day' ? 'day' : true);
+    },
     async removeFriend (context, friendKey) {
       const me = context.getters.socialUserKey;
       if (!me || !friendKey) return;
@@ -2873,9 +2886,13 @@ export default createStore({
       // edges listener and a detail page's own ensure, on a cold start) sees
       // a fresh fetch rather than a stale one.
       if (keys.length) context.commit('setSocialProfilesFetchedAt', Date.now());
+      const me = context.getters.socialUserKey;
       await Promise.all(keys.map(async (key) => {
         try {
-          const snapshot = await get(ref(db, `social/profiles/${key}`));
+          // A friend who shares with me at the end of the day only lets me
+          // read their end-of-day copy; the rules deny the live one.
+          const branch = context.state.socialEdges?.[key]?.[me] === 'day' ? 'dayProfiles' : 'profiles';
+          const snapshot = await get(ref(db, `social/${branch}/${key}`));
           context.commit('setSocialFriendProfile', { key, profile: snapshot.val() });
         } catch (error) {
           // A friend who hasn't published yet (or a permission race right

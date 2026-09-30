@@ -68,4 +68,24 @@ describe('timeAgo', () => {
     expect(short(new Date(2025, 8, 4, 12).getTime())).toBe('9/4/25');
     expect(short(null)).toBeNull();
   });
+
+  // A friend's end-of-day copy stamps each viewing at noon UTC of the day it
+  // was watched. Hours would read that noon back as a time ("14h"), which is
+  // the one thing the copy exists to hide.
+  it('counts an end-of-day copy in calendar days, never hours', () => {
+    const day = (t) => timeAgo(t, NOW, { dayOnly: true });
+    const short = (t) => timeAgo(t, NOW, { dayOnly: true, short: true });
+    const noonUtc = (y, m, d) => Date.UTC(y, m, d, 12);
+
+    // NOW is Aug 16, midday local: yesterday's stamp is ~a day old either way,
+    // but a stamp from late last night must still say "yesterday", not "13h".
+    expect(day(noonUtc(2026, 7, 15))).toBe('yesterday');
+    expect(timeAgo(noonUtc(2026, 7, 15), new Date(2026, 7, 16, 0, 30).getTime(), { dayOnly: true })).toBe('yesterday');
+    expect(short(noonUtc(2026, 7, 15))).toBe('yesterday');
+    expect(day(noonUtc(2026, 7, 11))).toBe('5 days ago');
+    expect(short(noonUtc(2026, 7, 11))).toBe('5d');
+    expect(day(noonUtc(2026, 5, 4))).toBe('Jun 4');
+    expect(short(noonUtc(2025, 8, 4))).toBe('9/4/25');
+    expect(day(null)).toBeNull();
+  });
 });

@@ -63,9 +63,9 @@ describe('FriendComparison', () => {
   it('labels each recent viewing with how long ago it was', () => {
     const { wrapper } = factory({ profile: PROFILE, myEntries: [movie(1, 'Heat', 8)] });
 
-    expect(wrapper.vm.watchedAgo(Date.now() - 3 * HOUR)).toBe('3 hours ago');
-    expect(wrapper.vm.watchedAgo(Date.now() - 5 * DAY)).toBe('5 days ago');
-    expect(wrapper.vm.watchedAgo(null)).toBeNull();
+    expect(wrapper.vm.watchedAgo({ at: Date.now() - 3 * HOUR })).toBe('3 hours ago');
+    expect(wrapper.vm.watchedAgo({ at: Date.now() - 5 * DAY })).toBe('5 days ago');
+    expect(wrapper.vm.watchedAgo({ at: null })).toBeNull();
   });
 
   it('puts what to watch above the analysis of how you differ', () => {
