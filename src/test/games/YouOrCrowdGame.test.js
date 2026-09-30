@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import YouOrCrowdGame from '@/components/games/YouOrCrowdGame.vue';
 
@@ -38,7 +38,11 @@ function factory (movieCount, films) {
   return { wrapper, dispatch };
 }
 
+const rightSide = (vm) => (vm.current.gap > 0 ? 0 : 1);
+
 describe('YouOrCrowdGame', () => {
+  afterEach(() => vi.useRealTimers());
+
   it('asks the store for the film cache and waits for ten answerable films before Start', () => {
     const { wrapper, dispatch } = factory(12, null);
     expect(dispatch).toHaveBeenCalledWith('ensureLetterboxdData');
@@ -47,32 +51,54 @@ describe('YouOrCrowdGame', () => {
     expect(start.text()).toContain('still loading');
   });
 
-  it('a right answer grows the streak and records the best; a wrong one ends the run with the reveal', async () => {
+  it('hides both scores behind a ? until you guess, with no title under the poster', async () => {
+    const { wrapper } = factory(20, flatCrowd(20));
+    await wrapper.find('.setup button').trigger('click');
+    expect(wrapper.findAll('.yc-score').map((el) => el.text())).toEqual(['?', '?']);
+    expect(wrapper.text()).not.toContain(wrapper.vm.current.entry.movie.title);
+    expect(wrapper.find('.yc-guess-badge').exists()).toBe(false);
+  });
+
+  it('a right answer reveals both scores, badges the poster and moves on by itself', async () => {
+    vi.useFakeTimers();
     const { wrapper, dispatch } = factory(20, flatCrowd(20));
     await wrapper.find('.setup button').trigger('click');
-    expect(wrapper.vm.current).not.toBeNull();
-    expect(wrapper.findAll('.yc-choice')).toHaveLength(2);
+    const first = wrapper.vm.current;
 
-    const right = wrapper.vm.current.gap > 0 ? 'you' : 'crowd';
-    const buttons = wrapper.findAll('.yc-choice');
-    await buttons[right === 'you' ? 0 : 1].trigger('click');
-    expect(wrapper.vm.lastGuessCorrect).toBe(true);
+    await wrapper.findAll('.yc-choice')[rightSide(wrapper.vm)].trigger('click');
     expect(wrapper.vm.streak).toBe(1);
     expect(dispatch).toHaveBeenCalledWith('writeDurably', { path: 'settings/games/youOrCrowdBestStreak', value: 1 });
-    expect(wrapper.vm.queue.length + 1).toBe(18);
-    const mine = (wrapper.vm.current.entry.movie.id / 2).toFixed(1);
-    expect(wrapper.text()).toContain(`You ★ ${mine}`);
-    expect(wrapper.text()).toContain('Crowd ★ 4.80');
-    expect(wrapper.text()).not.toContain('top ');
-    expect(wrapper.find('.next-btn').exists()).toBe(true);
+    const mine = (first.entry.movie.id / 2).toFixed(1);
+    expect(wrapper.findAll('.yc-score').map((el) => el.text())).toEqual([`★ ${mine}`, '★ 4.80']);
+    expect(wrapper.find('.yc-guess-badge.correct').exists()).toBe(true);
+    expect(wrapper.find('.next-btn').exists()).toBe(false);
 
-    await wrapper.find('.next-btn').trigger('click');
+    await vi.advanceTimersByTimeAsync(900);
     expect(wrapper.vm.guessed).toBe(false);
-    const wrong = wrapper.vm.current.gap > 0 ? 'crowd' : 'you';
-    await wrapper.findAll('.yc-choice')[wrong === 'you' ? 0 : 1].trigger('click');
+    expect(wrapper.vm.current).not.toBe(first);
+    expect(wrapper.vm.queue.length + 2).toBe(18);
+  });
+
+  it('a wrong answer ends the run with the X badge, the reveal and the end-of-round row', async () => {
+    const { wrapper, dispatch } = factory(20, flatCrowd(20));
+    await wrapper.find('.setup button').trigger('click');
+    await wrapper.findAll('.yc-choice')[1 - rightSide(wrapper.vm)].trigger('click');
     expect(wrapper.vm.gameOver).toBe(true);
-    expect(wrapper.text()).toContain('Streak over at 1');
+    expect(wrapper.find('.yc-guess-badge.incorrect').exists()).toBe(true);
+    expect(wrapper.text()).toContain('Streak over at 0');
     expect(wrapper.find('.end-actions').exists()).toBe(true);
     expect(dispatch).toHaveBeenCalledWith('writeDurably', expect.objectContaining({ path: 'settings/games/history/you-or-crowd' }));
+  });
+
+  it('leaving mid-reveal cancels the pending advance', async () => {
+    vi.useFakeTimers();
+    const { wrapper } = factory(20, flatCrowd(20));
+    await wrapper.find('.setup button').trigger('click');
+    await wrapper.findAll('.yc-choice')[rightSide(wrapper.vm)].trigger('click');
+    const vm = wrapper.vm;
+    const queued = vm.queue.length;
+    wrapper.unmount();
+    await vi.advanceTimersByTimeAsync(900);
+    expect(vm.queue.length).toBe(queued);
   });
 });

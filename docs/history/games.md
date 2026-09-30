@@ -279,3 +279,11 @@ The game shipped (2026-09-29) comparing RANKS — your percentile for a film amo
 Now the game (only the game — Insights still ranks) puts both on the star scale: your normalised score halved, which is exactly what ToggleableRating's star view shows, against the crowd's average. Near-ties inside 0.25 stars sit out. The reveal shows "You ★ 4.0" / "Crowd ★ 3.87".
 
 Checked on the live library before shipping: scored this way the crowd out-scores Matt on about three films in four (48 "you" vs 162 "crowd" among the 261 films with a crowd rating then), so an unbalanced run is won by always tapping "The crowd did". `balancedDeck` deals equal numbers of each answer per run, and Start waits for a balanced deck of ten. The score test was proven by temporarily restoring the rank comparison.
+
+## You or the Crowd?: restyled to match the others (2026-09-30)
+
+Matt, the same day: "The whole design of the new game is trash. Look at the other games, make this one match their styles." It had been built as its own thing — a flex-centred column in white text, a two-paragraph explainer, the title and year under the poster, two big boxes that turned green/red outlined on reveal, and a "Next film" button after every right answer. None of the other games look like that.
+
+Now it's Higher or Lower's screen with one poster: the same padding, `#adb5bd` greys, streak row, two-line status line and full-width Start. The two answer buttons are the shared `.btn-game-secondary` pills under a pair of big scores that read "?" until you guess (Higher or Lower's `.hl-card-score` look), the result is the check/X corner badge on the poster, and a right answer moves on by itself after 900ms like Higher or Lower and Tag. The pending advance is cleared on unmount and on restart; both guards were proven by reverting.
+
+The SVG banner (flat text on a dark rectangle) was replaced with poster-style art like the rest of the set — halftone dots growing toward a torn dark edge, a cream "you" figure against a green crowd, "YOU OR THE CROWD?" in DIN Condensed. It's rendered to JPG from a throwaway generator so the typeface doesn't depend on the device. Cineplexity's banner is still the older SVG style.
