@@ -310,6 +310,7 @@ import { memoByIdentity } from '../utils/memoByIdentity.js';
 // every open of the Watchlist before (~100ms desktop, 2026-09-23 sweep).
 const friendPicksMemo = memoByIdentity((library, profiles) => friendsLoveUnseen(library, getRating, profiles));
 import { rankSections, sourceSummary } from '../assets/javascript/recommendationStats.js';
+import { crowdRating } from '../assets/javascript/letterboxdCompare.js';
 import { rewatchCandidates, anotherShotCandidates, nearThresholdYears, favoritePeople, peopleYouRateHigher, rankWatchlistCandidates, dailyPick, ratedTmdbIds, topRatedSeeds, tasteProfile, puntKeyFor, nextPunt, isPunted, PEOPLE_PER_SECTION, MIN_PEOPLE_PER_SECTION } from '../assets/javascript/discover.js';
 import { awardsYearThreshold } from '../assets/javascript/personalAwards.js';
 import { formatScore } from '../assets/javascript/formatScore.js';
@@ -436,7 +437,10 @@ export default {
         key: candidate.entry.dbKey,
         title: candidate.entry.movie.title,
         poster: this.posterUrl(candidate.entry),
-        metaLines: [`You ${formatScore(candidate.yours)}`, `World ${formatScore(candidate.community)}`],
+        metaLines: [
+          `You ${formatScore(candidate.yours)}`,
+          candidate.communitySource === 'letterboxd' ? `Letterboxd ★ ${candidate.crowd.toFixed(2)}` : `World ${formatScore(candidate.community)}`
+        ],
         source: candidate.entry
       }));
     },
@@ -528,7 +532,11 @@ export default {
       return rewatchCandidates(this.library, getRating, Date.now(), { exclude: this.skipFromSuggestions });
     },
     anotherShotList () {
-      return anotherShotCandidates(this.library, getRating, Date.now(), { exclude: this.skipFromSuggestions });
+      const films = this.$store.state.letterboxdFilms;
+      return anotherShotCandidates(this.library, getRating, Date.now(), {
+        exclude: this.skipFromSuggestions,
+        crowdFor: films ? (entry) => crowdRating(films, entry?.movie?.id) : null
+      });
     },
     // Your three strongest genre affinities, named (for Hidden Gems). Two
     // until 2026-09-13 — the same "broader base" ask as the people rows.
@@ -681,6 +689,7 @@ export default {
     this.puntTimers = [];
   },
   created () {
+    this.$store.dispatch('ensureLetterboxdData');
     // For the Showtimes card's "new" flag. No-ops without an account key.
     this.$store.dispatch('loadTheaterBoard')?.catch?.(() => {});
     // Film Club picks need friends' published profiles; the watchlist is

@@ -62,6 +62,34 @@ describe('rewatchCandidates (cycle-based, feedback 2026-08-15)', () => {
   });
 });
 
+describe('anotherShotCandidates with the Letterboxd crowd', () => {
+  const NOW = Date.UTC(2026, 8, 29);
+  const old = NOW - 4 * 365 * 24 * 3600 * 1000;
+  const entry = (id, yours, vote_average, vote_count) => ({
+    dbKey: `k${id}`,
+    movie: { id, title: `Film ${id}`, vote_average, vote_count },
+    ratings: [{ calculatedTotal: yours, date: old }]
+  });
+  const ratingOf = (e) => e.ratings[0];
+
+  it('uses the crowd rating, doubled, in place of TMDB when it exists, and says so', () => {
+    const entries = [entry(1, 5, 6.0, 5000), entry(2, 5, 8.5, 5000)];
+    const crowdFor = (e) => (e.movie.id === 1 ? 4.2 : null); // TMDB said meh; Letterboxd loves it
+    const list = anotherShotCandidates(entries, ratingOf, NOW, { crowdFor });
+    const byId = Object.fromEntries(list.map((c) => [c.entry.movie.id, c]));
+    expect(byId[1].communitySource).toBe('letterboxd');
+    expect(byId[1].community).toBeCloseTo(8.4);
+    expect(byId[1].crowd).toBe(4.2);
+    expect(byId[2].communitySource).toBe('tmdb');
+  });
+
+  it('a Letterboxd-backed row needs no TMDB vote count', () => {
+    const entries = [entry(1, 5, 8.0, 3)];
+    expect(anotherShotCandidates(entries, ratingOf, NOW)).toEqual([]);
+    expect(anotherShotCandidates(entries, ratingOf, NOW, { crowdFor: () => 4.0 })).toHaveLength(1);
+  });
+});
+
 describe('anotherShotCandidates', () => {
   const withVotes = (id, title, opts, voteAverage, voteCount) => {
     const e = entry(id, title, opts);

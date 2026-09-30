@@ -4,7 +4,15 @@
 
     <div v-if="!leftCard" class="setup">
       <p>See a movie's real Cinema Roll score, then guess whether the next one scored higher or lower.</p>
-      <button type="button" class="btn-game btn-game-primary cta-btn" @click="start">Start</button>
+      <button type="button" class="btn-game btn-game-primary cta-btn" @click="start('score')">Start with my scores</button>
+      <!-- The same game on the Letterboxd crowd's ratings (2026-09-29) — your
+           library's films, their weighted averages. Needs the shared cache
+           the sweep fills; until it holds enough of your films the button
+           says so instead of starting a two-card game. -->
+      <p class="setup-alt">Or guess how the Letterboxd crowd rated them.</p>
+      <button type="button" class="btn-game cta-btn" :disabled="letterboxdPool.length < 10" @click="start('letterboxd')">
+        {{ letterboxdPool.length < 10 ? 'Letterboxd ratings still loading' : 'Start with Letterboxd ratings' }}
+      </button>
     </div>
 
     <template v-else>
@@ -58,7 +66,9 @@
 <script>
 import BackLink from './BackLink.vue';
 import gameDataMixin from '../../mixins/gameData.js';
-import { shuffle, entryKey } from '../../assets/javascript/games/gameUtils.js';
+import { shuffle, entryKey, ratingFor } from '../../assets/javascript/games/gameUtils.js';
+import { getRating } from '../../assets/javascript/GetRating.js';
+import { crowdRating } from '../../assets/javascript/letterboxdCompare.js';
 import higherLowerBanner from '../../assets/images/games/higher-lower-banner.jpg';
 
 export default {
@@ -70,6 +80,7 @@ export default {
   // and hides the "Cinema Roll" title overlay so it doesn't compete with
   // that baked-in branding - same pattern as Six Degrees, see CLAUDE.md.
   created () {
+    this.$store.dispatch?.('ensureLetterboxdData');
     this.previousBannerUrl = this.$store.state?.bannerUrl;
     this.$store.commit?.('setBannerUrl', higherLowerBanner);
     this.$store.commit?.('setHideHeaderLogo', true);
@@ -103,12 +114,22 @@ export default {
       // the mystery/revealed one.
       tappedSide: null,
       gameOver: false,
-      ranOutOfMovies: false
+      ranOutOfMovies: false,
+      // 'score' (Cinema Roll) or 'letterboxd' (the crowd's rating).
+      mode: 'score'
     };
   },
   computed: {
     bestStreak () {
-      return this.$store.state.settings?.games?.higherLowerBestStreak || 0;
+      const key = this.mode === 'letterboxd' ? 'higherLowerLetterboxdBestStreak' : 'higherLowerBestStreak';
+      return this.$store.state.settings?.games?.[key] || 0;
+    },
+    letterboxdFilms () {
+      return this.$store.state?.letterboxdFilms || null;
+    },
+    letterboxdPool () {
+      if (!this.letterboxdFilms) return [];
+      return this.eligibleGameEntries.filter((entry) => crowdRating(this.letterboxdFilms, entry?.movie?.id) !== null);
     },
     mysterySide () {
       return this.revealedSide === 'left' ? 'right' : 'left';
@@ -130,7 +151,7 @@ export default {
     // the cards themselves stationary.
     statusMessage () {
       if (this.ranOutOfMovies) return "You've compared your whole library! Restart to shuffle a new run.";
-      if (!this.guessed) return 'Tap the poster you think scored higher.';
+      if (!this.guessed) return this.mode === 'letterboxd' ? 'Tap the poster you think the crowd rated higher.' : 'Tap the poster you think scored higher.';
       if (this.lastGuessCorrect) return "Correct — that one's now the card to beat.";
       return `Streak over at ${this.streak}. Correct score was ${this.formattedRating(this.mysteryCard)}.`;
     }
@@ -141,7 +162,14 @@ export default {
       // GetRating.js's toFixed(2)) — showing only 1 hid the difference
       // between genuinely-tied and merely-close scores.
       const value = this.gameRatingFor(entry);
-      return Number.isFinite(value) ? value.toFixed(2) : '—';
+      if (!Number.isFinite(value)) return '—';
+      return this.mode === 'letterboxd' ? `★ ${value.toFixed(2)}` : value.toFixed(2);
+    },
+    // Overrides the mixin's: in Letterboxd mode the number on the card is
+    // the crowd's rating, not mine.
+    gameRatingFor (entry) {
+      if (this.mode === 'letterboxd') return crowdRating(this.letterboxdFilms, entry?.movie?.id) ?? 0;
+      return ratingFor(entry, getRating);
     },
     cardFor (side) {
       return side === 'left' ? this.leftCard : this.rightCard;
@@ -153,8 +181,9 @@ export default {
       if (side !== this.mysterySide || this.guessed) return this.formattedRating(this.cardFor(side));
       return '?';
     },
-    start () {
-      this.pool = shuffle(this.eligibleGameEntries, Math.random);
+    start (mode = 'score') {
+      this.mode = mode;
+      this.pool = shuffle(mode === 'letterboxd' ? this.letterboxdPool : this.eligibleGameEntries, Math.random);
       this.poolIndex = 2;
       this.leftCard = this.pool[0];
       this.rightCard = this.pool[1];
@@ -200,7 +229,8 @@ export default {
       this.streak += 1;
       this.recordGameWin(); // one correct guess counts — see the mixin
       if (this.streak > this.bestStreak) {
-        this.$store.dispatch('writeDurably', { path: 'settings/games/higherLowerBestStreak', value: this.streak });
+        const key = this.mode === 'letterboxd' ? 'higherLowerLetterboxdBestStreak' : 'higherLowerBestStreak';
+        this.$store.dispatch('writeDurably', { path: `settings/games/${key}`, value: this.streak });
       }
 
       // The mystery card just proved itself and becomes the new reference
@@ -233,6 +263,12 @@ export default {
 
 <style lang="scss" scoped>
 @import '@/assets/scss/game-buttons';
+
+.setup-alt {
+  color: #ccc;
+  font-size: 0.85rem;
+  margin: 1rem 0 0.25rem;
+}
 
 .higher-lower-game {
   color: #eee;

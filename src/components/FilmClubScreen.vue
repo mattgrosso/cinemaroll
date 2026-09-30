@@ -241,6 +241,38 @@
         </div>
       </section>
 
+      <!-- The club against the Letterboxd crowd (2026-09-29): who in the club
+           runs with the crowd, and the films where the club's average parts
+           ways with it. Both from the shared film cache the sweep fills. -->
+      <section v-if="crowd && crowd.people.length" class="cs-section">
+        <h2 class="cs-section-title">Running with the crowd</h2>
+        <p class="cs-caption">How each of you ranks films against Letterboxd's crowd — ranks, not scores.</p>
+        <div class="cs-crowd-people">
+          <div v-for="person in crowd.people" :key="`crowd-${person.who}`" class="cs-crowd-person">
+            <span class="cs-row-name">{{ person.who }}</span>
+            <span class="cs-crowd-label">{{ person.label }}</span>
+            <span class="cs-crowd-rho">{{ person.spearman.toFixed(2) }} <span class="cs-crowd-count">· {{ person.count }} films</span></span>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="crowd && crowd.divides.length" class="cs-section">
+        <h2 class="cs-section-title">Club vs the crowd</h2>
+        <p class="cs-caption">Where the club's average lands furthest from the Letterboxd crowd, either way.</p>
+        <div class="cs-scroll-list">
+          <div v-for="movie in crowd.divides" :key="`crowd-div-${movie.id}`" class="cs-consensus-row" @click="goToTitle(movie)">
+            <img v-if="movie.p" :src="poster(movie.p)" :alt="movie.t" class="cs-thumb">
+            <div class="cs-consensus-info">
+              <span class="cs-row-name">{{ movie.t }}</span>
+              <span class="cs-scores">
+                <span v-for="score in movie.scores" :key="score.who" class="cs-score-chip">{{ score.who }} {{ formatScore(score.r) }}</span>
+              </span>
+            </div>
+            <span class="cs-average" :class="movie.gap > 0 ? 'cs-crowd-above' : 'cs-crowd-below'">★ {{ movie.crowd.toFixed(2) }}</span>
+          </div>
+        </div>
+      </section>
+
       <!-- Everything to do with FINDING people is housekeeping, not the daily
            view, so it collapses ("should the sections about who my friends
            are, finding friends in other apps, and finding people be somehow
@@ -330,11 +362,13 @@ import { ratedTmdbIds } from '../assets/javascript/discover.js';
 import { timeAgo } from '../assets/javascript/timeAgo.js';
 import { getRating } from '../assets/javascript/GetRating.js';
 import { filmClubSummary, friendSnapshot, myRatingsById } from '../assets/javascript/social.js';
+import { clubVsCrowd } from '../assets/javascript/letterboxdCompare.js';
 import { memoByIdentity } from '../utils/memoByIdentity.js';
 
 // Both are pure in their (cached getter) inputs and were rebuilt on every
 // open of the club - ~200ms at desktop speed (2026-09-23 speed sweep).
 const summaryMemo = memoByIdentity((entries, profiles) => filmClubSummary(entries, getRating, profiles));
+const crowdMemo = memoByIdentity((entries, profiles, films) => clubVsCrowd(entries, getRating, profiles, films));
 const clubTitlesMemo = memoByIdentity((entries, friends) => clubTitleIndex(entries, friends));
 import { filterDirectory } from '../assets/javascript/interchange.js';
 import { clubTitleIndex, searchClubTitles, clubSeenBreakdown } from '../assets/javascript/clubTitleSearch.js';
@@ -491,6 +525,15 @@ export default {
         this.$store.getters.allMoviesAsArray || [],
         this.$store.getters.filmClubProfiles || {}
       );
+    },
+    crowd () {
+      const films = this.$store.state.letterboxdFilms;
+      if (!films) return null;
+      return crowdMemo(
+        this.$store.getters.allMoviesAsArray || [],
+        this.$store.getters.filmClubProfiles || {},
+        films
+      );
     }
   },
   watch: {
@@ -504,6 +547,7 @@ export default {
     }
   },
   created () {
+    this.$store.dispatch?.('ensureLetterboxdData');
     this.$store.dispatch('attachSocialListeners');
     this.$store.dispatch('fetchSocialDirectory');
     this.$store.dispatch('syncExternalFriends');
@@ -959,6 +1003,42 @@ export default {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
+
+.cs-crowd-people {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.cs-crowd-person {
+  align-items: baseline;
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.25rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+
+  .cs-row-name { flex: 0 0 auto; }
+}
+
+.cs-crowd-label {
+  color: #ccc;
+  flex: 1 1 auto;
+  font-size: 0.8rem;
+}
+
+.cs-crowd-rho {
+  color: #fff;
+  font-weight: 700;
+}
+
+.cs-crowd-count {
+  color: #ccc;
+  font-size: 0.72rem;
+  font-weight: 400;
+}
+
+.cs-crowd-above { color: #ffc107; }
+.cs-crowd-below { color: #00e054; }
 
 .cs-consensus-row {
   align-items: flex-start;

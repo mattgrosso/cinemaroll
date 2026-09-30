@@ -69,18 +69,10 @@ export const agreementLabel = (rho) => {
   return 'at odds';
 };
 
-// Every film both sides rated, with each side's percentile within that set.
-// `gap` is yours minus theirs: positive means you rank it higher than the
-// crowd does. Placeholders and films Letterboxd doesn't know drop out.
-export function crowdRows (entries, getRatingFn, films) {
-  const rows = [];
-  for (const entry of entries || []) {
-    const tmdbId = entry?.movie?.id;
-    const crowd = crowdRating(films, tmdbId);
-    const mine = getRatingFn(entry)?.calculatedTotal;
-    if (crowd === null || !Number.isFinite(mine)) continue;
-    rows.push({ entry, tmdbId, mine, crowd, count: crowdCount(films, tmdbId) });
-  }
+// Rank both sides within one set of rows ({ mine, crowd, ... }), in place.
+// `gap` is yours minus theirs in percentile points: positive means you rank
+// it higher than the crowd does.
+export function rankRows (rows) {
   if (rows.length < 2) return rows;
   const myRanks = ranks(rows.map((row) => row.mine));
   const crowdRanks = ranks(rows.map((row) => row.crowd));
@@ -95,12 +87,28 @@ export function crowdRows (entries, getRatingFn, films) {
   return rows;
 }
 
+export const rankCorrelation = (rows) => (rows.length < 2 ? null : pearson(rows.map((row) => row.myRank), rows.map((row) => row.crowdRank)));
+
+// Every film both sides rated, ranked. Placeholders and films Letterboxd
+// doesn't know drop out.
+export function crowdRows (entries, getRatingFn, films) {
+  const rows = [];
+  for (const entry of entries || []) {
+    const tmdbId = entry?.movie?.id;
+    const crowd = crowdRating(films, tmdbId);
+    const mine = getRatingFn(entry)?.calculatedTotal;
+    if (crowd === null || !Number.isFinite(mine)) continue;
+    rows.push({ entry, tmdbId, mine, crowd, count: crowdCount(films, tmdbId) });
+  }
+  return rankRows(rows);
+}
+
 // The Ratings-tab section: one correlation, then the films you rank far
 // above the crowd and the ones it ranks far above you.
 export function tasteVsCrowd (entries, getRatingFn, films, { minCount = 20, cap = 8 } = {}) {
   const rows = crowdRows(entries, getRatingFn, films);
   if (rows.length < minCount) return { count: rows.length, ready: false };
-  const rho = pearson(rows.map((row) => row.myRank), rows.map((row) => row.crowdRank));
+  const rho = rankCorrelation(rows);
   const byGap = [...rows].sort((a, b) => b.gap - a.gap);
   return {
     count: rows.length,
@@ -146,4 +154,95 @@ export function crowdLine (films, tmdbId, compact) {
   if (!Number.isFinite(film?.rating)) return null;
   const count = Number.isFinite(film.ratingCount) && compact ? compact(film.ratingCount) : null;
   return count ? `★ ${film.rating.toFixed(2)} · ${count}` : `★ ${film.rating.toFixed(2)}`;
+}
+
+// Year in Review: the year's films against the crowd. Viewings are the
+// yearInReview.js shape (movie, score, dbKey); a film watched twice in the
+// year counts once, at its latest score.
+export function yearVsCrowd (viewings, films, { minCount = 8 } = {}) {
+  const latest = new Map();
+  for (const viewing of viewings || []) {
+    const tmdbId = viewing?.movie?.id;
+    if (tmdbId == null || !Number.isFinite(viewing.score)) continue;
+    latest.set(tmdbId, viewing);
+  }
+  const rows = [];
+  for (const [tmdbId, viewing] of latest) {
+    const crowd = crowdRating(films, tmdbId);
+    if (crowd === null) continue;
+    rows.push({ viewing, tmdbId, mine: viewing.score, crowd, count: crowdCount(films, tmdbId) });
+  }
+  if (rows.length < minCount) return { count: rows.length, ready: false };
+  rankRows(rows);
+  const rho = rankCorrelation(rows);
+  const byGap = [...rows].sort((a, b) => b.gap - a.gap);
+  const hottest = byGap[0]?.gap > 0 ? byGap[0] : null;
+  const crowdPick = byGap.at(-1)?.gap < 0 ? byGap.at(-1) : null;
+  // The film you and the crowd both put at the top — closest to the top on
+  // both sides, not merely the smallest gap (a shared shrug is not agreement).
+  const agreed = [...rows].sort((a, b) => (b.myPct + b.crowdPct - Math.abs(b.gap)) - (a.myPct + a.crowdPct - Math.abs(a.gap)))
+    .find((row) => Math.abs(row.gap) <= 0.15 && row.myPct >= 0.6 && row.crowdPct >= 0.6) || null;
+  return { count: rows.length, ready: true, spearman: rho, label: agreementLabel(rho), hottest, crowdPick, agreed };
+}
+
+// Film Club: who in the club runs with the crowd, and where the club as a
+// whole parts ways with it. `friendProfiles` are the published profiles
+// (social.js): `ratings` maps tmdbId -> { r, t, p }, on the same 0–10 scale
+// as a Cinema Roll score.
+export function clubVsCrowd (myEntries, getRatingFn, friendProfiles, films, { minCount = 15, cap = 8 } = {}) {
+  const people = [];
+  const scoreMaps = [];
+
+  const mine = new Map();
+  for (const entry of myEntries || []) {
+    const id = entry?.movie?.id;
+    const score = getRatingFn(entry)?.calculatedTotal;
+    if (id != null && Number.isFinite(score)) mine.set(Number(id), { r: score, t: entry.movie.title, p: entry.movie.poster_path });
+  }
+  scoreMaps.push({ who: 'You', map: mine });
+  for (const profile of Object.values(friendProfiles || {})) {
+    if (!profile?.ratings) continue;
+    const map = new Map();
+    for (const [id, their] of Object.entries(profile.ratings)) {
+      if (Number.isFinite(their?.r)) map.set(Number(id), { r: their.r, t: their.t, p: their.p });
+    }
+    scoreMaps.push({ who: profile.name || 'Friend', map });
+  }
+
+  for (const { who, map } of scoreMaps) {
+    const rows = [];
+    for (const [id, their] of map) {
+      const crowd = crowdRating(films, id);
+      if (crowd !== null) rows.push({ mine: their.r, crowd });
+    }
+    if (rows.length < minCount) continue;
+    rankRows(rows);
+    const rho = rankCorrelation(rows);
+    people.push({ who, count: rows.length, spearman: rho, label: agreementLabel(rho) });
+  }
+  people.sort((a, b) => (b.spearman ?? -2) - (a.spearman ?? -2));
+
+  // Films two or more of the club scored, by the club's average.
+  const pool = new Map();
+  for (const { who, map } of scoreMaps) {
+    for (const [id, their] of map) {
+      const existing = pool.get(id) || { id, t: their.t, p: their.p, scores: [] };
+      existing.scores.push({ who, r: their.r });
+      pool.set(id, existing);
+    }
+  }
+  const rows = [];
+  for (const movie of pool.values()) {
+    if (movie.scores.length < 2) continue;
+    const crowd = crowdRating(films, movie.id);
+    if (crowd === null) continue;
+    const average = movie.scores.reduce((sum, score) => sum + score.r, 0) / movie.scores.length;
+    rows.push({ ...movie, scores: [...movie.scores].sort((a, b) => b.r - a.r), average, mine: average, crowd, count: crowdCount(films, movie.id) });
+  }
+  rankRows(rows);
+  const byGap = [...rows].sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap));
+  return {
+    people,
+    divides: rows.length >= 4 ? byGap.filter((row) => Math.abs(row.gap) >= 0.3).slice(0, cap) : []
+  };
 }

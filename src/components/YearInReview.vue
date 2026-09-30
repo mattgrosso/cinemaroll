@@ -201,6 +201,32 @@
           </div>
         </section>
 
+        <!-- You vs the Letterboxd crowd, for this year's films (2026-09-29:
+             "anywhere where we're looking at my numbers, comparing them to
+             the Letterboxd numbers seems like a worthwhile thing to do"). -->
+        <section v-if="crowd.ready" class="yir-section">
+          <h3 class="yir-title">You vs the Crowd</h3>
+          <p class="yir-caption">
+            Across the {{ crowd.count }} films from this year Letterboxd has rated, your ranking and the
+            crowd's were <strong>{{ crowd.label }}</strong> (rank correlation {{ crowd.spearman.toFixed(2) }}).
+          </p>
+          <div v-if="crowdCards.length" class="yir-poster-row">
+            <div
+              v-for="card in crowdCards"
+              :key="card.label"
+              class="yir-poster-card"
+              role="button"
+              :aria-label="card.row.viewing.movie.title"
+              @click="goToMovie(card.row.viewing.movie)"
+            >
+              <img v-if="card.row.viewing.movie.poster_path" :src="poster(card.row.viewing.movie)" :alt="card.row.viewing.movie.title" class="yir-poster">
+              <div v-else class="yir-poster yir-poster-blank">{{ card.row.viewing.movie.title }}</div>
+              <span class="yir-poster-note gold">{{ card.label }}</span>
+              <span class="yir-poster-note">you {{ card.row.mine.toFixed(2) }} · ★ {{ card.row.crowd.toFixed(2) }}</span>
+            </div>
+          </div>
+        </section>
+
         <!-- What was different -->
         <section v-if="signature.length" class="yir-section">
           <h3 class="yir-title">What Was Different About {{ selectedYear }}</h3>
@@ -334,6 +360,7 @@ import {
   versusPreviousYear,
   scoreShape
 } from '../assets/javascript/yearInReview.js';
+import { yearVsCrowd } from '../assets/javascript/letterboxdCompare.js';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -362,6 +389,7 @@ export default {
     }
   },
   mounted () {
+    this.$store.dispatch?.('ensureLetterboxdData');
     // Default to the most recent year that actually has something in it,
     // rather than to a possibly-empty current year.
     if (this.availableYears.length && !this.availableYears.includes(this.selectedYear)) {
@@ -450,6 +478,24 @@ export default {
     },
     signature () {
       return yearSignature(this.viewings, this.everyViewing);
+    },
+    crowd () {
+      const films = this.$store.state.letterboxdFilms;
+      if (!films) return { ready: false, count: 0 };
+      return yearVsCrowd(this.viewings, films);
+    },
+    crowdCards () {
+      if (!this.crowd.ready) return [];
+      const used = new Set();
+      return [
+        { key: 'hottest', label: 'Your hottest take', row: this.crowd.hottest },
+        { key: 'crowdPick', label: "The crowd's, not yours", row: this.crowd.crowdPick },
+        { key: 'agreed', label: 'You both loved', row: this.crowd.agreed }
+      ].filter((card) => {
+        if (!card.row || used.has(card.row.tmdbId)) return false;
+        used.add(card.row.tmdbId);
+        return true;
+      });
     },
     extremeCards () {
       const best = superlatives(this.viewings);

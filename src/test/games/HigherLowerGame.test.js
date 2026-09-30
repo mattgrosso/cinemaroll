@@ -203,3 +203,52 @@ describe('HigherLowerGame', () => {
     expect(wrapper.vm.$router.push).toHaveBeenCalledWith('/games');
   });
 });
+
+// The Letterboxd mode (2026-09-29): the same game on the crowd's ratings.
+describe('HigherLowerGame — Letterboxd ratings mode', () => {
+  function factoryWithFilms (movieCount, films) {
+    const dispatch = vi.fn();
+    const wrapper = mount(HigherLowerGame, {
+      global: {
+        mocks: {
+          $store: {
+            state: { settings: {}, letterboxdFilms: films },
+            getters: { allMediaAsArray: Array.from({ length: movieCount }, (_, i) => entry(i)) },
+            dispatch,
+            commit: vi.fn()
+          },
+          $router: { push: vi.fn() }
+        }
+      }
+    });
+    return { wrapper, dispatch };
+  }
+
+  it('asks the store for the film cache and keeps the Letterboxd button off until ten films have a rating', () => {
+    const { wrapper, dispatch } = factoryWithFilms(12, { 0: { rating: 3.1 }, 1: { rating: 4.2 } });
+    expect(dispatch).toHaveBeenCalledWith('ensureLetterboxdData');
+    const buttons = wrapper.findAll('.setup button');
+    expect(buttons[1].attributes('disabled')).toBeDefined();
+    expect(buttons[1].text()).toContain('still loading');
+  });
+
+  it('plays on the crowd ratings: stars on the cards, only rated films in the pool, its own best-streak key', async () => {
+    const films = {};
+    for (let i = 0; i < 12; i += 1) films[i] = { rating: 0.5 + i * 0.35 }; // crowd agrees with id order
+    const { wrapper, dispatch } = factoryWithFilms(15, films);
+    const buttons = wrapper.findAll('.setup button');
+    expect(buttons[1].attributes('disabled')).toBeUndefined();
+    await buttons[1].trigger('click');
+    expect(wrapper.vm.mode).toBe('letterboxd');
+    expect(wrapper.vm.pool.every((e) => e.movie.id < 12)).toBe(true); // 12–14 have no crowd rating
+    expect(wrapper.findAll('.hl-card-score')[0].text()).toMatch(/^★ \d\.\d\d$/);
+    expect(wrapper.text()).toContain('the crowd rated higher');
+
+    // Guess correctly (the higher id is the higher crowd rating), and the
+    // streak lands on the Letterboxd key, not the Cinema Roll one.
+    const higherIsMystery = wrapper.vm.mysteryCard.movie.id > wrapper.vm.revealedCard.movie.id;
+    await wrapper.vm.guess(higherIsMystery ? wrapper.vm.mysterySide : wrapper.vm.revealedSide);
+    expect(wrapper.vm.lastGuessCorrect).toBe(true);
+    expect(dispatch).toHaveBeenCalledWith('writeDurably', { path: 'settings/games/higherLowerLetterboxdBestStreak', value: 1 });
+  });
+});

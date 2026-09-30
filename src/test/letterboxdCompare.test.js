@@ -9,7 +9,9 @@ import {
   crowdLovesList,
   disagreeList,
   cultList,
-  crowdLine
+  crowdLine,
+  yearVsCrowd,
+  clubVsCrowd
 } from '@/assets/javascript/letterboxdCompare.js';
 
 const entry = (id, mine, title = `Film ${id}`) => ({ dbKey: `k${id}`, movie: { id, title }, ratings: [{ calculatedTotal: mine }] });
@@ -125,5 +127,56 @@ describe('Home helpers', () => {
     expect(crowdLine(films, 1, (n) => `${Math.round(n / 1000)}K`)).toBe('★ 4.30 · 50K');
     expect(crowdLine(films, 1)).toBe('★ 4.30');
     expect(crowdLine(films, 9)).toBeNull();
+  });
+});
+
+describe('yearVsCrowd', () => {
+  const viewing = (id, score, at = 1) => ({ movie: { id, title: `Film ${id}` }, dbKey: `k${id}`, score, at });
+
+  it('counts a film once at its latest score and names the hottest take and the crowd pick', () => {
+    const films = {};
+    const viewings = [];
+    for (let i = 1; i <= 10; i += 1) {
+      viewings.push(viewing(i, i));
+      films[i] = { rating: 0.5 + i * 0.4, ratingCount: 1000 };
+    }
+    // Film 10: I loved it (10), the crowd hates it; film 1: reverse.
+    films[10] = { rating: 0.6, ratingCount: 1000 };
+    films[1] = { rating: 4.9, ratingCount: 1000 };
+    viewings.push(viewing(5, 9.5, 2)); // re-rated later in the year
+    const result = yearVsCrowd(viewings, films);
+    expect(result.ready).toBe(true);
+    expect(result.count).toBe(10);
+    expect(result.hottest.tmdbId).toBe(10);
+    expect(result.crowdPick.tmdbId).toBe(1);
+    expect(result.agreed.tmdbId).toBe(9); // high on both sides, no gap
+  });
+
+  it('is not ready for a thin year', () => {
+    expect(yearVsCrowd([viewing(1, 5)], { 1: { rating: 3 } }).ready).toBe(false);
+  });
+});
+
+describe('clubVsCrowd', () => {
+  const films = {};
+  for (let i = 1; i <= 20; i += 1) films[i] = { rating: 0.5 + i * 0.2, ratingCount: 5000 };
+  const myEntries = [];
+  for (let i = 1; i <= 20; i += 1) myEntries.push(entry(i, i / 2));
+  const contrarian = { name: 'Rex', ratings: Object.fromEntries(Array.from({ length: 20 }, (_, k) => [k + 1, { r: 10 - k / 2, t: `Film ${k + 1}` }])) };
+  const shelfOnly = { name: 'Shelf', recent: [] };
+
+  it('ranks each person by how their ratings track the crowd, skipping shelf-only sharers', () => {
+    const { people } = clubVsCrowd(myEntries, getRating, { a: contrarian, b: shelfOnly }, films);
+    expect(people.map((p) => p.who)).toEqual(['You', 'Rex']);
+    expect(people[0].spearman).toBeCloseTo(1);
+    expect(people[1].spearman).toBeCloseTo(-1);
+    expect(people[1].label).toBe('at odds');
+  });
+
+  it('lists the films where the club average parts ways with the crowd', () => {
+    const { divides } = clubVsCrowd(myEntries, getRating, { a: contrarian }, films);
+    expect(divides.length).toBeGreaterThan(0);
+    expect(divides[0].scores).toHaveLength(2);
+    expect(Math.abs(divides[0].gap)).toBeGreaterThanOrEqual(0.3);
   });
 });

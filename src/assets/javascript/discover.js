@@ -94,22 +94,29 @@ export function anotherShotCandidates (entries, getRatingFn, now = Date.now(), {
   rampYears = 5,
   cap = 24,
   // Same as rewatchCandidates: excluded before the cap, so punting refills.
-  exclude = null
+  exclude = null,
+  // Letterboxd's crowd (2026-09-29): `crowdFor(entry)` returns the film's
+  // 0.5–5 rating or null. When it speaks, it stands in for TMDB's average
+  // (doubled onto the 0–10 scale) — a rating from millions beats one from
+  // thousands — and the row says so.
+  crowdFor = null
 } = {}) {
   return (entries || [])
     .filter((entry) => !exclude || !exclude(entry))
     .map((entry) => {
       const yours = getRatingFn(entry)?.calculatedTotal;
-      const community = entry?.movie?.vote_average;
+      const crowd = crowdFor ? crowdFor(entry) : null;
+      const community = Number.isFinite(crowd) ? crowd * 2 : entry?.movie?.vote_average;
+      const communitySource = Number.isFinite(crowd) ? 'letterboxd' : 'tmdb';
       const votes = entry?.movie?.vote_count;
       const watchedAt = lastWatchedAt(entry);
       if (!Number.isFinite(yours) || !Number.isFinite(community) || watchedAt == null) return null;
       if (yours > maxYourRating || community < minCommunity) return null;
-      if (!Number.isFinite(votes) || votes < minVotes) return null;
+      if (communitySource === 'tmdb' && (!Number.isFinite(votes) || votes < minVotes)) return null;
       const yearsSince = (now - watchedAt) / YEAR_MS;
       if (yearsSince < minYears) return null;
       const fade = Math.min(1, yearsSince / rampYears);
-      return { entry, yours, community, yearsSince, score: (community - yours) * fade };
+      return { entry, yours, community, communitySource, crowd: Number.isFinite(crowd) ? crowd : null, yearsSince, score: (community - yours) * fade };
     })
     .filter(Boolean)
     .sort((a, b) => b.score - a.score)
