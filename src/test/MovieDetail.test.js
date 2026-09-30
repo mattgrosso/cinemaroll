@@ -563,5 +563,10 @@ describe('MovieDetail — rank rides only with the precise score', () => {
     // business now, and ToggleableRating.test.js asserts it.
     expect(wrapper.find('.overall-rank-link').exists()).toBe(false)
     expect(wrapper.find('.rating-with-rank button').exists()).toBe(false)
+
+    // Bug report 2026-09-30: the tile's toggle is stacked (parenthetical
+    // under the number) and the "your score" label under it is gone.
+    expect(wrapper.findComponent({ name: 'ToggleableRating' }).props('stacked')).toBe(true)
+    expect(wrapper.find('.fact-score').text().toLowerCase()).not.toContain('your score')
   })
 })

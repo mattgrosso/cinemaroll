@@ -1,5 +1,5 @@
 <template>
-  <div class="toggleable-rating" @click="cycleVisibleRatingType">
+  <div class="toggleable-rating" :class="{ stacked }" @click="cycleVisibleRatingType">
     <div v-if="visibleRatingType === 'rating'" class="rating">
       <h3 class="m-0">{{ displayRating }}</h3>
       <!-- The rank sits exactly where "(normalized rating)" sits, and is
@@ -9,6 +9,9 @@
            while I'm trying to toggle." A tap here falls through to the
            toggle like a tap anywhere else on the control. -->
       <label v-if="rankLabel">({{ rankLabel }})</label>
+      <!-- Stacked, a film with no rank still reserves the second line, so
+           the number doesn't shift as the toggle cycles. -->
+      <span v-else-if="stacked" class="sub-line-spacer" aria-hidden="true"/>
     </div>
     <div v-else-if="visibleRatingType === 'normalizedRating'" class="normalized-rating">
       <h3 class="m-0">{{ displayNormalizedRating }}</h3>
@@ -23,6 +26,10 @@
         <i class="bi bi-star"/>
         <i class="bi bi-slash-lg"/>
       </div>
+      <!-- Stars have no parenthetical. Stacked, an empty second line keeps
+           them where the numbers sat (bug report 2026-09-30: "don't make the
+           stars jump around"). -->
+      <span v-if="stacked" class="sub-line-spacer" aria-hidden="true"/>
     </div>
   </div>
 </template>
@@ -50,6 +57,14 @@ export default {
     rankLabel: {
       type: String,
       default: ''
+    },
+    // The film page's score tile (bug report 2026-09-30): the parenthetical
+    // goes on its own line UNDER the number, where the tile's "your score"
+    // label used to be, instead of beside it. The details popup keeps the
+    // side-by-side layout.
+    stacked: {
+      type: Boolean,
+      default: false
     }
   },
   data () {
@@ -155,6 +170,27 @@ export default {
         bottom: -5px;
         white-space: nowrap;
         right: 0;
+      }
+    }
+
+    /* Two lines in every view: the value, then its parenthetical — or an
+       empty line of the same height, so nothing jumps while tapping. */
+    &.stacked {
+      .rating,
+      .normalized-rating,
+      .stars {
+        align-items: center;
+        display: flex;
+        flex-direction: column;
+
+        label,
+        .sub-line-spacer {
+          display: block;
+          height: 1.4em;
+          line-height: 1.4em;
+          margin: 2px 0 0;
+          position: static;
+        }
       }
     }
   }

@@ -31,7 +31,8 @@
         </div>
         <!-- The facts strip (2026-09-30 redesign): the four numbers a film
              page is opened for, on one row — your score with its rank (the
-             same three-way toggle as before), the Letterboxd crowd's rating,
+             same three-way toggle as before, stacked: the rank or
+             "normalized rating" sits under the number, no "your score"), the Letterboxd crowd's rating,
              the year, the runtime. Everything below folds. -->
         <div class="fact-strip rating-runtime-and-date">
           <a class="fact fact-year link" @click.stop="searchFor(`${getYear(result)}`)">
@@ -48,9 +49,9 @@
                 :rating="ratingForMedia(result)"
                 :normalizedRating="normalizedRatingForMedia(result)"
                 :rankLabel="ordinalRank || ''"
+                stacked
               />
             </span>
-            <span class="fact-label">your score</span>
           </div>
         </div>
 
@@ -2459,9 +2460,15 @@ export default {
         line-height: 1.1;
       }
       :deep(.toggleable-rating h3) { font-size: 1.35rem; font-weight: 700; line-height: 1.1; }
-      :deep(.toggleable-rating label) { font-size: 0.62rem; color: #ccc; position: static; margin-left: 4px; }
-      :deep(.toggleable-rating .rating),
-      :deep(.toggleable-rating .normalized-rating) { align-items: baseline; justify-content: center; }
+      /* The parenthetical sits on the second line, in the other tiles'
+         label size and colour; "your score" is gone. Not uppercased or
+         letter-spaced like "RELEASED": "(normalized rating)" has to fit a
+         third of a 402px phone, and "(1203RD)" reads badly. */
+      :deep(.toggleable-rating label),
+      :deep(.toggleable-rating .sub-line-spacer) {
+        font-size: 0.62rem;
+        color: #ccc;
+      }
     }
   }
 

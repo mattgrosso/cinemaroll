@@ -103,3 +103,64 @@ describe('ToggleableRating rank', () => {
     expect(mountRating().find('.rating label').exists()).toBe(false)
   })
 })
+
+// Bug report 2026-09-30, the film page's score tile: "get rid of the phrase
+// your score, and whatever we've been putting in the parentheses after the
+// value should appear down below... When it does the stars... don't put
+// anything underneath it, but don't make the stars jump around."
+describe('ToggleableRating stacked (the film page tile)', () => {
+  const mountStacked = (props = {}) => mountRating({ stacked: true, ...props })
+  const cycleTo = async (wrapper, taps) => {
+    for (let i = 0; i < taps; i++) await wrapper.trigger('click')
+  }
+
+  it('is off unless asked for, so the details popup keeps its layout', () => {
+    expect(mountRating().classes()).not.toContain('stacked')
+    expect(mountStacked().classes()).toContain('stacked')
+  })
+
+  it('puts the rank on the line under the number', () => {
+    const view = mountStacked({ rankLabel: '1203rd' }).find('.rating')
+    const lines = view.element.children
+    expect(lines).toHaveLength(2)
+    expect(lines[0].textContent).toBe('8.44')
+    expect(lines[1].textContent).toBe('(1203rd)')
+  })
+
+  it('puts "(normalized rating)" on the line under the normalized score', async () => {
+    const wrapper = mountStacked({ rankLabel: '1203rd' })
+    await cycleTo(wrapper, 1)
+    const lines = wrapper.find('.normalized-rating').element.children
+    expect(lines).toHaveLength(2)
+    expect(lines[0].textContent).toBe('7')
+    expect(lines[1].textContent).toBe('(normalized rating)')
+  })
+
+  it('keeps an empty second line under the stars so they do not jump', async () => {
+    const wrapper = mountStacked({ rankLabel: '1203rd' })
+    await cycleTo(wrapper, 2)
+    const spacer = wrapper.find('.stars .sub-line-spacer')
+    expect(spacer.exists()).toBe(true)
+    expect(spacer.text()).toBe('')
+  })
+
+  it('keeps the empty line under the stars when there are no stars too', async () => {
+    const wrapper = mountStacked({ normalizedRating: 0 })
+    await cycleTo(wrapper, 2)
+    expect(wrapper.find('.stars .no-stars').exists()).toBe(true)
+    expect(wrapper.find('.stars .sub-line-spacer').exists()).toBe(true)
+  })
+
+  it('reserves the second line for a film with no rank', () => {
+    const view = mountStacked().find('.rating')
+    expect(view.find('label').exists()).toBe(false)
+    expect(view.find('.sub-line-spacer').exists()).toBe(true)
+  })
+
+  it('adds no spacer lines when not stacked', async () => {
+    const wrapper = mountRating()
+    expect(wrapper.find('.sub-line-spacer').exists()).toBe(false)
+    await cycleTo(wrapper, 2)
+    expect(wrapper.find('.sub-line-spacer').exists()).toBe(false)
+  })
+})
