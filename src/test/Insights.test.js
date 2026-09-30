@@ -771,7 +771,7 @@ describe('Insights — one question per tab', () => {
   })
 
   const PLACEMENT = {
-    ratings: ['RatingCurvePlayback', 'Outliers', 'StandoutsSection', 'PantheonSection', 'TiesSection', 'GenresSection'],
+    ratings: ['RatingCurvePlayback', 'Outliers', 'CrowdSection', 'StandoutsSection', 'PantheonSection', 'TiesSection', 'GenresSection'],
     activity: ['WatchYearsSection', 'MarathonSection', 'RewatchesSection', 'FullCalendarView'],
     eras: ['YearlyAverage', 'BoxOfficeYears', 'CrownSection', 'DecadeChampionship']
   }

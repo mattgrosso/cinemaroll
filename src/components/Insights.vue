@@ -92,6 +92,7 @@
       <Outliers :resultsWithRatings="resultsWithRatings" :allCounts="allCounts" @updateSearchValue="updateSearchValue"/>
     </InsightsPane>
 
+    <InsightsPane><CrowdSection/></InsightsPane>
     <InsightsPane><StandoutsSection/></InsightsPane>
     <InsightsPane><PantheonSection/></InsightsPane>
     <InsightsPane><TiesSection/></InsightsPane>
@@ -383,6 +384,7 @@ import CrownSection from "./stats/CrownSection.vue";
 import PantheonSection from "./stats/PantheonSection.vue";
 import TiesSection from "./stats/TiesSection.vue";
 import StandoutsSection from "./stats/StandoutsSection.vue";
+import CrowdSection from "./stats/CrowdSection.vue";
 import GenresSection from "./stats/GenresSection.vue";
 import RewatchesSection from "./stats/RewatchesSection.vue";
 import MarathonSection from "./stats/MarathonSection.vue";
@@ -480,6 +482,7 @@ export default {
     PantheonSection,
     TiesSection,
     StandoutsSection,
+    CrowdSection,
     GenresSection,
     RewatchesSection,
     MarathonSection,

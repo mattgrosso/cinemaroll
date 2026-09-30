@@ -181,6 +181,7 @@ initializeApp(firebaseConfig);
 const auth = getAuth();
 
 const db = getDatabase();
+let letterboxdLoadInFlight = null;
 
 // Pending debounced profile publish (see scheduleSocialPublish).
 let socialPublishTimer = null;
@@ -378,6 +379,14 @@ export default createStore({
     socialRequests: {},
     socialEdges: {},
     socialDirectory: {},
+    // Letterboxd (2026-09-29): the shared per-film public stats the sweep
+    // fills (letterboxdFilms/<tmdbId>) and my own synced diary entries
+    // (<topKey>/letterboxd/reviews). Loaded once per session on demand
+    // (ensureLetterboxdData) — Insights, Home's chips and sort, the games and
+    // the club read them; MovieDetail reads its one film live.
+    letterboxdFilms: null,
+    letterboxdReviews: null,
+    letterboxdLoadedAt: 0,
     socialFriendProfiles: {},
     // When fetchFriendProfiles last STARTED. Profiles are one-shot reads, so
     // this is the only measure of how old they are (see clubFetchesNeeded).
@@ -729,6 +738,12 @@ export default createStore({
     },
     setSocialFriendProfile (state, { key, profile }) {
       state.socialFriendProfiles = { ...state.socialFriendProfiles, [key]: profile };
+    },
+    setLetterboxdData (state, { films, reviews, at }) {
+      // Frozen like movieLog: thousands of small objects nobody edits.
+      state.letterboxdFilms = Object.freeze(films || {});
+      state.letterboxdReviews = Object.freeze(reviews || {});
+      state.letterboxdLoadedAt = at;
     },
     setSocialProfilesFetchedAt (state, value) {
       state.socialProfilesFetchedAt = value;
@@ -2087,6 +2102,29 @@ export default createStore({
     // missing profile is fetched, and an app open since morning shows the
     // morning's snapshot — which is how a friend-log push steered Matt's
     // running app to the film and the pills had nothing to say.
+    // One read each of the shared film cache and my synced diary, remembered
+    // for the session (re-read after maxAgeMs). Never throws: a screen that
+    // asked simply has no Letterboxd data yet.
+    async ensureLetterboxdData (context, { maxAgeMs = 10 * 60 * 1000 } = {}) {
+      const topKey = context.getters.databaseTopKey;
+      if (!topKey || !context.state.isOnline) return;
+      if (context.state.letterboxdLoadedAt && Date.now() - context.state.letterboxdLoadedAt < maxAgeMs) return;
+      if (letterboxdLoadInFlight) return letterboxdLoadInFlight;
+      letterboxdLoadInFlight = (async () => {
+        try {
+          const [films, reviews] = await Promise.all([
+            get(ref(db, 'letterboxdFilms')).then((snapshot) => snapshot.val()),
+            get(ref(db, `${topKey}/letterboxd/reviews`)).then((snapshot) => snapshot.val())
+          ]);
+          context.commit('setLetterboxdData', { films, reviews, at: Date.now() });
+        } catch (error) {
+          console.warn('Letterboxd data unavailable:', error?.message);
+        } finally {
+          letterboxdLoadInFlight = null;
+        }
+      })();
+      return letterboxdLoadInFlight;
+    },
     ensureClubData (context, { maxAgeMs = Infinity } = {}) {
       context.dispatch('attachSocialListeners');
       const needed = clubFetchesNeeded({
