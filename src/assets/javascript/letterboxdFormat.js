@@ -31,18 +31,25 @@ export const compactCount = (count) => {
 // The reviews node for one film -> newest viewing first. The same viewing can
 // arrive twice — once from the feed (review-<id>) and once from the CSV
 // (csv-<code>) — so entries with the same watched date and the same text
-// collapse to one, preferring the feed's copy (it carries the URL).
+// collapse to one, preferring the feed's copy (it carries the URL). "Same
+// text" ignores whitespace: the CSV keeps a trailing space on each paragraph
+// that the feed trims, which showed every review twice (2026-09-29). A plain
+// watch (no text) on the same day as a review is the same viewing too.
+const textKey = (review) => String(review || '').replace(/\s+/g, ' ').trim();
+
 export const reviewsFromNode = (node) => {
   const entries = Object.entries(node || {})
     .filter(([, value]) => value && typeof value === 'object')
     .map(([id, value]) => ({ id, ...value }));
   const seen = new Map();
   for (const entry of entries) {
-    const key = `${entry.watchedDate || ''}|${String(entry.review || '').trim()}`;
+    const key = `${entry.watchedDate || ''}|${textKey(entry.review)}`;
     const existing = seen.get(key);
     if (!existing || (existing.source === 'csv' && entry.source !== 'csv')) seen.set(key, entry);
   }
-  return [...seen.values()].sort((a, b) => {
+  const kept = [...seen.values()];
+  const datesWithText = new Set(kept.filter((entry) => textKey(entry.review)).map((entry) => entry.watchedDate));
+  return kept.filter((entry) => textKey(entry.review) || !entry.watchedDate || !datesWithText.has(entry.watchedDate)).sort((a, b) => {
     const dateA = a.watchedDate || '';
     const dateB = b.watchedDate || '';
     if (dateA !== dateB) return dateB.localeCompare(dateA);
@@ -143,7 +150,7 @@ export const reviewsCsvToUpdates = (rows, entries, now = Date.now()) => {
     const tmdbId = matchTitle(index, title, year);
     if (!tmdbId) { unmatched.push({ title, year: Number.isInteger(year) ? year : null }); return; }
     const rating = Number(row.Rating);
-    const review = String(row.Review || '').replace(/\r\n/g, '\n').trim();
+    const review = String(row.Review || '').replace(/\r\n/g, '\n').split('\n').map((line) => line.trimEnd()).join('\n').trim();
     const value = {
       source: 'csv',
       kind: review ? 'review' : 'watch',

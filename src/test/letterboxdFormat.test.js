@@ -45,6 +45,23 @@ describe('reviewsFromNode', () => {
     expect(list[0].url).toBe('https://letterboxd.com/x');
   });
 
+  it('collapses the pair even when the CSV copy carries trailing spaces on its paragraphs', () => {
+    const node = {
+      'review-1': { source: 'rss', watchedDate: '2026-09-27', review: 'Shudder.\n\nHonestly, better than expected.' },
+      'csv-abc': { source: 'csv', watchedDate: '2026-09-27', review: 'Shudder. \n\nHonestly, better than expected. ' }
+    };
+    expect(reviewsFromNode(node).map((r) => r.id)).toEqual(['review-1']);
+  });
+
+  it('a plain watch on the same day as a review is the same viewing', () => {
+    const node = {
+      'csv-diary': { source: 'csv', watchedDate: '2026-09-27', rating: 3 },
+      'review-1': { source: 'rss', watchedDate: '2026-09-27', rating: 3, review: 'Text.' },
+      'watch-other': { source: 'rss', watchedDate: '2025-01-01' }
+    };
+    expect(reviewsFromNode(node).map((r) => r.id)).toEqual(['review-1', 'watch-other']);
+  });
+
   it('tolerates an empty node', () => {
     expect(reviewsFromNode(null)).toEqual([]);
   });
@@ -98,7 +115,7 @@ describe('reviewsCsvToUpdates', () => {
 
   it('builds the same review records the feed sync writes, keyed by the boxd.it code', () => {
     const rows = [
-      { Date: '2026-09-20', Name: 'Heat', Year: '1995', 'Letterboxd URI': 'https://boxd.it/ZzZ9', Rating: '4.5', Rewatch: 'Yes', Review: 'Still great.\r\nReally.', Tags: '', 'Watched Date': '2026-09-19' },
+      { Date: '2026-09-20', Name: 'Heat', Year: '1995', 'Letterboxd URI': 'https://boxd.it/ZzZ9', Rating: '4.5', Rewatch: 'Yes', Review: 'Still great. \r\nReally. ', Tags: '', 'Watched Date': '2026-09-19' },
       { Date: '2026-09-21', Name: 'Nobody Has This', Year: '2001', 'Letterboxd URI': 'https://boxd.it/Q', Rating: '', Rewatch: 'No', Review: '', Tags: '', 'Watched Date': '2026-09-21' }
     ];
     const { updates, matched, unmatched } = reviewsCsvToUpdates(rows, entries, 5000);
