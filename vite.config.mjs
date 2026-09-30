@@ -191,7 +191,9 @@ export default defineConfig(({ mode }) => {
           // query param) - except the plugin's own defaults: source maps,
           // img/icons/, favicon.ico.
           globPatterns: ['**/*'],
-          globIgnores: ['**/*.map', 'img/icons/**', 'favicon.ico', '**/.DS_Store'],
+          globIgnores: ['**/*.map', 'img/icons/**', 'favicon.ico', '**/.DS_Store', 'data/**'],
+          // data/academy-awards.json (~5.5MB) is fetched once and kept in
+          // IndexedDB by the store; precaching it would double-store it.
           // Content-hashed bundles are immutable by name (revision: null,
           // as workbox-webpack-plugin did); the copied public files get a
           // content revision so a changed file at the same URL is re-fetched.

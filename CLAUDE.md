@@ -141,7 +141,7 @@ Firebase Realtime Database, keyed by the user's sanitized email:
 ```
 
 External data: TMDB (movie metadata), OMDb (Rotten Tomatoes + Metacritic, newsletter
-only, server-side key), a `film-awards-api` on Railway (Academy Awards),
+only, server-side key), `public/data/academy-awards.json` (Academy Awards; see below),
 `src/assets/data/otherAwardsWinners.json` (Golden Globes / BAFTA / Cannes / Venice,
 scraped from Wikipedia wikitext), Letterboxd (scraping + deep links).
 
@@ -260,3 +260,16 @@ the version half alone in the header's corner badge. `vite.config.mjs` sets
 
 Use the Firebase `testing-database` path (via the in-app dev-mode toggle) for anything
 that mutates data. **Never use the real account for that.**
+
+
+## Academy Awards data
+
+`public/data/academy-awards.json` is the full Oscars dataset (every category, wins and
+nominations), served as a static file from S3/CloudFront and cached in IndexedDB by
+`initializeDB`. It replaced the `film-awards-api` service on Railway (Sep 2026); the
+Best Picture list is filtered from the same file. To add a new year after the ceremony:
+in `~/code/film-awards-api`, update `AcademyAwards.json` and rebuild the database as its
+README describes, run `npm start`, then
+`curl -s localhost:3000/awards > ~/code/cinemaroll/public/data/academy-awards.json`
+(check the port in its `server.js`) and deploy Cinema Roll. Devices that already cached
+the old file keep it until their IndexedDB snapshot is cleared.

@@ -389,10 +389,12 @@ describe('initializeDB: Best Picture enrichment is cached', () => {
 
   it('enriches and then caches when there is no snapshot', async () => {
     axios.get.mockImplementation((url) => {
-      if (url.includes('category=Best%20Picture')) {
+      if (url === '/data/academy-awards.json') {
         return Promise.resolve({ data: [
-          { tmdb: '100', year: 1994, isWinner: '1' },
-          { tmdb: '200', year: 1995, isWinner: '1' }
+          { category: 'Best Picture', tmdb: '100', year: 1994, isWinner: '1' },
+          { category: 'Best Picture', tmdb: '200', year: 1995, isWinner: '1' },
+          { category: 'Best Picture', tmdb: '300', year: 1995, isWinner: '0' },
+          { category: 'Best Actor', tmdb: '400', year: 1995, isWinner: '1' }
         ] })
       }
       if (url.includes('api.themoviedb.org')) {
@@ -406,6 +408,26 @@ describe('initializeDB: Best Picture enrichment is cached', () => {
 
     expect(store.state.academyAwardWinners.bestPicture).toHaveLength(2)
     expect(saveSnapshotMock).toHaveBeenCalledWith('global', 'academyAwardWinners', expect.any(Object))
+  })
+
+  it('downloads the static awards file once for both the Best Picture list and the full list', async () => {
+    axios.get.mockImplementation((url) => {
+      if (url === '/data/academy-awards.json') {
+        return Promise.resolve({ data: [{ category: 'Best Picture', tmdb: '100', year: 1994, isWinner: '1', isActing: '0' }] })
+      }
+      if (url.includes('api.themoviedb.org')) {
+        return Promise.resolve({ data: { id: 100, title: 'A Winner' } })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    await store.dispatch('initializeDB')
+    await flushMicrotasks()
+
+    const awardsCalls = axios.get.mock.calls.filter(([url]) => url === '/data/academy-awards.json')
+    expect(awardsCalls).toHaveLength(1)
+    expect(store.state.academyAwardWinners.bestPicture).toHaveLength(1)
+    expect(store.state.allAcademyAwards).toHaveLength(1)
   })
 
   it('does not cache an empty result, so a failed fetch is retried next launch', async () => {
@@ -440,7 +462,7 @@ describe('initializeDB: full Academy Awards dataset (feature: "pull it down and 
 
   it('fetches the full, unfiltered /awards dataset and normalizes isWinner/isActing to real booleans', async () => {
     axios.get.mockImplementation((url) => {
-      if (url === 'https://web-production-b8145.up.railway.app/awards') {
+      if (url === '/data/academy-awards.json') {
         return Promise.resolve({
           data: [
             { id: 1, category: 'Best Picture', tmdb: '100', year: 1994, isWinner: '1', isActing: '0' },
@@ -455,9 +477,8 @@ describe('initializeDB: full Academy Awards dataset (feature: "pull it down and 
     await store.dispatch('initializeDB')
     await flushMicrotasks()
 
-    // The bare endpoint, no ?category= filter — confirms this is a
-    // genuinely separate fetch from the existing Best-Picture-only one.
-    expect(axios.get).toHaveBeenCalledWith('https://web-production-b8145.up.railway.app/awards')
+    // The static file shipped with the app (was the Railway API).
+    expect(axios.get).toHaveBeenCalledWith('/data/academy-awards.json')
     expect(store.state.allAcademyAwards).toHaveLength(3)
     expect(store.state.allAcademyAwards[0]).toMatchObject({ category: 'Best Picture', isWinner: true, isActing: false })
     expect(store.state.allAcademyAwards[1]).toMatchObject({ category: 'Best Actor', isWinner: true, isActing: true })
@@ -481,13 +502,13 @@ describe('initializeDB: full Academy Awards dataset (feature: "pull it down and 
     await flushMicrotasks()
 
     expect(store.state.allAcademyAwards).toEqual([{ id: 1, category: 'Cached', isWinner: true, isActing: false }])
-    expect(axios.get).not.toHaveBeenCalledWith('https://web-production-b8145.up.railway.app/awards')
+    expect(axios.get).not.toHaveBeenCalledWith('/data/academy-awards.json')
   })
 
   it('fetches and caches when the snapshot is empty', async () => {
     loadSnapshotMock.mockImplementation(() => Promise.resolve(null))
     axios.get.mockImplementation((url) => {
-      if (url === 'https://web-production-b8145.up.railway.app/awards') {
+      if (url === '/data/academy-awards.json') {
         return Promise.resolve({ data: [{ id: 9, category: 'Best Picture', tmdb: '900', year: 2020, isWinner: '1', isActing: '0' }] })
       }
       return Promise.resolve({ data: [] })
@@ -506,7 +527,7 @@ describe('initializeDB: full Academy Awards dataset (feature: "pull it down and 
 
     await store.dispatch('initializeDB')
 
-    expect(axios.get).not.toHaveBeenCalledWith('https://web-production-b8145.up.railway.app/awards')
+    expect(axios.get).not.toHaveBeenCalledWith('/data/academy-awards.json')
   })
 
   it('is not reset by resetLocalDB, unlike the per-account movieLog/settings/academyAwardWinners (this data is not user-specific)', async () => {

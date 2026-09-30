@@ -46,6 +46,16 @@ import { postToNewsletter } from "../utils/newsletterRequest.js";
 // A rebuild takes about a minute end to end (measured at ~52s against the
 // real APIs), so the poll has to outlast that with room to spare without
 // hammering the database: 5s apart, up to two and a half minutes.
+// The full Academy Awards dataset (~11k wins + nominations, every category,
+// every ceremony) as a static file shipped with the app on S3/CloudFront.
+// It used to come from the self-built film-awards-api on Railway; the data
+// only changes once a year, so a server was pure cost. Yearly update: see
+// "Academy Awards data" in CLAUDE.md.
+export const ACADEMY_AWARDS_URL = '/data/academy-awards.json';
+async function fetchAcademyAwardsDataset () {
+  const response = await axios.get(ACADEMY_AWARDS_URL);
+  return response.data || [];
+}
 const NEWSLETTER_REBUILD_POLL_MS = 5000;
 const NEWSLETTER_REBUILD_TRIES = 30;
 import { pushPrefsWithDefaults } from "../assets/javascript/pushPrefs.js";
@@ -1423,10 +1433,12 @@ export default createStore({
         }
       }
 
+      // One download serves both the Best Picture list and the full list.
+      let awardsDataset = null;
       if (!Object.keys(context.state.academyAwardWinners).length) {
         try {
-          const response = await axios.get(`https://web-production-b8145.up.railway.app/awards?category=Best%20Picture`);
-          const data = response.data.map((item) => {
+          awardsDataset = awardsDataset || await fetchAcademyAwardsDataset();
+          const data = awardsDataset.filter((item) => String(item.category).toLowerCase() === 'best picture').map((item) => {
             return {
               ...item,
               isWinner: ['TRUE', '1', true].includes(item.isWinner)
@@ -1464,9 +1476,8 @@ export default createStore({
       // that many Academy Awards, it'd be like one JSON thing we could pull
       // down... store it locally so we can use it wherever we want to."
       // ~11k raw records (wins AND nominations, every category since the
-      // 1st ceremony), same self-built film-awards-api service as above,
-      // just the bare /awards endpoint with no category filter — confirmed
-      // live (curl) to return the complete dataset, ~5.5MB. NOT TMDB-enriched
+      // 1st ceremony), now the static /data/academy-awards.json (see ACADEMY_AWARDS_URL),
+      // ~5.5MB. NOT TMDB-enriched
       // per record (unlike academyAwardWinners' Best Picture list) — that
       // would mean a per-record TMDB fetch across ~11k rows, defeating the
       // "not that big" simplicity this is explicitly meant to have.
@@ -1487,8 +1498,8 @@ export default createStore({
 
       if (context.state.allAcademyAwards.length === 0) {
         try {
-          const response = await axios.get('https://web-production-b8145.up.railway.app/awards');
-          const data = (response.data || []).map((record) => ({
+          awardsDataset = awardsDataset || await fetchAcademyAwardsDataset();
+          const data = awardsDataset.map((record) => ({
             ...record,
             isWinner: ['TRUE', '1', true].includes(record.isWinner),
             isActing: ['TRUE', '1', true].includes(record.isActing)
