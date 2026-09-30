@@ -608,7 +608,8 @@ describe('MovieDetail — Best in <span>', () => {
     await wrapper.setData({ result: current, movie: current.movie })
 
     const row = wrapper.find('.best-since-row')
-    expect(row.find('.best-since-label').text()).toBe('Best in 6 weeks')
+    // Fourth tweak (2026-09-30): no "Best in 6 weeks" label, just the sentence.
+    expect(row.find('.best-since-label').exists()).toBe(false)
     const text = row.find('.best-since-text').text().replace(/\s+/g, ' ')
     // Third wording (2026-09-30): "the best movie to be released since E.T.
     // six years prior" — the film that ended the run leads, the span closes.
@@ -616,6 +617,8 @@ describe('MovieDetail — Best in <span>', () => {
     expect(row.find('.best-since-text strong').text()).toBe('Older Better')
     expect(text).not.toContain('Nothing released')
     expect(text).not.toContain('Best since')
+    expect(text).not.toContain('Best in')
+    expect(text).toBe('The best movie released since Older Better, 6 weeks prior.')
   })
 
   it('shows nothing when no earlier film rates higher', async () => {

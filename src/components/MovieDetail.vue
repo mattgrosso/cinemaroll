@@ -157,7 +157,8 @@
              had come out for six weeks"). lastHigherRatedMovie is the most
              recently RELEASED earlier film you rated higher; the poster is it.
              Third try, same day: the sentence reads "The best movie released
-             since E.T., 6 years prior." A tie doesn't end the run. -->
+             since E.T., 6 years prior." A tie doesn't end the run. Fourth
+             tweak: the "Best in 6 years" label is gone — just the sentence. -->
         <button v-if="lastHigherRatedMovie" type="button" class="best-since-row" @click="navigateToMovie(lastHigherRatedMovie.movie.id)">
           <img
             v-if="getPosterPath(lastHigherRatedMovie)"
@@ -165,7 +166,6 @@
             :alt="lastHigherRatedMovie.movie.title"
             class="best-since-thumb">
           <span class="best-since-text">
-            <span class="best-since-label">Best in {{ bestSinceSpan }}</span>
             The best movie released since
             <strong>{{ lastHigherRatedMovie.movie.title }}</strong>, {{ bestSinceSpan }} prior.
           </span>
@@ -2510,15 +2510,6 @@ export default {
     line-height: 1.35;
 
     strong { color: #fff; }
-  }
-
-  .best-since-label {
-    color: #6fb8ff;
-    display: block;
-    font-size: 0.62rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
   }
 
   .best-since-chevron { color: #9a9a9a; font-size: 0.7rem; }

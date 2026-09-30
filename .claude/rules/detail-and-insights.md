@@ -36,9 +36,9 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
   pass, same night: the facts strip is THREE across (year, runtime, your score — the
   Letterboxd crowd tile was "too prominent" and lives as the Letterboxd row's summary
   when there is no review), the three actions are tiles in the same style, the Ratings
-  accordion is dark, and **Best since leads with the span**: label "Best in 6 weeks",
-  then "The best movie released since <film>, 6 weeks prior." (`bestSinceSpan`; third
-  wording, 2026-09-30 — a middle try, "Nothing released in the 6 weeks before it rates
+  accordion is dark, and **Best since is one sentence, no label**: "The best movie
+  released since <film>, 6 weeks prior." (`bestSinceSpan`; third wording, 2026-09-30 —
+  a "Best in 6 weeks" label above it was dropped the same day — a middle try, "Nothing released in the 6 weeks before it rates
   higher. Last one that did: <film>.", read backwards). The orphan poster confused people, and a first sentence
   ("The highest you've rated anything released since <film>, N earlier") buried the
   span at the end and was still unclear (report, 2026-09-30). `lastHigherRatedMovie` is
