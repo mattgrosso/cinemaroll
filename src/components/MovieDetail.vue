@@ -2513,6 +2513,15 @@ export default {
     margin: 0 0 14px;
   }
 
+  /* The friends' chips sit between two folded rows; they get a rule of
+     their own so they read as a row too. The component renders nothing
+     when nobody in the club has seen the film, so no empty gap. */
+  :deep(.friends-who-saw) {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 0 !important;
+    padding: 10px 0 8px;
+  }
+
   /* A band title is a heading, a row label is a field name — they must not
      read alike (2026-09-30). */
   .band-title {
