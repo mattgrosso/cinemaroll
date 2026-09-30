@@ -108,12 +108,14 @@ describe('MovieDetail', () => {
       expect(wrapper.find('.letterboxd-film').exists()).toBe(false)
     })
 
-    it('shows the public rating in the facts strip, linked to the film page, with a compact count', async () => {
+    it('with no review of mine, the Letterboxd row is the crowd rating, linked to the film page', async () => {
       await wrapper.setData({ letterboxdFilmStats: { slug: 'heat-1995', rating: 4.32, ratingCount: 1307901, fans: 61000 } })
-      const fact = wrapper.find('.letterboxd-film')
-      expect(fact.text()).toContain('★ 4.32')
-      expect(fact.text()).toContain('1.3M on Letterboxd')
-      expect(fact.attributes('href')).toBe('https://letterboxd.com/film/heat-1995/')
+      expect(wrapper.vm.letterboxdSummary).toBe('★ 4.32 · 1.3M ratings · 61K fans')
+      const link = wrapper.find('.letterboxd-film a')
+      expect(link.text()).toBe('★ 4.32 · 1.3M ratings · 61K fans')
+      expect(link.attributes('href')).toBe('https://letterboxd.com/film/heat-1995/')
+      // The facts strip itself carries no crowd tile (Matt: "too prominent").
+      expect(wrapper.find('.fact-strip').text()).not.toContain('★')
     })
 
     it('a film Letterboxd does not know renders no rating fact', async () => {

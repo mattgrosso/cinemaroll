@@ -34,6 +34,14 @@
              same three-way toggle as before), the Letterboxd crowd's rating,
              the year, the runtime. Everything below folds. -->
         <div class="fact-strip rating-runtime-and-date">
+          <a class="fact fact-year link" @click.stop="searchFor(`${getYear(result)}`)">
+            <span class="fact-value">{{getYear(result)}}</span>
+            <span class="fact-label">released</span>
+          </a>
+          <div class="fact fact-runtime">
+            <span class="fact-value">{{prettifyRuntime(result)}}</span>
+            <span class="fact-label">runtime</span>
+          </div>
           <div class="fact fact-score">
             <span class="rating-with-rank">
               <ToggleableRating
@@ -44,37 +52,30 @@
             </span>
             <span class="fact-label">your score</span>
           </div>
-          <a v-if="letterboxdFilmLine" class="fact fact-crowd letterboxd-film" :href="letterboxdFilmUrl" target="_blank" rel="noopener">
-            <span class="fact-value">★ {{ letterboxdFilmStats.rating.toFixed(2) }}</span>
-            <span class="fact-label"><span v-if="compactCount(letterboxdFilmStats.ratingCount)">{{ compactCount(letterboxdFilmStats.ratingCount) }} on </span>Letterboxd</span>
-          </a>
-          <a class="fact fact-year link" @click.stop="searchFor(`${getYear(result)}`)">
-            <span class="fact-value">{{getYear(result)}}</span>
-            <span class="fact-label">released</span>
-          </a>
-          <div class="fact fact-runtime">
-            <span class="fact-value">{{prettifyRuntime(result)}}</span>
-            <span class="fact-label">runtime</span>
-          </div>
         </div>
 
-        <div class="details-actions d-flex align-items-center mb-4">
-          <div v-if="$store.state.settings.letterboxdConnected"
-               @click="logOnLetterboxd"
-               role="button"
-               :title="isMovieLoggedOnLetterboxd() ? 'View movie on Letterboxd' : 'Log on Letterboxd'"
-               :aria-label="isMovieLoggedOnLetterboxd() ? 'View movie on Letterboxd' : 'Log on Letterboxd'"
-               :class="['letterboxd-status-button', { 'logged': isMovieLoggedOnLetterboxd(), 'not-logged': !isMovieLoggedOnLetterboxd() }]">
-            <img :src="isMovieLoggedOnLetterboxd() ? 'https://a.ltrbxd.com/logos/letterboxd-decal-dots-pos-rgb-500px.png' : 'https://a.ltrbxd.com/logos/letterboxd-decal-dots-pos-mono-500px.png'"
-                 alt="Letterboxd"
-                 class="letterboxd-icon">
-          </div>
-          <button class="btn btn-sm btn-success me-2" @click="rateMedia(topStructure(result))">Add New Rating</button>
-          <button class="btn btn-sm btn-info me-2" @click="goToWikipedia()">Wikipedia</button>
+        <div class="details-actions">
+          <button type="button" class="action-tile action-primary" @click="rateMedia(topStructure(result))">
+            <i class="bi bi-plus-circle"></i><span>Add rating</span>
+          </button>
+          <button
+            v-if="$store.state.settings.letterboxdConnected"
+            type="button"
+            class="action-tile letterboxd-status-button"
+            :class="isMovieLoggedOnLetterboxd() ? 'logged' : 'not-logged'"
+            :title="isMovieLoggedOnLetterboxd() ? 'View movie on Letterboxd' : 'Log on Letterboxd'"
+            :aria-label="isMovieLoggedOnLetterboxd() ? 'View movie on Letterboxd' : 'Log on Letterboxd'"
+            @click="logOnLetterboxd">
+            <img :src="isMovieLoggedOnLetterboxd() ? 'https://a.ltrbxd.com/logos/letterboxd-decal-dots-pos-rgb-500px.png' : 'https://a.ltrbxd.com/logos/letterboxd-decal-dots-pos-mono-500px.png'" alt="" class="letterboxd-icon">
+            <span>{{ isMovieLoggedOnLetterboxd() ? 'On Letterboxd' : 'Log it' }}</span>
+          </button>
+          <button type="button" class="action-tile" @click="goToWikipedia()">
+            <i class="bi bi-wikipedia"></i><span>Wikipedia</span>
+          </button>
         </div>
-
 
         <div class="detail-band">
+          <p class="band-title">You</p>
         <!-- Previous ratings if any -->
         <div v-if="getAllRatings(previousEntry)" class="ratings-and-comparison-wrapper mb-3">
           <div class="ratings-section">
@@ -144,20 +145,30 @@
             </div>
           </div>
 
-          <!-- Last Higher Rated Movie Poster -->
-          <div v-if="lastHigherRatedMovie" class="comparison-poster-section">
-            <h4>Best since</h4>
-            <div class="poster-with-overlay" @click="navigateToMovie(lastHigherRatedMovie.movie.id)">
-              <img
-                :src="`https://image.tmdb.org/t/p/w342${getPosterPath(lastHigherRatedMovie)}`"
-                :alt="lastHigherRatedMovie.movie.title"
-                class="comparison-poster">
-            </div>
-            <div class="time-below-poster">({{ formatTimeDifference(lastHigherRatedMovie.movie.release_date, movie.release_date) }} prior)</div>
-          </div>
         </div>
 
-        <DetailSection v-if="letterboxdWrittenReviews.length" id="letterboxd" label="Letterboxd review" tone="you" :summary="letterboxdSummary" class="letterboxd-section">
+        <!-- "Best since" as a sentence (2026-09-30: "people find it confusing").
+             lastHigherRatedMovie is the most recently RELEASED earlier film you
+             rated higher, so this film is the best thing released since it. -->
+        <button v-if="lastHigherRatedMovie" type="button" class="best-since-row" @click="navigateToMovie(lastHigherRatedMovie.movie.id)">
+          <img
+            v-if="getPosterPath(lastHigherRatedMovie)"
+            :src="`https://image.tmdb.org/t/p/w154${getPosterPath(lastHigherRatedMovie)}`"
+            :alt="lastHigherRatedMovie.movie.title"
+            class="best-since-thumb">
+          <span class="best-since-text">
+            <span class="best-since-label">Best since</span>
+            The highest you've rated anything released since
+            <strong>{{ lastHigherRatedMovie.movie.title }}</strong>,
+            {{ formatTimeDifference(lastHigherRatedMovie.movie.release_date, movie.release_date) }} earlier.
+          </span>
+          <i class="bi bi-chevron-right best-since-chevron"></i>
+        </button>
+
+        <DetailSection v-if="letterboxdWrittenReviews.length || letterboxdFilmLine" id="letterboxd" label="Letterboxd" tone="you" :summary="letterboxdSummary" class="letterboxd-section">
+          <p v-if="letterboxdFilmLine" class="letterboxd-film mb-1">
+            <a :href="letterboxdFilmUrl" target="_blank" rel="noopener">{{ letterboxdFilmLine }}</a>
+          </p>
           <div class="letterboxd-reviews">
             <div v-for="review in letterboxdWrittenReviews" :key="review.id" class="letterboxd-review">
               <a v-if="review.url" :href="review.url" target="_blank" rel="noopener" class="letterboxd-review-date">{{ watchedDateLabel(review.watchedDate) }}</a>
@@ -263,7 +274,7 @@
 
         <div class="detail-band">
           <p class="band-title">The film</p>
-        <DetailSection id="genres" label="Genres" tone="film" :summary="listSummary(turnArrayIntoList(topStructure(result).genres, 'name'), 4)" defaultOpen>
+        <DetailSection id="genres" label="Genres" tone="film" :summary="listSummary(turnArrayIntoList(topStructure(result).genres, 'name'), 4)">
         <div class="genres mb-3">
           <h4>Genre<span v-if="multipleEntries(turnArrayIntoList(topStructure(result).genres, 'name'))">s</span></h4>
           <p class="long-list">
@@ -462,7 +473,7 @@
 
         <div class="detail-band">
           <p class="band-title">The people</p>
-        <DetailSection id="directors" label="Directors" tone="people" :summary="listSummary(getCrewMember('Director', true), 3)" defaultOpen>
+        <DetailSection id="directors" label="Directors" tone="people" :summary="listSummary(getCrewMember('Director', 'strict'), 3)">
         <!-- Directors -->
         <div class="directors mb-3">
           <h4>
@@ -710,7 +721,7 @@ export default {
     // One-line summaries for the folded sections (DetailSection).
     letterboxdSummary () {
       const reviews = this.letterboxdWrittenReviews;
-      if (!reviews.length) return '';
+      if (!reviews.length) return this.letterboxdFilmLine || '';
       const latest = reviews[0];
       const when = latest.watchedDate ? watchedDateLabel(latest.watchedDate) : '';
       return reviews.length === 1 ? `Your review${when ? `, ${when}` : ''}` : `${reviews.length} reviews${when ? `, latest ${when}` : ''}`;
@@ -2180,7 +2191,7 @@ export default {
 .movie-content {
   margin: 0 auto;
   max-width: 650px;
-  padding: 1rem;
+  padding: 1rem 1rem 120px; /* room for the Artwork row to clear the bug button */
 
   /* ---------------------------------------------------------------------
      Section accents (2026-08-17). The page was entirely flat black with grey
@@ -2322,9 +2333,33 @@ export default {
   }
 
   .details-actions {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 1rem;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin: 0 0 18px;
+
+    .action-tile {
+      align-items: center;
+      background: rgba(255, 255, 255, 0.06);
+      border: 0;
+      border-radius: 6px;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      justify-content: center;
+      min-height: 56px;
+      padding: 8px 6px;
+      font-size: 0.7rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+
+      i { font-size: 1.15rem; line-height: 1; }
+      &:active { background: rgba(255, 255, 255, 0.12); }
+    }
+
+    .action-primary,
+    .action-primary i { color: #6fd39b; }
   }
 
   .awards {
@@ -2365,21 +2400,23 @@ export default {
 
   .fact-strip {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 6px;
-    margin: 0 0 12px;
+    margin: 0 0 8px;
 
     .fact {
+      align-items: center;
       display: flex;
       flex-direction: column;
       justify-content: center;
       gap: 2px;
-      padding: 8px 10px;
+      padding: 10px 6px 8px;
       border-radius: 6px;
       background: rgba(255, 255, 255, 0.06);
       color: #fff;
+      text-align: center;
       text-decoration: none;
-      min-height: 58px;
+      min-height: 64px;
 
       &:active { background: rgba(255, 255, 255, 0.12); }
     }
@@ -2392,26 +2429,84 @@ export default {
 
     .fact-label {
       color: #ccc;
-      font-size: 0.68rem;
-      letter-spacing: 0.04em;
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
     }
 
-    .fact-crowd .fact-value { color: #00e054; }
-
-    .fact-score .rating-with-rank { display: block; }
+    /* The score tile hosts the three-way toggle; its number has to sit
+       exactly where the other tiles' values sit. */
+    .fact-score {
+      .rating-with-rank { display: block; }
+      :deep(.toggleable-rating) {
+        height: auto;
+        min-width: 0;
+        justify-content: center;
+        font-size: 1.35rem;
+        line-height: 1.1;
+      }
+      :deep(.toggleable-rating h3) { font-size: 1.35rem; font-weight: 700; line-height: 1.1; }
+      :deep(.toggleable-rating label) { font-size: 0.62rem; color: #ccc; position: static; margin-left: 4px; }
+      :deep(.toggleable-rating .rating),
+      :deep(.toggleable-rating .normalized-rating) { align-items: baseline; justify-content: center; }
+    }
   }
+
+  .best-since-row {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.04);
+    border: 0;
+    border-radius: 6px;
+    color: #fff;
+    display: flex;
+    gap: 10px;
+    margin: 8px 0 4px;
+    padding: 8px 10px;
+    text-align: left;
+    width: 100%;
+
+    &:active { background: rgba(255, 255, 255, 0.1); }
+  }
+
+  .best-since-thumb {
+    border-radius: 3px;
+    flex: 0 0 auto;
+    height: 54px;
+    object-fit: cover;
+    width: 36px;
+  }
+
+  .best-since-text {
+    color: #ccc;
+    flex: 1 1 auto;
+    font-size: 0.8rem;
+    line-height: 1.35;
+
+    strong { color: #fff; }
+  }
+
+  .best-since-label {
+    color: #6fb8ff;
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .best-since-chevron { color: #9a9a9a; font-size: 0.7rem; }
 
   .detail-band {
     margin: 0 0 14px;
   }
 
+  /* A band title is a heading, a row label is a field name — they must not
+     read alike (2026-09-30). */
   .band-title {
-    color: #9a9a9a;
-    font-size: 0.62rem;
-    letter-spacing: 0.12em;
-    margin: 0 0 2px;
-    text-transform: uppercase;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 18px 0 6px;
   }
 
   /* Inside a folded section the row's own label does the naming, so the
@@ -2769,76 +2864,49 @@ export default {
   }
 
   .ratings-and-comparison-wrapper {
-    display: flex;
-    gap: 1rem;
-    align-items: flex-start;
-
-    .ratings-section {
-      flex: 1;
-      min-width: 0; // Allow flex item to shrink below content size
-    }
-
-    .comparison-poster-section {
-      flex-shrink: 0;
-      width: 65px;
-
-      h4 {
-        margin-bottom: 0.35rem;
-        font-size: 0.6rem;
-      }
-
-      .poster-with-overlay {
-        cursor: pointer;
-        border-radius: 3px;
-        overflow: hidden;
-        transition: transform 0.2s;
-        margin-bottom: 0.25rem;
-
-        &:hover {
-          transform: scale(1.02);
-        }
-
-        .comparison-poster {
-          width: 100%;
-          display: block;
-          aspect-ratio: 2/3;
-          object-fit: cover;
-        }
-      }
-
-      .time-below-poster {
-        font-size: 0.5rem;
-        color: #fff;
-        text-align: right;
-        line-height: 1.2;
-      }
-    }
+    .ratings-section { min-width: 0; }
   }
 
   .previous-ratings,
   .ratings-section {
+    .accordion { --bs-accordion-bg: transparent; --bs-accordion-border-color: transparent; }
+
+    .accordion-item {
+      background: transparent;
+      border: 0;
+      margin-bottom: 4px;
+    }
+
     .accordion-button {
-      background-color: white;
-      color: black;
-      padding: 8px 12px;
+      background-color: rgba(255, 255, 255, 0.06);
+      border-radius: 6px !important;
+      color: #fff;
+      padding: 10px 12px;
+      font-size: 0.9rem;
 
-      &:focus {
-        box-shadow: none;
-      }
-
-      &::after {
-        display: none;
-      }
+      &:not(.collapsed) { background-color: rgba(255, 255, 255, 0.1); color: #fff; box-shadow: none; }
+      &:focus { box-shadow: none; }
+      &::after { display: none; }
+      .border-start { border-color: rgba(255, 255, 255, 0.2) !important; }
     }
 
     .accordion-body {
-      padding: 6px;
+      padding: 6px 4px 8px;
 
       table {
+        --bs-table-bg: transparent;
+        --bs-table-color: #fff;
+        --bs-table-striped-bg: rgba(255, 255, 255, 0.04);
+        --bs-table-striped-color: #fff;
+        --bs-table-border-color: rgba(255, 255, 255, 0.1);
+        color: #fff;
         table-layout: fixed;
         width: 100%;
 
+        tr.table-secondary { --bs-table-bg: transparent; --bs-table-color: #fff; }
+
         th {
+          color: #ccc;
           span {
             display: inline-block;
             font-size: 0.6rem;
@@ -2847,7 +2915,7 @@ export default {
         }
 
         td {
-          font-size: 0.6rem;
+          font-size: 0.7rem;
         }
       }
     }
@@ -2861,29 +2929,11 @@ export default {
     position: relative;
   }
 
-  .letterboxd-status-button {
-    width: 32px;
-    height: 32px;
-    margin-right: 8px;
-    cursor: pointer;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s, border-color 0.2s;
-    border: 0;
-
-    &.logged {
-      border-color: #28a745;
-    }
-
-    &.not-logged {
-      border-color: #6c757d;
-    }
-  }
+  .letterboxd-status-button.logged { color: #6fd39b; }
 
   .letterboxd-icon {
-    width: 24px;
+    height: 1.15rem;
+    width: auto;
     height: 24px;
     background: none !important;
   }
