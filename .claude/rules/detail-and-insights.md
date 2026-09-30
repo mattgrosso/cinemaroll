@@ -22,8 +22,24 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
 
 ## MovieDetail
 
-- **Section order**: Genres → Awards → Cast → Keywords → Box Office → Country of Origin →
-  Set In → Filmed In → Tags. "Country of Origin" is TMDB's production countries; it was
+- **The 2026-09-30 redesign (Matt: "The movie detail page has gotten away from us.
+  There's too much info for the current design.")**: hero, then a 2×2 **facts strip**
+  (your score with rank — still the three-way `ToggleableRating` — the Letterboxd crowd's
+  rating, year, runtime), the action row, then three bands: **you** (Ratings accordion +
+  Best since, Letterboxd review, Tags, club friends), **The film** (Genres, Awards,
+  Keywords, Box office, Places, Studios) and **The people** (Directors, Writers, Cast,
+  Composer, Cinematography, Editors, Producers), then Artwork. Every band row is a
+  `DetailSection`: closed, it is its label and a ONE-LINE SUMMARY (`listSummary`,
+  `awardsSummary`, `boxOfficeSummary`, `placesSummary`, `letterboxdSummary`); open, the
+  original list body. Genres and Directors open by default; the choice is remembered per
+  section in `localStorage` (`cinemaRoll.movieDetail.open.<id>`). Bodies are `v-show`, so
+  the old headings and classes stay in the DOM (hidden by `:deep` CSS; Places keeps its
+  `h4.sub` sub-labels) — tests still find `.box-office`, `.production-countries h4` and
+  friends, and mount with a pass-through `DetailSection` stub. The page went from four
+  phone screens to two. Country of Origin / Set In / Filmed In now share the Places row;
+  the naming rule below still holds.
+- **Old section order** (pre-redesign, for reading old history): Genres → Awards → Cast →
+  Keywords → Box Office → Country of Origin → Set In → Filmed In → Tags. "Country of Origin" is TMDB's production countries; it was
   headed "Made In" until 2026-09-08, when Matt couldn't tell it from Filmed In. Don't
   rename it back to anything that sounds like a place the cameras went. Set In / Filmed In are plain text from `movie.locations`
   (`places.js`); tapping a place runs a Cinema Roll search via a `place` chip (Matt,

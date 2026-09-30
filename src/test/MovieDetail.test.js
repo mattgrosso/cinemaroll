@@ -93,7 +93,7 @@ describe('MovieDetail', () => {
           $route: { params: { tmdbId: '42' }, query: {} },
           $router: { push: pushSpy }
         },
-        stubs: { ToggleableRating: true, Modal: true }
+        stubs: { ToggleableRating: true, Modal: true, DetailSection: { template: '<section class="detail-section-stub"><slot name="actions"/><slot/></section>' } }
       }
     })
 
@@ -105,55 +105,65 @@ describe('MovieDetail', () => {
     it('renders nothing until there is something', async () => {
       await wrapper.setData({ letterboxdReviews: [], letterboxdFilmStats: null })
       expect(wrapper.find('.letterboxd-section').exists()).toBe(false)
+      expect(wrapper.find('.letterboxd-film').exists()).toBe(false)
     })
 
-    it('shows the public rating line linked to the film page, with compact counts', async () => {
+    it('shows the public rating in the facts strip, linked to the film page, with a compact count', async () => {
       await wrapper.setData({ letterboxdFilmStats: { slug: 'heat-1995', rating: 4.32, ratingCount: 1307901, fans: 61000 } })
-      const line = wrapper.find('.letterboxd-film a')
-      expect(line.text()).toBe('★ 4.32 · 1.3M ratings · 61K fans')
-      expect(line.attributes('href')).toBe('https://letterboxd.com/film/heat-1995/')
+      const fact = wrapper.find('.letterboxd-film')
+      expect(fact.text()).toContain('★ 4.32')
+      expect(fact.text()).toContain('1.3M on Letterboxd')
+      expect(fact.attributes('href')).toBe('https://letterboxd.com/film/heat-1995/')
     })
 
-    it('a film Letterboxd does not know renders no rating line', async () => {
+    it('a film Letterboxd does not know renders no rating fact', async () => {
       await wrapper.setData({ letterboxdFilmStats: { missing: true, fetchedAt: 1 } })
-      expect(wrapper.find('.letterboxd-section').exists()).toBe(false)
+      expect(wrapper.find('.letterboxd-film').exists()).toBe(false)
     })
 
-    it('shows one toggle, then the dates and review text — no stars of mine, paragraphs kept', async () => {
+    it('lists my reviews as dates and text — no stars of mine, paragraphs kept — with a one-line summary', async () => {
       await wrapper.setData({
         letterboxdReviews: [
           { id: 'review-1', rating: 2.5, watchedDate: '2026-09-27', rewatch: true, review: 'First paragraph.\n\nSecond paragraph.', url: 'https://letterboxd.com/mattgrosso/film/primetime-2026/' },
           { id: 'watch-2', rating: 3, watchedDate: '2025-01-01' }
         ]
       })
-      const summary = wrapper.find('.letterboxd-summary')
-      expect(summary.text()).toBe('Show your review')
-      expect(wrapper.find('.letterboxd-section').text()).not.toContain('★★½')
-      expect(wrapper.find('.letterboxd-review').exists()).toBe(false)
-
-      await summary.trigger('click')
-      expect(summary.text()).toBe('Hide your review')
-      const reviews = wrapper.findAll('.letterboxd-review')
+      const section = wrapper.find('.letterboxd-section')
+      expect(section.exists()).toBe(true)
+      expect(section.text()).not.toContain('★')
+      const reviews = section.findAll('.letterboxd-review')
       expect(reviews).toHaveLength(1) // the plain watch has nothing to show
       expect(reviews[0].find('.letterboxd-review-date').text()).toBe(new Date(2026, 8, 27).toLocaleDateString())
       expect(reviews[0].find('.letterboxd-review-date').attributes('href')).toBe('https://letterboxd.com/mattgrosso/film/primetime-2026/')
       expect(reviews[0].find('.letterboxd-review-text').element.textContent).toBe('First paragraph.\n\nSecond paragraph.')
-      expect(reviews[0].text()).not.toContain('★')
+      expect(wrapper.vm.letterboxdSummary).toBe(`Your review, ${new Date(2026, 8, 27).toLocaleDateString()}`)
     })
 
-    it('entries without text give no toggle at all, and moving to another film folds the pane', async () => {
-      await wrapper.setData({ letterboxdReviews: [{ id: 'watch-1', rating: 3, watchedDate: '2026-09-27' }], letterboxdFilmStats: { slug: 'x', rating: 3.1, ratingCount: 10 } })
-      expect(wrapper.find('.letterboxd-summary').exists()).toBe(false)
-      await wrapper.setData({ letterboxdReviews: [{ id: 'r', review: 'Text.', watchedDate: '2026-09-27' }], showLetterboxdReviews: true })
-      expect(wrapper.find('.letterboxd-summary').text()).toBe('Hide your review')
-      wrapper.vm.loadLetterboxdExtras('950')
-      expect(wrapper.vm.showLetterboxdReviews).toBe(false)
+    it('entries without text give no section at all; two reviews summarise as a count', async () => {
+      await wrapper.setData({ letterboxdReviews: [{ id: 'watch-1', rating: 3, watchedDate: '2026-09-27' }] })
+      expect(wrapper.find('.letterboxd-section').exists()).toBe(false)
+      await wrapper.setData({ letterboxdReviews: [{ id: 'r1', review: 'A.', watchedDate: '2026-09-27' }, { id: 'r2', review: 'B.', watchedDate: '2024-01-01' }] })
+      expect(wrapper.vm.letterboxdSummary).toContain('2 reviews')
     })
 
     it('loadLetterboxdExtras asks for both, by the account key and the TMDB id', async () => {
       wrapper.vm.loadLetterboxdExtras('949')
       expect(letterboxdMocks.myLetterboxdReviews).toHaveBeenCalledWith('tester', 949)
       expect(letterboxdMocks.letterboxdFilm).toHaveBeenCalledWith(949, { online: true })
+    })
+  })
+
+  describe('folded-section summaries', () => {
+    it('listSummary names the first few and counts the rest', () => {
+      expect(wrapper.vm.listSummary(['A', 'B', 'C', 'D', 'E'], 3)).toBe('A, B, C +2')
+      expect(wrapper.vm.listSummary(['A'], 3)).toBe('A')
+      expect(wrapper.vm.listSummary([], 3)).toBe('')
+    })
+
+    it('box office and places summaries read as one line each', async () => {
+      await wrapper.setData({ movie: { ...makeResult().movie, budget: 356000000, revenue: 2799439100, production_countries: [{ name: 'United States of America' }] } })
+      expect(wrapper.vm.boxOfficeSummary).toBe('$356M budget · $2.8B box office')
+      expect(wrapper.vm.placesSummary).toContain('United States of America')
     })
   })
 
@@ -328,7 +338,7 @@ describe('MovieDetail', () => {
       const w = shallowMount(MovieDetail, {
         global: {
           mocks: { $store: store, $route: { params: { tmdbId: '42' }, query: {} }, $router: { push: vi.fn() } },
-          stubs: { ToggleableRating: true, Modal: true }
+          stubs: { ToggleableRating: true, Modal: true, DetailSection: { template: '<section class="detail-section-stub"><slot name="actions"/><slot/></section>' } }
         }
       })
       return w
@@ -472,7 +482,7 @@ describe('MovieDetail geography sections', () => {
           $route: { params: { tmdbId: '42' }, query: {} },
           $router: { push: vi.fn() }
         },
-        stubs: { ToggleableRating: true, Modal: true }
+        stubs: { ToggleableRating: true, Modal: true, DetailSection: { template: '<section class="detail-section-stub"><slot name="actions"/><slot/></section>' } }
       }
     })
     const result = makeResult({ movie: movieFields })
@@ -536,7 +546,7 @@ describe('MovieDetail — rank rides only with the precise score', () => {
     const wrapper = shallowMount(MovieDetail, {
       global: {
         mocks: { $store: store, $route: { params: { tmdbId: '42' }, query: {} }, $router: { push: vi.fn() } },
-        stubs: { ToggleableRating: true, Modal: true }
+        stubs: { ToggleableRating: true, Modal: true, DetailSection: { template: '<section class="detail-section-stub"><slot name="actions"/><slot/></section>' } }
       }
     })
     await wrapper.setData({ result: makeResult(), movie: makeResult().movie })

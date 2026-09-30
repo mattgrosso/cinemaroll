@@ -62,7 +62,7 @@ describe('MovieDetail - awards sections', () => {
           $route: { params: { tmdbId: '42' }, query: {} },
           $router: { push: pushSpy }
         },
-        stubs: { ToggleableRating: true, Modal: true }
+        stubs: { ToggleableRating: true, Modal: true, DetailSection: { template: '<section class="detail-section-stub"><slot name="actions"/><slot/></section>' } }
       }
     })
   }
@@ -239,7 +239,7 @@ describe('MovieDetail - awards sections', () => {
             $route: { params: { tmdbId: '42' }, query: {} },
             $router: { push: vi.fn() }
           },
-          stubs: { ToggleableRating: true, Modal: true }
+          stubs: { ToggleableRating: true, Modal: true, DetailSection: { template: '<section class="detail-section-stub"><slot name="actions"/><slot/></section>' } }
         }
       });
 
@@ -268,7 +268,7 @@ describe('MovieDetail - awards sections', () => {
             $route: { params: { tmdbId: '42' }, query: {} },
             $router: { push: vi.fn() }
           },
-          stubs: { ToggleableRating: true, Modal: true }
+          stubs: { ToggleableRating: true, Modal: true, DetailSection: { template: '<section class="detail-section-stub"><slot name="actions"/><slot/></section>' } }
         }
       });
 

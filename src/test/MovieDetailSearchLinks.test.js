@@ -111,7 +111,7 @@ function detailPage () {
   const wrapper = shallowMount(MovieDetail, {
     global: {
       mocks: { $store: store, $route: { params: { tmdbId: '42' }, query: {} }, $router: { push: vi.fn() } },
-      stubs: { ToggleableRating: true, Modal: true }
+      stubs: { ToggleableRating: true, Modal: true, DetailSection: { template: '<section class="detail-section-stub"><slot name="actions"/><slot/></section>' } }
     }
   });
   return { wrapper, commits };

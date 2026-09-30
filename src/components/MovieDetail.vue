@@ -29,19 +29,12 @@
           Rated offline - not yet matched to a real movie.
           <router-link :to="`/reconcile/${result.dbKey}`">Find the match</router-link>
         </div>
-        <div class="rating-runtime-and-date">
-          <div class="line-one">
-            <h3>
-              <a class="link" @click.stop="searchFor(`${getYear(result)}`)">{{getYear(result)}}</a>
-            </h3>
-            <!-- Rank rides with the score as a small parenthetical, in the
-                 same spot as "(normalized rating)". It used to be a button
-                 that jumped to the rank in Home, and that was the problem:
-                 the score is itself a three-way toggle, so a link sitting
-                 inside it caught taps meant for the toggle. Bug report
-                 2026-08-25: "get rid of the link and move the rank info so
-                 that it mimics the placement of the normalized
-                 parenthetical." -->
+        <!-- The facts strip (2026-09-30 redesign): the four numbers a film
+             page is opened for, on one row — your score with its rank (the
+             same three-way toggle as before), the Letterboxd crowd's rating,
+             the year, the runtime. Everything below folds. -->
+        <div class="fact-strip rating-runtime-and-date">
+          <div class="fact fact-score">
             <span class="rating-with-rank">
               <ToggleableRating
                 :rating="ratingForMedia(result)"
@@ -49,9 +42,19 @@
                 :rankLabel="ordinalRank || ''"
               />
             </span>
+            <span class="fact-label">your score</span>
           </div>
-          <div class="line-two">
-            <h3>{{prettifyRuntime(result)}}</h3>
+          <a v-if="letterboxdFilmLine" class="fact fact-crowd letterboxd-film" :href="letterboxdFilmUrl" target="_blank" rel="noopener">
+            <span class="fact-value">★ {{ letterboxdFilmStats.rating.toFixed(2) }}</span>
+            <span class="fact-label"><span v-if="compactCount(letterboxdFilmStats.ratingCount)">{{ compactCount(letterboxdFilmStats.ratingCount) }} on </span>Letterboxd</span>
+          </a>
+          <a class="fact fact-year link" @click.stop="searchFor(`${getYear(result)}`)">
+            <span class="fact-value">{{getYear(result)}}</span>
+            <span class="fact-label">released</span>
+          </a>
+          <div class="fact fact-runtime">
+            <span class="fact-value">{{prettifyRuntime(result)}}</span>
+            <span class="fact-label">runtime</span>
           </div>
         </div>
 
@@ -70,6 +73,8 @@
           <button class="btn btn-sm btn-info me-2" @click="goToWikipedia()">Wikipedia</button>
         </div>
 
+
+        <div class="detail-band">
         <!-- Previous ratings if any -->
         <div v-if="getAllRatings(previousEntry)" class="ratings-and-comparison-wrapper mb-3">
           <div class="ratings-section">
@@ -152,251 +157,16 @@
           </div>
         </div>
 
-        <!-- Letterboxd (2026-09-29): the film's public rating, and my own diary
-             entries for it — ratings, watched dates and REVIEW TEXT — synced
-             from my Letterboxd feed by the Lambda (aws-lambda/letterboxd.js)
-             and imported from the CSV export. Both arrive after the page
-             renders and the page never waits on them. -->
-        <div v-if="letterboxdFilmLine || letterboxdWrittenReviews.length" class="letterboxd-section mb-3">
-          <h4>Letterboxd</h4>
-          <p v-if="letterboxdFilmLine" class="letterboxd-film mb-0">
-            <a :href="letterboxdFilmUrl" target="_blank" rel="noopener">{{ letterboxdFilmLine }}</a>
-          </p>
-          <!-- Compact by default (Matt, 2026-09-29): the public line, then one
-               toggle. His own stars are never shown — his Letterboxd rating IS
-               his Cinema Roll score, halved — and the watched date already
-               sits under Ratings; the pane is dates and review text only. -->
-          <button
-            v-if="letterboxdWrittenReviews.length"
-            type="button"
-            class="letterboxd-summary"
-            :aria-expanded="showLetterboxdReviews ? 'true' : 'false'"
-            @click="showLetterboxdReviews = !showLetterboxdReviews">
-            <span>{{ showLetterboxdReviews ? 'Hide' : 'Show' }} your review<span v-if="letterboxdWrittenReviews.length > 1">s</span></span>
-            <i class="bi" :class="showLetterboxdReviews ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
-          </button>
-          <div v-if="showLetterboxdReviews" class="letterboxd-reviews">
+        <DetailSection v-if="letterboxdWrittenReviews.length" id="letterboxd" label="Letterboxd review" tone="you" :summary="letterboxdSummary" class="letterboxd-section">
+          <div class="letterboxd-reviews">
             <div v-for="review in letterboxdWrittenReviews" :key="review.id" class="letterboxd-review">
               <a v-if="review.url" :href="review.url" target="_blank" rel="noopener" class="letterboxd-review-date">{{ watchedDateLabel(review.watchedDate) }}</a>
               <span v-else class="letterboxd-review-date">{{ watchedDateLabel(review.watchedDate) }}</span>
               <p class="letterboxd-review-text mb-0">{{ review.review }}</p>
             </div>
           </div>
-        </div>
-
-        <!-- Directors -->
-        <div class="directors mb-3">
-          <h4>
-            Director<span v-if="multipleEntries(getCrewMember('Director', true))">s</span>
-          </h4>
-          <p class="long-list">
-            <a v-for="(name, index) in getCrewMember('Director', 'strict')" :key="index" class="link" @click.stop="searchFor(name, 'director')">
-              {{name}}<span v-if="countDirector(name)" class="small-count-bubble">&nbsp;({{ countDirector(name) }})</span><span v-if="index !== getCrewMember('Director', 'strict').length - 1">&nbsp;&nbsp;</span>
-            </a>
-          </p>
-        </div>
-
-        <!-- Genres -->
-        <div class="genres mb-3">
-          <h4>Genre<span v-if="multipleEntries(turnArrayIntoList(topStructure(result).genres, 'name'))">s</span></h4>
-          <p class="long-list">
-            <a
-              v-for="(genre, index) in topStructure(result).genres"
-              :key="index"
-              class="link me-2"
-              @click.stop="searchFor(genre.name, 'genre')"
-            >
-              {{genre.name}}<span v-if="countGenre(genre.name)" class="small-count-bubble">&nbsp;({{ countGenre(genre.name) }})</span>
-            </a>
-          </p>
-        </div>
-
-        <!-- Club friends who have rated this, as pills. Sits directly above
-             Awards by request (2026-08-25). -->
-        <FriendsWhoSaw :tmdbId="movie && movie.id" />
-
-        <!-- Awards -->
-        <div v-if="academyAwardWins.length || academyAwardNominations.length || personalAwardWins.length || personalAwardNominations.length || otherAwardWins.length || otherAwardNominations.length" class="awards mb-3">
-          <h4>Awards</h4>
-          <div class="awards-body">
-            <div v-if="personalAwardWins.length || personalAwardNominations.length" class="award-group personal-awards">
-              <h5>{{ personalAwardSectionTitle }}</h5>
-              <h6 v-if="personalAwardWins.length">Won</h6>
-              <div v-if="personalAwardWins.length" class="winners">
-                <a v-for="award in personalAwardWins" :key="award.id" class="link col-12" @click="openPersonalAwardsYear(award.year)">
-                  {{award.category}}
-                  <span v-if="award.names">({{parseNamesToList(award.names)}})</span>
-                </a>
-              </div>
-              <h6 v-if="personalAwardNominations.length">Nominated</h6>
-              <div v-if="personalAwardNominations.length" class="nominees">
-                <a v-for="award in personalAwardNominations" :key="award.id" class="link col-12" @click="openPersonalAwardsYear(award.year)">
-                  {{award.category}}
-                  <span v-if="award.names">({{parseNamesToList(award.names)}})</span>
-                </a>
-              </div>
-            </div>
-
-            <div v-if="academyAwardWins.length || academyAwardNominations.length" class="award-group academy-awards">
-              <h5>Academy Awards</h5>
-              <h6 v-if="academyAwardWins.length">Won</h6>
-              <div v-if="academyAwardWins.length" class="winners">
-                <a v-for="award in academyAwardWins" :key="award.id" class="link col-12" @click="goToWikipedia(award.ceremony)">
-                  {{award.category}}
-                  <span v-if="award.isActing" >({{parseNamesToList(award.names)}})</span>
-                </a>
-              </div>
-              <h6 v-if="academyAwardNominations.length">Nominated</h6>
-              <div v-if="academyAwardNominations.length" class="nominees">
-                <a v-for="award in academyAwardNominations" :key="award.id" class="link col-12" @click="goToWikipedia(award.ceremony)">
-                  {{award.category}}
-                  <span v-if="award.isActing" >({{parseNamesToList(award.names)}})</span>
-                </a>
-              </div>
-            </div>
-
-            <div v-if="otherAwardWins.length || otherAwardNominations.length" class="award-group other-awards">
-              <h5>Other Ceremonies</h5>
-              <h6 v-if="otherAwardWins.length">Won</h6>
-              <div v-if="otherAwardWins.length" class="winners">
-                <a v-for="award in otherAwardWins" :key="award.id" class="link col-12" @click="goToWikipedia(award.wikipediaQuery)">
-                  {{award.ceremony}} &middot; {{award.category}}
-                  <span v-if="award.names">({{parseNamesToList(award.names)}})</span>
-                </a>
-              </div>
-              <h6 v-if="otherAwardNominations.length">Nominated</h6>
-              <div v-if="otherAwardNominations.length" class="nominees">
-                <a v-for="award in otherAwardNominations" :key="award.id" class="link col-12" @click="goToWikipedia(award.wikipediaQuery)">
-                  {{award.ceremony}} &middot; {{award.category}}
-                  <span v-if="award.names">({{parseNamesToList(award.names)}})</span>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Cast -->
-        <div v-if="topStructure(result).cast && topStructure(result).cast.length" class="cast mb-3">
-          <h4 class="d-flex align-items-center">
-            Cast
-            <!-- The Web (2026-09-08): this film's people and their other
-                 films, as a picture you can walk. -->
-            <button type="button" class="web-link btn btn-sm btn-link p-0 ms-2" aria-label="See this film's web" @click.stop="openWeb">
-              <i class="bi bi-diagram-3"></i>
-            </button>
-          </h4>
-          <p class="long-list">
-            <a v-for="(castMember, index) in topStructure(result).cast" :key="index" class="link" @click.stop="searchFor(castMember.name, 'cast')">
-              {{castMember.name}}<span v-if="countCastCrew(castMember.name)" class="small-count-bubble">&nbsp;({{ countCastCrew(castMember.name) }})</span><span v-if="index !== topStructure(result).cast.length - 1">&nbsp;&nbsp;</span>
-            </a>
-          </p>
-        </div>
-
-        <!-- Keywords -->
-        <div v-if="(topStructure(result).flatKeywords && topStructure(result).flatKeywords.length) || isEditingKeywords" class="keywords mb-3">
-          <div class="keywords-header d-flex align-items-center">
-            <h4 class="mb-0 me-2">Keyword<span v-if="multipleEntries(topStructure(result).flatKeywords)">s</span></h4>
-            <button
-              type="button"
-              class="keyword-edit-toggle btn btn-sm btn-link p-0"
-              :aria-label="isEditingKeywords ? 'Close keyword editor' : 'Edit keywords'"
-              @click.stop="toggleKeywordEditor">
-              <i :class="isEditingKeywords ? 'bi bi-check-lg' : 'bi bi-pencil'"></i>
-            </button>
-          </div>
-
-          <p v-if="!isEditingKeywords" class="long-list">
-            <a v-for="(keyword, index) in sortedFlatKeywords" :key="index" class="link" @click.stop="searchFor(keyword, 'keyword')">
-              {{keyword}}<span class="small-count-bubble">&nbsp;({{ keywordCounts[keyword] }})</span><span v-if="index !== topStructure(result).flatKeywords.length - 1">&nbsp;&nbsp;</span>
-            </a>
-          </p>
-
-          <div v-else class="keyword-editor">
-            <div class="keyword-chip-list">
-              <span v-for="(keyword, index) in sortedFlatKeywords" :key="`chip-${index}`" class="keyword-chip">
-                <span class="keyword-chip-label">{{ keyword }}</span>
-                <button
-                  type="button"
-                  class="keyword-chip-remove"
-                  :aria-label="`Remove ${keyword}`"
-                  @click.stop="removeKeyword(keyword)">
-                  <i class="bi bi-x"></i>
-                </button>
-              </span>
-              <span v-if="!sortedFlatKeywords.length" class="text-muted small">No keywords yet — add one below.</span>
-            </div>
-
-            <div class="keyword-add-row">
-              <input
-                v-model="keywordInput"
-                type="text"
-                class="form-control form-control-sm keyword-add-input"
-                placeholder="Add keyword…"
-                autocomplete="off"
-                @keydown.enter.prevent="addTypedKeyword"
-                @keydown.esc.prevent="closeKeywordEditor"/>
-            </div>
-
-            <ul v-if="keywordSuggestions.length" class="keyword-suggestion-list">
-              <li
-                v-for="suggestion in keywordSuggestions"
-                :key="`sug-${suggestion.name}`"
-                class="keyword-suggestion-item"
-                @click.stop="addKeyword(suggestion.name)">
-                <span class="keyword-suggestion-name">{{ suggestion.name }}</span>
-                <span class="small-count-bubble">({{ suggestion.count }})</span>
-              </li>
-            </ul>
-
-            <button
-              v-if="canCreateTypedKeyword"
-              type="button"
-              class="btn btn-sm btn-outline-light keyword-create-new"
-              @click.stop="addTypedKeyword">
-              Add new keyword "{{ trimmedKeywordInput }}"
-            </button>
-          </div>
-        </div>
-
-        <!-- Box Office -->
-        <div v-if="hasBoxOfficeInfo" class="box-office mb-3">
-          <h4>Box Office</h4>
-          <p class="long-list mb-0">
-            <span v-if="movieBudget">Budget: {{ formatCurrency(movieBudget) }}</span>
-            <br v-if="movieBudget && movieRevenue">
-            <span v-if="movieRevenue">Box Office: {{ formatCurrency(movieRevenue) }}</span>
-          </p>
-        </div>
-
-        <!-- Production countries (TMDB): whose film industry made it, which is
-             a different fact from where the cameras were. Matt read "Made In"
-             next to "Filmed In" and couldn't tell them apart (2026-09-08), so
-             this uses the term IMDb and Letterboxd use. -->
-        <div v-if="productionCountries.length" class="production-countries mb-3">
-          <h4>Countr<span v-if="productionCountries.length > 1">ies</span><span v-else>y</span> of Origin</h4>
-          <p class="long-list mb-0">{{ productionCountries.join(' · ') }}</p>
-        </div>
-
-        <!-- Where the story is set and where it was shot (Wikidata, see
-             places.js). Plain text and a search, no map: tapping "Paris"
-             runs a Cinema Roll search (Matt, 2026-09-08). -->
-        <div v-if="narrativePlaces.length" class="places mb-3">
-          <h4>Set In</h4>
-          <p class="long-list mb-0">
-            <a v-for="(place, index) in narrativePlaces" :key="`set-${index}`" class="link" @click.stop="searchFor(place, 'place')">
-              {{ place }}<span class="small-count-bubble">&nbsp;({{ placeCounts[place] || 1 }})</span><span v-if="index !== narrativePlaces.length - 1">&nbsp;&nbsp;</span>
-            </a>
-          </p>
-        </div>
-        <div v-if="filmingPlaces.length" class="places mb-3">
-          <h4>Filmed In</h4>
-          <p class="long-list mb-0">
-            <a v-for="(place, index) in filmingPlaces" :key="`filmed-${index}`" class="link" @click.stop="searchFor(place, 'place')">
-              {{ place }}<span class="small-count-bubble">&nbsp;({{ placeCounts[place] || 1 }})</span><span v-if="index !== filmingPlaces.length - 1">&nbsp;&nbsp;</span>
-            </a>
-          </p>
-        </div>
-
+        </DetailSection>
+        <DetailSection v-if="(viewingTags && viewingTags.length) || isEditingTags" id="tags" label="Tags" tone="film" :summary="tagsSummary">
         <!-- Tags -->
         <div v-if="(viewingTags && viewingTags.length) || isEditingTags" class="tags mb-3">
           <div class="tags-header d-flex align-items-center">
@@ -484,47 +254,200 @@
             </div>
           </div>
         </div>
+        </DetailSection>
+        <!-- Club friends who have rated this, as pills. Sits directly above
+             Awards by request (2026-08-25). -->
+        <FriendsWhoSaw :tmdbId="movie && movie.id" />
 
-        <!-- Writers -->
-        <div v-if="writers.length" class="writers mb-3">
-          <h4>Writer<span v-if="multipleEntries(writers)">s</span></h4>
+        </div>
+
+        <div class="detail-band">
+          <p class="band-title">The film</p>
+        <DetailSection id="genres" label="Genres" tone="film" :summary="listSummary(turnArrayIntoList(topStructure(result).genres, 'name'), 4)" defaultOpen>
+        <div class="genres mb-3">
+          <h4>Genre<span v-if="multipleEntries(turnArrayIntoList(topStructure(result).genres, 'name'))">s</span></h4>
           <p class="long-list">
-            <a v-for="(name, index) in writers" :key="index" class="link" @click.stop="searchFor(name, 'writer')">
-              {{name}}<span v-if="countCastCrew(name)" class="small-count-bubble">&nbsp;({{ countCastCrew(name) }})</span><span v-if="index !== writers.length - 1">&nbsp;&nbsp;</span>
+            <a
+              v-for="(genre, index) in topStructure(result).genres"
+              :key="index"
+              class="link me-2"
+              @click.stop="searchFor(genre.name, 'genre')"
+            >
+              {{genre.name}}<span v-if="countGenre(genre.name)" class="small-count-bubble">&nbsp;({{ countGenre(genre.name) }})</span>
             </a>
           </p>
         </div>
+        </DetailSection>
+        <DetailSection v-if="academyAwardWins.length || academyAwardNominations.length || personalAwardWins.length || personalAwardNominations.length || otherAwardWins.length || otherAwardNominations.length" id="awards" label="Awards" tone="awards" :summary="awardsSummary">
+        <!-- Awards -->
+        <div v-if="academyAwardWins.length || academyAwardNominations.length || personalAwardWins.length || personalAwardNominations.length || otherAwardWins.length || otherAwardNominations.length" class="awards mb-3">
+          <h4>Awards</h4>
+          <div class="awards-body">
+            <div v-if="personalAwardWins.length || personalAwardNominations.length" class="award-group personal-awards">
+              <h5>{{ personalAwardSectionTitle }}</h5>
+              <h6 v-if="personalAwardWins.length">Won</h6>
+              <div v-if="personalAwardWins.length" class="winners">
+                <a v-for="award in personalAwardWins" :key="award.id" class="link col-12" @click="openPersonalAwardsYear(award.year)">
+                  {{award.category}}
+                  <span v-if="award.names">({{parseNamesToList(award.names)}})</span>
+                </a>
+              </div>
+              <h6 v-if="personalAwardNominations.length">Nominated</h6>
+              <div v-if="personalAwardNominations.length" class="nominees">
+                <a v-for="award in personalAwardNominations" :key="award.id" class="link col-12" @click="openPersonalAwardsYear(award.year)">
+                  {{award.category}}
+                  <span v-if="award.names">({{parseNamesToList(award.names)}})</span>
+                </a>
+              </div>
+            </div>
 
-        <!-- Composers -->
-        <div v-if="getCrewMember('Composer').length" class="composers mb-3">
-          <h4>Composer<span v-if="multipleEntries(getCrewMember('Composer'))">s</span></h4>
-          <p class="long-list">
-            <a v-for="(name, index) in getCrewMember('Composer')" :key="index" class="link" @click.stop="searchFor(name, 'composer')">
-              {{name}}<span v-if="countCastCrew(name)" class="small-count-bubble">&nbsp;({{ countCastCrew(name) }})</span><span v-if="index !== getCrewMember('Composer').length - 1">&nbsp;&nbsp;</span>
+            <div v-if="academyAwardWins.length || academyAwardNominations.length" class="award-group academy-awards">
+              <h5>Academy Awards</h5>
+              <h6 v-if="academyAwardWins.length">Won</h6>
+              <div v-if="academyAwardWins.length" class="winners">
+                <a v-for="award in academyAwardWins" :key="award.id" class="link col-12" @click="goToWikipedia(award.ceremony)">
+                  {{award.category}}
+                  <span v-if="award.isActing" >({{parseNamesToList(award.names)}})</span>
+                </a>
+              </div>
+              <h6 v-if="academyAwardNominations.length">Nominated</h6>
+              <div v-if="academyAwardNominations.length" class="nominees">
+                <a v-for="award in academyAwardNominations" :key="award.id" class="link col-12" @click="goToWikipedia(award.ceremony)">
+                  {{award.category}}
+                  <span v-if="award.isActing" >({{parseNamesToList(award.names)}})</span>
+                </a>
+              </div>
+            </div>
+
+            <div v-if="otherAwardWins.length || otherAwardNominations.length" class="award-group other-awards">
+              <h5>Other Ceremonies</h5>
+              <h6 v-if="otherAwardWins.length">Won</h6>
+              <div v-if="otherAwardWins.length" class="winners">
+                <a v-for="award in otherAwardWins" :key="award.id" class="link col-12" @click="goToWikipedia(award.wikipediaQuery)">
+                  {{award.ceremony}} &middot; {{award.category}}
+                  <span v-if="award.names">({{parseNamesToList(award.names)}})</span>
+                </a>
+              </div>
+              <h6 v-if="otherAwardNominations.length">Nominated</h6>
+              <div v-if="otherAwardNominations.length" class="nominees">
+                <a v-for="award in otherAwardNominations" :key="award.id" class="link col-12" @click="goToWikipedia(award.wikipediaQuery)">
+                  {{award.ceremony}} &middot; {{award.category}}
+                  <span v-if="award.names">({{parseNamesToList(award.names)}})</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+        </DetailSection>
+        <DetailSection v-if="(topStructure(result).flatKeywords && topStructure(result).flatKeywords.length) || isEditingKeywords" id="keywords" label="Keywords" tone="film" :summary="listSummary(sortedFlatKeywords, 4)">
+        <!-- Keywords -->
+        <div v-if="(topStructure(result).flatKeywords && topStructure(result).flatKeywords.length) || isEditingKeywords" class="keywords mb-3">
+          <div class="keywords-header d-flex align-items-center">
+            <h4 class="mb-0 me-2">Keyword<span v-if="multipleEntries(topStructure(result).flatKeywords)">s</span></h4>
+            <button
+              type="button"
+              class="keyword-edit-toggle btn btn-sm btn-link p-0"
+              :aria-label="isEditingKeywords ? 'Close keyword editor' : 'Edit keywords'"
+              @click.stop="toggleKeywordEditor">
+              <i :class="isEditingKeywords ? 'bi bi-check-lg' : 'bi bi-pencil'"></i>
+            </button>
+          </div>
+
+          <p v-if="!isEditingKeywords" class="long-list">
+            <a v-for="(keyword, index) in sortedFlatKeywords" :key="index" class="link" @click.stop="searchFor(keyword, 'keyword')">
+              {{keyword}}<span class="small-count-bubble">&nbsp;({{ keywordCounts[keyword] }})</span><span v-if="index !== topStructure(result).flatKeywords.length - 1">&nbsp;&nbsp;</span>
+            </a>
+          </p>
+
+          <div v-else class="keyword-editor">
+            <div class="keyword-chip-list">
+              <span v-for="(keyword, index) in sortedFlatKeywords" :key="`chip-${index}`" class="keyword-chip">
+                <span class="keyword-chip-label">{{ keyword }}</span>
+                <button
+                  type="button"
+                  class="keyword-chip-remove"
+                  :aria-label="`Remove ${keyword}`"
+                  @click.stop="removeKeyword(keyword)">
+                  <i class="bi bi-x"></i>
+                </button>
+              </span>
+              <span v-if="!sortedFlatKeywords.length" class="text-muted small">No keywords yet — add one below.</span>
+            </div>
+
+            <div class="keyword-add-row">
+              <input
+                v-model="keywordInput"
+                type="text"
+                class="form-control form-control-sm keyword-add-input"
+                placeholder="Add keyword…"
+                autocomplete="off"
+                @keydown.enter.prevent="addTypedKeyword"
+                @keydown.esc.prevent="closeKeywordEditor"/>
+            </div>
+
+            <ul v-if="keywordSuggestions.length" class="keyword-suggestion-list">
+              <li
+                v-for="suggestion in keywordSuggestions"
+                :key="`sug-${suggestion.name}`"
+                class="keyword-suggestion-item"
+                @click.stop="addKeyword(suggestion.name)">
+                <span class="keyword-suggestion-name">{{ suggestion.name }}</span>
+                <span class="small-count-bubble">({{ suggestion.count }})</span>
+              </li>
+            </ul>
+
+            <button
+              v-if="canCreateTypedKeyword"
+              type="button"
+              class="btn btn-sm btn-outline-light keyword-create-new"
+              @click.stop="addTypedKeyword">
+              Add new keyword "{{ trimmedKeywordInput }}"
+            </button>
+          </div>
+        </div>
+        </DetailSection>
+        <DetailSection v-if="hasBoxOfficeInfo" id="boxoffice" label="Box office" tone="plain" :summary="boxOfficeSummary">
+        <!-- Box Office -->
+        <div v-if="hasBoxOfficeInfo" class="box-office mb-3">
+          <h4>Box Office</h4>
+          <p class="long-list mb-0">
+            <span v-if="movieBudget">Budget: {{ formatCurrency(movieBudget) }}</span>
+            <br v-if="movieBudget && movieRevenue">
+            <span v-if="movieRevenue">Box Office: {{ formatCurrency(movieRevenue) }}</span>
+          </p>
+        </div>
+        </DetailSection>
+        <DetailSection v-if="productionCountries.length || narrativePlaces.length || filmingPlaces.length" id="places" label="Places" tone="plain" :summary="placesSummary">
+        <!-- Production countries (TMDB): whose film industry made it, which is
+             a different fact from where the cameras were. Matt read "Made In"
+             next to "Filmed In" and couldn't tell them apart (2026-09-08), so
+             this uses the term IMDb and Letterboxd use. -->
+        <div v-if="productionCountries.length" class="production-countries mb-3">
+          <h4 class="sub">Countr<span v-if="productionCountries.length > 1">ies</span><span v-else>y</span> of Origin</h4>
+          <p class="long-list mb-0">{{ productionCountries.join(' · ') }}</p>
+        </div>
+
+        <!-- Where the story is set and where it was shot (Wikidata, see
+             places.js). Plain text and a search, no map: tapping "Paris"
+             runs a Cinema Roll search (Matt, 2026-09-08). -->
+        <div v-if="narrativePlaces.length" class="places mb-3">
+          <h4 class="sub">Set In</h4>
+          <p class="long-list mb-0">
+            <a v-for="(place, index) in narrativePlaces" :key="`set-${index}`" class="link" @click.stop="searchFor(place, 'place')">
+              {{ place }}<span class="small-count-bubble">&nbsp;({{ placeCounts[place] || 1 }})</span><span v-if="index !== narrativePlaces.length - 1">&nbsp;&nbsp;</span>
             </a>
           </p>
         </div>
-
-        <!-- Editors -->
-        <div v-if="getCrewMember('Editor').length" class="editors mb-3">
-          <h4>Editor<span v-if="multipleEntries(getCrewMember('Editor'))">s</span></h4>
-          <p class="long-list">
-            <a v-for="(name, index) in getCrewMember('Editor')" :key="index" class="link" @click.stop="searchFor(name, 'editor')">
-              {{name}}<span v-if="countCastCrew(name)" class="small-count-bubble">&nbsp;({{ countCastCrew(name) }})</span><span v-if="index !== getCrewMember('Editor').length - 1">&nbsp;&nbsp;</span>
+        <div v-if="filmingPlaces.length" class="places mb-3">
+          <h4 class="sub">Filmed In</h4>
+          <p class="long-list mb-0">
+            <a v-for="(place, index) in filmingPlaces" :key="`filmed-${index}`" class="link" @click.stop="searchFor(place, 'place')">
+              {{ place }}<span class="small-count-bubble">&nbsp;({{ placeCounts[place] || 1 }})</span><span v-if="index !== filmingPlaces.length - 1">&nbsp;&nbsp;</span>
             </a>
           </p>
         </div>
-
-        <!-- Cinematographers -->
-        <div v-if="getCrewMember('Photo').length" class="cinematographers mb-3">
-          <h4>Cinematographer<span v-if="multipleEntries(getCrewMember('Photo'))">s</span></h4>
-          <p class="long-list">
-            <a v-for="(name, index) in getCrewMember('Photo')" :key="index" class="link" @click.stop="searchFor(name, 'photo')">
-              {{name}}<span v-if="countCastCrew(name)" class="small-count-bubble">&nbsp;({{ countCastCrew(name) }})</span><span v-if="index !== getCrewMember('Photo').length - 1">&nbsp;&nbsp;</span>
-            </a>
-          </p>
-        </div>
-
+        </DetailSection>
+        <DetailSection v-if="topStructure(result).production_companies && topStructure(result).production_companies.length" id="companies" label="Studios" tone="people" :summary="listSummary(turnArrayIntoList(topStructure(result).production_companies, 'name'), 3)">
         <!-- Production Companies -->
         <div v-if="topStructure(result).production_companies && topStructure(result).production_companies.length" class="production-companies mb-3">
           <h4>Production <span v-if="multipleEntries(turnArrayIntoList(topStructure(result).production_companies, 'name'))">Companies</span><span v-else>Company</span></h4>
@@ -534,7 +457,85 @@
             </a>
           </p>
         </div>
+        </DetailSection>
+        </div>
 
+        <div class="detail-band">
+          <p class="band-title">The people</p>
+        <DetailSection id="directors" label="Directors" tone="people" :summary="listSummary(getCrewMember('Director', true), 3)" defaultOpen>
+        <!-- Directors -->
+        <div class="directors mb-3">
+          <h4>
+            Director<span v-if="multipleEntries(getCrewMember('Director', true))">s</span>
+          </h4>
+          <p class="long-list">
+            <a v-for="(name, index) in getCrewMember('Director', 'strict')" :key="index" class="link" @click.stop="searchFor(name, 'director')">
+              {{name}}<span v-if="countDirector(name)" class="small-count-bubble">&nbsp;({{ countDirector(name) }})</span><span v-if="index !== getCrewMember('Director', 'strict').length - 1">&nbsp;&nbsp;</span>
+            </a>
+          </p>
+        </div>
+
+        <!-- Genres -->
+        </DetailSection>
+        <DetailSection v-if="writers.length" id="writers" label="Writers" tone="people" :summary="listSummary(writers, 3)">
+        <!-- Writers -->
+        <div v-if="writers.length" class="writers mb-3">
+          <h4>Writer<span v-if="multipleEntries(writers)">s</span></h4>
+          <p class="long-list">
+            <a v-for="(name, index) in writers" :key="index" class="link" @click.stop="searchFor(name, 'writer')">
+              {{name}}<span v-if="countCastCrew(name)" class="small-count-bubble">&nbsp;({{ countCastCrew(name) }})</span><span v-if="index !== writers.length - 1">&nbsp;&nbsp;</span>
+            </a>
+          </p>
+        </div>
+        </DetailSection>
+        <DetailSection v-if="topStructure(result).cast && topStructure(result).cast.length" id="cast" label="Cast" tone="people" :summary="listSummary(turnArrayIntoList(topStructure(result).cast, 'name'), 3)">
+          <template #actions><button type="button" class="web-link btn btn-sm btn-link p-0" aria-label="See this film's web" @click.stop="openWeb"><i class="bi bi-diagram-3"></i></button></template>
+        <!-- Cast -->
+        <div v-if="topStructure(result).cast && topStructure(result).cast.length" class="cast mb-3">
+          <h4 class="d-flex align-items-center">
+            Cast
+          </h4>
+          <p class="long-list">
+            <a v-for="(castMember, index) in topStructure(result).cast" :key="index" class="link" @click.stop="searchFor(castMember.name, 'cast')">
+              {{castMember.name}}<span v-if="countCastCrew(castMember.name)" class="small-count-bubble">&nbsp;({{ countCastCrew(castMember.name) }})</span><span v-if="index !== topStructure(result).cast.length - 1">&nbsp;&nbsp;</span>
+            </a>
+          </p>
+        </div>
+        </DetailSection>
+        <DetailSection v-if="getCrewMember('Composer').length" id="composers" label="Composer" tone="people" :summary="listSummary(getCrewMember('Composer'), 3)">
+        <!-- Composers -->
+        <div v-if="getCrewMember('Composer').length" class="composers mb-3">
+          <h4>Composer<span v-if="multipleEntries(getCrewMember('Composer'))">s</span></h4>
+          <p class="long-list">
+            <a v-for="(name, index) in getCrewMember('Composer')" :key="index" class="link" @click.stop="searchFor(name, 'composer')">
+              {{name}}<span v-if="countCastCrew(name)" class="small-count-bubble">&nbsp;({{ countCastCrew(name) }})</span><span v-if="index !== getCrewMember('Composer').length - 1">&nbsp;&nbsp;</span>
+            </a>
+          </p>
+        </div>
+        </DetailSection>
+        <DetailSection v-if="getCrewMember('Photo').length" id="cinematographers" label="Cinematography" tone="people" :summary="listSummary(getCrewMember('Photo'), 3)">
+        <!-- Cinematographers -->
+        <div v-if="getCrewMember('Photo').length" class="cinematographers mb-3">
+          <h4>Cinematographer<span v-if="multipleEntries(getCrewMember('Photo'))">s</span></h4>
+          <p class="long-list">
+            <a v-for="(name, index) in getCrewMember('Photo')" :key="index" class="link" @click.stop="searchFor(name, 'photo')">
+              {{name}}<span v-if="countCastCrew(name)" class="small-count-bubble">&nbsp;({{ countCastCrew(name) }})</span><span v-if="index !== getCrewMember('Photo').length - 1">&nbsp;&nbsp;</span>
+            </a>
+          </p>
+        </div>
+        </DetailSection>
+        <DetailSection v-if="getCrewMember('Editor').length" id="editors" label="Editors" tone="people" :summary="listSummary(getCrewMember('Editor'), 3)">
+        <!-- Editors -->
+        <div v-if="getCrewMember('Editor').length" class="editors mb-3">
+          <h4>Editor<span v-if="multipleEntries(getCrewMember('Editor'))">s</span></h4>
+          <p class="long-list">
+            <a v-for="(name, index) in getCrewMember('Editor')" :key="index" class="link" @click.stop="searchFor(name, 'editor')">
+              {{name}}<span v-if="countCastCrew(name)" class="small-count-bubble">&nbsp;({{ countCastCrew(name) }})</span><span v-if="index !== getCrewMember('Editor').length - 1">&nbsp;&nbsp;</span>
+            </a>
+          </p>
+        </div>
+        </DetailSection>
+        <DetailSection v-if="getCrewMember('Producer').length" id="producers" label="Producers" tone="people" :summary="listSummary(getCrewMember('Producer'), 3)">
         <!-- Producers -->
         <div v-if="getCrewMember('Producer').length" class="producers mb-3">
           <h4>Producer<span v-if="multipleEntries(getCrewMember('Producer'))">s</span></h4>
@@ -544,9 +545,13 @@
             </a>
           </p>
         </div>
+        </DetailSection>
+        </div>
 
+        <div class="detail-band detail-band--last">
+        <DetailSection id="artwork" label="Artwork" tone="plain" :summary="'Choose another poster or backdrop'">
         <!-- Choose Alternate Poster & Backdrop Section -->
-        <div class="alternate-media-section mt-4 mb-4">
+        <div class="alternate-media-section">
           <div class="text-center mb-3 d-flex justify-content-center gap-2">
             <button class="btn btn-sm btn-secondary" @click="togglePosterOptions">
               {{ showPosterOptions ? 'Hide' : 'Choose' }} Alternate Poster
@@ -598,6 +603,8 @@
             </div>
           </div>
         </div>
+        </DetailSection>
+        </div>
       </div>
     </div>
 
@@ -616,6 +623,8 @@ import { formatScore } from '../assets/javascript/formatScore.js';
 import axios from 'axios';
 import ToggleableRating from './ToggleableRating.vue';
 import FriendsWhoSaw from './FriendsWhoSaw.vue';
+import DetailSection from './DetailSection.vue';
+import { formatMoneyShort } from '../assets/javascript/formatMoney.js';
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import ErrorLogService from "../services/ErrorLogService.js";
 import LetterboxdUrlService from '../services/LetterboxdUrlService.js';
@@ -637,7 +646,8 @@ export default {
   name: 'MovieDetail',
   components: {
     ToggleableRating,
-    FriendsWhoSaw
+    FriendsWhoSaw,
+    DetailSection
   },
   data () {
     return {
@@ -696,6 +706,41 @@ export default {
   computed: {
     letterboxdWrittenReviews () {
       return this.letterboxdReviews.filter((review) => review.review);
+    },
+    // One-line summaries for the folded sections (DetailSection).
+    letterboxdSummary () {
+      const reviews = this.letterboxdWrittenReviews;
+      if (!reviews.length) return '';
+      const latest = reviews[0];
+      const when = latest.watchedDate ? watchedDateLabel(latest.watchedDate) : '';
+      return reviews.length === 1 ? `Your review${when ? `, ${when}` : ''}` : `${reviews.length} reviews${when ? `, latest ${when}` : ''}`;
+    },
+    tagsSummary () {
+      return this.listSummary(this.sortedTags, 4) || 'No tags yet';
+    },
+    awardsSummary () {
+      const parts = [];
+      const categories = (list) => list.map((award) => award.category);
+      if (this.personalAwardWins.length) parts.push(`${this.personalAwardSectionTitle}: ${categories(this.personalAwardWins).join(', ')}`);
+      else if (this.personalAwardNominations.length) parts.push(`${this.personalAwardSectionTitle}: ${this.personalAwardNominations.length} nomination${this.personalAwardNominations.length === 1 ? '' : 's'}`);
+      if (this.academyAwardWins.length) parts.push(`Oscars: ${categories(this.academyAwardWins).join(', ')}`);
+      else if (this.academyAwardNominations.length) parts.push(`Oscars: ${this.academyAwardNominations.length} nomination${this.academyAwardNominations.length === 1 ? '' : 's'}`);
+      if (this.otherAwardWins.length) parts.push(`${this.otherAwardWins.length} other win${this.otherAwardWins.length === 1 ? '' : 's'}`);
+      else if (this.otherAwardNominations.length) parts.push(`${this.otherAwardNominations.length} other nomination${this.otherAwardNominations.length === 1 ? '' : 's'}`);
+      return parts.join(' · ');
+    },
+    boxOfficeSummary () {
+      const parts = [];
+      if (this.movieBudget) parts.push(`${formatMoneyShort(this.movieBudget)} budget`);
+      if (this.movieRevenue) parts.push(`${formatMoneyShort(this.movieRevenue)} box office`);
+      return parts.join(' · ');
+    },
+    placesSummary () {
+      const parts = [];
+      if (this.productionCountries.length) parts.push(this.productionCountries.join(', '));
+      if (this.narrativePlaces.length) parts.push(`set in ${this.listSummary(this.narrativePlaces, 2)}`);
+      if (this.filmingPlaces.length) parts.push(`filmed in ${this.listSummary(this.filmingPlaces, 2)}`);
+      return parts.join(' · ');
     },
     letterboxdFilmUrl () {
       const slug = this.letterboxdFilmStats?.slug;
@@ -1414,6 +1459,14 @@ export default {
 
     starsFor,
     watchedDateLabel,
+    compactCount,
+    // "A, B, C +12" — the first few names and how many more are folded away.
+    listSummary (names, shown = 3) {
+      const list = (names || []).filter(Boolean);
+      if (!list.length) return '';
+      const rest = list.length - shown;
+      return list.slice(0, shown).join(', ') + (rest > 0 ? ` +${rest}` : '');
+    },
     // My diary entries for this film and its public stats, each on its own
     // promise so a slow one never holds up the other. A stale request (the
     // user tapped through to another film) is dropped by the id check.
@@ -2308,6 +2361,71 @@ export default {
       flex-wrap: wrap;
       padding: 6px;
     }
+  }
+
+  .fact-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin: 0 0 12px;
+
+    .fact {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff;
+      text-decoration: none;
+      min-height: 58px;
+
+      &:active { background: rgba(255, 255, 255, 0.12); }
+    }
+
+    .fact-value {
+      font-size: 1.35rem;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .fact-label {
+      color: #ccc;
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .fact-crowd .fact-value { color: #00e054; }
+
+    .fact-score .rating-with-rank { display: block; }
+  }
+
+  .detail-band {
+    margin: 0 0 14px;
+  }
+
+  .band-title {
+    color: #9a9a9a;
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    margin: 0 0 2px;
+    text-transform: uppercase;
+  }
+
+  /* Inside a folded section the row's own label does the naming, so the
+     old headings hide — except the Places sub-labels, which tell Country
+     of Origin from Set In from Filmed In. They stay in the DOM for
+     in-page search and the tests. */
+  :deep(.detail-section-body) {
+    h4:not(.sub) { display: none; }
+    h4.sub { font-size: 0.62rem; color: #9a9a9a; letter-spacing: 0.06em; text-transform: uppercase; margin: 6px 0 2px; }
+    > div { margin-bottom: 0 !important; }
+    .long-list { box-shadow: none; padding: 2px 0; max-height: none; margin-bottom: 0; }
+    p { margin-bottom: 0; }
+    .keywords-header, .tags-header { margin-bottom: 4px; }
+    .web-link { color: #cd7fe8; }
   }
 
   .letterboxd-section {
