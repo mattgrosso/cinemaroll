@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { isSafeMomentForReload, shouldAutoAttempt, reloadForUpdate, hardReload, waitForNewWorker, markUpdateLanded } from '@/utils/appUpdate.js'
+import { isSafeMomentForReload, shouldAutoAttempt, reloadForUpdate, hardReload, waitForNewWorker, markUpdateLanded, newAppIsReachable } from '@/utils/appUpdate.js'
 
 // Auto-update ships reloads only at provably quiet moments (bug report:
 // "the user shouldn't have to take an action" — but the July lesson stands:
@@ -61,11 +61,12 @@ describe('reloadForUpdate', () => {
       removeItem: (k) => map.delete(k)
     }
   }
-  const harness = ({ outcome = 'settled' } = {}) => ({
+  const harness = ({ outcome = 'settled', reachable = true } = {}) => ({
     storage: memoryStorage(),
     reload: vi.fn(),
     hard: vi.fn(),
-    wait: vi.fn(async () => outcome)
+    wait: vi.fn(async () => outcome),
+    canFetchNewApp: vi.fn(async () => reachable)
   })
 
   it('the first attempt for an update is an ordinary reload', async () => {
@@ -118,7 +119,85 @@ describe('reloadForUpdate', () => {
   })
 })
 
+// Bug report (Matt, 2026-09-30, one bar of signal at his therapist's): the
+// new worker couldn't finish downloading in 15s on that connection, so the
+// update went hard - threw away the app on the phone and reloaded from the
+// internet - and he got a half-loaded page and a loading bar that never
+// finished. A hard reload now needs the new app to be downloadable first.
+describe('reloadForUpdate on a connection that can\'t carry the new app', () => {
+  const memoryStorage = () => {
+    const map = new Map()
+    return {
+      getItem: (k) => map.get(k) ?? null,
+      setItem: (k, v) => map.set(k, String(v)),
+      removeItem: (k) => map.delete(k)
+    }
+  }
+
+  it('a stuck install keeps the working app instead of wiping it', async () => {
+    const h = { storage: memoryStorage(), reload: vi.fn(), hard: vi.fn(), wait: vi.fn(async () => 'stuck'), canFetchNewApp: vi.fn(async () => false) }
+    expect(await reloadForUpdate({ target: 'js/app.new.js', ...h })).toBe('deferred')
+    expect(h.canFetchNewApp).toHaveBeenCalledWith('js/app.new.js')
+    expect(h.hard).not.toHaveBeenCalled()
+    expect(h.reload).not.toHaveBeenCalled()
+  })
+
+  it('a repeat attempt keeps the working app too, and goes hard once the connection can carry it', async () => {
+    let reachable = false
+    const h = { storage: memoryStorage(), reload: vi.fn(), hard: vi.fn(), wait: vi.fn(async () => 'settled'), canFetchNewApp: vi.fn(async () => reachable) }
+    expect(await reloadForUpdate({ target: 'js/app.new.js', ...h })).toBe('reloaded')
+    expect(await reloadForUpdate({ target: 'js/app.new.js', ...h })).toBe('deferred')
+    expect(h.hard).not.toHaveBeenCalled()
+    reachable = true
+    expect(await reloadForUpdate({ target: 'js/app.new.js', ...h })).toBe('hard')
+    expect(h.hard).toHaveBeenCalledTimes(1)
+  })
+
+  it('a probe that throws counts as unreachable', async () => {
+    const h = { storage: memoryStorage(), reload: vi.fn(), hard: vi.fn(), wait: vi.fn(async () => 'stuck'), canFetchNewApp: vi.fn(async () => { throw new Error('boom') }) }
+    expect(await reloadForUpdate({ target: 'js/app.new.js', ...h })).toBe('deferred')
+    expect(h.hard).not.toHaveBeenCalled()
+  })
+})
+
+describe('newAppIsReachable', () => {
+  const ok = (body = '') => ({ ok: true, text: async () => body, arrayBuffer: async () => new ArrayBuffer(8) })
+
+  it('downloads the target bundle itself', async () => {
+    const fetchImpl = vi.fn(async () => ok())
+    expect(await newAppIsReachable('js/app.new.js', { fetchImpl })).toBe(true)
+    expect(fetchImpl.mock.calls[0][0]).toBe('/js/app.new.js')
+  })
+
+  it('with no known target, reads the bundle name off the deployed page first', async () => {
+    const fetchImpl = vi.fn(async (url) => ok(url.includes('index.html') ? '<script src="/js/app.abc123.js">' : ''))
+    expect(await newAppIsReachable(null, { fetchImpl })).toBe(true)
+    expect(fetchImpl.mock.calls[1][0]).toBe('/js/app.abc123.js')
+  })
+
+  it('a download that does not finish in time is unreachable', async () => {
+    vi.useFakeTimers()
+    const fetchImpl = vi.fn((url, { signal }) => new Promise((resolve, reject) => {
+      signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
+    }))
+    const result = newAppIsReachable('js/app.new.js', { fetchImpl, timeoutMs: 10000 })
+    await vi.advanceTimersByTimeAsync(10001)
+    expect(await result).toBe(false)
+    vi.useRealTimers()
+  })
+
+  it('a server error is unreachable', async () => {
+    expect(await newAppIsReachable('js/app.new.js', { fetchImpl: async () => ({ ok: false }) })).toBe(false)
+  })
+})
+
 describe('waitForNewWorker', () => {
+  it('does not wait on an update check that never answers', async () => {
+    const registration = { installing: null, waiting: null, update: () => new Promise(() => {}) }
+    const sleep = vi.fn(async () => {})
+    expect(await waitForNewWorker(15000, { getRegistration: async () => registration, sleep })).toBe('settled')
+  })
+
   it('reports stuck when a worker is still installing at the deadline, nudging any waiting one', async () => {
     const waiting = { postMessage: vi.fn() }
     const registration = { installing: {}, waiting, update: vi.fn(async () => {}) }

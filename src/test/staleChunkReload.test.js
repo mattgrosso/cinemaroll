@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { isStaleChunkError, handleRouterChunkError } from '@/utils/staleChunkReload.js'
+import { isStaleChunkError, handleRouterChunkError, lazyScreen } from '@/utils/staleChunkReload.js'
 
 function memoryStorage () {
   const map = new Map()
@@ -85,5 +85,38 @@ describe('handleRouterChunkError', () => {
 
     expect(handleRouterChunkError(chunkError(), { fullPath: '/x' }, broken, reload)).toBe(true)
     expect(reload).toHaveBeenCalledTimes(1)
+  })
+})
+
+// Bug report (Matt, 2026-09-30, one bar of signal): a screen file left to
+// the network on a there-but-not-really connection neither loads nor fails,
+// so the loading bar crept across and stopped. With a worker in charge, a
+// screen that hasn't arrived by the deadline becomes a ChunkLoadError, which
+// the handler above turns into one reload onto the version the phone has.
+describe('lazyScreen', () => {
+  it('turns a screen that never arrives into a stale-chunk error, with a worker in charge', async () => {
+    vi.useFakeTimers()
+    const load = lazyScreen(() => new Promise(() => {}), { deadlineMs: 8000, hasWorker: () => true })
+    const result = load().catch((error) => error)
+    await vi.advanceTimersByTimeAsync(8001)
+    const error = await result
+    expect(isStaleChunkError(error)).toBe(true)
+    vi.useRealTimers()
+  })
+
+  it('hands back the screen when it arrives in time', async () => {
+    const screen = { name: 'Home' }
+    const load = lazyScreen(async () => screen, { hasWorker: () => true })
+    expect(await load()).toBe(screen)
+  })
+
+  it('puts no deadline on a page with no worker (first visit: slow is just slow)', async () => {
+    vi.useFakeTimers()
+    let settled = false
+    const load = lazyScreen(() => new Promise(() => {}), { deadlineMs: 8000, hasWorker: () => false })
+    load().finally(() => { settled = true }).catch(() => {})
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(settled).toBe(false)
+    vi.useRealTimers()
   })
 })

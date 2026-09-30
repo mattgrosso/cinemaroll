@@ -18,7 +18,12 @@ export async function waitForNewWorker (timeoutMs = 15000, { getRegistration = d
   try {
     const registration = await getRegistration();
     if (!registration) return 'settled';
-    await registration.update?.().catch?.(() => {});
+    // Capped: on one bar of signal update() sits on the worker script's
+    // download for minutes, and this wait is meant to be 15 seconds.
+    await Promise.race([
+      Promise.resolve(registration.update?.()).catch(() => {}),
+      sleep(Math.min(5000, timeoutMs))
+    ]);
     const deadline = Date.now() + timeoutMs;
     while ((registration.installing || registration.waiting) && Date.now() < deadline) {
       // A worker sitting in `waiting` has finished installing and only needs
@@ -69,12 +74,16 @@ export function markUpdateLanded (storage = window.localStorage) {
   try { storage.removeItem(RELOAD_KEY); } catch { /* storage unavailable */ }
 }
 
+// Resolves 'reloaded', 'hard', or 'deferred' - the last when a hard reload
+// was called for but the connection couldn't carry the new app, so the
+// running (cached) app stays put and the banner stays up.
 export async function reloadForUpdate ({
   target = null,
   storage = window.localStorage,
   reload = () => window.location.reload(),
   hard = hardReload,
-  wait = waitForNewWorker
+  wait = waitForNewWorker,
+  canFetchNewApp = newAppIsReachable
 } = {}) {
   // No known target still counts (2026-09-29 loop): a null target used to
   // go unremembered, so every attempt looked like the first.
@@ -83,10 +92,60 @@ export async function reloadForUpdate ({
   const repeat = previous?.target === key;
   try { storage.setItem(RELOAD_KEY, JSON.stringify({ target: key, at: Date.now() })); } catch { /* still reload */ }
 
-  if (repeat) return hard();
+  // A hard reload throws away the copy of the app on this phone and loads
+  // the new one from the internet. Bug report (Matt, 2026-09-30, one bar of
+  // signal at his therapist's): the new worker couldn't finish downloading
+  // in 15 seconds - of course not, on that connection - so this went hard,
+  // and he was left with a half-loaded page and a loading bar for as long
+  // as he stayed. Only go hard when the new app can actually be fetched,
+  // right now, in a few seconds; otherwise keep the working app and let the
+  // worker finish in its own time.
+  const goHard = async () => {
+    let reachable = false;
+    try { reachable = await canFetchNewApp(target); } catch { reachable = false; }
+    if (!reachable) return 'deferred';
+    await hard();
+    return 'hard';
+  };
+
+  if (repeat) return goHard();
   const outcome = await wait();
-  if (outcome === 'stuck') return hard();
+  if (outcome === 'stuck') return goHard();
   reload();
+  return 'reloaded';
+}
+
+export const NEW_APP_FETCH_TIMEOUT_MS = 10000;
+
+/**
+ * Can this connection carry the new app right now? Downloads the new
+ * bundle itself (the one big file a hard reload needs first) against a
+ * deadline. A success also leaves it in the HTTP cache for the reload.
+ */
+export async function newAppIsReachable (target, {
+  fetchImpl = (...args) => fetch(...args),
+  timeoutMs = NEW_APP_FETCH_TIMEOUT_MS
+} = {}) {
+  const base = (typeof process !== 'undefined' && process.env && process.env.BASE_URL) || '/';
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = setTimeout(() => controller?.abort(), timeoutMs);
+  try {
+    let bundle = target;
+    if (!bundle) {
+      const page = await fetchImpl(`${base}index.html?updateCheck=${Date.now()}`, { cache: 'no-store', signal: controller?.signal });
+      if (!page.ok) return false;
+      bundle = ((await page.text()).match(/js\/app\.[a-z0-9]+\.js/) || [])[0];
+      if (!bundle) return false;
+    }
+    const response = await fetchImpl(`${base}${bundle}`, { signal: controller?.signal });
+    if (!response.ok) return false;
+    await response.arrayBuffer();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**

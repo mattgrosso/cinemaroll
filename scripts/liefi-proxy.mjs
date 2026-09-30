@@ -10,6 +10,13 @@
 //   node scripts/liefi-proxy.mjs          # proxy on :8888, control on :8889
 //   curl localhost:8889/mode/blackhole    # kill the internet, keep the bars
 //   curl localhost:8889/mode/pass         # bring it back
+//   curl localhost:8889/mode/trickle      # one bar: ~3 KB/s down, every byte late
+//   curl localhost:8889/rate/1500         # trickle speed in bytes per second
+//
+// Trickle is the therapist's-office case (2026-09-30): a small file gets
+// through in seconds, a few megabytes take the better part of an hour. That
+// is the network where "fetch the new version, then reload" goes wrong -
+// blackhole never lets the version check through at all, so it can't show it.
 //
 // Drive a browser through it with Playwright:
 //   chromium.launch({ proxy: { server: 'http://127.0.0.1:8888', bypass: '<-loopback>' } })
@@ -22,33 +29,56 @@
 import net from 'node:net';
 import http from 'node:http';
 let mode = 'pass';
+let rate = 3000; // bytes per second, trickle mode, shared by every connection
 const tunnels = new Set();
-const relay = (from, to) => {
-  from.on('data', (chunk) => { if (mode === 'pass') { if (!to.write(chunk)) { from.pause(); to.once('drain', () => from.resume()); } } });
-  from.on('end', () => { if (mode === 'pass') to.end(); });
+// One shared downlink: in trickle mode every chunk waits its turn, released
+// at `rate` bytes a second across all connections together, like one bar.
+let downlinkFreeAt = 0;
+const scheduleDown = (bytes) => {
+  const now = Date.now();
+  downlinkFreeAt = Math.max(now, downlinkFreeAt) + (bytes / rate) * 1000;
+  return downlinkFreeAt - now;
+};
+const sendDown = (to, chunk, from) => {
+  if (mode !== 'trickle') {
+    if (!to.write(chunk) && from) { from.pause(); to.once('drain', () => from.resume()); }
+    return;
+  }
+  if (from) from.pause();
+  setTimeout(() => { if (!to.destroyed) to.write(chunk); if (from) from.resume(); }, scheduleDown(chunk.length));
+};
+const relay = (from, to, down = false) => {
+  from.on('data', (chunk) => {
+    if (mode === 'blackhole') return;
+    if (down) sendDown(to, chunk, from);
+    else if (!to.write(chunk)) { from.pause(); to.once('drain', () => from.resume()); }
+  });
+  from.on('end', () => { if (mode !== 'blackhole') setTimeout(() => to.end(), mode === 'trickle' ? Math.max(0, downlinkFreeAt - Date.now()) : 0); });
   from.on('error', () => to.destroy());
 };
 const proxy = http.createServer((req, res) => {
   // plain http (localhost dist server)
-  if (mode !== 'pass') { tunnels.add(res); return; } // hold forever
+  if (mode === 'blackhole') { tunnels.add(res); return; } // hold forever
   const u = new URL(req.url);
-  const up = http.request({ host: u.hostname, port: u.port || 80, path: u.pathname + u.search, method: req.method, headers: req.headers }, (ur) => { res.writeHead(ur.statusCode, ur.headers); ur.pipe(res); });
+  const up = http.request({ host: u.hostname, port: u.port || 80, path: u.pathname + u.search, method: req.method, headers: req.headers }, (ur) => { res.writeHead(ur.statusCode, ur.headers); relay(ur, res, true); });
   up.on('error', () => res.destroy());
   req.pipe(up);
 });
 proxy.on('connect', (req, client, head) => {
   const [host, port] = req.url.split(':');
   client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-  if (mode !== 'pass') { client.on('data', () => {}); client.on('error', () => {}); tunnels.add(client); return; }
+  if (mode === 'blackhole') { client.on('data', () => {}); client.on('error', () => {}); tunnels.add(client); return; }
   const upstream = net.connect(Number(port || 443), host, () => { if (head?.length) upstream.write(head); });
   upstream.on('error', () => client.destroy());
   client.on('error', () => upstream.destroy());
-  relay(client, upstream); relay(upstream, client);
+  relay(client, upstream); relay(upstream, client, true);
 });
 proxy.listen(8888);
 http.createServer((req, res) => {
-  const m = req.url.match(/^\/mode\/(pass|blackhole)$/);
+  const m = req.url.match(/^\/mode\/(pass|blackhole|trickle)$/);
   if (m) { mode = m[1]; res.end(`mode=${mode}\n`); console.log(new Date().toISOString(), 'mode ->', mode); return; }
+  const r = req.url.match(/^\/rate\/(\d+)$/);
+  if (r) { rate = Math.max(1, Number(r[1])); res.end(`rate=${rate}\n`); return; }
   res.end(`mode=${mode}\n`);
 }).listen(8889);
 console.log('lie-fi proxy on 8888, control on 8889');

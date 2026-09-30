@@ -40,3 +40,33 @@ export function handleRouterChunkError (
   reload();
   return true;
 }
+
+// A screen file that never arrives. Bug report (Matt, 2026-09-30, one bar
+// of signal): a request that's left to the network on a there-but-not-really
+// connection neither loads nor fails, so the error above never comes and the
+// loading bar just sits there. With a service worker in charge every screen
+// of the running version is on the phone and opens in well under a second;
+// one that hasn't in SCREEN_LOAD_DEADLINE_MS is being fetched from the
+// network, which means this page is an older version than the worker's. The
+// deadline turns that into the same ChunkLoadError, and the handler above
+// reloads onto the version the phone does have. Without a worker (first
+// visit, dev server) a slow screen is just slow: no deadline.
+export const SCREEN_LOAD_DEADLINE_MS = 8000;
+
+export function lazyScreen (loader, {
+  deadlineMs = SCREEN_LOAD_DEADLINE_MS,
+  hasWorker = () => Boolean(typeof navigator !== 'undefined' && navigator.serviceWorker?.controller)
+} = {}) {
+  return () => {
+    if (!hasWorker()) return loader();
+    let timer = null;
+    const deadline = new Promise((resolve, reject) => {
+      timer = setTimeout(() => {
+        const error = new Error('Loading chunk timed out');
+        error.name = 'ChunkLoadError';
+        reject(error);
+      }, deadlineMs);
+    });
+    return Promise.race([loader(), deadline]).finally(() => clearTimeout(timer));
+  };
+}

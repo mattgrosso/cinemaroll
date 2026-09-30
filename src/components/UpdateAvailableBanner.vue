@@ -8,10 +8,10 @@
     <span class="prompt-body">
       <span class="prompt-label">App update</span>
       <p class="prompt-text">
-        {{ updating ? 'Updating Cinema Roll…' : 'A new version of Cinema Roll is ready.' }}
+        {{ updating ? 'Updating Cinema Roll…' : (deferred ? 'A new version of Cinema Roll is waiting for a better connection. This one keeps working.' : 'A new version of Cinema Roll is ready.') }}
       </p>
       <button class="prompt-action prompt-action-app" :disabled="updating" @click.stop="reload">
-        {{ updating ? 'One moment' : 'Refresh' }}
+        {{ updating ? 'One moment' : (deferred ? 'Try again' : 'Refresh') }}
       </button>
     </span>
   </div>
@@ -35,7 +35,10 @@ export default {
   name: 'UpdateAvailableBanner',
   data () {
     return {
-      updating: false
+      updating: false,
+      // The connection couldn't carry the new version (appUpdate.js), so
+      // the page stayed on the working one; say so rather than spin.
+      deferred: false
     };
   },
   methods: {
@@ -44,7 +47,11 @@ export default {
       this.updating = true;
       // The target lets a second tap for the SAME update escalate to a hard
       // reload instead of looping (appUpdate.js, bug report 2026-09-21).
-      await reloadForUpdate({ target: this.$store.state.updateTargetBundle });
+      const outcome = await reloadForUpdate({ target: this.$store.state.updateTargetBundle });
+      if (outcome === 'deferred') {
+        this.updating = false;
+        this.deferred = true;
+      }
     },
     // The wait-out-the-install logic lives in utils/appUpdate.js, shared
     // with App.vue's automatic update path.

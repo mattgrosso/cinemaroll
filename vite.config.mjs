@@ -220,7 +220,10 @@ export default defineConfig(({ mode }) => {
           // has no hand-written worker to edit, so extra behaviour rides in
           // via importScripts. The file is copied from public/ as-is, so the
           // name here must match its real path in dist/.
-          importScripts: ['push-sw.js'],
+          //
+          // keep-previous-app-sw.js keeps the outgoing version's screen
+          // files through an update (see the file, and the route below).
+          importScripts: ['push-sw.js', 'keep-previous-app-sw.js'],
           // Posters/backdrops: keep whatever's been seen (or proactively
           // warmed via the Settings "Download for offline" action) available
           // without a network round-trip. CacheFirst since a given TMDB
@@ -244,24 +247,17 @@ export default defineConfig(({ mode }) => {
               },
             },
             {
-              urlPattern: /^https:\/\/fonts\.googleapis\.com\//,
-              handler: 'StaleWhileRevalidate',
-              options: {
-                cacheName: 'google-fonts-stylesheets',
-              },
-            },
-            {
-              urlPattern: /^https:\/\/fonts\.gstatic\.com\//,
+              // A hashed app file the current precache doesn't list is one
+              // from an earlier version, asked for by a page still running
+              // it. keep-previous-app-sw.js stashed those at install; serve
+              // from there so opening a screen never waits on the network
+              // (bug report 2026-09-30). The precache route is registered
+              // first, so current files never reach this one. Keep the
+              // pattern in step with HASHED_APP_FILE in that file.
+              urlPattern: /\/(js|css|fonts)\/[^/?]+\.[0-9a-f]{8}\.(js|css|woff2?|ttf)$/,
               handler: 'CacheFirst',
               options: {
-                cacheName: 'google-fonts-webfonts',
-                expiration: {
-                  maxEntries: 30,
-                  maxAgeSeconds: 60 * 60 * 24 * 365,
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
+                cacheName: 'cinema-roll-previous-app',
               },
             },
           ],

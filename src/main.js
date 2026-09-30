@@ -12,6 +12,9 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import "bootstrap";
+// The app's own web fonts (Roboto Condensed, Lobster, Limelight), bundled so
+// the first paint never waits on Google. See the file's header.
+import "./assets/scss/fonts.css";
 
 import { createApp } from "vue";
 import App from "./App.vue";

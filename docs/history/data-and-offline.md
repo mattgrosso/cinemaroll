@@ -368,3 +368,67 @@ images and fonts; use `waitUntil: 'commit'` and CDP `Page.captureScreenshot`.
 The tester's Firebase keys are `<timestamp>-<uuid>-<title>`, so look for a
 test title by substring, not `orderByKey().startAt()`.
 
+
+## One bar at the therapist's: the update that ate the app (2026-09-30)
+
+Matt, from an office with a very bad connection: "I tried... it sort of
+partially loaded... loading bar at the top of the screen and spun for a while
+and just never did anything... We need to figure out how to make things work
+offline for real."
+
+**The reproduction.** `scripts/liefi-proxy.mjs` grew a `trickle` mode
+(`curl localhost:8889/mode/trickle`, `/rate/<bytes per second>`): one shared
+~3 KB/s downlink, so a 5 KB page gets through and a few MB take most of an
+hour. Blackhole can't show this bug - the version check never gets through,
+so no update ever starts. Harness: two builds of the same code (every build
+has a new bundle hash via the build stamp), a switchable static server, a
+persistent Playwright profile signed in as the tester; install version A on
+good signal, switch the server to B and the proxy to trickle, relaunch.
+
+**What happened, measured.** Home painted at once from the precache and the
+IndexedDB snapshot - relaunching was fine, as the lie-fi round had found.
+Then: the new worker started downloading its precache over the trickle; the
+index.html version check got through (~70-250s in); `reloadForUpdate`
+waited its 15s for the worker, got `stuck` (or `settled` after a failed
+install, which then reloaded onto the old app and came round again as a
+repeat) and called `hardReload` - which deletes every cache except the
+posters and navigates to a `?fresh=` URL. On one bar that is the worst
+possible move: the phone's working copy of the app is gone and the new one
+is ~1 MB away. The page sat half-loaded with its loading bar.
+
+**The fixes.**
+1. `reloadForUpdate` only goes hard when `newAppIsReachable` can download
+   the new bundle within 10s (it also warms the HTTP cache for the reload).
+   Otherwise it returns `'deferred'`: the running app stays, the worker
+   finishes in its own time, and the banner says the update is waiting for a
+   better connection, with Try again. `waitForNewWorker`'s `update()` call is
+   capped at 5s - on the trickle it sat for minutes.
+2. `public/keep-previous-app-sw.js` (importScripts) copies the outgoing
+   version's hashed js/css/font files into `cinema-roll-previous-app` while
+   a new worker installs; a CacheFirst route serves hashed files the new
+   precache doesn't list from there. A page still running the old version
+   can open any screen after an update without the network. One version
+   back, replaced at each install.
+3. `lazyScreen` (`staleChunkReload.js`) puts an 8s deadline on every route's
+   screen file when a worker controls the page (every current screen is
+   precached, so 8s means it's on the network); the timeout is a
+   ChunkLoadError, so the existing once-per-route reload handles it.
+4. `offlineStore`: IndexedDB open bounded at 4s with one retry (WebKit has
+   left a launch's first open unanswered), reads/writes at 15s. The snapshot
+   is the only way the library appears when the live listener can't connect.
+5. The three web fonts actually in use (Roboto Condensed, Lobster,
+   Limelight) are bundled in `src/assets/fonts` + `src/assets/scss/fonts.css`;
+   the render-blocking Google Fonts `<link>` is gone, along with six fonts
+   nothing used. The worker's Google Fonts runtime routes went with it.
+
+**Measured after.** Same trickle harness, fixed builds: 11 minutes on one
+bar, the page never reloaded, Home stayed usable throughout, the update
+waited (the worker's install kept failing and retrying on that connection -
+fine, it finishes when signal returns). Old-version file after a takeover,
+blackholed, HTTP cache bypassed: before, no answer in 10s; after, 200 in
+2ms from `cinema-roll-previous-app`. Harness note: a new worker sat in
+`waiting` indefinitely under headless Chrome while the old page stayed
+open, so the takeover-under-an-open-page case was checked by fetching the
+old file from a fresh page instead. And Playwright's `waitForFunction`
+treats an async predicate's promise as truthy - poll with `evaluate`.
+

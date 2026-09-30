@@ -134,5 +134,17 @@ Branch on `state.isOnline` for offline behaviour, never on `navigator.onLine`;
 never add a network call without a timeout (axios has the default; raw `fetch`
 goes through `fetchWithTimeout`). Everything queued through `pendingWriteQueue`
 is JSON-round-tripped to plain data - reactive state cannot be structured-cloned.
-Reproduce a dead-but-connected network with `scripts/liefi-proxy.mjs`.
+Reproduce a dead-but-connected network with `scripts/liefi-proxy.mjs`
+(`blackhole`), and one bar of signal with its `trickle` mode - the case where
+slow requests DO get through, which is what starts an update.
+
+## Updates must never cost the offline copy (2026-09-30)
+
+A hard reload (`hardReload` in `appUpdate.js`) deletes the precache and loads
+from the network. It only runs once `newAppIsReachable` has downloaded the
+new bundle; otherwise the update is `'deferred'` and the running app stays.
+Route screens go through `lazyScreen` (8s deadline under a worker, then the
+stale-chunk reload), the outgoing version's files survive an update in
+`cinema-roll-previous-app` (`public/keep-previous-app-sw.js`), and nothing in
+`index.html`'s head may load from another host - fonts are bundled.
 
