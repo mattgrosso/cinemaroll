@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675">
+  <rect width="1200" height="675" fill="#14181c"/>
+  <g opacity="0.18" fill="none" stroke="#ffffff" stroke-width="3">
+    <circle cx="300" cy="360" r="210"/>
+    <circle cx="900" cy="360" r="210"/>
+  </g>
+  <g font-family="Helvetica Neue, Helvetica, Arial, sans-serif" text-anchor="middle">
+    <text x="300" y="330" font-size="150" font-weight="800" fill="#ffc107">YOU</text>
+    <text x="300" y="420" font-size="40" fill="#e0e0e0" letter-spacing="6">YOUR SCORE</text>
+    <text x="600" y="385" font-size="72" font-weight="700" fill="#9a9a9a">or</text>
+    <text x="900" y="330" font-size="150" font-weight="800" fill="#00e054">★</text>
+    <text x="900" y="420" font-size="40" fill="#e0e0e0" letter-spacing="6">THE CROWD</text>
+    <text x="600" y="600" font-size="34" fill="#9a9a9a" letter-spacing="8">CINEMA ROLL GAMES</text>
+  </g>
+</svg>

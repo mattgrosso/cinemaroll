@@ -34,6 +34,7 @@ const pct = (numerator, denominator) => (denominator ? `${Math.round((numerator 
 // stat its records can't support — a stats screen should never show "null".
 const SUMMARIES = {
   'higher-lower': (records) => streakSummary(records),
+  'you-or-crowd': (records) => streakSummary(records),
   timeline: (records) => streakSummary(records),
   tagline: (records) => streakSummary(records),
   wordle: (records) => [
@@ -96,6 +97,7 @@ function formatDollars (value) {
 // primary metric, not the whole record.
 const ROUND_LABELS = {
   'higher-lower': (r) => `streak ${r.streak ?? '?'}`,
+  'you-or-crowd': (r) => `streak ${r.streak ?? '?'}`,
   timeline: (r) => `streak ${r.streak ?? '?'}`,
   tagline: (r) => `streak ${r.streak ?? '?'}`,
   wordle: (r) => `${r.guesses ?? '?'} guess${r.guesses === 1 ? '' : 'es'}`,

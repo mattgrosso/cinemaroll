@@ -60,6 +60,7 @@ import tagBanner from '../../assets/images/games/tag-banner.jpg';
 import triviaBanner from '../../assets/images/games/trivia-banner.jpg';
 import stampBanner from '../../assets/images/games/stamp-banner.jpg';
 import posterZoomBanner from '../../assets/images/games/poster-zoom-banner.jpg';
+import youOrCrowdBanner from '../../assets/images/games/you-or-crowd-banner.svg';
 import cineplexityBanner from '../../assets/images/games/cineplexity-banner.svg';
 
 export default {
@@ -144,6 +145,12 @@ export default {
           name: 'Stamp',
           banner: stampBanner,
           description: 'Sort which keywords fit.'
+        },
+        {
+          path: '/games/you-or-crowd',
+          name: 'You or the Crowd?',
+          banner: youOrCrowdBanner,
+          description: 'Who ranked it higher — you or Letterboxd?'
         },
         {
           path: '/games/cineplexity',

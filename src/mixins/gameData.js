@@ -60,7 +60,8 @@ export const GAME_NAMES = {
   '/games/trivia': 'Trivia',
   '/games/poster-zoom': 'Poster Zoom',
   '/games/stamp': 'Stamp',
-  '/games/cineplexity': 'Cineplexity'
+  '/games/cineplexity': 'Cineplexity',
+  '/games/you-or-crowd': 'You or the Crowd?'
 };
 
 export const GAME_ICONS = {
@@ -74,7 +75,8 @@ export const GAME_ICONS = {
   '/games/trivia': 'bi-question-circle-fill',
   '/games/poster-zoom': 'bi-zoom-in',
   '/games/stamp': 'bi-bookmark-check-fill',
-  '/games/cineplexity': 'bi-intersect'
+  '/games/cineplexity': 'bi-intersect',
+  '/games/you-or-crowd': 'bi-people-fill'
 };
 
 // Feature request: "I don't want to limit the number of times I can play a

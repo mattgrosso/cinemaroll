@@ -54,7 +54,7 @@ describe('GamesHub', () => {
       const alts = wrapper.findAll('.game-tile-image').map((img) => img.attributes('alt'));
       expect(alts[0]).toBe('Stamp');
       expect(alts[1]).toBe('Reel Wordle');
-      expect(alts).toHaveLength(11);
+      expect(alts).toHaveLength(12);
     });
 
     it('keeps the hand-curated order for ties, including the no-plays default', () => {
@@ -81,7 +81,7 @@ describe('GamesHub', () => {
 
   it('lists all games once there is enough data', () => {
     const { wrapper } = factory(10);
-    expect(wrapper.findAll('.game-tile').length).toBe(11);
+    expect(wrapper.findAll('.game-tile').length).toBe(12);
   });
 
   it('navigates to the chosen game route on tap', async () => {

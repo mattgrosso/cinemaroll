@@ -33,6 +33,17 @@
            overall rank is useful is sorted by rating." Everywhere else the bar
            names the thing being sorted on instead, which is what you're
            actually looking at. -->
+      <!-- The Letterboxd crowd on the poster (Matt, 2026-09-29: "we need to
+           include the Letterboxd data on each poster somehow, in the bottom
+           row like we do other things"): the crowd's rating when the list is
+           sorted by it, and your score beside it on the crowd chips. -->
+      <span v-else-if="sortValue === 'letterboxd'" class="crowd-line">
+        <template v-if="crowdStars">★ {{crowdStars}}<span v-if="crowdCountLabel"> · {{crowdCountLabel}}</span></template>
+        <template v-else>no Letterboxd rating</template>
+      </span>
+      <span v-else-if="showCrowd && crowdStars" class="crowd-line">
+        {{formatScore(mostRecentRating(result).calculatedTotal)}} · ★ {{crowdStars}}
+      </span>
       <span v-else-if="showsOverallRank" class="rank">
         <span v-if="resultsAreFiltered">{{getOrdinal(index + 1)}} ({{getOrdinal(overAllRank)}})</span>
         <span v-else>{{getOrdinal(overAllRank)}}</span>
@@ -295,6 +306,7 @@ const DATE_FORMATS = {
   monthDayYear: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 };
 import { formatScore } from '../assets/javascript/formatScore.js';
+import { compactCount } from '../assets/javascript/letterboxdFormat.js';
 import { formatMoneyShort, formatProfit, formatReturn } from '../assets/javascript/formatMoney.js';
 import { adjustedMovieMoney } from '../assets/javascript/inflation.js';
 import { isModernWithNoBoxOffice } from '../assets/javascript/searchFiltering.js';
@@ -336,6 +348,12 @@ export default {
     allCounts: {
       type: Array,
       required: false
+    },
+    // True while a Letterboxd chip (Crowd Loves / You Disagree / Cult Films)
+    // is the active list, so the bar can show your score beside the crowd's.
+    showCrowd: {
+      type: Boolean,
+      default: false
     },
     index: {
       type: Number,
@@ -438,6 +456,17 @@ export default {
     // An empty sortValue is the rating sort (see getSortValue's default).
     showsOverallRank () {
       return !this.sortValue || this.sortValue === 'rating';
+    },
+    crowdFilm () {
+      const id = this.topStructure(this.result)?.id;
+      return this.$store.state.letterboxdFilms?.[id] || null;
+    },
+    crowdStars () {
+      const rating = Number.isFinite(this.result._crowd) ? this.result._crowd : this.crowdFilm?.rating;
+      return Number.isFinite(rating) ? rating.toFixed(2) : null;
+    },
+    crowdCountLabel () {
+      return compactCount(this.crowdFilm?.ratingCount);
     },
     marksNoBoxOffice () {
       return this.sortValue === 'budget' && isModernWithNoBoxOffice(this.result);

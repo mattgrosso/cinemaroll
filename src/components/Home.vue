@@ -1400,6 +1400,7 @@
                   :index="index"
                   :resultsAreFiltered="resultsAreFiltered"
                   :sortValue="sortValue"
+                  :showCrowd="letterboxdChipActive"
                   :activeQuickLinkList="quickLinkContext"
                   @updateSearchValue="updateSearchValue"
                 />
@@ -1417,6 +1418,7 @@
               :index="index"
               :resultsAreFiltered="resultsAreFiltered"
               :sortValue="sortValue"
+              :showCrowd="letterboxdChipActive"
               :activeQuickLinkList="quickLinkContext"
               @updateSearchValue="updateSearchValue"
             />
@@ -3724,6 +3726,9 @@ export default {
         "count-more-than-4-remainder-2": count > 4 & count % 4 === 2,
         "count-more-than-4-remainder-3": count > 4 & count % 4 === 3
       }
+    },
+    letterboxdChipActive () {
+      return ['crowdLoves', 'disagree', 'cult'].includes(this.activeListChip?.value);
     },
     // Letterboxd chips (2026-09-29). Empty until the store has the film cache.
     crowdLovesMovies () {

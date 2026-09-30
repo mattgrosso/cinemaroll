@@ -30,6 +30,7 @@ const plural = (count, noun, pluralNoun = `${noun}s`) => `${count} ${count === 1
 // `wonField` names the boolean that says a round was won.
 export const METRICS = {
   'higher-lower': { kind: 'streak', field: 'streak', better: 'high', phrase: (v) => `${v} in a row`, noun: 'run' },
+  'you-or-crowd': { kind: 'streak', field: 'streak', better: 'high', phrase: (v) => `${v} in a row`, noun: 'run' },
   timeline: { kind: 'streak', field: 'streak', better: 'high', phrase: (v) => `${v} in a row`, noun: 'run' },
   tagline: { kind: 'streak', field: 'streak', better: 'high', phrase: (v) => `${v} in a row`, noun: 'run' },
   wordle: { kind: 'solve', field: 'guesses', better: 'low', phrase: (v) => plural(v, 'guess', 'guesses'), noun: 'puzzle' },

@@ -19,6 +19,7 @@ const YearInReview = () => import(/* webpackChunkName: "year-in-review" */ "../c
 const TrophyCase = () => import(/* webpackChunkName: "trophy-case" */ "../components/TrophyCase.vue");
 const GamesHub = () => import(/* webpackChunkName: "games" */ "../components/games/GamesHub.vue");
 const HigherLowerGame = () => import(/* webpackChunkName: "games" */ "../components/games/HigherLowerGame.vue");
+const YouOrCrowdGame = () => import(/* webpackChunkName: "games" */ "../components/games/YouOrCrowdGame.vue");
 const ReelWordleGame = () => import(/* webpackChunkName: "games" */ "../components/games/ReelWordleGame.vue");
 const ConnectionsGame = () => import(/* webpackChunkName: "games" */ "../components/games/ConnectionsGame.vue");
 const SixDegreesGame = () => import(/* webpackChunkName: "games" */ "../components/games/SixDegreesGame.vue");
@@ -615,6 +616,24 @@ const routes = [
       // Back-link identity: what this screen is called, and where back
       // goes when there is no history to go back to.
       title: 'Stamp',
+      parent: '/games',
+      requiresLogin: true
+    },
+    beforeEnter: (to, from, next) => {
+      if (!loggedIn()) {
+        next('/login');
+      } else {
+        next();
+      }
+    }
+  },
+  {
+    path: '/games/you-or-crowd',
+    name: 'YouOrCrowdGame',
+    component: YouOrCrowdGame,
+    meta: {
+      exitToParent: true,
+      title: 'You or the Crowd?',
       parent: '/games',
       requiresLogin: true
     },

@@ -7,7 +7,7 @@ paths:
 
 # Games rules
 
-Ten games built entirely from the user's own rated library. Full narrative and per-game
+Twelve games built from the user's own rated library (You or the Crowd? also reads the shared Letterboxd film cache). Full narrative and per-game
 design history: `docs/history/games.md`.
 
 ## Architecture
@@ -30,6 +30,7 @@ design history: `docs/history/games.md`.
 | Trivia | `/games/trivia` |
 | Stamp | `/games/stamp` |
 | Poster Zoom | `/games/poster-zoom` |
+| You or the Crowd? | `/games/you-or-crowd` |
 
 All `requiresLogin`.
 
