@@ -150,7 +150,7 @@ export default {
           path: '/games/you-or-crowd',
           name: 'You or the Crowd?',
           banner: youOrCrowdBanner,
-          description: 'Who ranked it higher — you or Letterboxd?'
+          description: 'Who scored it higher — you or Letterboxd?'
         },
         {
           path: '/games/cineplexity',

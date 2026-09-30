@@ -2,10 +2,10 @@
   <div class="you-or-crowd-game">
     <BackLink/>
     <div v-if="!current" class="setup">
-      <p>One film from your library at a time. Did you rank it higher than the Letterboxd crowd did, or did they?</p>
-      <p class="setup-note">By rank, not score: your place for it among your own ratings against the crowd's place for it among theirs.</p>
-      <button type="button" class="btn-game btn-game-primary cta-btn" :disabled="rounds.length < 10" @click="start">
-        {{ rounds.length < 10 ? 'Letterboxd ratings still loading' : 'Start' }}
+      <p>One film from your library at a time. Did you score it higher than the Letterboxd crowd did, or did they?</p>
+      <p class="setup-note">Your score in stars, the way the star view shows it, against the crowd's average star rating.</p>
+      <button type="button" class="btn-game btn-game-primary cta-btn" :disabled="deckSize < 10" @click="start">
+        {{ deckSize < 10 ? 'Letterboxd ratings still loading' : 'Start' }}
       </button>
     </div>
     <template v-else>
@@ -22,12 +22,12 @@
 
       <div class="yc-choices">
         <button type="button" class="btn-game yc-choice" :class="choiceClass('you')" :disabled="guessed || gameOver" @click="guess('you')">
-          <span class="yc-choice-label">I ranked it higher</span>
-          <span v-if="guessed" class="yc-choice-detail">You {{ formatScore(current.mine) }} · {{ percentLabel(current.myPct) }} of yours</span>
+          <span class="yc-choice-label">I scored it higher</span>
+          <span v-if="guessed" class="yc-choice-detail">You {{ starLabel(current.mine, 1) }}</span>
         </button>
         <button type="button" class="btn-game yc-choice" :class="choiceClass('crowd')" :disabled="guessed || gameOver" @click="guess('crowd')">
           <span class="yc-choice-label">The crowd did</span>
-          <span v-if="guessed" class="yc-choice-detail">★ {{ current.crowd.toFixed(2) }} · {{ percentLabel(current.crowdPct) }} of theirs</span>
+          <span v-if="guessed" class="yc-choice-detail">Crowd {{ starLabel(current.crowd, 2) }}</span>
         </button>
       </div>
 
@@ -44,13 +44,12 @@
 // You or the Crowd? — a streak game on the Letterboxd data (2026-09-29).
 // Rules in games/youOrCrowd.js; the crowd's ratings come from the shared
 // letterboxdFilms cache (store: ensureLetterboxdData), so the Start button
-// waits until at least ten of the library's films have one.
+// waits until a balanced run of at least ten films can be dealt.
 import BackLink from './BackLink.vue';
 import gameDataMixin from '../../mixins/gameData.js';
 import { shuffle } from '../../assets/javascript/games/gameUtils.js';
-import { youOrCrowdRounds, answerFor, percentLabel } from '../../assets/javascript/games/youOrCrowd.js';
+import { youOrCrowdRounds, answerFor, balancedDeck, starLabel } from '../../assets/javascript/games/youOrCrowd.js';
 import { getRating } from '../../assets/javascript/GetRating.js';
-import { formatScore } from '../../assets/javascript/formatScore.js';
 import banner from '../../assets/images/games/you-or-crowd-banner.svg';
 
 export default {
@@ -86,6 +85,10 @@ export default {
       if (!this.films) return [];
       return youOrCrowdRounds(this.eligibleGameEntries, getRating, this.films);
     },
+    deckSize () {
+      const yours = this.rounds.filter((row) => answerFor(row) === 'you').length;
+      return 2 * Math.min(yours, this.rounds.length - yours);
+    },
     bestStreak () {
       return this.$store.state?.settings?.games?.youOrCrowdBestStreak || 0;
     },
@@ -95,16 +98,15 @@ export default {
     },
     statusMessage () {
       if (this.gameOver && !this.queue.length && this.lastGuessCorrect) return "You've been through every film with an answer. Restart to shuffle a new run.";
-      if (!this.guessed) return 'Who ranked this one higher?';
-      if (this.lastGuessCorrect) return answerFor(this.current) === 'you' ? 'Right — you rank it higher than the crowd does.' : 'Right — the crowd ranks it higher than you do.';
-      return `Streak over at ${this.streak}. ${answerFor(this.current) === 'you' ? 'You rank it higher.' : 'The crowd ranks it higher.'}`;
+      if (!this.guessed) return 'Who scored this one higher?';
+      if (this.lastGuessCorrect) return answerFor(this.current) === 'you' ? 'Right — you score it higher than the crowd does.' : 'Right — the crowd scores it higher than you do.';
+      return `Streak over at ${this.streak}. ${answerFor(this.current) === 'you' ? 'You score it higher.' : 'The crowd scores it higher.'}`;
     }
   },
   methods: {
-    formatScore,
-    percentLabel,
+    starLabel,
     start () {
-      this.queue = shuffle(this.rounds, Math.random);
+      this.queue = balancedDeck(this.rounds, (list) => shuffle(list, Math.random));
       this.streak = 0;
       this.gameOver = false;
       this.lastGuessCorrect = null;

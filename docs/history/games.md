@@ -271,3 +271,11 @@ The page had been one flat card per game — four label/value lines and a chip s
 - **Drama on reveals**: cards rise in staggered by 110ms, the scoreboard numbers count up over 900ms, the personal-best value pops once its card has landed. A tap anywhere settles everything instantly; `prefers-reduced-motion` skips it all. jsdom has no `matchMedia`, which the component reads as reduced motion — so tests see final numbers, no timers needed.
 
 Nothing shows a zero: every block hides when the records can't support it (`personalRecord`/`recentTrend`/`habits` return null, `movieFacts` returns empty lists). Stamp is a "volume" game with no record or form strip — its headline counts posters judged. Tests: `gameStats.test.js` (pure), `GameStatsScreen.test.js` (DOM), and one round-record assertion per single-target game; the movie-key and poster-resolution guards were proven by reverting.
+
+## You or the Crowd?: scores, not ranks (2026-09-30)
+
+The game shipped (2026-09-29) comparing RANKS — your percentile for a film among your own ratings against the crowd's percentile among theirs, the same trick `letterboxdCompare.js` uses for Insights, because a 0–10 weighted score and a 0.5–5 star average can't be subtracted. Matt's report the next day: "The comparison for the new game should be our scores, not our ranks. I don't know what it means for the rank to be higher or lower." Rank is right for a correlation and wrong for a quick yes/no question a player has to reason about.
+
+Now the game (only the game — Insights still ranks) puts both on the star scale: your normalised score halved, which is exactly what ToggleableRating's star view shows, against the crowd's average. Near-ties inside 0.25 stars sit out. The reveal shows "You ★ 4.0" / "Crowd ★ 3.87".
+
+Checked on the live library before shipping: scored this way the crowd out-scores Matt on about three films in four (48 "you" vs 162 "crowd" among the 261 films with a crowd rating then), so an unbalanced run is won by always tapping "The crowd did". `balancedDeck` deals equal numbers of each answer per run, and Start waits for a balanced deck of ten. The score test was proven by temporarily restoring the rank comparison.
