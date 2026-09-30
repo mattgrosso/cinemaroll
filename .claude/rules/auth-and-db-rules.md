@@ -179,6 +179,26 @@ invisible until the raw reply was logged. `tools` + `tool_choice` has the API va
 the arguments against a schema and leaves nothing to parse. It also fixed vague prompts
 ("x", "one more"), which used to get a conversational reply and come back empty.
 
+## The Letterboxd sync rides in the newsletter Lambda (2026-09-29)
+
+`aws-lambda/letterboxd.js` (+ pure `letterboxdSync.js`, tested from
+`src/test/letterboxdSync.test.js`) is bundled INTO `cinemaroll-newsletter` rather than a
+function of its own: that Lambda already holds `FIREBASE_SA` and the account sweep, and
+copying the key into a new function is exactly the kind of credential handling a session
+shouldn't do. Entry points: EventBridge `cinemaroll-letterboxd-reviews` (rate 6 hours,
+Input `{"letterboxdSweep":"reviews"}`) and `cinemaroll-letterboxd-films` (cron 09:15 UTC,
+`{"letterboxdSweep":"films"}`), and HTTP `POST /letterboxd/sync` / `/letterboxd/film` on
+the newsletter API (`lpou4xxxng`, `$default` route, so no route to add). The Lambda's
+timeout was raised to **600s** for the film backfill; the handler now takes `context` for
+the deadline. `letterboxdFilms` is a shared root and is in `NON_ACCOUNT_ROOTS` in BOTH
+Lambdas — keep it there or the sweeps treat it as a person.
+
+**Deploy with `yarn deploy:newsletter` and check the zip.** The bundle directory under
+`$TMPDIR` was once found with hollow `node_modules` (57 dirs, 83 KB zipped) and shipped a
+Lambda that died on `Cannot find module 'web-push'` — the newsletter would have failed
+that Friday. A healthy zip is ~13 MB / ~4,900 files; `rm -rf` the bundle dir and rerun if
+it isn't. The script uses `~/aws-cli/aws` (the PATH `aws` is Intel on this Mac).
+
 ## The push Lambda (`aws-lambda/push-notify.js`, deployed as `cinemaroll-push`)
 
 Web push notifications (2026-08-27). Same auth pattern as the AI lambda — Firebase ID

@@ -9,7 +9,10 @@ export default defineConfig({
     globals: true,
     // src/test/emulated needs the Firebase emulator around it (yarn
     // test:emulated), so it is not part of a plain `yarn test:run`.
-    exclude: ['**/node_modules/**', '**/dist/**', 'src/test/emulated/**'],
+    // Linked worktrees (.claude/worktrees/*) carry their own copy of the
+    // suite; running them from the main checkout doubles the run and fails
+    // on whatever the branch hasn't merged yet.
+    exclude: ['**/node_modules/**', '**/dist/**', 'src/test/emulated/**', '.claude/worktrees/**'],
     setupFiles: ['./src/test/setup.js'],
     coverage: {
       provider: 'v8',

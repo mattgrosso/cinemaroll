@@ -24,6 +24,14 @@ vi.mock('@/assets/javascript/GetRating.js', () => ({
 
 vi.mock('@/services/ErrorLogService.js', () => ({ default: { error: vi.fn() } }))
 
+// The Letterboxd extras arrive from Firebase and the Lambda after the page
+// renders; the tests hand them in directly.
+const letterboxdMocks = vi.hoisted(() => ({
+  myLetterboxdReviews: vi.fn(async () => []),
+  letterboxdFilm: vi.fn(async () => null)
+}))
+vi.mock('@/utils/letterboxdData.js', () => letterboxdMocks)
+
 const warmImageCacheMock = vi.fn()
 vi.mock('@/assets/javascript/offlinePosterCache.js', async () => {
   const actual = await vi.importActual('@/assets/javascript/offlinePosterCache.js')
@@ -63,14 +71,17 @@ describe('MovieDetail', () => {
 
   beforeEach(async () => {
     warmImageCacheMock.mockClear()
+    letterboxdMocks.myLetterboxdReviews.mockClear()
+    letterboxdMocks.letterboxdFilm.mockClear()
     pushSpy = vi.fn()
     mockStore = {
       state: {
         movieLog: {},
         settings: { tags: { 'viewing-tags': {} } },
-        academyAwardWinners: {}
+        academyAwardWinners: {},
+        isOnline: true
       },
-      getters: { allMoviesAsArray: [], allMediaAsArray: [] },
+      getters: { allMoviesAsArray: [], allMediaAsArray: [], databaseTopKey: 'tester' },
       commit: vi.fn(),
       dispatch: vi.fn()
     }
@@ -88,6 +99,46 @@ describe('MovieDetail', () => {
 
     // result/movie are normally loaded async in created(); set them directly.
     await wrapper.setData({ result: makeResult(), movie: makeResult().movie })
+  })
+
+  describe('Letterboxd section', () => {
+    it('renders nothing until there is something', async () => {
+      await wrapper.setData({ letterboxdReviews: [], letterboxdFilmStats: null })
+      expect(wrapper.find('.letterboxd-section').exists()).toBe(false)
+    })
+
+    it('shows the public rating line linked to the film page, with compact counts', async () => {
+      await wrapper.setData({ letterboxdFilmStats: { slug: 'heat-1995', rating: 4.32, ratingCount: 1307901, fans: 61000 } })
+      const line = wrapper.find('.letterboxd-film a')
+      expect(line.text()).toBe('★ 4.32 · 1.3M ratings · 61K fans')
+      expect(line.attributes('href')).toBe('https://letterboxd.com/film/heat-1995/')
+    })
+
+    it('a film Letterboxd does not know renders no rating line', async () => {
+      await wrapper.setData({ letterboxdFilmStats: { missing: true, fetchedAt: 1 } })
+      expect(wrapper.find('.letterboxd-section').exists()).toBe(false)
+    })
+
+    it('shows my reviews with stars, the watched date and the text, paragraphs kept', async () => {
+      await wrapper.setData({
+        letterboxdReviews: [{
+          id: 'review-1', rating: 2.5, watchedDate: '2026-09-27', rewatch: true,
+          review: 'First paragraph.\n\nSecond paragraph.', url: 'https://letterboxd.com/mattgrosso/film/primetime-2026/'
+        }]
+      })
+      const review = wrapper.find('.letterboxd-review')
+      expect(review.find('.letterboxd-stars').text()).toBe('★★½')
+      expect(review.find('.letterboxd-rewatch').exists()).toBe(true)
+      expect(review.find('.letterboxd-review-text').text()).toContain('First paragraph.')
+      expect(review.find('.letterboxd-review-text').element.textContent).toBe('First paragraph.\n\nSecond paragraph.')
+      expect(review.find('.letterboxd-review-link').attributes('href')).toBe('https://letterboxd.com/mattgrosso/film/primetime-2026/')
+    })
+
+    it('loadLetterboxdExtras asks for both, by the account key and the TMDB id', async () => {
+      wrapper.vm.loadLetterboxdExtras('949')
+      expect(letterboxdMocks.myLetterboxdReviews).toHaveBeenCalledWith('tester', 949)
+      expect(letterboxdMocks.letterboxdFilm).toHaveBeenCalledWith(949, { online: true })
+    })
   })
 
   describe('pure formatters', () => {

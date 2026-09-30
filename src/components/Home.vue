@@ -977,6 +977,33 @@
                                     </span>
                                   </button>
                                 </div>
+                                <!-- The feed sync (2026-09-29): the Lambda reads your public
+                                     Letterboxd feed every six hours and files ratings, watched
+                                     dates and reviews on each film's page. The feed only carries
+                                     the latest ~50 entries; the CSV export covers the rest. -->
+                                <div v-if="letterboxdUsername" class="letterboxd-sync mt-2">
+                                  <small class="form-text text-white d-block mb-2">
+                                    <span v-if="letterboxdSync.state?.lastAt">
+                                      Feed synced {{ relativeTimeFrom(letterboxdSync.state.lastAt) }}<span v-if="letterboxdSync.state.error"> — {{ letterboxdSync.state.error }}</span><span v-else-if="letterboxdSync.state.count != null"> · {{ letterboxdSync.state.count }} recent entries, {{ letterboxdSync.state.reviews || 0 }} with reviews</span>
+                                    </span>
+                                    <span v-else>Your public feed is read every six hours: ratings, watched dates and reviews land on each film's page.</span>
+                                  </small>
+                                  <div class="d-flex flex-wrap gap-2 align-items-center">
+                                    <button class="btn btn-sm btn-outline-info" @click="syncLetterboxdNow" :disabled="letterboxdSync.loading">
+                                      <span v-if="letterboxdSync.loading" class="spinner-border spinner-border-sm me-1" role="status"></span>Sync now
+                                    </button>
+                                    <label class="btn btn-sm btn-outline-light mb-0" :class="{ disabled: letterboxdSync.loading }">
+                                      Import reviews.csv
+                                      <input type="file" accept=".csv,text/csv" class="d-none" :disabled="letterboxdSync.loading" @change="importLetterboxdCsv">
+                                    </label>
+                                  </div>
+                                  <small v-if="letterboxdSync.message" class="form-text d-block mt-2" :class="letterboxdSync.error ? 'text-warning' : 'text-white'">{{ letterboxdSync.message }}</small>
+                                  <div v-if="letterboxdSync.unmatched.length" class="letterboxd-unmatched mt-1">
+                                    <small class="d-block" style="color: #ccc;">Not in your library, so not imported:</small>
+                                    <small class="d-block" style="color: #ccc;">{{ letterboxdSync.unmatched.slice(0, 12).map((row) => row.year ? `${row.title} (${row.year})` : row.title).join(' · ') }}<span v-if="letterboxdSync.unmatched.length > 12"> · and {{ letterboxdSync.unmatched.length - 12 }} more</span></small>
+                                  </div>
+                                  <small class="form-text d-block mt-2" style="color: #ccc;">For everything older than the feed's ~50 entries: Letterboxd → Settings → Import &amp; Export → Export your data, then import the reviews.csv here.</small>
+                                </div>
                                 <div v-if="letterboxdUsername">
                                   <div v-if="scrapingTest.result" class="mt-2">
                                     <div v-if="scrapingTest.success" class="alert alert-success alert-sm">
@@ -1584,6 +1611,8 @@
 import { isShort } from '../assets/javascript/shorts.js';
 import axios from 'axios';
 import { scrollWindowTo } from '../utils/scrollWindowTo.js';
+import { letterboxdSyncState, syncLetterboxdNow, importLetterboxdReviews } from '../utils/letterboxdData.js';
+import { parseCsv, reviewsCsvToUpdates, relativeTimeFrom } from '../assets/javascript/letterboxdFormat.js';
 import { indexOfMovie, resultElementId, resultsNeededToReveal, scrollOffsetFor } from '../assets/javascript/revealInList.js';
 import { arrivedFromMovieDetail } from '../router/scrollBehavior.js';
 import minBy from 'lodash/minBy';
@@ -1854,6 +1883,13 @@ export default {
       libraryTrim: { status: 'idle', completed: 0, total: 0, failed: 0 },
       syncStampBackfill: { status: 'idle', completed: 0, total: 0, failed: 0 },
       quickLinksSortType: "count",
+      letterboxdSync: {
+        loading: false,
+        state: null,
+        message: '',
+        error: false,
+        unmatched: []
+      },
       scrapingTest: {
         loading: false,
         result: null,
@@ -2276,6 +2312,8 @@ export default {
     }
 
     // Note: showShorts, showErrorLogs, and enableRandomSearch are now computed properties
+
+    this.loadLetterboxdSyncState();
 
     // Initialize letterboxdOverrides from store
     if (this.$store.state.settings.letterboxdOverrides) {
@@ -5201,6 +5239,55 @@ export default {
     },
     saveLetterboxdConnection () {
       this.$store.dispatch('writeDurably', { path: 'settings/letterboxdConnected', value: this.letterboxdConnected });
+    },
+    relativeTimeFrom,
+    async loadLetterboxdSyncState () {
+      if (!this.$store.state.settings?.letterboxdUsername) return;
+      this.letterboxdSync.state = await letterboxdSyncState(this.$store.getters.databaseTopKey);
+    },
+    async syncLetterboxdNow () {
+      if (this.letterboxdSync.loading) return;
+      // The username is saved on blur; a tap straight from the field skips it.
+      this.saveLetterboxdUsername();
+      this.letterboxdSync = { ...this.letterboxdSync, loading: true, message: '', error: false, unmatched: [] };
+      try {
+        const result = await syncLetterboxdNow();
+        if (result?.error) {
+          this.letterboxdSync.message = result.error;
+          this.letterboxdSync.error = true;
+        } else {
+          const films = result?.films?.fetched ? `, ${result.films.fetched} film rating${result.films.fetched === 1 ? '' : 's'} refreshed` : '';
+          this.letterboxdSync.message = `Synced ${result?.count ?? 0} recent entries from your feed${films}.`;
+        }
+      } catch (error) {
+        this.letterboxdSync.message = error?.response?.data?.error || error.message || 'Sync failed';
+        this.letterboxdSync.error = true;
+      } finally {
+        this.letterboxdSync.loading = false;
+        await this.loadLetterboxdSyncState();
+      }
+    },
+    async importLetterboxdCsv (event) {
+      const file = event?.target?.files?.[0];
+      if (event?.target) event.target.value = '';
+      if (!file) return;
+      this.letterboxdSync = { ...this.letterboxdSync, loading: true, message: '', error: false, unmatched: [] };
+      try {
+        const rows = parseCsv(await file.text());
+        if (!rows.length || !('Name' in rows[0])) {
+          throw new Error("That doesn't look like a Letterboxd export — expected columns like Name, Year and Review.");
+        }
+        const { updates, matched, unmatched } = reviewsCsvToUpdates(rows, this.$store.getters.allMediaAsArray || []);
+        await importLetterboxdReviews(this.$store.getters.databaseTopKey, updates);
+        const withReviews = Object.values(updates).filter((record) => record.review).length;
+        this.letterboxdSync.message = `Imported ${matched} of ${rows.length} entries (${withReviews} with reviews).`;
+        this.letterboxdSync.unmatched = unmatched;
+      } catch (error) {
+        this.letterboxdSync.message = error.message || 'Import failed';
+        this.letterboxdSync.error = true;
+      } finally {
+        this.letterboxdSync.loading = false;
+      }
     },
     saveLetterboxdUsername () {
       this.$store.dispatch('writeDurably', { path: 'settings/letterboxdUsername', value: this.letterboxdUsername });

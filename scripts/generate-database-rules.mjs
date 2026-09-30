@@ -192,6 +192,15 @@ const rules = {
     },
 
     // One branch per user, named after their sanitized email address.
+    // Letterboxd's public per-film stats (weighted rating, rating count,
+    // fans), fetched by the newsletter Lambda's sweep (aws-lambda/letterboxd.js)
+    // and shared by every account — a film's rating is the same for everyone.
+    // Written only through the Admin SDK; readable by anyone signed in.
+    letterboxdFilms: {
+      '.read': 'auth != null',
+      '.write': false
+    },
+
     $topKey: {
       '.read': ownsBranch,
       '.write': ownsBranch,

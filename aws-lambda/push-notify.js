@@ -56,7 +56,7 @@ const ALLOWED_ORIGINS = [
 // accounts by shallow-listing the root, so anything shared lives here.
 const NON_ACCOUNT_ROOTS = new Set([
   'bugReports', 'social', 'clubDirectory', 'clubInbox', 'clubFeed',
-  'mirrorFeed', 'testing-database'
+  'mirrorFeed', 'letterboxdFilms', 'testing-database'
 ]);
 // Mirrors QA_ACCOUNT_KEYS in src/assets/javascript/databaseKey.js - the QA
 // account never gets real notifications.

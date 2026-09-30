@@ -50,6 +50,42 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
 
 ## Letterboxd
 
+**Data in (2026-09-29): the feed and the film page, nothing else.** Matt: "Can we get my
+reviews? ... I would like to get user data, but I don't want to get in trouble. But I
+don't mind if it just fails at some point." The official API is partner-only (the stub in
+`services/LetterboxdService.js` never got keys). What works, all allowed by their
+robots.txt and fetched with an identifying User-Agent and a pause between requests:
+
+- **`letterboxd.com/<username>/rss/`** — the member's last ~50 diary entries WITH review
+  text, star rating, watched date, rewatch flag and TMDB id. The newsletter Lambda
+  (`aws-lambda/letterboxd.js`, pure parsing in `letterboxdSync.js`) reads it every six
+  hours (EventBridge `cinemaroll-letterboxd-reviews`) into
+  `<topKey>/letterboxd/reviews/<tmdbId>/<reviewId>`, plus `<topKey>/letterboxd/sync`.
+- **`letterboxd.com/tmdb/<id>/`** redirects to the film page, whose JSON-LD carries the
+  weighted average and rating count, and whose header the fan count. Cached for everyone
+  in the global `letterboxdFilms/<tmdbId>` (read: any signed-in user; write: Admin only)
+  for 30 days; a failure waits a week. Daily backfill (`cinemaroll-letterboxd-films`,
+  cap 180 films/run, reads each connected `movieLog` once), plus `POST /letterboxd/film`
+  on demand from MovieDetail. An unknown TMDB id answers **200 at the /tmdb/ URL with no
+  redirect** — the final URL, not the status, says whether the film exists.
+- **Out of reach:** watch/list/like counts, the ratings histogram, the member's own
+  `/films/reviews/` pages — all behind Cloudflare's JS challenge. Don't add a headless
+  browser for them.
+
+The sweep stops after three consecutive failures and never retries hot. The history
+older than the feed arrives through Letterboxd's own CSV export (Settings → Import &
+Export → reviews.csv), parsed and matched by title+year in `letterboxdFormat.js` and
+imported from the Settings panel — the CSV has no TMDB id, so a title Cinema Roll spells
+differently lands in the "not imported" list rather than on the wrong film. The two
+sources can describe one viewing twice; `reviewsFromNode` collapses same-date-same-text
+pairs, preferring the feed's copy (it has the URL).
+
+MovieDetail's Letterboxd section (`.letterboxd-section`, after Ratings) shows the public
+line ("★ 4.32 · 1.3M ratings · 61K fans", linked) and my diary entries with the text,
+paragraphs kept via `white-space: pre-line`. Both load after the page renders and the
+page never waits on them (`loadLetterboxdExtras`; the utils in `utils/letterboxdData.js`
+resolve to something renderable on every failure).
+
 Username-only, no OAuth — setting the username *is* the login. The
 `letterboxdUsername`/`letterboxdConnected` computeds need **setters**, or `v-model` writes
 are silent no-ops (this dropped new users' typed usernames).

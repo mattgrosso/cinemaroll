@@ -152,6 +152,28 @@
           </div>
         </div>
 
+        <!-- Letterboxd (2026-09-29): the film's public rating, and my own diary
+             entries for it — ratings, watched dates and REVIEW TEXT — synced
+             from my Letterboxd feed by the Lambda (aws-lambda/letterboxd.js)
+             and imported from the CSV export. Both arrive after the page
+             renders and the page never waits on them. -->
+        <div v-if="letterboxdFilmLine || letterboxdReviews.length" class="letterboxd-section mb-3">
+          <h4>Letterboxd</h4>
+          <p v-if="letterboxdFilmLine" class="letterboxd-film mb-1">
+            <a :href="letterboxdFilmUrl" target="_blank" rel="noopener">{{ letterboxdFilmLine }}</a>
+          </p>
+          <div v-for="review in letterboxdReviews" :key="review.id" class="letterboxd-review">
+            <div class="letterboxd-review-meta">
+              <span v-if="starsFor(review.rating)" class="letterboxd-stars">{{ starsFor(review.rating) }}</span>
+              <span v-if="review.watchedDate">{{ formattedDate(review.watchedDate) }}</span>
+              <span v-if="review.rewatch" class="letterboxd-rewatch">rewatch</span>
+              <span v-if="review.liked" class="letterboxd-liked">♥</span>
+              <a v-if="review.url" :href="review.url" target="_blank" rel="noopener" class="letterboxd-review-link">open</a>
+            </div>
+            <p v-if="review.review" class="letterboxd-review-text mb-0">{{ review.review }}</p>
+          </div>
+        </div>
+
         <!-- Directors -->
         <div class="directors mb-3">
           <h4>
@@ -587,6 +609,8 @@ import FriendsWhoSaw from './FriendsWhoSaw.vue';
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import ErrorLogService from "../services/ErrorLogService.js";
 import LetterboxdUrlService from '../services/LetterboxdUrlService.js';
+import { myLetterboxdReviews, letterboxdFilm } from '../utils/letterboxdData.js';
+import { starsFor, compactCount } from '../assets/javascript/letterboxdFormat.js';
 import { computeFlatKeywords } from '../utils/keywords.js';
 import { buildTagSuggestions, canCreateNewTag } from '../utils/tags.js';
 import { awardCategoryNameMap } from '../assets/javascript/personalAwardsCategories.js';
@@ -611,6 +635,8 @@ export default {
       result: null, // Will be constructed from movie data
       previousEntry: null,
       letterboxdData: null,
+      letterboxdReviews: [],
+      letterboxdFilmStats: null,
       getAllRatings,
       isLoading: false,
       showPosterOptions: false,
@@ -657,6 +683,21 @@ export default {
     }
   },
   computed: {
+    letterboxdFilmUrl () {
+      const slug = this.letterboxdFilmStats?.slug;
+      return slug ? `https://letterboxd.com/film/${slug}/` : null;
+    },
+    // "★ 4.32 · 1.3M ratings · 61K fans" — only when the sweep has a rating.
+    letterboxdFilmLine () {
+      const stats = this.letterboxdFilmStats;
+      if (!stats || stats.missing || !Number.isFinite(stats.rating)) return null;
+      const parts = [`★ ${stats.rating.toFixed(2)}`];
+      const ratings = compactCount(stats.ratingCount);
+      if (ratings) parts.push(`${ratings} ratings`);
+      const fans = compactCount(stats.fans);
+      if (fans && stats.fans > 0) parts.push(`${fans} fans`);
+      return parts.join(' · ');
+    },
     // Names wherever back will actually land, so the link can't lie.
     backLabel () {
       const back = this.$router?.options?.history?.state?.back;
@@ -1043,6 +1084,7 @@ export default {
         }
 
         // Load Letterboxd data if available
+        this.loadLetterboxdExtras(tmdbId);
         await this.checkLetterboxdData();
       } catch (error) {
         console.error('Error loading movie data:', error);
@@ -1353,6 +1395,29 @@ export default {
       }
     },
 
+    starsFor,
+    // My diary entries for this film and its public stats, each on its own
+    // promise so a slow one never holds up the other. A stale request (the
+    // user tapped through to another film) is dropped by the id check.
+    loadLetterboxdExtras (tmdbId) {
+      const id = Number(tmdbId);
+      this.letterboxdReviews = [];
+      this.letterboxdFilmStats = null;
+      if (!Number.isInteger(id) || id <= 0) return;
+      const topKey = this.$store.getters.databaseTopKey;
+      myLetterboxdReviews(topKey, id)
+        .then((reviews) => {
+          if (Number(this.$route.params.tmdbId) === id) this.letterboxdReviews = reviews;
+          return reviews;
+        })
+        .catch(() => {});
+      letterboxdFilm(id, { online: this.$store.state.isOnline !== false })
+        .then((stats) => {
+          if (Number(this.$route.params.tmdbId) === id) this.letterboxdFilmStats = stats;
+          return stats;
+        })
+        .catch(() => {});
+    },
     async checkLetterboxdData () {
       if (!this.$store.state.settings.letterboxdConnected) {
         return;
@@ -2223,6 +2288,45 @@ export default {
       display: flex;
       flex-wrap: wrap;
       padding: 6px;
+    }
+  }
+
+  .letterboxd-section {
+    .letterboxd-film a {
+      color: #fff;
+      font-size: 0.9rem;
+      text-decoration: none;
+
+      &:active { color: #ccc; }
+    }
+
+    .letterboxd-review {
+      padding: 6px 8px;
+      margin-top: 6px;
+      border-left: 2px solid #ff8000; /* Letterboxd's orange */
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .letterboxd-review-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: baseline;
+      font-size: 0.75rem;
+      color: #ccc;
+
+      .letterboxd-stars { color: #00e054; letter-spacing: 1px; } /* Letterboxd green */
+      .letterboxd-rewatch { text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.5px; }
+      .letterboxd-liked { color: #ff8000; }
+      .letterboxd-review-link { color: #ccc; margin-left: auto; text-decoration: underline; }
+    }
+
+    .letterboxd-review-text {
+      margin-top: 4px;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      white-space: pre-line;
+      color: #fff;
     }
   }
 

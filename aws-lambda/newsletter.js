@@ -57,6 +57,7 @@ const {
   issueDue,
   previouslyIssued
 } = require('./newsletterCompose.js');
+const letterboxd = require('./letterboxd.js');
 const {
   discoverReleases, enrichCandidate, anniversaryPool, trendingThisWeek, filmCard,
   personWithSignatureFilm, olderNamesake
@@ -83,7 +84,7 @@ const ALLOWED_ORIGINS = [
 // real readable account, devMode's, and would have been sent a newsletter.
 const NON_ACCOUNT_ROOTS = new Set([
   'bugReports', 'social', 'clubDirectory', 'clubInbox', 'clubFeed',
-  'mirrorFeed', 'testing-database'
+  'mirrorFeed', 'letterboxdFilms', 'testing-database'
 ]);
 const QA_ACCOUNT_KEYS = new Set(['cinemaroll-tester-example-com']);
 
@@ -209,6 +210,17 @@ const dbGet = async (path, params = '') => {
   });
   if (!res.ok) throw new Error(`RTDB GET ${path} failed: ${res.status}`);
   return res.json();
+};
+
+// Multi-location update: keys may contain '/' and land relative to `path`.
+const dbPatch = async (path, value) => {
+  const token = await getDbToken();
+  const res = await fetch(`${DATABASE_URL}/${path}.json`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(value)
+  });
+  if (!res.ok) throw new Error(`RTDB PATCH ${path} failed: ${res.status}`);
 };
 
 const dbSet = async (path, value) => {
@@ -612,7 +624,31 @@ const UNSAFE_KEY_PATTERN = new RegExp(`[${UNSAFE_KEY_CHARACTERS.map((c) => `\\${
 const emailToDatabaseKey = (email) =>
   (typeof email === 'string' && email ? email.replace(UNSAFE_KEY_PATTERN, '-') : null);
 
-exports.handler = async (event) => {
+// The Letterboxd sync (letterboxd.js) rides in this Lambda. Its db handle is
+// the three helpers above; its account list is the same sweep filter the
+// newsletter uses, minus QA accounts (the tester library is a copy of Matt's
+// and would fetch every film page twice).
+const letterboxdDb = { get: dbGet, set: dbSet, patch: dbPatch };
+const listAccounts = async () => {
+  const roots = await dbGet('', 'shallow=true');
+  return Object.keys(roots || {})
+    .filter((key) => !NON_ACCOUNT_ROOTS.has(key) && !QA_ACCOUNT_KEYS.has(key));
+};
+
+exports.handler = async (event, context) => {
+  // EventBridge, with an Input of { "letterboxdSweep": "reviews" | "films" }.
+  if (event?.letterboxdSweep) {
+    const deadline = Date.now() + (context?.getRemainingTimeInMillis?.() ?? 240000);
+    const result = await letterboxd.sweep({
+      mode: event.letterboxdSweep,
+      accounts: await listAccounts(),
+      db: letterboxdDb,
+      deadline
+    });
+    console.log('Letterboxd sweep:', JSON.stringify(result));
+    return { ok: true, result };
+  }
+
   // The async half of a rebuild: one named account, ignoring the schedule.
   if (event?.rebuildFor) {
     try {
@@ -640,6 +676,34 @@ exports.handler = async (event) => {
 
   const topKey = emailToDatabaseKey(claims.email);
   if (!topKey) return response(400, { error: 'No account key for that email' });
+
+  // The Letterboxd routes: synchronous, seconds each, no model call.
+  const path = event.rawPath || event.requestContext.http?.path || '';
+  if (path.startsWith('/letterboxd/')) {
+    try {
+      const now = Date.now();
+      if (path === '/letterboxd/sync') {
+        const username = await dbGet(`${topKey}/settings/letterboxdUsername`);
+        if (!username) return response(400, { error: 'Set your Letterboxd username first' });
+        const synced = await letterboxd.syncAccount({ topKey, username, db: letterboxdDb, now, log: console.log });
+        if (synced.error) return response(200, { error: synced.error });
+        const existing = (await dbGet('letterboxdFilms').catch(() => null)) || {};
+        const films = await letterboxd.refreshFilms({
+          tmdbIds: synced.tmdbIds, existing, db: letterboxdDb, now, cap: 6, deadline: now + 20000, log: console.log
+        });
+        return response(200, { count: synced.count, films });
+      }
+      if (path === '/letterboxd/film') {
+        let body = {};
+        try { body = JSON.parse(event.body || '{}'); } catch { body = {}; }
+        return response(200, await letterboxd.filmOnDemand({ tmdbId: body.tmdbId, db: letterboxdDb, now, log: console.log }));
+      }
+      return response(404, { error: 'No such route' });
+    } catch (error) {
+      console.error(`Letterboxd route ${path} for ${topKey} failed:`, error);
+      return response(500, { error: error.message });
+    }
+  }
 
   try {
     // Every rebuild spends a frontier-model call, and the button is on screen

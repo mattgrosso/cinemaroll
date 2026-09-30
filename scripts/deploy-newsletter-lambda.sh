@@ -17,12 +17,16 @@ set -euo pipefail
 FUNCTION=cinemaroll-newsletter
 REGION=us-east-1
 PROFILE=personal
+# The aws on PATH is an Intel build on this Mac and dies with "Bad CPU type";
+# scripts/deploy.mjs makes the same choice (2026-09-27).
+AWS="${AWS_BIN:-$HOME/aws-cli/aws}"
+[ -x "$AWS" ] || AWS=aws
 BUNDLE="${TMPDIR:-/tmp}/cinemaroll-newsletter-bundle"
 
-for file in aws-lambda/newsletter.js aws-lambda/newsletterCompose.js aws-lambda/newsletterSources.js; do
+for file in aws-lambda/newsletter.js aws-lambda/newsletterCompose.js aws-lambda/newsletterSources.js aws-lambda/letterboxd.js aws-lambda/letterboxdSync.js; do
   node --check "$file" || { echo "✗ $file does not parse — nothing deployed."; exit 1; }
 done
-echo "✓ all three sources parse"
+echo "✓ all five sources parse"
 
 # The dependency tree is expensive to rebuild and never changes between code
 # edits, so it is installed once and reused.
@@ -45,7 +49,7 @@ JSON
 fi
 
 cp aws-lambda/newsletter.js "$BUNDLE/index.js"
-cp aws-lambda/newsletterCompose.js aws-lambda/newsletterSources.js "$BUNDLE/"
+cp aws-lambda/newsletterCompose.js aws-lambda/newsletterSources.js aws-lambda/letterboxd.js aws-lambda/letterboxdSync.js "$BUNDLE/"
 
 # One more check, on the bundle itself: what parses in the repo is not
 # necessarily what got copied.
@@ -54,14 +58,14 @@ cp aws-lambda/newsletterCompose.js aws-lambda/newsletterSources.js "$BUNDLE/"
 rm -f "$BUNDLE/function.zip"
 (cd "$BUNDLE" && zip -q -r function.zip . -x 'function.zip')
 
-aws lambda update-function-code \
+"$AWS" lambda update-function-code \
   --function-name "$FUNCTION" \
   --zip-file "fileb://$BUNDLE/function.zip" \
   --profile "$PROFILE" --region "$REGION" \
   --query 'LastUpdateStatus' --output text
 
 for _ in $(seq 1 20); do
-  status=$(aws lambda get-function-configuration --function-name "$FUNCTION" \
+  status=$("$AWS" lambda get-function-configuration --function-name "$FUNCTION" \
     --profile "$PROFILE" --region "$REGION" --query 'LastUpdateStatus' --output text)
   if [ "$status" = "Successful" ]; then echo "✓ $FUNCTION updated"; exit 0; fi
   if [ "$status" = "Failed" ]; then echo "✗ update failed"; exit 1; fi

@@ -1,9 +1,10 @@
 import axios from 'axios';
 import { getAuth } from 'firebase/auth';
 
-// The newsletter Lambda's HTTP half — the devMode rebuild, and nothing else.
-// The weekly issue arrives without anyone asking, so this is the ONLY route a
-// client ever calls.
+// The newsletter Lambda's HTTP half — the devMode rebuild. The weekly issue
+// arrives without anyone asking, so this is the only NEWSLETTER route a client
+// calls; the same Lambda also answers the Letterboxd routes, through
+// utils/letterboxdRequest.js.
 //
 // Same gate as utils/aiRequest.js and utils/push.js: the endpoint verifies a
 // Firebase ID token, because its URL ships in the public bundle and a rebuild
