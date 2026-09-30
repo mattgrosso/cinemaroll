@@ -159,18 +159,37 @@
              renders and the page never waits on them. -->
         <div v-if="letterboxdFilmLine || letterboxdReviews.length" class="letterboxd-section mb-3">
           <h4>Letterboxd</h4>
-          <p v-if="letterboxdFilmLine" class="letterboxd-film mb-1">
+          <p v-if="letterboxdFilmLine" class="letterboxd-film mb-0">
             <a :href="letterboxdFilmUrl" target="_blank" rel="noopener">{{ letterboxdFilmLine }}</a>
           </p>
-          <div v-for="review in letterboxdReviews" :key="review.id" class="letterboxd-review">
-            <div class="letterboxd-review-meta">
-              <span v-if="starsFor(review.rating)" class="letterboxd-stars">{{ starsFor(review.rating) }}</span>
-              <span v-if="review.watchedDate">{{ watchedDateLabel(review.watchedDate) }}</span>
-              <span v-if="review.rewatch" class="letterboxd-rewatch">rewatch</span>
-              <span v-if="review.liked" class="letterboxd-liked">♥</span>
-              <a v-if="review.url" :href="review.url" target="_blank" rel="noopener" class="letterboxd-review-link">open</a>
+          <!-- Compact by default (Matt, 2026-09-29: "I don't think I need it
+               to be open by default"): one line for the latest entry, tap
+               to unfold the review text. -->
+          <button
+            v-if="letterboxdReviews.length"
+            type="button"
+            class="letterboxd-summary"
+            :aria-expanded="showLetterboxdReviews ? 'true' : 'false'"
+            @click="showLetterboxdReviews = !showLetterboxdReviews">
+            <span v-if="starsFor(letterboxdLatest.rating)" class="letterboxd-stars">{{ starsFor(letterboxdLatest.rating) }}</span>
+            <span v-if="letterboxdLatest.watchedDate">{{ watchedDateLabel(letterboxdLatest.watchedDate) }}</span>
+            <span v-if="letterboxdReviews.length > 1">· {{ letterboxdReviews.length }} entries</span>
+            <span class="letterboxd-summary-action">
+              {{ showLetterboxdReviews ? 'Hide' : letterboxdHasText ? 'Show review' : 'Details' }}
+              <i class="bi" :class="showLetterboxdReviews ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+            </span>
+          </button>
+          <div v-if="showLetterboxdReviews" class="letterboxd-reviews">
+            <div v-for="review in letterboxdReviews" :key="review.id" class="letterboxd-review">
+              <div class="letterboxd-review-meta">
+                <span v-if="starsFor(review.rating)" class="letterboxd-stars">{{ starsFor(review.rating) }}</span>
+                <span v-if="review.watchedDate">{{ watchedDateLabel(review.watchedDate) }}</span>
+                <span v-if="review.rewatch" class="letterboxd-rewatch">rewatch</span>
+                <span v-if="review.liked" class="letterboxd-liked">♥</span>
+                <a v-if="review.url" :href="review.url" target="_blank" rel="noopener" class="letterboxd-review-link">open</a>
+              </div>
+              <p v-if="review.review" class="letterboxd-review-text mb-0">{{ review.review }}</p>
             </div>
-            <p v-if="review.review" class="letterboxd-review-text mb-0">{{ review.review }}</p>
           </div>
         </div>
 
@@ -637,6 +656,7 @@ export default {
       letterboxdData: null,
       letterboxdReviews: [],
       letterboxdFilmStats: null,
+      showLetterboxdReviews: false,
       getAllRatings,
       isLoading: false,
       showPosterOptions: false,
@@ -683,6 +703,12 @@ export default {
     }
   },
   computed: {
+    letterboxdLatest () {
+      return this.letterboxdReviews[0] || {};
+    },
+    letterboxdHasText () {
+      return this.letterboxdReviews.some((review) => review.review);
+    },
     letterboxdFilmUrl () {
       const slug = this.letterboxdFilmStats?.slug;
       return slug ? `https://letterboxd.com/film/${slug}/` : null;
@@ -1404,6 +1430,7 @@ export default {
       const id = Number(tmdbId);
       this.letterboxdReviews = [];
       this.letterboxdFilmStats = null;
+      this.showLetterboxdReviews = false;
       if (!Number.isInteger(id) || id <= 0) return;
       const topKey = this.$store.getters.databaseTopKey;
       myLetterboxdReviews(topKey, id)
@@ -2299,6 +2326,26 @@ export default {
       text-decoration: none;
 
       &:active { color: #ccc; }
+    }
+
+    .letterboxd-summary {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      width: 100%;
+      margin-top: 4px;
+      padding: 4px 6px;
+      border: 0;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #ccc;
+      font-size: 0.75rem;
+      text-align: left;
+
+      &:active { background: rgba(255, 255, 255, 0.12); }
+
+      .letterboxd-stars { color: #00e054; letter-spacing: 1px; }
+      .letterboxd-summary-action { margin-left: auto; color: #fff; white-space: nowrap; }
     }
 
     .letterboxd-review {
