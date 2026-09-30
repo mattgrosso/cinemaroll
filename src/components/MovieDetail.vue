@@ -156,7 +156,8 @@
              "on the date this movie was released, it was the best movie that
              had come out for six weeks"). lastHigherRatedMovie is the most
              recently RELEASED earlier film you rated higher; the poster is it.
-             "Rates higher", not "beats": a tie doesn't end the run. -->
+             Third try, same day: the sentence reads "The best movie released
+             since E.T., 6 years prior." A tie doesn't end the run. -->
         <button v-if="lastHigherRatedMovie" type="button" class="best-since-row" @click="navigateToMovie(lastHigherRatedMovie.movie.id)">
           <img
             v-if="getPosterPath(lastHigherRatedMovie)"
@@ -165,8 +166,8 @@
             class="best-since-thumb">
           <span class="best-since-text">
             <span class="best-since-label">Best in {{ bestSinceSpan }}</span>
-            Nothing released in the {{ bestSinceSpan }} before it rates higher.
-            Last one that did: <strong>{{ lastHigherRatedMovie.movie.title }}</strong>.
+            The best movie released since
+            <strong>{{ lastHigherRatedMovie.movie.title }}</strong>, {{ bestSinceSpan }} prior.
           </span>
           <i class="bi bi-chevron-right best-since-chevron"></i>
         </button>
