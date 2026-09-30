@@ -153,7 +153,7 @@ export default {
         this.list = follow.theaters.map(({ key, name }) => ({ key, name }));
         this.zip = follow.zip || '';
         this.place = follow.place || null;
-      } else {
+      } else if (this.$store.state.databaseTopKey === 'mattgrosso-gmail-com') {
         // Matt has no saved list: the sweep follows its own, which is what
         // his board shows. Start from that so editing it changes nothing
         // until he moves something.
