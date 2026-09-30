@@ -54,23 +54,27 @@
           </div>
         </div>
 
-        <div class="details-actions">
-          <button type="button" class="action-tile action-primary" @click="rateMedia(topStructure(result))">
-            <i class="bi bi-plus-circle"></i><span>Add rating</span>
-          </button>
+        <!-- Letterboxd | Wikipedia | Add rating (Matt, 2026-09-30). Two-up
+             when there is no Letterboxd account to show. The old
+             .letterboxd-status-button class is NOT used here: the grid
+             result's copy of that rule is unscoped and sized it to 32px. -->
+        <div class="details-actions" :class="{ 'two-up': !$store.state.settings.letterboxdConnected }">
           <button
             v-if="$store.state.settings.letterboxdConnected"
             type="button"
-            class="action-tile letterboxd-status-button"
+            class="action-tile action-letterboxd"
             :class="isMovieLoggedOnLetterboxd() ? 'logged' : 'not-logged'"
             :title="isMovieLoggedOnLetterboxd() ? 'View movie on Letterboxd' : 'Log on Letterboxd'"
             :aria-label="isMovieLoggedOnLetterboxd() ? 'View movie on Letterboxd' : 'Log on Letterboxd'"
             @click="logOnLetterboxd">
-            <img :src="isMovieLoggedOnLetterboxd() ? 'https://a.ltrbxd.com/logos/letterboxd-decal-dots-pos-rgb-500px.png' : 'https://a.ltrbxd.com/logos/letterboxd-decal-dots-pos-mono-500px.png'" alt="" class="letterboxd-icon">
+            <img :src="isMovieLoggedOnLetterboxd() ? 'https://a.ltrbxd.com/logos/letterboxd-decal-dots-pos-rgb-500px.png' : 'https://a.ltrbxd.com/logos/letterboxd-decal-dots-pos-mono-500px.png'" alt="" class="action-letterboxd-icon">
             <span>{{ isMovieLoggedOnLetterboxd() ? 'On Letterboxd' : 'Log it' }}</span>
           </button>
           <button type="button" class="action-tile" @click="goToWikipedia()">
             <i class="bi bi-wikipedia"></i><span>Wikipedia</span>
+          </button>
+          <button type="button" class="action-tile action-primary" @click="rateMedia(topStructure(result))">
+            <i class="bi bi-plus-circle"></i><span>Add rating</span>
           </button>
         </div>
 
@@ -2360,6 +2364,15 @@ export default {
 
     .action-primary,
     .action-primary i { color: #6fd39b; }
+
+    .action-letterboxd.logged { color: #6fd39b; }
+
+    .action-letterboxd-icon {
+      height: 1.15rem;
+      width: auto;
+    }
+
+    &.two-up { grid-template-columns: repeat(2, 1fr); }
   }
 
   .awards {
@@ -2929,14 +2942,6 @@ export default {
     position: relative;
   }
 
-  .letterboxd-status-button.logged { color: #6fd39b; }
-
-  .letterboxd-icon {
-    height: 1.15rem;
-    width: auto;
-    height: 24px;
-    background: none !important;
-  }
 
   .letterboxd-actions {
     .letterboxd-status {
