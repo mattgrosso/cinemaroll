@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import { shallowMount } from '@vue/test-utils'
 import Insights from '@/components/Insights.vue'
 
@@ -841,5 +843,24 @@ describe('Insights — one question per tab', () => {
     window.localStorage.setItem('cinemaRoll.insights.tab', 'deepstats')
     const { wrapper } = mountWithPanes()
     expect(wrapper.vm.activeTab).toBe('overview')
+  })
+})
+
+// Report 2026-09-30: "the most visited section has a broken layout on my
+// phone". .insights-pane is a centred, wrapping flex row, and Most Visited
+// has no long sentence to force a line break, so its list shrank to its text
+// and sat beside its title. jsdom loads no CSS, so this reads the stylesheet:
+// every block the Places tab puts in a pane must claim the full width.
+describe('Places tab layout', () => {
+  const source = readFileSync(resolve(process.cwd(), 'src/components/Insights.vue'), 'utf8')
+  const style = source.slice(source.indexOf('<style')).replace(/\/\*[\s\S]*?\*\//g, '')
+
+  it('makes every Places block full width inside the flex pane', () => {
+    const rule = style.match(/([^{}]*)\{\s*box-sizing: border-box;\s*width: 100%;\s*\}/)
+    expect(rule).not.toBeNull()
+    const selectors = rule[1].split(',').map((s) => s.trim())
+    for (const cls of ['.insights-pane-header', '.places-summary', '.place-list', '.country-card']) {
+      expect(selectors).toContain(cls)
+    }
   })
 })

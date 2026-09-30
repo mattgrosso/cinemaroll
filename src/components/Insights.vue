@@ -3436,6 +3436,21 @@ export default {
   }
 
   /* Places tab. Same tile language as the rest; scores use the tab accent. */
+
+  /* .insights-pane is a centred, wrapping flex row, so anything not pushed
+     to a full line shrinks to its text and sits beside its neighbour. Most
+     Visited (no summary sentence to force a break) put its whole list next
+     to its own title on a phone. Every block on this tab takes the width. */
+  .insights-pane-header,
+  .places-empty,
+  .places-summary,
+  .country-card,
+  .country-card-breakdown,
+  .place-list {
+    box-sizing: border-box;
+    width: 100%;
+  }
+
   .places-empty,
   .places-summary,
   .country-card-breakdown {

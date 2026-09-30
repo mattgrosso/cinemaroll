@@ -225,6 +225,11 @@ gzipped, measured against 110m's 35K and raw 50m's 212K), loaded **lazily** when
 opens — `world` is a required prop, never imported by the component. The set/filmed choice
 persists in `localStorage` (`cinemaRoll.insights.placeType`) — tests must clear it.
 Every tap on a place hands Home a real `place` chip (`searchPlace`), the MovieDetail way.
+**`.insights-pane` is a centred, wrapping flex row** — a block in it that isn't
+`width: 100%` shrinks to its text and sits beside its neighbour. Most Visited (no summary
+sentence to force a break) put its list beside its own title on a phone (2026-09-30).
+Every Places block is in one full-width rule; `Insights.test.js` reads the stylesheet to
+guard it, since jsdom loads no CSS.
 
 ## Years by box office (Eras tab since 2026-09-29; built 2026-09-13)
 
