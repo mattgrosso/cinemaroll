@@ -155,6 +155,9 @@ export const isModernWithNoBoxOffice = (item) => {
  * need only their own.
  */
 export function isSortValueUnknown (item, key) {
+  // The crowd's rating (Home decorates `_crowd` from letterboxdFilms); a film
+  // Letterboxd hasn't rated sinks in both directions like a missing budget.
+  if (key === 'letterboxd') return !Number.isFinite(item?._crowd);
   if (!BOX_OFFICE_SORTS.has(key)) return false;
   const { budget, revenue } = boxOfficeFor(item);
   // A budget IS known for a streaming original — but it isn't comparable to
@@ -192,6 +195,9 @@ export function getSortValue (item, key, getRating, { adjusted = false } = {}) {
     // what it cost. Guarded against a zero budget, which would be Infinity
     // and would sort above every real film.
     return budget > 0 ? (revenue / budget) * 100 : 0;
+  }
+  if (key === 'letterboxd') {
+    return Number.isFinite(item?._crowd) ? item._crowd : -1;
   }
   if (key === 'rating') {
     return getRating(item).calculatedTotal;

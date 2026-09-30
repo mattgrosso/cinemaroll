@@ -1368,7 +1368,10 @@ export default {
         return true; // Manual override says this movie is logged
       }
 
-      // Fall back to automatic detection
+      // The synced diary (store, 2026-09-29) knows; the proxy scraper's
+      // answer is the fallback for a session where it hasn't loaded.
+      const synced = this.$store.state.letterboxdReviews;
+      if (synced) return Boolean(synced[movie.id]);
       return this.letterboxdData && this.letterboxdData.length > 0;
     },
 

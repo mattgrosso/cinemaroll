@@ -51,7 +51,11 @@ export const FILTER_KINDS = {
         // so checking the full name covers part matches too.
         s.cast.some(name => name.includes(searchValue)) ||
         s.crew.some(person => person.name.includes(searchValue)) ||
-        s.companies.some(company => company.includes(searchValue));
+        s.companies.some(company => company.includes(searchValue)) ||
+        // My own Letterboxd reviews (2026-09-29: "if we can just include that
+        // in the search, that'd be cool"). Three characters before prose
+        // counts, or every film with a review answers a single letter.
+        (searchValue.length >= 3 && (s.reviews || []).some(text => text.includes(searchValue)));
     }
   },
 

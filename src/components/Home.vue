@@ -146,6 +146,27 @@
             </span>
             <span
               class="badge mx-1 tap-feedback"
+              :class="activeListChip?.value === 'crowdLoves' ? 'text-bg-success' : 'text-bg-secondary'"
+              @click="toggleListChip('crowdLoves', 'letterboxd')"
+            >
+              Crowd Loves
+            </span>
+            <span
+              class="badge mx-1 tap-feedback"
+              :class="activeListChip?.value === 'disagree' ? 'text-bg-success' : 'text-bg-secondary'"
+              @click="toggleListChip('disagree', 'rating')"
+            >
+              You Disagree
+            </span>
+            <span
+              class="badge mx-1 tap-feedback"
+              :class="activeListChip?.value === 'cult' ? 'text-bg-success' : 'text-bg-secondary'"
+              @click="toggleListChip('cult', 'letterboxd')"
+            >
+              Cult Films
+            </span>
+            <span
+              class="badge mx-1 tap-feedback"
               :class="activeQuickLinkList === 'genre' ? 'text-bg-success' : 'text-bg-secondary'"
               @click="toggleQuickLinksList('genre')"
             >
@@ -414,6 +435,7 @@
             <i v-if="sortValue === 'release'" class="bi bi-calendar-date"/>
             <i v-if="sortValue === 'title'" class="bi bi-alphabet"></i>
             <i v-if="sortValue === 'views'" class="bi bi-eye"></i>
+            <i v-if="sortValue === 'letterboxd'" class="bi bi-star"></i>
             <i v-if="sortValue === 'direction'" class="bi bi-dpad"></i>
             <i v-if="sortValue === 'imagery'" class="bi bi-image"></i>
             <i v-if="sortValue === 'story'" class="bi bi-book"></i>
@@ -469,6 +491,11 @@
               <li value="views">
                 <button class="dropdown-item" :class="{active: sortValue === 'views'}" @click="setOrToggleSortValue('views')">
                   Views
+                </button>
+              </li>
+              <li value="letterboxd">
+                <button class="dropdown-item" :class="{active: sortValue === 'letterboxd'}" @click="setOrToggleSortValue('letterboxd')">
+                  Letterboxd Rating
                 </button>
               </li>
               <li value="direction">
@@ -1611,6 +1638,7 @@
 import { isShort } from '../assets/javascript/shorts.js';
 import axios from 'axios';
 import { scrollWindowTo } from '../utils/scrollWindowTo.js';
+import { crowdRating, crowdLovesList, disagreeList, cultList } from '../assets/javascript/letterboxdCompare.js';
 import { letterboxdSyncState, syncLetterboxdNow, importLetterboxdReviews } from '../utils/letterboxdData.js';
 import { parseCsv, reviewsCsvToUpdates, relativeTimeFrom } from '../assets/javascript/letterboxdFormat.js';
 import { indexOfMovie, resultElementId, resultsNeededToReveal, scrollOffsetFor } from '../assets/javascript/revealInList.js';
@@ -1636,7 +1664,10 @@ import { captureHomePaint, saveHomePaint, loadHomePaint } from "../utils/homePai
 // See allEntriesWithFlatKeywordsAdded. Pure in (library, anchors, tweak):
 // flat keywords and search fields come from the entry, the score from the
 // entry plus those two settings.
-const homeEntriesMemo = memoByIdentity((entries, _anchors, _tweak) => entries.map((result) => {
+// `films` and `reviews` are the store's Letterboxd maps (or null before they
+// load): the crowd's rating rides on each entry as `_crowd` for the sort and
+// chips, and my review text joins the searchable fields.
+const homeEntriesMemo = memoByIdentity((entries, _anchors, _tweak, films, reviews) => entries.map((result) => {
   // Use the shared keyword util so Home matches the detail page exactly,
   // including manually-added (customKeywords) and removed (removedKeywords)
   // keywords. An inline version here previously omitted those, so e.g. a
@@ -1647,11 +1678,16 @@ const homeEntriesMemo = memoByIdentity((entries, _anchors, _tweak) => entries.ma
   };
   // Precompute lowercased search fields and the score ONCE per library, so
   // neither is redone per keystroke or per mount.
+  const crowd = crowdRating(films, movie.id);
+  const myReviews = reviews?.[movie.id]
+    ? Object.values(reviews[movie.id]).map((record) => record?.review).filter(Boolean).map(normalizeSearchText)
+    : [];
   return {
     ...result,
     movie,
-    _search: buildSearchFieldsUtil(movie, result.ratings),
-    _rating: getRating(result)
+    _search: { ...buildSearchFieldsUtil(movie, result.ratings), reviews: myReviews },
+    _rating: getRating(result),
+    _crowd: crowd
   };
 }));
 import InsetBrowserModal from './InsetBrowserModal.vue';
@@ -2097,6 +2133,9 @@ export default {
   },
   mounted () {
     this.armLoadingSpinner();
+    // The crowd's ratings and my synced diary, for the sort, the chips and
+    // review search. One read per session; nothing here waits on it.
+    this.$store.dispatch('ensureLetterboxdData');
     if (!this.$store.state.dbLoaded) {
       this.cachedPaint = loadHomePaint(this.$store.getters.databaseTopKey);
     }
@@ -2814,7 +2853,9 @@ export default {
       return homeEntriesMemo(
         this.$store.getters.allMediaAsArray,
         JSON.stringify(settings.normalizationAnchors || null),
-        Number(settings.normalizationTweak) || 0
+        Number(settings.normalizationTweak) || 0,
+        this.$store.state.letterboxdFilms || null,
+        this.$store.state.letterboxdReviews || null
       );
     },
     allGenres () {
@@ -3684,16 +3725,35 @@ export default {
         "count-more-than-4-remainder-3": count > 4 & count % 4 === 3
       }
     },
+    // Letterboxd chips (2026-09-29). Empty until the store has the film cache.
+    crowdLovesMovies () {
+      return crowdLovesList(this.allEntriesWithFlatKeywordsAdded, this.$store.state.letterboxdFilms);
+    },
+    disagreeMovies () {
+      return disagreeList(this.allEntriesWithFlatKeywordsAdded, (entry) => entry._rating, this.$store.state.letterboxdFilms);
+    },
+    cultMovies () {
+      return cultList(this.allEntriesWithFlatKeywordsAdded, this.$store.state.letterboxdFilms);
+    },
     notOnLetterboxdMovies () {
       if (!this.$store.state.settings.letterboxdConnected || !this.$store.state.settings.letterboxdUsername) {
         return [];
       }
-
-      // If we don't have letterboxd data yet, return empty array
+      // The synced diary (store, since 2026-09-29) is the answer: a film with
+      // no entry there is not on Letterboxd. The proxy scraper only covers
+      // the case where the sync hasn't loaded yet.
+      const synced = this.$store.state.letterboxdReviews;
+      if (synced) {
+        const overrides = this.$store.state.settings.letterboxdOverrides || {};
+        return this.allEntriesWithFlatKeywordsAdded.filter((result) => {
+          if (synced[result.movie.id]) return false;
+          const overrideKey = `${String(result.movie.title || '').toLowerCase().replace(/[^a-z0-9]/g, '')}_${this.getYear(result)}`;
+          return !overrides[overrideKey];
+        });
+      }
       if (!this.letterboxdUserData) {
         return [];
       }
-
       // Filter movies that are NOT in the user's Letterboxd films
       return this.allEntriesWithFlatKeywordsAdded.filter((result) => {
         const movie = result.movie;
@@ -4145,7 +4205,10 @@ export default {
         lastYear: () => this.lastYearsMovies,
         thisMonth: () => this.thisMonthsMovies,
         lastMonth: () => this.lastMonthsMovies,
-        notOnLetterboxd: () => this.notOnLetterboxdMovies
+        notOnLetterboxd: () => this.notOnLetterboxdMovies,
+        crowdLoves: () => this.crowdLovesMovies,
+        disagree: () => this.disagreeMovies,
+        cult: () => this.cultMovies
       };
 
       let results = baseSets[this.activeListChip?.value]?.() ?? this.allEntriesWithFlatKeywordsAdded;
@@ -4824,7 +4887,10 @@ export default {
         lastYear: 'rating',
         thisMonth: 'rating',
         lastMonth: 'rating',
-        notOnLetterboxd: 'rating'
+        notOnLetterboxd: 'rating',
+        crowdLoves: 'letterboxd',
+        disagree: 'rating',
+        cult: 'letterboxd'
       };
       if (value && listSorts[value]) {
         this.toggleListChip(value, listSorts[value]);
@@ -4896,9 +4962,11 @@ export default {
     async toggleNotOnLetterboxdFilter () {
       this.toggleListChip('notOnLetterboxd', 'rating');
 
-      // Fetch Letterboxd data if we don't have it yet
+      // The synced diary answers this; the proxy scraper is the fallback
+      // for a session where the sync hasn't loaded.
       if (this.activeListChip?.value === 'notOnLetterboxd') {
-        await this.fetchLetterboxdData();
+        await this.$store.dispatch('ensureLetterboxdData');
+        if (!this.$store.state.letterboxdReviews) await this.fetchLetterboxdData();
       }
     },
     toggleSortOrder () {
@@ -5588,7 +5656,10 @@ export default {
         lastYear: 'Last Year',
         thisMonth: 'This Month',
         lastMonth: 'Last Month',
-        notOnLetterboxd: 'Not on Letterboxd'
+        notOnLetterboxd: 'Not on Letterboxd',
+        crowdLoves: 'Crowd Loves',
+        disagree: 'You Disagree',
+        cult: 'Cult Films'
       };
       return displayNames[quickLinkKey] || quickLinkKey;
     },
