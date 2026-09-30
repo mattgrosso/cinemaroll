@@ -157,38 +157,29 @@
              from my Letterboxd feed by the Lambda (aws-lambda/letterboxd.js)
              and imported from the CSV export. Both arrive after the page
              renders and the page never waits on them. -->
-        <div v-if="letterboxdFilmLine || letterboxdReviews.length" class="letterboxd-section mb-3">
+        <div v-if="letterboxdFilmLine || letterboxdWrittenReviews.length" class="letterboxd-section mb-3">
           <h4>Letterboxd</h4>
           <p v-if="letterboxdFilmLine" class="letterboxd-film mb-0">
             <a :href="letterboxdFilmUrl" target="_blank" rel="noopener">{{ letterboxdFilmLine }}</a>
           </p>
-          <!-- Compact by default (Matt, 2026-09-29: "I don't think I need it
-               to be open by default"): one line for the latest entry, tap
-               to unfold the review text. -->
+          <!-- Compact by default (Matt, 2026-09-29): the public line, then one
+               toggle. His own stars are never shown — his Letterboxd rating IS
+               his Cinema Roll score, halved — and the watched date already
+               sits under Ratings; the pane is dates and review text only. -->
           <button
-            v-if="letterboxdReviews.length"
+            v-if="letterboxdWrittenReviews.length"
             type="button"
             class="letterboxd-summary"
             :aria-expanded="showLetterboxdReviews ? 'true' : 'false'"
             @click="showLetterboxdReviews = !showLetterboxdReviews">
-            <span v-if="starsFor(letterboxdLatest.rating)" class="letterboxd-stars">{{ starsFor(letterboxdLatest.rating) }}</span>
-            <span v-if="letterboxdLatest.watchedDate">{{ watchedDateLabel(letterboxdLatest.watchedDate) }}</span>
-            <span v-if="letterboxdReviews.length > 1">· {{ letterboxdReviews.length }} entries</span>
-            <span class="letterboxd-summary-action">
-              {{ showLetterboxdReviews ? 'Hide' : letterboxdHasText ? 'Show review' : 'Details' }}
-              <i class="bi" :class="showLetterboxdReviews ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
-            </span>
+            <span>{{ showLetterboxdReviews ? 'Hide' : 'Show' }} your review<span v-if="letterboxdWrittenReviews.length > 1">s</span></span>
+            <i class="bi" :class="showLetterboxdReviews ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
           </button>
           <div v-if="showLetterboxdReviews" class="letterboxd-reviews">
-            <div v-for="review in letterboxdReviews" :key="review.id" class="letterboxd-review">
-              <div class="letterboxd-review-meta">
-                <span v-if="starsFor(review.rating)" class="letterboxd-stars">{{ starsFor(review.rating) }}</span>
-                <span v-if="review.watchedDate">{{ watchedDateLabel(review.watchedDate) }}</span>
-                <span v-if="review.rewatch" class="letterboxd-rewatch">rewatch</span>
-                <span v-if="review.liked" class="letterboxd-liked">♥</span>
-                <a v-if="review.url" :href="review.url" target="_blank" rel="noopener" class="letterboxd-review-link">open</a>
-              </div>
-              <p v-if="review.review" class="letterboxd-review-text mb-0">{{ review.review }}</p>
+            <div v-for="review in letterboxdWrittenReviews" :key="review.id" class="letterboxd-review">
+              <a v-if="review.url" :href="review.url" target="_blank" rel="noopener" class="letterboxd-review-date">{{ watchedDateLabel(review.watchedDate) }}</a>
+              <span v-else class="letterboxd-review-date">{{ watchedDateLabel(review.watchedDate) }}</span>
+              <p class="letterboxd-review-text mb-0">{{ review.review }}</p>
             </div>
           </div>
         </div>
@@ -703,11 +694,8 @@ export default {
     }
   },
   computed: {
-    letterboxdLatest () {
-      return this.letterboxdReviews[0] || {};
-    },
-    letterboxdHasText () {
-      return this.letterboxdReviews.some((review) => review.review);
+    letterboxdWrittenReviews () {
+      return this.letterboxdReviews.filter((review) => review.review);
     },
     letterboxdFilmUrl () {
       const slug = this.letterboxdFilmStats?.slug;
@@ -2330,11 +2318,11 @@ export default {
 
     .letterboxd-summary {
       display: flex;
-      align-items: baseline;
-      gap: 6px;
+      align-items: center;
+      justify-content: space-between;
       width: 100%;
       margin-top: 4px;
-      padding: 4px 6px;
+      padding: 4px 8px;
       border: 0;
       border-radius: 4px;
       background: rgba(255, 255, 255, 0.05);
@@ -2343,9 +2331,6 @@ export default {
       text-align: left;
 
       &:active { background: rgba(255, 255, 255, 0.12); }
-
-      .letterboxd-stars { color: #00e054; letter-spacing: 1px; }
-      .letterboxd-summary-action { margin-left: auto; color: #fff; white-space: nowrap; }
     }
 
     .letterboxd-review {
@@ -2355,18 +2340,12 @@ export default {
       background: rgba(255, 255, 255, 0.05);
     }
 
-    .letterboxd-review-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: baseline;
+    .letterboxd-review-date {
       font-size: 0.75rem;
       color: #ccc;
+      text-decoration: none;
 
-      .letterboxd-stars { color: #00e054; letter-spacing: 1px; } /* Letterboxd green */
-      .letterboxd-rewatch { text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.5px; }
-      .letterboxd-liked { color: #ff8000; }
-      .letterboxd-review-link { color: #ccc; margin-left: auto; text-decoration: underline; }
+      &:active { color: #fff; }
     }
 
     .letterboxd-review-text {

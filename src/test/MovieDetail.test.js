@@ -119,39 +119,35 @@ describe('MovieDetail', () => {
       expect(wrapper.find('.letterboxd-section').exists()).toBe(false)
     })
 
-    it('shows my reviews with stars, the watched date and the text, paragraphs kept — after a tap', async () => {
+    it('shows one toggle, then the dates and review text — no stars of mine, paragraphs kept', async () => {
       await wrapper.setData({
-        letterboxdReviews: [{
-          id: 'review-1', rating: 2.5, watchedDate: '2026-09-27', rewatch: true,
-          review: 'First paragraph.\n\nSecond paragraph.', url: 'https://letterboxd.com/mattgrosso/film/primetime-2026/'
-        }]
+        letterboxdReviews: [
+          { id: 'review-1', rating: 2.5, watchedDate: '2026-09-27', rewatch: true, review: 'First paragraph.\n\nSecond paragraph.', url: 'https://letterboxd.com/mattgrosso/film/primetime-2026/' },
+          { id: 'watch-2', rating: 3, watchedDate: '2025-01-01' }
+        ]
       })
-      // Compact by default: the summary line, no review text.
       const summary = wrapper.find('.letterboxd-summary')
-      expect(summary.exists()).toBe(true)
-      expect(summary.text()).toContain('★★½')
-      expect(summary.text()).toContain('Show review')
+      expect(summary.text()).toBe('Show your review')
+      expect(wrapper.find('.letterboxd-section').text()).not.toContain('★★½')
       expect(wrapper.find('.letterboxd-review').exists()).toBe(false)
 
       await summary.trigger('click')
-      expect(summary.text()).toContain('Hide')
-      const review = wrapper.find('.letterboxd-review')
-      expect(review.find('.letterboxd-stars').text()).toBe('★★½')
-      // The watched date is the day Letterboxd says, in every timezone.
-      expect(review.find('.letterboxd-review-meta').text()).toContain(new Date(2026, 8, 27).toLocaleDateString())
-      expect(review.find('.letterboxd-rewatch').exists()).toBe(true)
-      expect(review.find('.letterboxd-review-text').text()).toContain('First paragraph.')
-      expect(review.find('.letterboxd-review-text').element.textContent).toBe('First paragraph.\n\nSecond paragraph.')
-      expect(review.find('.letterboxd-review-link').attributes('href')).toBe('https://letterboxd.com/mattgrosso/film/primetime-2026/')
+      expect(summary.text()).toBe('Hide your review')
+      const reviews = wrapper.findAll('.letterboxd-review')
+      expect(reviews).toHaveLength(1) // the plain watch has nothing to show
+      expect(reviews[0].find('.letterboxd-review-date').text()).toBe(new Date(2026, 8, 27).toLocaleDateString())
+      expect(reviews[0].find('.letterboxd-review-date').attributes('href')).toBe('https://letterboxd.com/mattgrosso/film/primetime-2026/')
+      expect(reviews[0].find('.letterboxd-review-text').element.textContent).toBe('First paragraph.\n\nSecond paragraph.')
+      expect(reviews[0].text()).not.toContain('★')
     })
 
-    it('an entry without text offers Details, and moving to another film folds it back up', async () => {
-      await wrapper.setData({ letterboxdReviews: [{ id: 'watch-1', rating: 3, watchedDate: '2026-09-27' }], showLetterboxdReviews: true })
-      expect(wrapper.find('.letterboxd-summary').text()).toContain('Hide')
+    it('entries without text give no toggle at all, and moving to another film folds the pane', async () => {
+      await wrapper.setData({ letterboxdReviews: [{ id: 'watch-1', rating: 3, watchedDate: '2026-09-27' }], letterboxdFilmStats: { slug: 'x', rating: 3.1, ratingCount: 10 } })
+      expect(wrapper.find('.letterboxd-summary').exists()).toBe(false)
+      await wrapper.setData({ letterboxdReviews: [{ id: 'r', review: 'Text.', watchedDate: '2026-09-27' }], showLetterboxdReviews: true })
+      expect(wrapper.find('.letterboxd-summary').text()).toBe('Hide your review')
       wrapper.vm.loadLetterboxdExtras('950')
       expect(wrapper.vm.showLetterboxdReviews).toBe(false)
-      await wrapper.setData({ letterboxdReviews: [{ id: 'watch-1', rating: 3, watchedDate: '2026-09-27' }] })
-      expect(wrapper.find('.letterboxd-summary').text()).toContain('Details')
     })
 
     it('loadLetterboxdExtras asks for both, by the account key and the TMDB id', async () => {
