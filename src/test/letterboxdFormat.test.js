@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   starsFor,
+  stripReviewMarkup,
+  watchedDateLabel,
   compactCount,
   reviewsFromNode,
   parseCsv,
@@ -49,6 +51,14 @@ describe('reviewsFromNode', () => {
     const node = {
       'review-1': { source: 'rss', watchedDate: '2026-09-27', review: 'Shudder.\n\nHonestly, better than expected.' },
       'csv-abc': { source: 'csv', watchedDate: '2026-09-27', review: 'Shudder. \n\nHonestly, better than expected. ' }
+    };
+    expect(reviewsFromNode(node).map((r) => r.id)).toEqual(['review-1']);
+  });
+
+  it('collapses the pair when the CSV copy keeps inline markup the feed stripped', () => {
+    const node = {
+      'review-1': { source: 'rss', watchedDate: '2026-09-27', review: 'There is a lot of directing.' },
+      'csv-abc': { source: 'csv', watchedDate: '2026-09-27', review: 'There is <i>a lot</i> of directing.' }
     };
     expect(reviewsFromNode(node).map((r) => r.id)).toEqual(['review-1']);
   });
@@ -144,6 +154,20 @@ describe('reviewsCsvToUpdates', () => {
     expect(record).not.toHaveProperty('rating');
     expect(record).not.toHaveProperty('review');
     expect(record).not.toHaveProperty('rewatch');
+  });
+});
+
+describe('stripReviewMarkup', () => {
+  it('drops tags, keeps breaks as newlines, decodes entities, trims paragraph ends', () => {
+    expect(stripReviewMarkup('Great <i>a lot</i> of &amp; stuff. <br>Next line ')).toBe('Great a lot of & stuff.\nNext line');
+    expect(stripReviewMarkup('<blockquote>quoted</blockquote>after')).toBe('quoted\n\nafter');
+  });
+});
+
+describe('watchedDateLabel', () => {
+  it('reads a bare date as a local day, not UTC midnight', () => {
+    expect(watchedDateLabel('2026-09-27')).toBe(new Date(2026, 8, 27).toLocaleDateString());
+    expect(watchedDateLabel('')).toBe('');
   });
 });
 

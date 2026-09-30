@@ -35,7 +35,27 @@ export const compactCount = (count) => {
 // text" ignores whitespace: the CSV keeps a trailing space on each paragraph
 // that the feed trims, which showed every review twice (2026-09-29). A plain
 // watch (no text) on the same day as a review is the same viewing too.
-const textKey = (review) => String(review || '').replace(/\s+/g, ' ').trim();
+// Letterboxd reviews may carry inline HTML (<i>, <b>, <a>, <blockquote>,
+// <br>); the feed's copy arrives as text, the CSV keeps the tags.
+export const stripReviewMarkup = (review) => String(review || '')
+  .replace(/\r\n/g, '\n')
+  .replace(/<br\s*\/?>/gi, '\n')
+  .replace(/<\/(p|blockquote)>/gi, '\n\n')
+  .replace(/<[^>]+>/g, '')
+  .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+  .split('\n').map((line) => line.trimEnd()).join('\n')
+  .replace(/\n{3,}/g, '\n\n')
+  .trim();
+
+const textKey = (review) => stripReviewMarkup(review).replace(/\s+/g, ' ').trim();
+
+// A watched date is a bare "YYYY-MM-DD"; `new Date()` reads that as UTC
+// midnight, which is the evening before anywhere west of Greenwich.
+export const watchedDateLabel = (value) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+  if (!match) return value ? new Date(value).toLocaleDateString() : '';
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).toLocaleDateString();
+};
 
 export const reviewsFromNode = (node) => {
   const entries = Object.entries(node || {})
@@ -150,7 +170,7 @@ export const reviewsCsvToUpdates = (rows, entries, now = Date.now()) => {
     const tmdbId = matchTitle(index, title, year);
     if (!tmdbId) { unmatched.push({ title, year: Number.isInteger(year) ? year : null }); return; }
     const rating = Number(row.Rating);
-    const review = String(row.Review || '').replace(/\r\n/g, '\n').split('\n').map((line) => line.trimEnd()).join('\n').trim();
+    const review = stripReviewMarkup(row.Review);
     const value = {
       source: 'csv',
       kind: review ? 'review' : 'watch',

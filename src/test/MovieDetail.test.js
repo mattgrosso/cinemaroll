@@ -128,6 +128,8 @@ describe('MovieDetail', () => {
       })
       const review = wrapper.find('.letterboxd-review')
       expect(review.find('.letterboxd-stars').text()).toBe('★★½')
+      // The watched date is the day Letterboxd says, in every timezone.
+      expect(review.find('.letterboxd-review-meta').text()).toContain(new Date(2026, 8, 27).toLocaleDateString())
       expect(review.find('.letterboxd-rewatch').exists()).toBe(true)
       expect(review.find('.letterboxd-review-text').text()).toContain('First paragraph.')
       expect(review.find('.letterboxd-review-text').element.textContent).toBe('First paragraph.\n\nSecond paragraph.')

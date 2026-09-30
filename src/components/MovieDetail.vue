@@ -165,7 +165,7 @@
           <div v-for="review in letterboxdReviews" :key="review.id" class="letterboxd-review">
             <div class="letterboxd-review-meta">
               <span v-if="starsFor(review.rating)" class="letterboxd-stars">{{ starsFor(review.rating) }}</span>
-              <span v-if="review.watchedDate">{{ formattedDate(review.watchedDate) }}</span>
+              <span v-if="review.watchedDate">{{ watchedDateLabel(review.watchedDate) }}</span>
               <span v-if="review.rewatch" class="letterboxd-rewatch">rewatch</span>
               <span v-if="review.liked" class="letterboxd-liked">♥</span>
               <a v-if="review.url" :href="review.url" target="_blank" rel="noopener" class="letterboxd-review-link">open</a>
@@ -610,7 +610,7 @@ import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import ErrorLogService from "../services/ErrorLogService.js";
 import LetterboxdUrlService from '../services/LetterboxdUrlService.js';
 import { myLetterboxdReviews, letterboxdFilm } from '../utils/letterboxdData.js';
-import { starsFor, compactCount } from '../assets/javascript/letterboxdFormat.js';
+import { starsFor, compactCount, watchedDateLabel } from '../assets/javascript/letterboxdFormat.js';
 import { computeFlatKeywords } from '../utils/keywords.js';
 import { buildTagSuggestions, canCreateNewTag } from '../utils/tags.js';
 import { awardCategoryNameMap } from '../assets/javascript/personalAwardsCategories.js';
@@ -1396,6 +1396,7 @@ export default {
     },
 
     starsFor,
+    watchedDateLabel,
     // My diary entries for this film and its public stats, each on its own
     // promise so a slow one never holds up the other. A stale request (the
     // user tapped through to another film) is dropped by the id check.
