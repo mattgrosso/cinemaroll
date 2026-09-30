@@ -181,6 +181,9 @@
             </div>
           </div>
         </DetailSection>
+        <!-- Club friends who have rated this, as pills. Sits directly above
+             Awards by request (2026-08-25). -->
+        <FriendsWhoSaw :tmdbId="movie && movie.id" />
         <DetailSection v-if="(viewingTags && viewingTags.length) || isEditingTags" id="tags" label="Tags" tone="film" :summary="tagsSummary">
         <!-- Tags -->
         <div v-if="(viewingTags && viewingTags.length) || isEditingTags" class="tags mb-3">
@@ -270,9 +273,6 @@
           </div>
         </div>
         </DetailSection>
-        <!-- Club friends who have rated this, as pills. Sits directly above
-             Awards by request (2026-08-25). -->
-        <FriendsWhoSaw :tmdbId="movie && movie.id" />
 
         </div>
 
