@@ -20,6 +20,7 @@
     "restore-db": "node scripts/restore-database.mjs",
     "mint-test-token": "node scripts/mint-test-token.mjs",
     "letterboxd-status": "node scripts/letterboxd-status.mjs",
+    "import-letterboxd": "node scripts/import-letterboxd-csv.mjs",
     "deploy:newsletter": "bash scripts/deploy-newsletter-lambda.sh",
     "newsletter-e2e": "node scripts/newsletter-e2e.mjs",
     "newsletter-dry-run": "node scripts/newsletter-dry-run.mjs",
