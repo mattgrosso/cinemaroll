@@ -39,7 +39,10 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
   accordion is dark, and **Best since is a sentence** — "The highest you've rated
   anything released since <film>, N earlier" — because the orphan poster confused
   people (`lastHigherRatedMovie` is by RELEASE date, so that sentence is the exact
-  meaning). Band titles are white sentence-case headings so they can't be mistaken for
+  meaning). The score tile has no "your score" label (2026-09-30): `ToggleableRating`'s
+  `stacked` prop puts the rank / "(normalized rating)" on a second line under the
+  number, with an empty line of the same height under the stars (and for an unranked
+  film) so nothing jumps while tapping. The details popup doesn't pass `stacked`. Band titles are white sentence-case headings so they can't be mistaken for
   row labels, and `.movie-content` has 120px of bottom padding so the Artwork row clears
   the bug button. `getCrewMember(job, 'strict')` — the flag is the STRING 'strict', not
   `true`; `true` gave the Directors summary 26 assistant directors. Bodies are `v-show`, so
