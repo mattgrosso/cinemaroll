@@ -121,7 +121,7 @@ describe('GameStatsScreen — the fun round', () => {
     expect(tiles).toEqual(['5 rounds', '6 sessions', '4 days played', '4 day streak']);
     expect(board.text()).toContain('On a hot streak — 4 days in a row');
     expect(board.text()).toContain('Favourite game: Timeline, 4 sessions.');
-    expect(board.text()).toContain('Won today: 1 of 11 games.');
+    expect(board.text()).toContain('Won today: 1 of 12 games.');
   });
 
   it('no streak tile or callout on a single day of play', () => {
