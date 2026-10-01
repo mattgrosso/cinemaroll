@@ -637,6 +637,50 @@ function composeDayMessage (name, films) {
   };
 }
 
+// --- End of day for friends on other apps -----------------------------------
+//
+// Matt, 2026-10-01: he wanted the same Right away / End of day switch for his
+// Movie Log friends, "so they all looked the same on my page". They read ONE
+// public Interchange feed (clubFeed/<owner>/<secret>), and Movie Log treats a
+// new feed link as a new person, so it is one switch for all of them, not one
+// per friend. With it on, the app parks its live feed at the private
+// social/clubFeedLive/<owner> and the sweep publishes this copy instead:
+// nothing watched since the owner's last midnight, and every viewing a date.
+
+/**
+ * The end-of-day copy of an Interchange feed (interchange.js toInterchange's
+ * shape). Viewings at or after `cutoff` are withheld — a rewatch keeps its
+ * earlier viewings, a film first watched today leaves the feed — and the rest
+ * become noon UTC of the owner's local date, like dayProfileFrom's. `marker`
+ * is supplied by the caller: the feed's own is a publish time, and Movie Log
+ * may read it as "something changed".
+ */
+function dayFeedFrom (feed, { cutoff, tz, marker }) {
+  if (!feed || !Array.isArray(feed.movies)) return null;
+  const movies = [];
+  feed.movies.forEach((movie) => {
+    if (!movie) return;
+    const viewings = Array.isArray(movie.viewings) ? movie.viewings : [];
+    const kept = viewings.filter((viewing) => viewing && Number.isFinite(Number(viewing.watchedAt)) && Number(viewing.watchedAt) < cutoff);
+    if (viewings.length && !kept.length) return;
+    const next = { ...movie };
+    if (viewings.length) next.viewings = kept.map((viewing) => ({ ...viewing, watchedAt: dayStamp(tz, Number(viewing.watchedAt)) }));
+    movies.push(next);
+  });
+  return { ...feed, marker, movieCount: movies.length, movies, dayOnly: true };
+}
+
+/**
+ * The marker for a rebuilt copy: the midnight itself on the first build of a
+ * day, one more than last time on a same-day rebuild (the owner republished).
+ * Either way it moves when the copy might have, and never tells anyone when
+ * the app was opened.
+ */
+function dayFeedMarker (release, cutoff) {
+  if (release && release.cutoff === cutoff && Number.isFinite(Number(release.marker))) return Number(release.marker) + 1;
+  return cutoff;
+}
+
 // --- Friends on other apps --------------------------------------------------
 //
 // A Cinema Roll friend's log reaches you because THEIR client announces it
@@ -1370,6 +1414,8 @@ module.exports = {
   nextLocalMidnight,
   dayStamp,
   dayProfileFrom,
+  dayFeedFrom,
+  dayFeedMarker,
   dayFriendsByOwner,
   dayCopyDue,
   dayNews,

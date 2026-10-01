@@ -18,14 +18,14 @@ function myMovie (id, title, rating) {
   };
 }
 
-function factory ({ profiles = {}, myEntries = [], edges = {} } = {}) {
+function factory ({ profiles = {}, myEntries = [], edges = {}, externals = {}, settings = {} } = {}) {
   return shallowMount(FilmClubScreen, {
     global: {
       stubs: { SettingsSection: false, BackLink: true },
       mocks: {
         $store: {
           state: {
-            settings: {},
+            settings,
             federatedDirectory: [],
             federatedDirectoryLoading: false,
             socialDirectory: {},
@@ -38,9 +38,14 @@ function factory ({ profiles = {}, myEntries = [], edges = {} } = {}) {
             crossAppDiscoveryEnabled: false,
             allMoviesAsArray: myEntries,
             filmClubProfiles: profiles,
-            filmClubFriends: Object.entries(profiles).map(([key, profile]) => ({
-              key, name: profile.name, profile, external: false
-            })),
+            filmClubFriends: [
+              ...Object.entries(profiles).map(([key, profile]) => ({
+                key, name: profile.name, profile, external: false
+              })),
+              ...Object.entries(externals).map(([key, profile]) => ({
+                key, name: profile.name, profile, external: true, source: 'movielog'
+              }))
+            ],
             socialFriendKeys: Object.keys(profiles),
             socialUserKey: 'me',
             socialPendingSentKeys: []
@@ -442,6 +447,33 @@ describe('FilmClubScreen — "Has anybody seen…"', () => {
       await endOfDay.trigger('click');
       expect(wrapper.vm.$store.dispatch).toHaveBeenCalledWith('setFriendTiming', { friendKey: 'brian', timing: 'day' });
       expect(wrapper.vm.$router.push).not.toHaveBeenCalled();
+    });
+
+    // 2026-10-01: "I would like it more if they all looked the same on my
+    // page". A Movie Log friend gets the same switch, but they all read one
+    // feed, so it is one setting for all of them and the row says so.
+    describe('a friend on Movie Log', () => {
+      const EXTERNAL = { ext1: { name: 'Brian', counts: { titles: 1 }, recent: [] } };
+      const row = (wrapper) => wrapper.findAll('.cs-friend').find((friend) => friend.text().includes('Brian'));
+
+      it('has the same switch, reading the shared setting', () => {
+        expect(row(factory({ externals: EXTERNAL })).find('.cs-timing-toggle .is-on').text()).toBe('Right away');
+        expect(row(factory({ externals: EXTERNAL, settings: { clubFeedTiming: 'day' } })).find('.cs-timing-toggle .is-on').text()).toBe('End of day');
+      });
+
+      it('says the setting covers all of them', () => {
+        expect(row(factory({ externals: EXTERNAL })).find('.cs-friend-timing-note').text()).toBe('Same setting for all your friends on Movie Log');
+        expect(factory({ profiles: PROFILES }).find('.cs-friend-timing-note').exists()).toBe(false);
+      });
+
+      it('switches the shared feed, not a friend edge', async () => {
+        const wrapper = factory({ externals: EXTERNAL });
+        const [, endOfDay] = row(wrapper).findAll('.cs-timing-toggle button');
+        await endOfDay.trigger('click');
+        expect(wrapper.vm.$store.dispatch).toHaveBeenCalledWith('setClubFeedTiming', 'day');
+        expect(wrapper.vm.$store.dispatch).not.toHaveBeenCalledWith('setFriendTiming', expect.anything());
+        expect(wrapper.vm.$router.push).not.toHaveBeenCalled();
+      });
     });
 
     it('dates an end-of-day friend\'s films instead of timing them', () => {

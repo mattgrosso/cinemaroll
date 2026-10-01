@@ -573,7 +573,21 @@ possible with a ratings map), a first watch leaves the feed, ratings, top shelf,
 and counts — and turns every time into noon UTC of the owner's local date, marking feed
 items `d: 1` with `pub` (the midnight it was released, which the Film Club badge counts
 from). Readers show `d` items with `timeAgo(…, { dayOnly: true })`: calendar days, never
-hours. Friends on other apps (Movie Log) read the Interchange feed and have no switch.
+hours.
+
+**Friends on other apps (2026-10-01)** get the same switch, but it is ONE switch
+(`settings/clubFeedTiming`): every Movie Log friend reads the one public
+`clubFeed/<owner>/<secret>`, and Movie Log treats a new feed URL as a new person, so
+per-friend feeds would need Movie Log changes. The row says "Same setting for all your
+friends on Movie Log". With it on, `publishClubFeed` parks the live feed at
+`social/clubFeedLive/<owner>` = { feed, secret, tz } (owner-only rules) and never writes
+the public path; the sweep's `releaseDayFeeds` rebuilds the public copy with
+`dayFeedFrom` (pushCadence.js, tested in `clubFeedTiming.test.js`) when the owner's
+midnight passes or the parked feed's marker moves, recording `release` beside it. The
+copy's `marker` is the midnight (+1 per same-day rebuild), never a publish time. No push —
+Movie Log notifies its own users. Right away deletes the node FIRST, then publishes live;
+the node's absence is "off". Switching on leaves today's watches public until the next
+sweep (up to 15 minutes).
 
 ## The newsletter Lambda (`aws-lambda/newsletter.js`, deployed as `cinemaroll-newsletter`)
 

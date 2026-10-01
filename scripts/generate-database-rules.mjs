@@ -125,6 +125,16 @@ const rules = {
           '.write': `auth != null && $userKey === ${sanitizedAuthEmail} && !newData.exists()`,
           '.read': `auth != null && ($userKey === ${sanitizedAuthEmail} || (root.child('social/friends/' + $userKey).child(${sanitizedAuthEmail}).exists() && root.child('social/friends/' + ${sanitizedAuthEmail}).child($userKey).exists()))`
         }
+      },
+      // End of day for friends on OTHER apps (2026-10-01). They all read the
+      // one public clubFeed, so with the switch on the app parks its live
+      // feed here instead — owner only — and the push Lambda's sweep (admin)
+      // publishes the end-of-day copy to clubFeed. See dayFeedFrom.
+      clubFeedLive: {
+        $userKey: {
+          '.read': `auth != null && $userKey === ${sanitizedAuthEmail}`,
+          '.write': `auth != null && $userKey === ${sanitizedAuthEmail}`
+        }
       }
     },
 

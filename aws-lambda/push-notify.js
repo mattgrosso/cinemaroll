@@ -35,7 +35,7 @@ const crypto = require('crypto');
 const webpush = require('web-push');
 const {
   dueFromDigest, nextBaseline, shouldSend, composeMessage, friendLogBody, friendRequestMessage, EMPTY_BASELINE,
-  DAY_FRIEND, localDayStart, dayProfileFrom, dayFriendsByOwner, dayCopyDue, dayNews, composeDayMessage,
+  DAY_FRIEND, localDayStart, dayProfileFrom, dayFeedFrom, dayFeedMarker, dayFriendsByOwner, dayCopyDue, dayNews, composeDayMessage,
   gamesDue, shouldSendGames, composeGamesMessage,
   externalWatches, externalLogsDue,
   signupsDue, composeSignupMessages,
@@ -435,6 +435,11 @@ const runSweep = async () => {
     results.push(...await releaseDayProfiles(now));
   } catch (error) {
     console.error('End-of-day copies failed:', error.message);
+  }
+  try {
+    await releaseDayFeeds(now);
+  } catch (error) {
+    console.error('End-of-day feeds failed:', error.message);
   }
 
   for (const topKey of accounts) {
@@ -953,6 +958,44 @@ const releaseDayProfiles = async (now) => {
     }
   }
   return results;
+};
+
+// --- End of day for friends on other apps -----------------------------------
+//
+// One switch for every Movie Log friend (2026-10-01): they all read the one
+// public Interchange feed. With it on, the app writes its live feed to
+// social/clubFeedLive/<owner> (owner-only) instead of the public path, and
+// this rebuilds the public copy when the owner's midnight passes or they
+// republish. No push: Movie Log tells its own users. Switching back to Right
+// away deletes the node, so its absence is "off". WHAT the copy holds is
+// dayFeedFrom's, tested.
+const FEED_SECRET = /^[0-9a-f]{16,64}$/;
+
+const releaseDayFeeds = async (now) => {
+  const owners = Object.keys(await dbGet('social/clubFeedLive', 'shallow=true') || {});
+  for (const owner of owners) {
+    try {
+      const [secret, tzPref, source, release] = await Promise.all([
+        dbGet(`social/clubFeedLive/${owner}/secret`),
+        dbGet(`social/clubFeedLive/${owner}/tz`),
+        dbGet(`social/clubFeedLive/${owner}/feed/marker`),
+        dbGet(`social/clubFeedLive/${owner}/release`)
+      ]);
+      if (typeof secret !== 'string' || !FEED_SECRET.test(secret) || !source) continue;
+      const tz = typeof tzPref === 'string' && tzPref ? tzPref : 'America/New_York';
+      const cutoff = localDayStart(tz, now);
+      if (!dayCopyDue({ release, cutoff, source }).rebuild) continue;
+
+      const marker = dayFeedMarker(release, cutoff);
+      const copy = dayFeedFrom(await dbGet(`social/clubFeedLive/${owner}/feed`), { cutoff, tz, marker });
+      if (!copy) continue;
+      await dbSet(`clubFeed/${owner}/${secret}`, copy);
+      await dbSet(`social/clubFeedLive/${owner}/release`, { cutoff, source, marker });
+      console.log(`End-of-day feed for ${owner}: ${copy.movieCount} films`);
+    } catch (error) {
+      console.error(`End-of-day feed for ${owner} failed:`, error.message);
+    }
+  }
 };
 
 // --- Finding theaters -------------------------------------------------------

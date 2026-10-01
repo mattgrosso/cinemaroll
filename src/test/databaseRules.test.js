@@ -107,6 +107,15 @@ describe('database.rules.json', () => {
       expect(copy['.write']).toContain('!newData.exists()');
     });
 
+    // 2026-10-01: with End of day on for Movie Log friends, the live feed
+    // waits here. Readable by anyone and it would be the public feed again.
+    it('keeps the parked live feed to its owner', () => {
+      const live = rules.social.clubFeedLive;
+      expect(live['.read']).toBeUndefined();
+      expect(live.$userKey['.read']).toBe(live.$userKey['.write']);
+      expect(live.$userKey['.read']).toMatch(/^auth != null && \$userKey === /);
+    });
+
     it('scopes the dev-mode sandbox to its owner', () => {
       expect(rules['testing-database']['.read']).toContain('mattgrosso-gmail-com');
       expect(rules['testing-database']['.write']).toContain('mattgrosso-gmail-com');

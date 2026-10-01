@@ -1935,7 +1935,25 @@ export default createStore({
       const feed = toInterchange(entries, getRating, {
         name: context.getters.socialSettings.displayName || 'A Cinema Roll user'
       });
+      // End of day for friends on other apps (2026-10-01): the live feed is
+      // parked where only I can read it, and the push Lambda publishes the
+      // end-of-day copy to the public path (dayFeedFrom in pushCadence.js).
+      if (context.state.settings?.clubFeedTiming === 'day') {
+        await update(ref(db, `social/clubFeedLive/${me}`), {
+          feed,
+          secret,
+          tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York'
+        });
+        return;
+      }
+      // Removed first, so a sweep already under way finds nothing to release.
+      await set(ref(db, `social/clubFeedLive/${me}`), null);
       await set(ref(db, `clubFeed/${me}/${secret}`), feed);
+    },
+    // One switch for every friend on another app: they all read the one feed.
+    async setClubFeedTiming (context, timing) {
+      await context.dispatch('writeDurably', { path: 'settings/clubFeedTiming', value: timing === 'day' ? 'day' : null });
+      await context.dispatch('publishClubFeed');
     },
     // Cross-app discovery is its own opt-in: this row is PUBLICLY readable,
     // which is more exposure than the in-app directory (auth required), so

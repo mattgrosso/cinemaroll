@@ -193,9 +193,10 @@
           <!-- When this friend finds out what I watched (2026-09-30: coworkers
                in the club, "I would rather not see exactly when I watch a
                movie"). End of day: they see it after my midnight, dated but
-               never timed, in one notification. Native friends only — a
-               friend on another app reads my Interchange feed. -->
-          <div v-if="!friend.external" class="cs-friend-timing" @click.stop>
+               never timed, in one notification. Friends on another app
+               (2026-10-01) all read my one Interchange feed, so theirs is one
+               switch shared by every one of them, and the row says so. -->
+          <div class="cs-friend-timing" @click.stop>
             <span class="cs-friend-timing-label">They see what you watch</span>
             <span class="cs-timing-toggle" role="group" :aria-label="`When ${friend.name} sees what you watch`">
               <button
@@ -212,6 +213,7 @@
               >End of day</button>
             </span>
           </div>
+          <p v-if="friend.external" class="cs-friend-timing-note">Same setting for all your friends on {{ externalAppName }}</p>
         </div>
       </section>
 
@@ -393,7 +395,7 @@ import { memoByIdentity } from '../utils/memoByIdentity.js';
 const summaryMemo = memoByIdentity((entries, profiles) => filmClubSummary(entries, getRating, profiles));
 const crowdMemo = memoByIdentity((entries, profiles, films) => clubVsCrowd(entries, getRating, profiles, films));
 const clubTitlesMemo = memoByIdentity((entries, friends) => clubTitleIndex(entries, friends));
-import { filterDirectory } from '../assets/javascript/interchange.js';
+import { filterDirectory, FEDERATED_APPS } from '../assets/javascript/interchange.js';
 import { clubTitleIndex, searchClubTitles, clubSeenBreakdown } from '../assets/javascript/clubTitleSearch.js';
 import { omitQaAccounts, isQaAccountKey } from '../assets/javascript/databaseKey.js';
 import { formatScore, formatScoreGap } from '../assets/javascript/formatScore.js';
@@ -430,6 +432,11 @@ export default {
     };
   },
   computed: {
+    // Who the shared End of day switch reaches: Movie Log, while it is the
+    // only other app.
+    externalAppName () {
+      return FEDERATED_APPS.length === 1 ? FEDERATED_APPS[0].name : 'other apps';
+    },
     // TMDB ids of everything you've rated, for telling a friend's watch you
     // can open from one you can't.
     myTmdbIds () {
@@ -527,7 +534,7 @@ export default {
           external: friend.external,
           source: friend.source,
           error: friend.error,
-          timing: this.myEdges[friend.key] === 'day' ? 'day' : 'now',
+          timing: (friend.external ? this.$store.state.settings?.clubFeedTiming : this.myEdges[friend.key]) === 'day' ? 'day' : 'now',
           ...snapshot,
           // A poster-less recent item would render a broken image.
           recent: snapshot.recent.filter((item) => item.p)
@@ -611,7 +618,10 @@ export default {
     },
     setTiming (friend, timing) {
       if (friend.timing === timing) return;
-      this.$store.dispatch('setFriendTiming', { friendKey: friend.key, timing }).catch((error) => {
+      const change = friend.external
+        ? this.$store.dispatch('setClubFeedTiming', timing)
+        : this.$store.dispatch('setFriendTiming', { friendKey: friend.key, timing });
+      change.catch((error) => {
         console.warn('Could not change when a friend sees your films:', error?.message);
       });
     },
@@ -804,6 +814,8 @@ export default {
 }
 
 .cs-friend-timing-label { color: #b9b9b9; font-size: 0.72rem; }
+
+.cs-friend-timing-note { color: #b9b9b9; font-size: 0.68rem; margin: 0.2rem 0 0; text-align: right; }
 
 .cs-timing-toggle {
   border: 1px solid #3a3a3a;
