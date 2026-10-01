@@ -342,3 +342,23 @@ describe('gamesDigest', () => {
     expect(digest.games.list.length).toBe(Object.keys(GAME_NAMES).length);
   });
 });
+
+// Bug report 2026-10-01: shorts were turning up in tiebreaks with the
+// "Include short films" setting off. The chore notification must agree.
+describe('tiebreakDigest with short films turned off', () => {
+  const film = (id, score, runtime) => ({ ...entry(id, `Film ${id}`, { score, ratedAt: NOW }), dbKey: `k-${id}`, movie: { id, runtime } });
+
+  it('ignores a tie made only of shorts', () => {
+    const entries = [film(1, 9, 120), film(2, 7, 15), film(3, 7, 20)];
+    expect(tiebreakDigest(entries, {}, getRating, NOW).due).toBe(false);
+    expect(tiebreakDigest(entries, { includeShorts: true }, getRating, NOW).count).toBe(2);
+  });
+
+  it('does not count a tournament that holds a short', () => {
+    const entries = [film(1, 8, 15), film(2, 8, 120), film(3, 6, 120)];
+    const settings = { tieBreakTournament: { contestantIds: ['k-1', 'k-2'] } };
+    expect(tiebreakDigest(entries, settings, getRating, NOW)).toMatchObject({ due: false, pinned: false });
+    expect(tiebreakDigest(entries, { ...settings, includeShorts: true }, getRating, NOW).pinned).toBe(true);
+  });
+});
+

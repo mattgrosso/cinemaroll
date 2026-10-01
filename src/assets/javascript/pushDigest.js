@@ -30,7 +30,8 @@
 // A prompt the user disabled in-app (settings/*PromptState === 'disabled')
 // publishes as empty — a push about a prompt you turned off is spam.
 
-import { findTiedGroup, tiedContestantCount } from './tieBreakTournament.js';
+import { findTiedGroup, tiedContestantCount, liveTournament } from './tieBreakTournament.js';
+import { withoutShorts } from './shorts.js';
 import { yearsMeetingAwardsThreshold } from './personalAwards.js';
 import { promptsPerDay, lastAwardsPromptAt, ONE_DAY_MS } from './promptQuota.js';
 import { GAME_NAMES, gameWinKey } from '../../mixins/gameData.js';
@@ -169,11 +170,13 @@ export function tiebreakDigest (entries, settings, getRating, now = Date.now()) 
   // first tiebreak rather than being asked immediately.
   const gate = (Number(settings?.lastTweak) || now) + ONE_DAY_MS / (Number(settings?.tieBreakTweak) || 1);
 
-  const tournament = settings?.tieBreakTournament || null;
+  // Shorts sit out of tiebreaks while the setting is off, same as on screen.
+  const includeShorts = settings?.includeShorts === true;
+  const tournament = liveTournament(settings?.tieBreakTournament || null, entries, includeShorts);
 
   // Score each entry ONCE, then sort — getRating in a comparator is the
   // documented perf trap (CLAUDE.md).
-  const scored = (entries || [])
+  const scored = withoutShorts(entries || [], includeShorts)
     .map((entry) => ({ entry, score: getRating(entry)?.calculatedTotal }))
     .filter((item) => Number.isFinite(item.score))
     .sort((a, b) => b.score - a.score);

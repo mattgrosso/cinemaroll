@@ -198,6 +198,12 @@ contiguous run of equal scores; `createRoundRobinTournament(ids, rng)` builds ev
   and divided by 10, then rounded to 2dp — so the visible score moves by a *fifth* of the
   tweak. `-0.05` is the smallest step that moves the displayed score at all. Anything
   smaller vanishes in rounding and makes the same tournament recur forever.
+- **Shorts sit out while "include short films" is off** (report 2026-10-01). The tie scan
+  in all three places that decide a tiebreak is due — `TweakInline`, Home's
+  `shouldShowTieBreakModal`, and `pushDigest`'s `tiebreakDigest` — goes through
+  `withoutShorts`, and a stored tournament goes through `liveTournament`, which treats one
+  holding a short as absent; `TweakInline` then clears it and a fresh scan takes over.
+  Turning shorts off mid-tournament therefore throws that tournament away, by design.
 - **Membership is frozen at creation.** `findTiedGroup` only runs when no tournament
   record exists, so a movie rated mid-tournament can't be pulled in.
 - **Scores are applied in one batch** at the results screen, never per match.

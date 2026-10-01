@@ -11,6 +11,23 @@
 // already-running tournament — it waits for the next tie scan, which only
 // ever runs once there is no active tournament (see TweakInline.vue).
 
+import { isShortEntry } from './shorts.js';
+
+// The stored tournament, unless it pits a short film against the rest while
+// the "include short films" setting is off — then it no longer counts, and
+// the caller treats it as absent (TweakInline clears the record and starts
+// over without the short). Bug report 2026-10-01: "I'm still seeing shorts
+// tied in tiebreakers, which feels like they should be excluded from that if
+// I have shorts turned off." An unknown contestant (library not loaded yet)
+// is never taken as a short, so a cold launch can't throw a tournament away.
+export function liveTournament (tournament, entries, includeShorts) {
+  if (!tournament) return null;
+  if (includeShorts) return tournament;
+  const ids = new Set(tournament.contestantIds || []);
+  const holdsShort = (entries || []).some((entry) => ids.has(entry?.dbKey) && isShortEntry(entry));
+  return holdsShort ? null : tournament;
+}
+
 // Finds the full contiguous run of entries sharing the same score as the
 // first adjacent tie in `sortedEntries` (works regardless of best-first or
 // worst-first order, since a tied group is contiguous either way).

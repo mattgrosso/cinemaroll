@@ -163,6 +163,7 @@
 <script>
 import { getRating } from "../assets/javascript/GetRating.js";
 import { sortResultsFast } from "../assets/javascript/searchFiltering.js";
+import { withoutShorts, includeShortsSetting } from "../assets/javascript/shorts.js";
 import {
   findTiedGroup,
   tiedContestantCount,
@@ -172,7 +173,8 @@ import {
   isComplete,
   recordMatchResult,
   progress,
-  tweakDeltaForRank
+  tweakDeltaForRank,
+  liveTournament
 } from "../assets/javascript/tieBreakTournament.js";
 
 export default {
@@ -252,12 +254,27 @@ export default {
     // only relevant when there's no tournament already in progress (a
     // tournament's contestantIds are frozen at creation, see
     // tieBreakTournament.js, so this must never override an active one).
+    //
+    // Shorts sit out while "include short films" is off (bug report
+    // 2026-10-01). allMoviesRanked itself keeps them: it's also the lookup
+    // for a tournament's contestants, and must find whatever was stored.
     tiedGroupDbKeys () {
-      return findTiedGroup(this.allMoviesRanked, (movie) => getRating(movie).calculatedTotal)
+      return findTiedGroup(withoutShorts(this.allMoviesRanked, this.includeShorts), (movie) => getRating(movie).calculatedTotal)
         .map((movie) => movie.dbKey);
     },
-    currentTournament () {
+    includeShorts () {
+      return includeShortsSetting(this.$store.state);
+    },
+    storedTournament () {
       return this.localTournament || this.$store.state.settings?.tieBreakTournament || null;
+    },
+    // A stored tournament holding a short while shorts are off doesn't count;
+    // the staleTournament watcher clears it and a fresh tie scan takes over.
+    currentTournament () {
+      return liveTournament(this.storedTournament, this.$store.getters.allMoviesAsArray, this.includeShorts);
+    },
+    staleTournament () {
+      return Boolean(this.storedTournament) && !this.currentTournament;
     },
     // The "force tiebreak to show" testing toggle (Home's settings pane).
     // Read straight from the store rather than taken as a prop: showTweakModal
@@ -380,6 +397,14 @@ export default {
     // notice rendered nothing because no tournament existed for it to show).
     // Watching this computed instead re-fires whenever currentTournament
     // drops back to null while there's still something to start.
+    // Before needsNewTournament, so the old record is cleared ahead of the
+    // fresh one being written.
+    staleTournament: {
+      immediate: true,
+      handler (stale) {
+        if (stale) this.clearCompletedTournament();
+      }
+    },
     needsNewTournament: {
       immediate: true,
       handler (needsOne) {

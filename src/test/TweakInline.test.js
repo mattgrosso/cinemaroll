@@ -19,10 +19,10 @@ function movie (dbKey, title, calculatedTotal, tweakValue = 0) {
   }
 }
 
-function mountTweak (movies, { tieBreakTournament = null, tieBreakPromptState = 'auto' } = {}) {
+function mountTweak (movies, { tieBreakTournament = null, tieBreakPromptState = 'auto', includeShorts } = {}) {
   const dispatch = vi.fn()
   const mockStore = {
-    state: { currentLog: 'movieLog', settings: { tieBreakTournament, tieBreakPromptState } },
+    state: { currentLog: 'movieLog', settings: { tieBreakTournament, tieBreakPromptState, includeShorts } },
     getters: { allMoviesAsArray: movies },
     dispatch
   }
@@ -542,6 +542,65 @@ describe('TweakInline', () => {
 
       const notice = wrapper.find('.prompt-card')
       expect(notice.exists()).toBe(true)
+    })
+  })
+
+  // Bug report 2026-10-01: "I'm still seeing shorts tied in tiebreakers,
+  // which feels like they should be excluded from that if I have shorts
+  // turned off."
+  describe('short films', () => {
+    const short = (dbKey, title, score) => {
+      const entry = movie(dbKey, title, score)
+      return { ...entry, movie: { ...entry.movie, runtime: 14 } }
+    }
+
+    it('leaves shorts out of a new tournament while shorts are off', () => {
+      const movies = [movie('a', 'A', 9), short('s1', 'S1', 7), short('s2', 'S2', 7), movie('b', 'B', 5), movie('c', 'C', 5)]
+      const { dispatch } = mountTweak(movies)
+      expect(lastDispatchTo(dispatch, 'settings/tieBreakTournament').contestantIds.sort()).toEqual(['b', 'c'])
+    })
+
+    it('shows nothing when the only tie is between shorts', () => {
+      const { wrapper, dispatch } = mountTweak([movie('a', 'A', 9), short('s1', 'S1', 7), short('s2', 'S2', 7)])
+      expect(wrapper.find('.tweak-inline').exists()).toBe(false)
+      expect(lastDispatchTo(dispatch, 'settings/tieBreakTournament')).toBeUndefined()
+    })
+
+    it('still includes shorts when the setting is on', () => {
+      const movies = [movie('a', 'A', 9), short('s1', 'S1', 7), short('s2', 'S2', 7)]
+      const { dispatch } = mountTweak(movies, { includeShorts: true })
+      expect(lastDispatchTo(dispatch, 'settings/tieBreakTournament').contestantIds.sort()).toEqual(['s1', 's2'])
+    })
+
+    it('drops a tournament already under way that holds a short, and starts a fresh one', () => {
+      const existingTournament = {
+        contestantIds: ['s1', 'a', 'b'],
+        schedule: [{ a: 's1', b: 'a' }, { a: 's1', b: 'b' }, { a: 'a', b: 'b' }],
+        nextIndex: 1,
+        wins: { s1: 1, a: 0, b: 0 },
+        startedAt: Date.now(),
+        finalRanking: null,
+        completedAt: null
+      }
+      const movies = [short('s1', 'S1', 8), movie('a', 'A', 8), movie('b', 'B', 8)]
+      const { dispatch } = mountTweak(movies, { tieBreakTournament: existingTournament })
+      const writes = dispatch.mock.calls.filter(([, entry]) => entry.path === 'settings/tieBreakTournament').map(([, entry]) => entry.value)
+      expect(writes[0]).toBeNull()
+      expect(writes[writes.length - 1].contestantIds.sort()).toEqual(['a', 'b'])
+    })
+
+    it('keeps a tournament that holds a short when shorts are on', () => {
+      const existingTournament = {
+        contestantIds: ['s1', 'a'],
+        schedule: [{ a: 's1', b: 'a' }],
+        nextIndex: 0,
+        wins: { s1: 0, a: 0 },
+        startedAt: Date.now(),
+        finalRanking: null,
+        completedAt: null
+      }
+      const { dispatch } = mountTweak([short('s1', 'S1', 8), movie('a', 'A', 8)], { tieBreakTournament: existingTournament, includeShorts: true })
+      expect(lastDispatchTo(dispatch, 'settings/tieBreakTournament')).toBeUndefined()
     })
   })
 

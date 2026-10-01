@@ -179,4 +179,47 @@ describe('which prompt the home screen shows', () => {
 
     expect(wrapper.vm.activeModalType).not.toBe('tieBreak');
   });
+
+  // Bug report 2026-10-01: "I'm still seeing shorts tied in tiebreakers,
+  // which feels like they should be excluded from that if I have shorts
+  // turned off."
+  describe('with short films turned off', () => {
+    const short = (id, title, calculatedTotal) => {
+      const entry = needsStickiness(id, title, calculatedTotal);
+      return { ...entry, movie: { ...entry.movie, runtime: 12 } };
+    };
+    const feature = (id, title, calculatedTotal) => {
+      const entry = needsStickiness(id, title, calculatedTotal);
+      return { ...entry, movie: { ...entry.movie, runtime: 120 } };
+    };
+
+    it('does not call a tie made only of shorts a tie', () => {
+      const library = [feature(1, 'Feature', 9), short(2, 'Short A', 7), short(3, 'Short B', 7)];
+      expect(mountHome({ library }).vm.shouldShowTieBreakModal).toBe(false);
+    });
+
+    it('still finds the tie when shorts are on', () => {
+      const library = [feature(1, 'Feature', 9), short(2, 'Short A', 7), short(3, 'Short B', 7)];
+      expect(mountHome({ library, settings: { includeShorts: true } }).vm.shouldShowTieBreakModal).toBe(true);
+    });
+
+    it('does not let a tournament holding a short pin the screen', () => {
+      const library = [short(1, 'Short A', 8), feature(2, 'Feature B', 8), feature(3, 'Feature C', 6)];
+      const wrapper = mountHome({
+        library,
+        settings: {
+          tieBreakTournament: {
+            contestantIds: ['k-1', 'k-2'],
+            schedule: [{ a: 'k-1', b: 'k-2' }],
+            nextIndex: 0,
+            wins: { 'k-1': 0, 'k-2': 0 },
+            matchResults: [],
+            finalRanking: null,
+            completedAt: null
+          }
+        }
+      });
+      expect(wrapper.vm.activeModalType).toBe('stickiness');
+    });
+  });
 });

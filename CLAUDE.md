@@ -170,7 +170,8 @@ every screen that summarises the library — `src/assets/javascript/shorts.js` i
 (runtime ≤ 40; the "Short" genre tag does NOT count, matching Home) and `withoutShorts`
 the cached filter. Deliberate exceptions: Insights' calendar-gaps grid (a short still
 means you watched something that day), and per-film tools (rating, Stickiness, Film Club,
-award lookups). New library-wide stats go through `withoutShorts`.
+award lookups). New library-wide stats go through `withoutShorts`. Tiebreaks follow
+the setting too (2026-10-01).
 
 **Preference: extract pure logic into `src/assets/javascript/` and unit-test it directly**
 rather than only through component mounts. That's why `searchFiltering.js`,

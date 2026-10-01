@@ -1637,7 +1637,7 @@
 </template>
 
 <script>
-import { isShort } from '../assets/javascript/shorts.js';
+import { isShort, withoutShorts } from '../assets/javascript/shorts.js';
 import axios from 'axios';
 import { scrollWindowTo } from '../utils/scrollWindowTo.js';
 import { crowdRating, crowdLovesList, disagreeList, cultList } from '../assets/javascript/letterboxdCompare.js';
@@ -1752,7 +1752,7 @@ import {
   awardNameSingular
 } from '../assets/javascript/personalAwards.js';
 import { groupByPersonRole } from '../assets/javascript/personRoleGroups.js';
-import { findTiedGroup } from '../assets/javascript/tieBreakTournament.js';
+import { findTiedGroup, liveTournament } from '../assets/javascript/tieBreakTournament.js';
 import { GAME_ICONS, GAME_NAMES, gameWinKey, lastPlayedGamePath } from '../mixins/gameData.js';
 import { collectImageUrls, warmImageCache } from '../assets/javascript/offlinePosterCache.js';
 import { backfillBoxOffice, collectMoviesNeedingBoxOffice } from '../assets/javascript/backfillBoxOffice.js';
@@ -3939,7 +3939,7 @@ export default {
       // cleared on "Done" (or automatically for a 2-way tie), so this pins
       // the prompt for exactly as long as there are matches left to play.
       // A disabled tiebreak still wins, since that is an explicit choice.
-      if (!tieBreakDisabled && this.$store.state.settings?.tieBreakTournament) {
+      if (!tieBreakDisabled && this.liveTieBreakTournament) {
         return 'tieBreak';
       }
 
@@ -3971,6 +3971,12 @@ export default {
       return this.activeModalType === 'tieBreak';
     },
 
+    // The tournament record, unless it holds a short while shorts are off —
+    // TweakInline clears that one, so it must not pin the screen meanwhile.
+    liveTieBreakTournament () {
+      return liveTournament(this.$store.state.settings?.tieBreakTournament, this.$store.getters.allMediaAsArray, this.showShorts);
+    },
+
     shouldShowTieBreakModal () {
       // Include forceModalReevaluation to make this computed re-evaluate on the periodic modal re-check
       // eslint-disable-next-line no-unused-vars
@@ -3983,8 +3989,9 @@ export default {
       // scan when there's no record, so a movie rated mid-tournament that
       // happens to also tie never gets swept into it (TweakInline.vue owns
       // actually starting a new one).
-      const hasTiedResults = Boolean(this.$store.state.settings?.tieBreakTournament) ||
-        findTiedGroup(this.sortedByRating, (movie) => getRating(movie).calculatedTotal).length >= 2;
+      // Shorts sit out while the setting is off (bug report 2026-10-01).
+      const hasTiedResults = Boolean(this.liveTieBreakTournament) ||
+        findTiedGroup(withoutShorts(this.sortedByRating, this.showShorts), (movie) => getRating(movie).calculatedTotal).length >= 2;
 
       if (!hasTiedResults) {
         return false;
