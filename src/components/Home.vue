@@ -763,7 +763,11 @@
                   <p v-if="hatConnectError" class="settings-hat-error">{{ hatConnectError }}</p>
                 </div>
 
-                <button type="button" class="btn btn-outline-info btn-sm" :disabled="findingHats" @click="findMovieHats">
+                <!-- Only once connected: Movie Hat refuses every read without its
+                     own sign-in, so before it this button could only fail, and
+                     said "Couldn't reach Movie Hat" — which reads as Movie Hat
+                     being down (report 2026-10-01, "Cannot sign into Movie Hat"). -->
+                <button v-if="movieHatEmail" type="button" class="btn btn-outline-info btn-sm" :disabled="findingHats" @click="findMovieHats">
                   <span v-if="findingHats" class="spinner-border spinner-border-sm me-1" role="status"></span>
                   {{ linkedMovieHats.length ? 'Look for more hats' : 'Find my hats' }}
                 </button>
@@ -783,9 +787,17 @@
                   </label>
                 </div>
 
-                <p v-if="searchedForHats && !hatChoices.length" class="settings-note">
-                  No hats found for {{ movieHatEmail || userEmail }} — that's the address Movie Hat knows you by.
-                </p>
+                <!-- A good sign-in by someone in no hats used to end at a bare "No
+                     hats found", which reads like something broke. Hats are
+                     shared by invitation, so say so and say what to do. -->
+                <div v-if="movieHatEmail && searchedForHats && !hatLookupError && !hatChoices.length" class="settings-hat-none">
+                  <p class="settings-note">
+                    You're signed in to Movie Hat as {{ movieHatEmail }}, but that address isn't in any hats yet.
+                  </p>
+                  <p class="settings-note">
+                    Hats are shared by invitation: ask whoever runs a hat to add this address, or start your own at movie-hat.com. Then come back and tap Find my hats.
+                  </p>
+                </div>
               </SettingsSection>
 
               <SettingsSection title="Prompts" hint="How often Cinema Roll asks you things" collapsible :startOpen="false">
@@ -1761,6 +1773,7 @@ import { backfillMovieLocations, collectMoviesNeedingLocations } from '../assets
 import { trimStoredEntries, collectEntriesNeedingTrim, entryForStorage } from '../assets/javascript/storedEntry.js';
 import { collectEntriesNeedingStamp, stampBackfillUpdates } from '../assets/javascript/syncStamp.js';
 import { makePlaceholderId } from '../utils/placeholderId.js';
+import { isSignInDismissal, movieHatSignInMessage } from '../assets/javascript/movieHatSignIn.js';
 import {
   countDirectors as countDirectorsUtil,
   countCastCrew as countCastCrewUtil,
@@ -4380,13 +4393,18 @@ export default {
     async connectMovieHat () {
       this.connectingHat = true;
       this.hatConnectError = null;
+      this.hatLookupError = null;
       try {
         await this.$store.dispatch('connectMovieHat');
         this.searchedForHats = true;
       } catch (error) {
-        // Closing the popup is a choice, not a failure worth shouting about.
-        if (error?.code !== 'auth/popup-closed-by-user') {
-          this.hatConnectError = "Couldn't sign in to Movie Hat.";
+        if (error?.movieHatStage === 'lookup') {
+          // Signed in fine; it's reading the hats that failed.
+          this.hatLookupError = "Signed in, but couldn't read your hats just now. Tap Find my hats to try again.";
+          ErrorLogService.error('Movie Hat lookup after sign-in failed', error);
+        } else if (!isSignInDismissal(error)) {
+          // Closing the popup is a choice, not a failure worth shouting about.
+          this.hatConnectError = movieHatSignInMessage(error);
           ErrorLogService.error('Movie Hat sign-in failed', error);
         }
       } finally {

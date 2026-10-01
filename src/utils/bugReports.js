@@ -38,6 +38,15 @@ function buildAppStateSummary (store, route) {
     // auto refresh is stuck"): what this page is running, what the last
     // check saw deployed, what the service worker was doing, and whether a
     // reload for this update has already been tried.
+    // Cinema Roll's second sign-in (report 2026-10-01, "Cannot sign into
+    // Movie Hat", which carried nothing that could say why).
+    movieHat: {
+      connectedAs: state.movieHatEmail || null,
+      linkedHats: (store.getters?.linkedMovieHats || []).length,
+      foundHats: (state.availableMovieHats || []).length,
+      accessError: state.movieHatAccessError?.reason || null,
+      lastFailure: state.movieHatLastFailure || null
+    },
     update: {
       running: runningBundleName(),
       deployed: state.updateTargetBundle || null,

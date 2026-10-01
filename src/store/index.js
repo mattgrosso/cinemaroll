@@ -36,6 +36,7 @@ import {
   disconnectMovieHat as signOutOfMovieHat,
   watchMovieHatAuth as observeMovieHatAuth
 } from "../assets/javascript/movieHatAuth.js";
+import { isSignInDismissal, signInFailureSummary } from "../assets/javascript/movieHatSignIn.js";
 import { buildSocialProfile, socialSettingsWithDefaults, countNewFriendUpdates, clubFetchesNeeded } from "../assets/javascript/social.js";
 import { buildMirrorFeed } from "../assets/javascript/mirrorFeed.js";
 import { buildPushDigest } from "../assets/javascript/pushDigest.js";
@@ -423,6 +424,10 @@ export default createStore({
     // reads outright, so without this the whole section just renders empty
     // or "couldn't load" and nothing anywhere says to sign back in.
     movieHatAccessError: null,
+    // The last sign-in or hat-lookup failure, for bug reports only. A report
+    // that just said "Cannot sign into Movie Hat" (2026-10-01) carried nothing
+    // that could say why.
+    movieHatLastFailure: null,
     // Friends on other apps (Movie Log), translated into the same profile
     // shape as native friends. Held in memory; the subscription itself
     // lives in settings/externalFriends.
@@ -728,6 +733,9 @@ export default createStore({
       // Connecting (or disconnecting) makes any previous refusal stale — the
       // next read is the only thing that can say whether it still applies.
       state.movieHatAccessError = null;
+    },
+    setMovieHatLastFailure (state, value) {
+      state.movieHatLastFailure = value || null;
     },
     setMovieHatAccessError (state, value) {
       state.movieHatAccessError = value || null;
@@ -2320,7 +2328,13 @@ export default createStore({
       // The index first — the only route that survives the lockdown. The
       // whole-database scan is the fallback for as long as it works, so
       // linking hats keeps working before the index is backfilled.
-      let mine = await fetchMyHats(email);
+      let mine;
+      try {
+        mine = await fetchMyHats(email);
+      } catch (error) {
+        context.commit('setMovieHatLastFailure', signInFailureSummary(error, 'lookup'));
+        throw error;
+      }
 
       if (!mine.length) {
         try {
@@ -2340,10 +2354,26 @@ export default createStore({
      * browser can get a Movie Hat session at all now the rules are on.
      */
     async connectMovieHat (context, token = null) {
-      const user = token ? await signIntoMovieHatWithToken(token) : await signIntoMovieHat();
+      let user;
+      try {
+        user = token ? await signIntoMovieHatWithToken(token) : await signIntoMovieHat();
+      } catch (error) {
+        if (!isSignInDismissal(error)) context.commit('setMovieHatLastFailure', signInFailureSummary(error, 'sign-in'));
+        throw error;
+      }
       context.commit('setMovieHatUser', user);
+      context.commit('setMovieHatLastFailure', null);
       // Whichever account just signed in is the one whose hats to look for.
-      if (user?.email) await context.dispatch('findMovieHats');
+      // A failure HERE is not a failed sign-in — the account is connected —
+      // so it's marked, and the screen says the lookup failed instead.
+      if (user?.email) {
+        try {
+          await context.dispatch('findMovieHats');
+        } catch (error) {
+          error.movieHatStage = 'lookup';
+          throw error;
+        }
+      }
       return user;
     },
 

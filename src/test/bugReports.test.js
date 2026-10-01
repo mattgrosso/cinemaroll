@@ -63,4 +63,24 @@ describe('bugReports', () => {
     const [, report] = set.mock.calls[0];
     expect(report.reporterEmail).toBeNull();
   });
+
+  // Report 2026-10-01, "Cannot sign into Movie Hat", carried nothing about
+  // Movie Hat at all.
+  it("carries Movie Hat's connection state and last failure", async () => {
+    store.state.movieHatEmail = 'hat@example.com';
+    store.state.availableMovieHats = [];
+    store.state.movieHatAccessError = { reason: 'denied' };
+    store.state.movieHatLastFailure = { where: 'sign-in', code: 'auth/popup-blocked' };
+    store.getters = { linkedMovieHats: [{ title: 'Just Matt' }] };
+
+    await submitBugReport(store, 'hat trouble', route);
+    const report = set.mock.calls[0][1];
+    expect(JSON.parse(report.appState).movieHat).toEqual({
+      connectedAs: 'hat@example.com',
+      linkedHats: 1,
+      foundHats: 0,
+      accessError: 'denied',
+      lastFailure: { where: 'sign-in', code: 'auth/popup-blocked' }
+    });
+  });
 });

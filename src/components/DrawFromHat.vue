@@ -127,6 +127,7 @@
 // the movie first." The only follow-on offered is looking the film up.
 import ErrorLogService from '../services/ErrorLogService.js';
 import { timeAgo } from '../assets/javascript/timeAgo.js';
+import { isSignInDismissal, movieHatSignInMessage } from '../assets/javascript/movieHatSignIn.js';
 import WhereToWatch from './WhereToWatch.vue';
 
 // When a hat was last drawn from, or 0 for never (and for a hat whose
@@ -219,8 +220,10 @@ export default {
         ]);
       } catch (error) {
         // Dismissing the Google chooser is a choice, not a failure.
-        if (error?.code !== 'auth/popup-closed-by-user') {
-          this.reconnectError = "Couldn't sign in to Movie Hat.";
+        if (!isSignInDismissal(error)) {
+          this.reconnectError = error?.movieHatStage === 'lookup'
+            ? "Signed in, but couldn't read your hats just now."
+            : movieHatSignInMessage(error);
           ErrorLogService.error('Movie Hat reconnect failed', error);
         }
       } finally {

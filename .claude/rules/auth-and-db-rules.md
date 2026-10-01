@@ -118,6 +118,16 @@ been checked correct: `yarn mint-hat-token` in the movie-hat repo, exchange it a
 API with `?auth=<idToken>`. The tester reaches Dev Hat and nothing else, which also
 demonstrates the rules working.
 
+**Sign-in failures say which (2026-10-01).** A new user's "Cannot sign into Movie Hat"
+arrived with nothing to go on. Now `movieHatSignIn.js` turns the Firebase auth code into
+a sentence (blocked popup, network, Safari storage…; unknown codes still name the code),
+`state.movieHatLastFailure` keeps the last sign-in or lookup failure, and bug reports
+carry a `movieHat` block (connected-as, linked/found counts, access reason, last
+failure). A lookup that fails AFTER a good sign-in throws with `movieHatStage: 'lookup'`
+so the screen doesn't call it a failed sign-in. Settings hides "Find my hats" until
+connected (it could only fail before), and a connected account in no hats is told hats
+are by invitation.
+
 **Read only what you need.** The hat read rule sits at `hats/$title/$hatKey`, so a child
 path like `.../movies.json` needs no rule change. `ensureMovieHatContents` wants TMDB ids
 only and used to call `fetchHat`, pulling whole hat nodes — history included, ~1.9MB
