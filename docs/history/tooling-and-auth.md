@@ -351,3 +351,18 @@ after launch. Four slow spots, all fixed in `appUpdate.js` + `App.vue`:
   second attempt — the hard reload. `state.updateApplying` makes the card say
   "Updating…" with the button disabled, and `reloadForUpdate` joins an attempt
   already in flight instead of starting another.
+
+## Still five seconds (2026-10-01)
+
+"The auto refresh is still taking like five seconds. I feel like it used to take like
+maybe one second at most." The 2026-09-30 round ran the worker check and the bundle
+comparison side by side. The comparison usually won, so the refresh started while the
+worker check was still going, and `waitForNewWorker` called `registration.update()` a
+second time. On iOS that second call queues behind the first one's install and doesn't
+answer, so the 5-second cap (added the same day for weak signal) became the floor of
+every update. Fix: `checkWorkerOnce` shares one in-flight check per registration (and
+skips checking right after one, or while a worker is already installing), and the
+install wait wakes on the worker's `statechange` instead of a 250ms poll. The guard
+test, where the phone's second check hangs, was confirmed to fail against the old code
+while still waiting at 600ms. Bug reports now carry `update.lastUpdate` timings so
+the next "slow" report comes with numbers.

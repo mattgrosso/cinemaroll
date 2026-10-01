@@ -1,5 +1,5 @@
 import { getDatabase, ref as dbRef, push, set, serverTimestamp } from 'firebase/database';
-import { getLastWorkerState, getReloadAttempt } from './appUpdate.js';
+import { getLastWorkerState, getReloadAttempt, getUpdateTiming } from './appUpdate.js';
 
 // Same "report a bug without breaking your flow" pattern used in the
 // thunderstone/space-base repos, adapted to Cinema Roll's Vuex store (not
@@ -43,7 +43,8 @@ function buildAppStateSummary (store, route) {
       deployed: state.updateTargetBundle || null,
       available: Boolean(state.updateAvailable),
       worker: getLastWorkerState(),
-      reloadAttempt: getReloadAttempt()
+      reloadAttempt: getReloadAttempt(),
+      lastUpdate: getUpdateTiming()
     }
   };
 }

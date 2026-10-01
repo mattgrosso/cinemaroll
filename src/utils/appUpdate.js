@@ -21,7 +21,7 @@ export async function waitForNewWorker (timeoutMs = 15000, { getRegistration = d
     // Capped: on one bar of signal update() sits on the worker script's
     // download for minutes, and this wait is meant to be 15 seconds.
     await Promise.race([
-      Promise.resolve(registration.update?.()).catch(() => {}),
+      checkWorkerOnce(registration),
       sleep(Math.min(5000, timeoutMs))
     ]);
     const deadline = Date.now() + timeoutMs;
@@ -31,13 +31,61 @@ export async function waitForNewWorker (timeoutMs = 15000, { getRegistration = d
       // itself on install, but asking again costs nothing and covers a
       // worker whose own skipWaiting didn't stick.
       registration.waiting?.postMessage?.({ type: 'SKIP_WAITING' });
-      await sleep(250);
+      // Wake the moment the new worker moves on, not on the next tick.
+      await untilWorkerChanges(registration, sleep(250));
     }
     return (registration.installing || registration.waiting) ? 'stuck' : 'settled';
   } catch {
     // Any surprise here must never eat the reload itself.
     return 'settled';
   }
+}
+
+// One "is there a new worker?" check per registration at a time.
+//
+// Bug report (Matt, 2026-10-01): "The auto refresh is still taking like five
+// seconds." The update check asks the worker to look for a new version
+// while it compares bundles, and the bundle comparison usually wins - so the
+// refresh started straight away and asked the worker AGAIN. The phone queues
+// that second check behind the first one's install, and the 5-second cap
+// above was all that ended the wait. Now the refresh joins the check already
+// under way, and skips asking at all when a new worker is already installing
+// or a check has only just finished.
+const workerChecks = new WeakMap();
+const CHECK_FRESH_MS = 30000;
+
+export function checkWorkerOnce (registration, { now = Date.now } = {}) {
+  if (!registration?.update) return Promise.resolve();
+  const known = workerChecks.get(registration) || {};
+  if (known.promise && now() - known.startedAt < CHECK_FRESH_MS) return known.promise;
+  if (registration.installing || registration.waiting) return Promise.resolve();
+  if (known.finishedAt && now() - known.finishedAt < CHECK_FRESH_MS) return Promise.resolve();
+  const entry = { startedAt: now() };
+  entry.promise = Promise.resolve()
+    .then(() => registration.update())
+    .catch(() => {})
+    .finally(() => {
+      if (workerChecks.get(registration) === entry) {
+        workerChecks.set(registration, { finishedAt: now() });
+      }
+    });
+  workerChecks.set(registration, entry);
+  return entry.promise;
+}
+
+// Resolves when the installing/waiting worker changes state (or a new one
+// turns up), or when `fallback` resolves - whichever comes first.
+function untilWorkerChanges (registration, fallback) {
+  const targets = [registration, registration.installing, registration.waiting]
+    .filter((target) => typeof target?.addEventListener === 'function');
+  if (!targets.length) return fallback;
+  const eventFor = (target) => (target === registration ? 'updatefound' : 'statechange');
+  let wake;
+  const changed = new Promise((resolve) => { wake = resolve; });
+  targets.forEach((target) => target.addEventListener(eventFor(target), wake));
+  return Promise.race([changed, fallback]).finally(() => {
+    targets.forEach((target) => target.removeEventListener?.(eventFor(target), wake));
+  });
 }
 
 const defaultGetRegistration = () => navigator.serviceWorker?.getRegistration?.();
@@ -70,8 +118,25 @@ function readAttempt (storage) {
 }
 
 /** Called once the running bundle matches the deployed one: the update landed. */
-export function markUpdateLanded (storage = window.localStorage) {
+export function markUpdateLanded (storage = window.localStorage, { now = Date.now } = {}) {
   try { storage.removeItem(RELOAD_KEY); } catch { /* storage unavailable */ }
+  const timing = getUpdateTiming(storage);
+  if (timing && timing.landedMs == null) writeTiming(storage, { ...timing, landedMs: now() - timing.at });
+}
+
+// How long the last update took, step by step, for bug reports (2026-10-01,
+// "still taking like five seconds" - next time there are numbers): when it
+// was spotted after opening, how long the wait for the new worker took and
+// how it ended, which kind of reload followed, and - written by the NEW
+// version once it's running - how long until it landed.
+const TIMING_KEY = 'update-timing';
+
+function writeTiming (storage, record) {
+  try { storage.setItem(TIMING_KEY, JSON.stringify(record)); } catch { /* storage unavailable */ }
+}
+
+export function getUpdateTiming (storage = window.localStorage) {
+  try { return JSON.parse(storage.getItem(TIMING_KEY)) || null; } catch { return null; }
 }
 
 // Resolves 'reloaded', 'hard', or 'deferred' - the last when a hard reload
@@ -96,7 +161,9 @@ async function runReloadForUpdate ({
   reload = () => window.location.reload(),
   hard = hardReload,
   wait = waitForNewWorker,
-  canFetchNewApp = newAppIsReachable
+  canFetchNewApp = newAppIsReachable,
+  sinceVisibleMs = null,
+  now = Date.now
 } = {}) {
   // No known target still counts (2026-09-29 loop): a null target used to
   // go unremembered, so every attempt looked like the first.
@@ -121,9 +188,19 @@ async function runReloadForUpdate ({
     return 'hard';
   };
 
-  if (repeat) return goHard();
+  const at = now();
+  const timing = { target: key, at, sinceVisibleMs, waitMs: null, wait: null, result: null };
+  const finish = (result) => {
+    writeTiming(storage, { ...timing, result });
+    return result;
+  };
+
+  if (repeat) return finish(await goHard());
   const outcome = await wait();
-  if (outcome === 'stuck') return goHard();
+  timing.waitMs = now() - at;
+  timing.wait = outcome;
+  if (outcome === 'stuck') return finish(await goHard());
+  finish('reloaded');
   reload();
   return 'reloaded';
 }

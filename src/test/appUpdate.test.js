@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { isSafeMomentForReload, shouldAutoAttempt, reloadForUpdate, hardReload, waitForNewWorker, markUpdateLanded, newAppIsReachable, isFreshMoment, runUpdateCheck } from '@/utils/appUpdate.js'
+import { isSafeMomentForReload, shouldAutoAttempt, reloadForUpdate, hardReload, waitForNewWorker, markUpdateLanded, newAppIsReachable, isFreshMoment, runUpdateCheck, checkWorkerOnce, getUpdateTiming } from '@/utils/appUpdate.js'
 
 // Auto-update ships reloads only at provably quiet moments (bug report:
 // "the user shouldn't have to take an action" — but the July lesson stands:
@@ -304,5 +304,111 @@ describe('reloadForUpdate while an attempt is already running', () => {
     expect(await tapped).toBe('reloaded')
     expect(h.reload).toHaveBeenCalledTimes(1)
     expect(h.hard).not.toHaveBeenCalled()
+  })
+})
+
+// Bug report (Matt, 2026-10-01): "The auto refresh is still taking like five
+// seconds. I feel like it used to take like maybe one second at most." The
+// update check asked the worker for a new version; the bundle comparison won
+// the race, the refresh started, and asked the worker AGAIN. On the phone that
+// second ask queues behind the first one's install and doesn't answer - only
+// the 5-second cap ended the wait.
+describe('the refresh after an update check', () => {
+  const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+  function phoneWhoseSecondCheckHangs () {
+    const registration = { installing: null, waiting: null, calls: 0 }
+    registration.update = vi.fn(() => {
+      registration.calls += 1
+      if (registration.calls > 1) return new Promise(() => {}) // queued behind the first, never answers
+      registration.installing = {}
+      return new Promise((resolve) => setTimeout(() => {
+        registration.installing = null // the new worker installed and took over
+        resolve()
+      }, 100))
+    })
+    return registration
+  }
+
+  it('joins the check already under way instead of waiting out a second one', async () => {
+    vi.useFakeTimers()
+    try {
+      const registration = phoneWhoseSecondCheckHangs()
+      checkWorkerOnce(registration) // App.vue's update check
+      let outcome = null
+      const waiting = waitForNewWorker(15000, { getRegistration: async () => registration, sleep: realSleep })
+      waiting.then((result) => { outcome = result; return result }).catch(() => {})
+      await vi.advanceTimersByTimeAsync(600)
+      expect(outcome).toBe('settled') // well under a second, not five
+      expect(registration.update).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not ask again right after a check has finished', async () => {
+    const registration = { installing: null, waiting: null, update: vi.fn(async () => {}) }
+    await checkWorkerOnce(registration)
+    await checkWorkerOnce(registration)
+    expect(registration.update).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not ask while a new worker is already installing', async () => {
+    const registration = { installing: {}, waiting: null, update: vi.fn(async () => {}) }
+    await checkWorkerOnce(registration)
+    expect(registration.update).not.toHaveBeenCalled()
+  })
+
+  it('asks again once the last check is old news', async () => {
+    let clock = 0
+    const now = () => clock
+    const registration = { installing: null, waiting: null, update: vi.fn(async () => {}) }
+    await checkWorkerOnce(registration, { now })
+    clock = 60000
+    await checkWorkerOnce(registration, { now })
+    expect(registration.update).toHaveBeenCalledTimes(2)
+  })
+
+  it('wakes as soon as the new worker changes state instead of on the next tick', async () => {
+    const listeners = {}
+    const installing = {
+      addEventListener: (type, fn) => { listeners[type] = fn },
+      removeEventListener: vi.fn()
+    }
+    const registration = { installing, waiting: null, update: vi.fn(async () => {}) }
+    const neverTicks = (ms) => (ms === 250 ? new Promise(() => {}) : Promise.resolve())
+    const done = waitForNewWorker(15000, { getRegistration: async () => registration, sleep: neverTicks })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    registration.installing = null
+    listeners.statechange()
+    expect(await done).toBe('settled')
+    expect(installing.removeEventListener).toHaveBeenCalledWith('statechange', listeners.statechange)
+  })
+})
+
+describe('update timing for bug reports', () => {
+  function memoryStorage () {
+    const map = new Map()
+    return { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => map.set(k, String(v)), removeItem: (k) => map.delete(k) }
+  }
+
+  it('records how long each step took, and when the new version landed', async () => {
+    const storage = memoryStorage()
+    let clock = 1000
+    const now = () => clock
+    await reloadForUpdate({
+      target: 'js/app.new.js',
+      storage,
+      now,
+      sinceVisibleMs: 1200,
+      reload: vi.fn(),
+      hard: vi.fn(),
+      wait: async () => { clock += 300; return 'settled' }
+    })
+    expect(getUpdateTiming(storage)).toMatchObject({ target: 'js/app.new.js', sinceVisibleMs: 1200, waitMs: 300, wait: 'settled', result: 'reloaded' })
+    markUpdateLanded(storage, { now: () => 2500 })
+    expect(getUpdateTiming(storage).landedMs).toBe(1500)
+    markUpdateLanded(storage, { now: () => 9999 }) // later checks don't overwrite it
+    expect(getUpdateTiming(storage).landedMs).toBe(1500)
   })
 })

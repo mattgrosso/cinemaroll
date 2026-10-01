@@ -148,3 +148,10 @@ stale-chunk reload), the outgoing version's files survive an update in
 `cinema-roll-previous-app` (`public/keep-previous-app-sw.js`), and nothing in
 `index.html`'s head may load from another host - fonts are bundled.
 
+
+**Never ask the worker for an update twice at once (2026-10-01).** Every
+`registration.update()` goes through `checkWorkerOnce` (`appUpdate.js`): it
+joins a check already in flight and skips one that just finished or a worker
+already installing. A second `update()` queues behind the first one's install
+on iOS, which is what made every auto-refresh sit out the 5-second cap.
+Bug reports carry `update.lastUpdate` (spotted-after, wait time, result, landed-after).

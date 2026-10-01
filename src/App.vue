@@ -41,7 +41,7 @@ import RouteProgress from "./components/RouteProgress.vue";
 import SavedFlash from "./components/SavedFlash.vue";
 import { pickFallbackBanner } from "./assets/javascript/bannerFallback.js";
 import { flushStashedBugReports } from "./utils/bugReports.js";
-import { reloadForUpdate, isSafeMomentForReload, shouldAutoAttempt, markUpdateLanded, recordWorkerState, isFreshMoment, runUpdateCheck, QUIET_MS } from "./utils/appUpdate.js";
+import { reloadForUpdate, isSafeMomentForReload, shouldAutoAttempt, markUpdateLanded, recordWorkerState, checkWorkerOnce, isFreshMoment, runUpdateCheck, QUIET_MS } from "./utils/appUpdate.js";
 import { fetchWithTimeout } from "./utils/networkHealth.js";
 import { refreshSubscriptionIfGranted } from "./utils/push.js";
 
@@ -163,7 +163,10 @@ export default {
           const registration = await navigator.serviceWorker.getRegistration();
           recordWorkerState(registration);
           if (registration) {
-            await registration.update();
+            // Shared with the refresh that may follow (appUpdate.js
+            // checkWorkerOnce), so it joins this check instead of queueing
+            // a second one behind it.
+            await checkWorkerOnce(registration);
             recordWorkerState(registration);
           }
         },
@@ -253,7 +256,7 @@ export default {
       // The banner reads this to say "Updating…" instead of offering a
       // Refresh that would only get in the way.
       this.$store.commit('setUpdateApplying', true);
-      const outcome = await reloadForUpdate({ target: this.deployedBundleSeen });
+      const outcome = await reloadForUpdate({ target: this.deployedBundleSeen, sinceVisibleMs: Date.now() - (this.lastBecameVisibleAt || 0) });
       if (outcome === 'deferred') {
         this.$store.commit('setUpdateApplying', false);
         this.$store.commit('setUpdateDeferred', true);
