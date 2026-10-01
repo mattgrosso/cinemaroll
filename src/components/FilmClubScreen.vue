@@ -152,6 +152,10 @@
       <section class="cs-section">
         <h2 class="cs-section-title">Friends</h2>
         <p v-if="!friendRows.length" class="cs-empty">No friends yet — open "Find people" below and send a request.</p>
+        <!-- Scrolls inside its own box once there are more than two or so
+             friends (2026-10-01: "it's getting to be too tall because of the
+             number of people who I've connected with"). -->
+        <div v-if="friendRows.length" class="cs-friend-list">
         <div v-for="friend in friendRows" :key="friend.key" class="cs-friend cs-row-tappable" @click="$router.push(`/film-club/${friend.key}`)">
           <div class="cs-friend-head">
             <span class="cs-friend-name">{{ friend.name }}</span>
@@ -214,6 +218,7 @@
             </span>
           </div>
           <p v-if="friend.external" class="cs-friend-timing-note">Same setting for all your friends on {{ externalAppName }}</p>
+        </div>
         </div>
       </section>
 
@@ -764,6 +769,16 @@ export default {
 /* A friend row was a name, a count and a chevron. It now says how much you
    overlap, how closely you agree and what they've just been watching
    (2026-08-17: "the list of friends in my film club is a bit sparse"). */
+/* About two and a half friends tall: the cut-off one says "scroll". Contain
+   the vertical overscroll so reaching the end doesn't drag the page along;
+   each poster strip inside still swipes sideways on its own. */
+.cs-friend-list {
+  max-height: 26rem;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .cs-friend {
   border-bottom: 1px solid #242424;
   padding: 0.6rem 0;

@@ -166,6 +166,17 @@ describe('FilmClubScreen', () => {
     expect(wrapper.findAll('.cs-scroll-list').length).toBe(2);
   });
 
+  // "It's getting to be too tall because of the number of people who I've
+  // connected with" — every friend row lives in one box that scrolls in place.
+  it('puts every friend inside the scrolling friends box', () => {
+    const wrapper = factory({ profiles: PROFILES, myEntries: [myMovie(1, 'Heat', 8)] });
+    const list = wrapper.find('.cs-friend-list');
+
+    expect(wrapper.vm.friendRows.length).toBeGreaterThan(0);
+    expect(list.exists()).toBe(true);
+    expect(list.findAll('.cs-friend')).toHaveLength(wrapper.vm.friendRows.length);
+  });
+
   // "The sections about... finding friends in other apps, and finding people
   // [should] be somehow their own, like, maybe collapsible accordion."
   it('collapses the finding-people sections, and leaves Friends open', () => {
