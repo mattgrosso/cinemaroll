@@ -613,3 +613,30 @@ Noted, not done: Outliers ("You love these more than most things") and
 Standouts overlap — both rank the corners of the library you rate above your
 average, by different maths. They now sit next to each other on Ratings, which
 makes the overlap visible; merging them is Matt's call.
+
+## Rate page restyled in the film page's language (2026-09-30)
+
+Matt (bug report, 2026-09-30): "take the styling changes that we've made other places,
+especially the ones recently in the movie detail page, and apply a similar redesign to
+the rate a movie page, because that feels pretty outdated now." Template and styles
+only — the scoring, saving and edit paths are untouched.
+
+- Hero matches MovieDetail: shadowed caret-back link, w1280 backdrop (already cached when
+  arriving from the film page), title on a translucent bar with a small green
+  "Rate" / "Edit rating" kicker. The h1 still carries "Edit" — it's the only cue that you
+  are overwriting a viewing.
+- Facts strip, three across: live score with "#n of N", rank in its release year, and the
+  watch date. The date and Medium tiles are the REAL `datetime-local` / `<select>`, laid
+  invisibly over the tile (`.fact-overlay-input`, `overflow: hidden` on the tile so the
+  UA minimum width can't leak into the page width — the old iOS viewport-latch bug). A
+  placeholder with no release date shows "–", not "in 1970" (`new Date(null)`).
+- Each criterion is a dark card (`RatingSelect`); the selects stay native on purpose —
+  the iOS wheel is the fastest way to pick one of eleven labelled values.
+- Title/year, the weights math and earlier viewings are `DetailSection` rows (ids
+  `rate.*`), replacing two Bootstrap accordions and a white table. Tags are pills with a
+  check when on and a separate 32px × to delete. Submit is full-width green with dark
+  text (white on that green fails contrast).
+- The neighbours strip is now the LAST element, so when pinned it rides the whole form;
+  dark surface, siblings dimmed, no coloured outline. `neighborsPin.test.js` still holds.
+- `data-bs-theme="dark"` on the content wrapper gives the inputs dark chrome and a light
+  select arrow. Tests: `src/test/RateMovieLayout.test.js`.

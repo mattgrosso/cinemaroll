@@ -1,13 +1,13 @@
 <template>
   <div class="rate-movie" :class="{ 'rate-movie-saving': loading }">
+    <!-- Hero, matching the film page (2026-09-30 redesign): the same backdrop
+         size, so arriving from a film's page reuses the image it just loaded. -->
     <div class="rate-movie-header">
-      <div class="home-link" @click="returnHome">
+      <div class="home-link" role="button" aria-label="Back to Home" @click="returnHome">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-caret-left-fill" viewBox="0 0 16 16">
           <path d="m3.86 8.753 5.482 4.796c.646.566 1.658.106 1.658-.753V3.204a1 1 0 0 0-1.659-.753l-5.48 4.796a1 1 0 0 0 0 1.506z"/>
         </svg>
-        <span>
-          Home
-        </span>
+        <span>Home</span>
       </div>
       <img v-if="rateBannerUrl"
            :src="rateBannerUrl"
@@ -16,46 +16,66 @@
       <!-- The heading is the only thing distinguishing an edit from a new
            rating on a screen that otherwise looks identical, and getting that
            wrong means overwriting a viewing you meant to keep. -->
-      <h1 class="text-light m-0 px-3 py-2">{{ isEditing ? 'Edit' : 'Rate' }} {{title}}</h1>
+      <h1 class="rate-title">
+        <span class="rate-kicker">{{ isEditing ? 'Edit rating' : 'Rate' }}</span>
+        {{title}}
+      </h1>
     </div>
-    <div class="rate-movie-content container-fluid">
-      <div class="row p-3">
-      <div class="col-12 mb-0">
-        <label class="form-label fs-4" for="title">Title</label>
-        <input class="form-control" name="title" type="text" id="title" v-model="title">
-        <div class="text-end mt-2">
-          <button class="btn btn-sm btn-outline-secondary" :disabled="movieContextLoading" @click="getMovieContext">
-            <span v-if="movieContextLoading">Thinking...</span>
-            <span v-else>More Context</span>
-          </button>
+
+    <div class="rate-movie-content" data-bs-theme="dark">
+      <!-- The facts strip, as on the film page: the live score with its
+           place in the library, its place in its year, and the watch date.
+           The date tile is a real datetime-local input laid invisibly over
+           the tile, so a tap opens the phone's own picker. -->
+      <div class="fact-strip">
+        <div class="fact fact-score">
+          <span class="fact-value">{{formatScore(rating.calculatedTotal)}}</span>
+          <span class="fact-label">#{{movieIndex + 1}} of {{numberOfMoviesAfterRating}}</span>
         </div>
+        <div class="fact fact-year-rank">
+          <span class="fact-value">{{ releaseYearKnown ? `#${yearIndex + 1}` : '–' }}</span>
+          <span class="fact-label">{{ releaseYearKnown ? `in ${movieYear(movieToRate)}` : 'in its year' }}</span>
+        </div>
+        <label class="fact fact-date" for="date">
+          <span class="fact-value">{{ watchedDay }}</span>
+          <span class="fact-label">{{ watchedLabel }}</span>
+          <input class="fact-overlay-input" name="date" id="date" type="datetime-local" v-model="date">
+        </label>
       </div>
 
-      <div class="col-12 my-3">
-        <div class="row g-3">
-          <div class="col-3">
-            <label class="form-label fs-4" for="year">Year</label>
-            <input class="form-control" name="year" id="year" type="text" v-model="year">
-          </div>
-          <div class="col-4">
-            <label class="form-label fs-4" for="medium">Medium</label>
-            <select class="form-select" name="medium" id="medium" v-model="medium">
-              <option value=""></option>
-              <option value="Theater">Theater</option>
-              <option value="Physical Media">Physical Media</option>
-              <option value="Streaming">Streaming</option>
-              <option value="Download">Download</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          <div class="col-5">
-            <label class="form-label fs-4" for="date">Date</label>
-            <input class="form-control" name="date" id="date" type="datetime-local" v-model="date">
-          </div>
-        </div>
+      <div class="rate-actions">
+        <label class="action-tile action-medium" for="medium">
+          <i class="bi bi-film"></i>
+          <span>{{ medium || 'Medium' }}</span>
+          <select class="fact-overlay-input" name="medium" id="medium" v-model="medium">
+            <option value=""></option>
+            <option value="Theater">Theater</option>
+            <option value="Physical Media">Physical Media</option>
+            <option value="Streaming">Streaming</option>
+            <option value="Download">Download</option>
+            <option value="Other">Other</option>
+          </select>
+        </label>
+        <button type="button" class="action-tile" :disabled="movieContextLoading" @click="getMovieContext">
+          <i class="bi bi-chat-square-text"></i>
+          <span>{{ movieContextLoading ? 'Thinking…' : 'More context' }}</span>
+        </button>
       </div>
 
-      <hr>
+      <DetailSection id="rate.titleYear" label="Title" tone="plain" :summary="titleSummary">
+        <div class="title-fields">
+          <div class="title-field">
+            <label class="field-label" for="title">Title</label>
+            <input class="form-control" name="title" type="text" id="title" v-model="title">
+          </div>
+          <div class="year-field">
+            <label class="field-label" for="year">Year</label>
+            <input class="form-control" name="year" id="year" type="text" inputmode="numeric" v-model="year">
+          </div>
+        </div>
+      </DetailSection>
+
+      <p class="band-title">Your rating</p>
 
       <RatingSelect
         v-for="field in ratingFields"
@@ -67,147 +87,79 @@
         :options="field.options"
       />
 
-      <hr>
-
-      <div class="col-12 my-3">
-        <p class="rating text-center mb-0" id="rating">
-          <span class="fw-bold">Rating: {{formatScore(rating.calculatedTotal)}}</span>
-          <i class="bi bi-info-circle ms-2" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-collapseRatingBreakdown" aria-expanded="true" aria-controls="panelsStayOpen-collapseRatingBreakdown"></i>
-          <span class="mx-2">|</span>
-          <span>#{{indexIfSortedIntoArray(movieAsRatedOnPage, allMoviesRanked) + 1}}/{{numberOfMoviesAfterRating}}</span>
-          <span class="mx-2">|</span>
-          <span>#{{indexIfSortedIntoArray(movieAsRatedOnPage, moviesRankedFromYear) + 1}} in {{movieYear(movieToRate)}}</span>
-        </p>
-      </div>
-
-      <div class="rating-breakdown-accordion accordion" id="ratingBreakdownAccordion">
-        <div class="accordion-item" >
-          <div id="panelsStayOpen-collapseRatingBreakdown" class="accordion-collapse collapse" aria-labelledby="panelsStayOpen-headingRatingBreakdown">
-            <div class="accordion-body">
-              <table class="table table-striped table-bordered">
-                <tbody>
-                  <tr v-for="(value, key) in ratingWithoutDate" :key="key">
-                    <td>{{ key }}</td>
-                    <td>{{ value }}</td>
-                    <td>x</td>
-                    <td>{{ weights[key] }}</td>
-                    <td>=</td>
-                    <td>{{ weights[key] * value }}</td>
-                  </tr>
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td>Total</td>
-                    <td></td>
-                    <td>{{weightedTotal}}</td>
-                  </tr>
-                  <tr>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td>Rating</td>
-                    <td></td>
-                    <td>{{formatScore(rating.calculatedTotal)}}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div class="best-since">
-        <p v-if="lastHigherRatedMovie">
-          <span>This is the best movie you've watched since:</span>
-          <span class="best-since-movie">
-            <strong>{{ lastHigherRatedMovie.title }}</strong>
-            <span v-if="lastHigherRatedMovie.date">&nbsp;({{ relativeTime(lastHigherRatedMovie.date) }})</span>
-          </span>
-        </p>
-        <p v-else>
-          This is your highest rated movie!
-        </p>
+        <template v-if="lastHigherRatedMovie">
+          The best movie you've watched since
+          <strong>{{ lastHigherRatedMovie.title }}</strong><template v-if="lastHigherRatedMovie.date">, {{ relativeTime(lastHigherRatedMovie.date) }}</template>.
+        </template>
+        <template v-else>
+          This would be your highest rated movie.
+        </template>
       </div>
 
-      <div v-if="movieToRate" class="col-12">
-        <div ref="neighbors" class="neighbors" :class="{ unstuck: !neighborsPinned }">
-          <!-- A pin, not the up/down arrows this used to show. Those read as a
-               sort control - reported as exactly that on 2026-08-21: "I'm
-               assuming it's supposed to make that list be sorted ascending or
-               descending". Sorting these makes no sense; the strip is
-               positional (two above, this film, two below, by rating). What
-               the button actually does is pin the strip to the bottom of the
-               screen or let it scroll away. -->
-          <div
-            class="hide-neighbors"
+      <DetailSection id="rate.breakdown" label="The math" tone="you" :summary="`${formatScore(weightedTotal)} weighted, rating ${formatScore(rating.calculatedTotal)}`">
+        <table class="breakdown-table">
+          <tbody>
+            <tr v-for="(value, key) in ratingWithoutDate" :key="key">
+              <td class="breakdown-name">{{ key }}</td>
+              <td>{{ value }}</td>
+              <td class="breakdown-op">×</td>
+              <td>{{ weights[key] }}</td>
+              <td class="breakdown-op">=</td>
+              <td class="breakdown-product">{{ weights[key] * value }}</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td class="breakdown-name" colspan="5">Total</td>
+              <td class="breakdown-product">{{weightedTotal}}</td>
+            </tr>
+            <tr>
+              <td class="breakdown-name" colspan="5">Rating</td>
+              <td class="breakdown-product">{{formatScore(rating.calculatedTotal)}}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </DetailSection>
+
+      <p class="band-title">Tags for this viewing</p>
+      <div class="viewing-tags">
+        <div class="tag-list">
+          <span
+            v-for="tag in viewingTags"
+            :key="tag.title"
+            class="tag-pill"
+            :class="{ selected: viewingTagChecked(tag) }"
             role="button"
             tabindex="0"
-            :title="neighborsPinned ? 'Unpin this strip' : 'Pin this strip to the bottom'"
-            :aria-label="neighborsPinned ? 'Unpin this strip' : 'Pin this strip to the bottom'"
-            @click="toggleNeighbors"
-            @keydown.enter="toggleNeighbors"
-            @keydown.space.prevent="toggleNeighbors"
-          >
-            <i class="bi bi-pin-angle-fill"/>
-            <i class="bi bi-pin-angle"/>
-          </div>
-          <div v-if="neighborTwoAhead" class="neighbor-two-ahead">
-            <img :src="posterUrl(neighborTwoAhead.movie, neighborTwoAhead)" :alt="`${neighborTwoAhead.movie.title} poster`">
-          </div>
-          <div v-if="neighborAhead" class="neighbor-ahead">
-            <img :src="posterUrl(neighborAhead.movie, neighborAhead)" :alt="`${neighborAhead.movie.title} poster`">
-          </div>
-          <div v-if="movieToRate" class="current-movie">
-            <img :src="posterUrl(movieToRate, previousEntry)" :alt="`${movieToRate.title} poster`">
-          </div>
-          <div v-if="neighborBehind" class="neighbor-behind">
-            <img :src="posterUrl(neighborBehind.movie, neighborBehind)" :alt="`${neighborBehind.movie.title} poster`">
-          </div>
-          <div v-if="neighborTwoBehind" class="neighbor-two-behind">
-            <img :src="posterUrl(neighborTwoBehind.movie, neighborTwoBehind)" :alt="`${neighborTwoBehind.movie.title} poster`">
-          </div>
-        </div>
-      </div>
-
-      <hr>
-
-      <div class="col-12 my-3 viewing-tags">
-        <label class="form-label">Tags for this viewing</label>
-        <div class="tag-list d-flex flex-wrap column-gap-2 row-gap-1">
-          <div v-for="(tag, index) in viewingTags" :key="index" class="tag-pill-container">
-            <span
-              class="badge me-1 mb-1 d-inline-flex align-items-center"
-              :class="viewingTagChecked(tag) ? 'text-bg-primary' : 'text-bg-secondary'"
-              @click="toggleViewingTag(tag)"
-              style="cursor: pointer;">
-              {{tag.title}}
-              <button
-                class="btn-close btn-close-white ms-1"
-                @click.stop="deleteViewingTag(tag)"
-                title="Delete tag"
-                style="font-size: 0.5rem; opacity: 0.6;">
-              </button>
-            </span>
-          </div>
+            :aria-pressed="viewingTagChecked(tag) ? 'true' : 'false'"
+            @click="toggleViewingTag(tag)"
+            @keydown.enter="toggleViewingTag(tag)">
+            <i v-if="viewingTagChecked(tag)" class="bi bi-check-lg"></i>
+            {{tag.title}}
+            <button
+              type="button"
+              class="tag-delete"
+              @click.stop="deleteViewingTag(tag)"
+              :aria-label="`Delete tag ${tag.title}`"
+              title="Delete tag">
+              <i class="bi bi-x"></i>
+            </button>
+          </span>
         </div>
 
-        <div class="input-group mt-2">
-          <input type="text" class="form-control" placeholder="Add new tag" v-model="newViewingTagTitle" @keyup.enter.prevent="addViewingTag">
-          <button class="btn btn-outline-primary" type="button" @click.prevent="addViewingTag">
-            <i class="bi bi-plus"></i> Add
+        <div class="tag-add">
+          <input type="text" class="form-control" placeholder="Add a new tag" v-model="newViewingTagTitle" @keyup.enter.prevent="addViewingTag">
+          <button class="tag-add-button" type="button" :disabled="!newViewingTagTitle" @click.prevent="addViewingTag">
+            <i class="bi bi-plus-lg"></i> Add
           </button>
         </div>
       </div>
 
-      <hr>
-
-      <p v-if="submitError" class="text-danger text-center mb-2">{{ submitError }}</p>
+      <p v-if="submitError" class="submit-error">{{ submitError }}</p>
 
       <button
-        class="submit-button btn btn-primary col-12 mt-5 mb-4"
+        class="submit-button"
         @click.prevent="addRating"
         type="submit"
         value="Submit"
@@ -217,57 +169,68 @@
         <span v-if="loading" class="disabled-show spinner-border spinner-border-sm mx-2" role="status" aria-hidden="true"></span>
         <span v-if="loading" class="disabled-show ">{{ isEditing ? 'Saving…' : 'Submitting…' }}</span>
       </button>
-    </div>
 
-    <div v-if="getAllRatings(previousEntry)" class="previous-ratings my-3 mb-5 px-4 pt-3 pb-5">
-      <label class="fs-4">Previous Viewings</label>
-      <div class="accordion" id="previous-ratings-accordion">
-        <div class="accordion-item" v-for="(rating, index) in getAllRatings(previousEntry)" :key="index">
-          <h2 class="accordion-header" :id="`heading-${index}`">
-            <button class="accordion-button px-5" type="button" data-bs-toggle="collapse" :data-bs-target="`#collapse-${index}`" aria-expanded="false" :aria-controls="`collapse-${index}`">
-              <div class="col-12 d-flex">
-                <p class="col-7 m-0 text-start border-end">
-                  <span v-if="rating.date">{{ new Date(rating.date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) }}</span>
-                  <span v-else>-</span>
-                </p>
-                <p class="col-5 m-0 text-center border-start">{{formatScore(rating.calculatedTotal)}}</p>
-              </div>
-            </button>
-          </h2>
-          <div :id="`collapse-${index}`" class="accordion-collapse collapse" :aria-labelledby="`heading-${index}`">
-            <div class="accordion-body">
-              <table class="table mb-0 col-12 table-striped-columns">
-                <thead>
-                  <tr>
-                    <th class="col-1"><span>dir</span></th>
-                    <th class="col-1"><span>img</span></th>
-                    <th class="col-1"><span>stry</span></th>
-                    <th class="col-1"><span>perf</span></th>
-                    <th class="col-1"><span>sndtk</span></th>
-                    <th class="col-1"><span>stick</span></th>
-                    <th class="col-1"><span>love</span></th>
-                    <th class="col-1"><span>ovral</span></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr class="table-secondary">
-                    <td class="col-1">{{rating.direction}}</td>
-                    <td class="col-1">{{rating.imagery}}</td>
-                    <td class="col-1">{{rating.story}}</td>
-                    <td class="col-1">{{rating.performance}}</td>
-                    <td class="col-1">{{rating.soundtrack}}</td>
-                    <td class="col-1">{{rating.stickiness}}</td>
-                    <td class="col-1">{{rating.love}}</td>
-                    <td class="col-1">{{rating.overall}}</td>
-                  </tr>
-                </tbody>
-              </table>
+      <DetailSection
+        v-if="previousViewings.length"
+        id="rate.previousViewings"
+        class="previous-ratings"
+        label="Viewings"
+        tone="you"
+        :summary="previousViewingsSummary">
+        <div v-for="(viewing, index) in previousViewings" :key="index" class="previous-viewing">
+          <div class="previous-viewing-head">
+            <span>{{ viewing.date ? shortDate(viewing.date) : 'No date' }}</span>
+            <strong>{{formatScore(viewing.calculatedTotal)}}</strong>
+          </div>
+          <div class="previous-viewing-grid">
+            <div v-for="criterion in previousCriteria" :key="criterion.key" class="previous-cell">
+              <span class="previous-cell-label">{{ criterion.short }}</span>
+              <span class="previous-cell-value">{{ viewing[criterion.key] ?? '–' }}</span>
             </div>
           </div>
         </div>
+      </DetailSection>
+
+      <!-- Two above, this film, two below, by rating. Last, so the sticky
+           strip has the whole form to ride along over. -->
+      <div v-if="movieToRate" ref="neighbors" class="neighbors" :class="{ unstuck: !neighborsPinned }">
+        <!-- A pin, not the up/down arrows this used to show. Those read as a
+             sort control - reported as exactly that on 2026-08-21: "I'm
+             assuming it's supposed to make that list be sorted ascending or
+             descending". Sorting these makes no sense; the strip is
+             positional (two above, this film, two below, by rating). What
+             the button actually does is pin the strip to the bottom of the
+             screen or let it scroll away. -->
+        <div
+          class="hide-neighbors"
+          role="button"
+          tabindex="0"
+          :title="neighborsPinned ? 'Unpin this strip' : 'Pin this strip to the bottom'"
+          :aria-label="neighborsPinned ? 'Unpin this strip' : 'Pin this strip to the bottom'"
+          @click="toggleNeighbors"
+          @keydown.enter="toggleNeighbors"
+          @keydown.space.prevent="toggleNeighbors"
+        >
+          <i class="bi bi-pin-angle-fill"/>
+          <i class="bi bi-pin-angle"/>
+        </div>
+        <div v-if="neighborTwoAhead" class="neighbor-two-ahead">
+          <img :src="posterUrl(neighborTwoAhead.movie, neighborTwoAhead)" :alt="`${neighborTwoAhead.movie.title} poster`">
+        </div>
+        <div v-if="neighborAhead" class="neighbor-ahead">
+          <img :src="posterUrl(neighborAhead.movie, neighborAhead)" :alt="`${neighborAhead.movie.title} poster`">
+        </div>
+        <div v-if="movieToRate" class="current-movie">
+          <img :src="posterUrl(movieToRate, previousEntry)" :alt="`${movieToRate.title} poster`">
+        </div>
+        <div v-if="neighborBehind" class="neighbor-behind">
+          <img :src="posterUrl(neighborBehind.movie, neighborBehind)" :alt="`${neighborBehind.movie.title} poster`">
+        </div>
+        <div v-if="neighborTwoBehind" class="neighbor-two-behind">
+          <img :src="posterUrl(neighborTwoBehind.movie, neighborTwoBehind)" :alt="`${neighborTwoBehind.movie.title} poster`">
+        </div>
       </div>
-      </div><!-- end row -->
-    </div><!-- end container-fluid -->
+    </div>
 
     <!-- Movie Context Modal -->
     <div v-if="movieContext" class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" @click.self="closeContextModal">
@@ -279,7 +242,7 @@
           </div>
           <div class="modal-body">
             <p class="text-light fst-italic mb-3">{{ movieContext }}</p>
-            <p class="text-secondary small mb-0">Generated by Claude — take it with a grain of salt.</p>
+            <p class="modal-note small mb-0">Generated by Claude — take it with a grain of salt.</p>
           </div>
         </div>
       </div>
@@ -295,7 +258,8 @@
           </div>
           <div class="modal-body">
             <p class="text-light">Are you sure you want to delete the tag <strong>"{{ tagToDelete?.title }}"</strong>?</p>
-            <p class="text-muted small mb-0">This will remove it from your tag list permanently.</p>
+            <!-- #ccc, not .text-muted: Bootstrap's grey fails on this dark panel. -->
+            <p class="modal-note small mb-0">This will remove it from your tag list permanently.</p>
           </div>
           <div class="modal-footer border-secondary">
             <button class="btn btn-secondary" @click="showDeleteModal = false">Cancel</button>
@@ -317,6 +281,7 @@ import { announceLoggedMovie } from '../utils/push.js';
 import { isPlaceholderId } from '../utils/placeholderId.js';
 import { countViewingTagUsage, sortVocabularyByUsage } from "../utils/tags.js";
 import RatingSelect from "./RatingSelect.vue";
+import DetailSection from "./DetailSection.vue";
 import notFoundImage from "../assets/images/Image_not_available.png";
 
 // Option label text for each rating scale, indexed by option value ("0", "1"…).
@@ -372,8 +337,20 @@ const RATING_FIELDS = [
   { key: "overall", label: "Overall", description: "Gut sense of the film's overall rating.", options: STANDARD_OPTIONS }
 ];
 
+// The previous-viewings grid, in the order the old table's columns ran.
+const PREVIOUS_CRITERIA = [
+  { key: "direction", short: "Dir" },
+  { key: "imagery", short: "Img" },
+  { key: "story", short: "Story" },
+  { key: "performance", short: "Perf" },
+  { key: "soundtrack", short: "Sound" },
+  { key: "stickiness", short: "Stick" },
+  { key: "love", short: "Love" },
+  { key: "overall", short: "Overall" }
+];
+
 export default {
-  components: { RatingSelect },
+  components: { RatingSelect, DetailSection },
   data () {
     return {
       // Whether the neighbours strip is pinned to the bottom of the screen.
@@ -399,7 +376,6 @@ export default {
       selectedViewingTags: [],
       title: null,
       year: null,
-      getAllRatings,
       dbEntry: null,
       chatGPTKeywords: [],
       movieContext: null,
@@ -407,6 +383,7 @@ export default {
       showDeleteModal: false,
       tagToDelete: null,
       ratingFields: RATING_FIELDS,
+      previousCriteria: PREVIOUS_CRITERIA,
       submitError: null
     }
   },
@@ -509,6 +486,35 @@ export default {
     movieIndex () {
       return this.indexIfSortedIntoArray(this.movieAsRatedOnPage, this.allMoviesRanked);
     },
+    yearIndex () {
+      return this.indexIfSortedIntoArray(this.movieAsRatedOnPage, this.moviesRankedFromYear);
+    },
+    // An offline placeholder has no release date, and new Date(null) is
+    // 1970 — the year tile would rank it among the films of 1970.
+    releaseYearKnown () {
+      return Boolean(this.movieToRate?.release_date);
+    },
+    watchedAt () {
+      const when = this.date ? new Date(this.date) : null;
+      return when && !Number.isNaN(when.getTime()) ? when : null;
+    },
+    watchedDay () {
+      return this.watchedAt ? this.watchedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Today';
+    },
+    watchedLabel () {
+      if (!this.watchedAt || this.watchedAt.getFullYear() === new Date().getFullYear()) return 'watched';
+      return `watched ${this.watchedAt.getFullYear()}`;
+    },
+    titleSummary () {
+      return [this.title, this.year].filter(Boolean).join(' · ');
+    },
+    previousViewings () {
+      return getAllRatings(this.previousEntry) || [];
+    },
+    previousViewingsSummary () {
+      const count = this.previousViewings.length;
+      return `${count} logged`;
+    },
     neighborAhead () {
       const index = this.movieIndex - 1;
       return index >= 0 ? this.allMoviesRanked[index] : undefined;
@@ -576,7 +582,8 @@ export default {
         if (!backdropPath) {
           return false;
         }
-        return `https://image.tmdb.org/t/p/w500${backdropPath}`;
+        // w1280, the film page's size: arriving from there, it's already cached.
+        return `https://image.tmdb.org/t/p/w1280${backdropPath}`;
       } else {
         return false;
       }
@@ -629,6 +636,9 @@ export default {
   },
   methods: {
     formatScore,
+    shortDate (date) {
+      return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    },
     movieYear (movie) {
       return new Date(movie.release_date).getFullYear();
     },
@@ -937,7 +947,14 @@ export default {
 </script>
 
 <style lang="scss">
+  /* 2026-09-30: restyled in the film page's language (Matt: "take the styling
+     changes that we've made other places, especially the ones recently in
+     the movie detail page, and apply a similar redesign to the rate a movie
+     page"). Dark tiles at rgba(255,255,255,.06), uppercase .62rem labels in
+     #ccc, folded DetailSection rows, :active press states only. */
   .rate-movie {
+    color: #fff;
+
     .rate-movie-header {
       position: relative;
       height: 200px;
@@ -945,24 +962,38 @@ export default {
 
       .home-link {
         align-items: center;
-        background: rgba(0, 0, 0, 0.5);
-        border-radius: 4px;
         color: white;
+        column-gap: 4px;
         cursor: pointer;
         display: flex;
-        font-size: 1rem;
-        left: 0;
-        margin: 6px;
-        padding: 2px 8px;
+        left: 12px;
         position: absolute;
-        text-decoration: none;
-        top: 0;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+        top: 12px;
+        z-index: 10;
+
+        &:active { opacity: 0.6; }
       }
 
-      h1 {
-        background-color: #000000a3;
+      .rate-title {
+        background-color: rgba(0, 0, 0, 0.5);
         bottom: 0;
+        color: #fff;
+        font-size: 1.75rem;
+        line-height: 1.15;
+        margin: 0;
+        padding: 6px 12px;
         position: absolute;
+        right: 0;
+      }
+
+      .rate-kicker {
+        color: #6fd39b;
+        display: block;
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
       }
 
       .backdrop-image {
@@ -975,9 +1006,12 @@ export default {
     .rate-movie-content {
       margin: 0 auto;
       max-width: 650px;
+      /* No bottom padding: the pinned neighbours strip is the last thing on
+         the page and has to reach the bottom edge. */
+      padding: 1rem 1rem 0;
     }
 
-    // Form controls must never exceed their grid column. Inputs/selects have a
+    // Form controls must never exceed their container. Inputs/selects have a
     // UA-imposed intrinsic minimum width (datetime-local is the worst offender —
     // it reserves room for "MM/DD/YYYY, --:-- --"); in a narrow column that
     // min-width beats `width: 100%` and the field's box pokes past the right
@@ -990,49 +1024,327 @@ export default {
       max-width: 100%;
     }
 
-    .rating {
-      i {
-        cursor: pointer;
-      }
+    .fact-strip,
+    .rate-actions {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin: 0 0 8px;
+    }
+
+    .rate-actions {
+      grid-template-columns: repeat(2, 1fr);
+      margin-bottom: 14px;
+    }
+
+    .fact,
+    .action-tile {
+      align-items: center;
+      background: rgba(255, 255, 255, 0.06);
+      border: 0;
+      border-radius: 6px;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      margin: 0;
+      min-width: 0;
+      /* Contains the invisible overlay input below, so its UA minimum width
+         can't leak into the page's scroll width (see the form-control note). */
+      overflow: hidden;
+      position: relative;
+      text-align: center;
+    }
+
+    .fact {
+      gap: 2px;
+      min-height: 64px;
+      padding: 10px 6px 8px;
+    }
+
+    .fact-date:active,
+    .action-tile:active { background: rgba(255, 255, 255, 0.12); }
+
+    .fact-value {
+      font-size: 1.35rem;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .fact-label {
+      color: #ccc;
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .fact-score .fact-value { color: #6fd39b; }
+
+    .action-tile {
+      font-size: 0.7rem;
+      gap: 4px;
+      letter-spacing: 0.04em;
+      min-height: 56px;
+      padding: 8px 6px;
+      text-transform: uppercase;
+
+      i { font-size: 1.15rem; line-height: 1; }
+      &:disabled { color: #ccc; }
+    }
+
+    /* The real control, laid over its tile and invisible: the tile shows the
+       value, the tap opens the phone's own date or option picker. */
+    .fact-overlay-input {
+      cursor: pointer;
+      font-size: 16px; /* under 16px, iOS zooms the page on focus */
+      height: 100%;
+      inset: 0;
+      opacity: 0;
+      position: absolute;
+      width: 100%;
+    }
+
+    .band-title {
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 18px 0 8px;
+    }
+
+    .title-fields {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) 5.5rem;
+    }
+
+    .field-label {
+      color: #ccc;
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
+      margin-bottom: 2px;
+      text-transform: uppercase;
+    }
+
+    .form-control,
+    .form-select {
+      background-color: #1c1c1c;
+      border-color: rgba(255, 255, 255, 0.15);
+      color: #fff;
+      font-size: 16px;
+
+      &::placeholder { color: #9a9a9a; }
     }
 
     .best-since {
-      padding: 0.5rem;
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 6px;
+      color: #ccc;
+      font-size: 0.85rem;
+      line-height: 1.35;
+      margin: 4px 0 10px;
+      padding: 10px 12px;
 
-      span {
-        display: block;
+      strong { color: #fff; }
+    }
+
+    .breakdown-table {
+      font-size: 0.75rem;
+      font-variant-numeric: tabular-nums;
+      width: 100%;
+
+      td {
+        color: #ccc;
+        padding: 2px 4px;
+        text-align: right;
       }
 
-      .best-since-movie {
-        display: flex;
-        justify-content: center;
-        align-items: center;
+      .breakdown-name { color: #fff; text-align: left; text-transform: capitalize; }
+      .breakdown-op { color: #9a9a9a; text-align: center; }
+      .breakdown-product { color: #fff; }
+
+      tfoot td {
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        font-weight: 700;
       }
+    }
+
+    .viewing-tags {
+      margin-bottom: 18px;
+    }
+
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .tag-pill {
+      align-items: center;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      color: #fff;
+      cursor: pointer;
+      display: inline-flex;
+      font-size: 0.85rem;
+      gap: 4px;
+      min-height: 36px;
+      padding: 0 0 0 12px;
+
+      &:active { background: rgba(255, 255, 255, 0.12); }
+
+      &.selected {
+        background: rgba(111, 211, 155, 0.18);
+        border-color: #6fd39b;
+        color: #fff;
+
+        .bi-check-lg { color: #6fd39b; }
+      }
+    }
+
+    .tag-delete {
+      align-items: center;
+      background: none;
+      border: 0;
+      color: #9a9a9a;
+      display: inline-flex;
+      font-size: 1rem;
+      justify-content: center;
+      min-height: 36px;
+      min-width: 32px;
+      padding: 0 6px 0 2px;
+
+      &:active { color: #fff; }
+    }
+
+    .tag-add {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+
+      .form-control { flex: 1 1 auto; }
+    }
+
+    .tag-add-button {
+      background: rgba(255, 255, 255, 0.06);
+      border: 0;
+      border-radius: 6px;
+      color: #6fd39b;
+      flex: 0 0 auto;
+      min-height: 40px;
+      padding: 0 14px;
+
+      &:active { background: rgba(255, 255, 255, 0.12); }
+      &:disabled { color: #9a9a9a; }
+    }
+
+    .submit-error {
+      color: #ff8a8a;
+      margin: 0 0 8px;
+      text-align: center;
+    }
+
+    .submit-button {
+      align-items: center;
+      background: #6fd39b;
+      border: 0;
+      border-radius: 8px;
+      color: #0d0d0d; /* dark on the green: ~11:1, where white would be ~1.9:1 */
+      display: flex;
+      font-size: 1rem;
+      font-weight: 700;
+      justify-content: center;
+      letter-spacing: 0.02em;
+      margin: 8px 0 18px;
+      min-height: 52px;
+      width: 100%;
+
+      &:active { background: #5bbd88; }
+
+      &[disabled] {
+        opacity: 0.8;
+
+        .disabled-show {
+          display: inline-block;
+        }
+      }
+
+      .disabled-show {
+        display: none;
+      }
+    }
+
+    .previous-ratings {
+      margin-bottom: 18px;
+    }
+
+    .previous-viewing {
+      padding: 6px 0;
+
+      & + .previous-viewing { border-top: 1px solid rgba(255, 255, 255, 0.06); }
+    }
+
+    .previous-viewing-head {
+      display: flex;
+      font-size: 0.85rem;
+      justify-content: space-between;
+      margin-bottom: 4px;
+
+      span { color: #ccc; }
+    }
+
+    .previous-viewing-grid {
+      display: grid;
+      gap: 4px;
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    .previous-cell {
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+      padding: 3px 0;
+      text-align: center;
+    }
+
+    .previous-cell-label {
+      color: #ccc;
+      font-size: 0.58rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .previous-cell-value {
+      font-size: 0.85rem;
+      font-variant-numeric: tabular-nums;
     }
 
     .neighbors {
       align-items: center;
-      background: #212529;
-      border-bottom: 1px solid white;
-      border-top: 1px solid white;
+      background: rgba(18, 18, 18, 0.96);
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
       display: flex;
       justify-content: space-between;
-      margin: 0 -1rem; /* Extend to edges, counteracting parent p-3 padding */
-      padding: 6px;
+      margin: 0 -1rem; /* Extend to edges, counteracting the content's 1rem padding */
+      padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
       /* Pinned to the bottom of the viewport while you scroll the form, so
          where this film sits against its neighbours stays visible the whole
-         time you're moving sliders. That is the entire point of the strip, and
+         time you're choosing scores. That is the entire point of the strip, and
          of the pin button.
-         Restored 2026-08-21: "Cleans up layout for rate movie form" (6020426,
-         2025-09-06) swapped this for `position: relative` during a 267-line
+         Restored 2026-08-21: "Cleans up layout for rate movie form" (2025-09-06)
+         swapped this for `position: relative` during a 267-line
          refactor. That silently made the pin button a no-op — `.unstuck` below
          sets `position: relative` too, so both of its states were identical
          and only the icon changed. It stayed that way for eleven months, until
          a bug report: "I press this little up/down arrow... it doesn't do
          anything." The toggle was left in place by that commit, which is what
-         makes it collateral rather than a decision. */
+         makes it collateral rather than a decision.
+         Since 2026-09-30 it is the last thing on the page, so it rides along
+         over the whole form instead of letting go halfway down. */
       bottom: 0;
       position: sticky;
+      z-index: 5;
 
       &.unstuck {
         /* Released: back into normal flow, scrolling away with the page.
@@ -1058,16 +1370,26 @@ export default {
       }
 
       .hide-neighbors {
+        align-items: center;
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 50%;
         cursor: pointer;
+        display: flex;
+        height: 32px;
+        justify-content: center;
         position: absolute;
-        right: 10px;
-        top: 3px;
+        right: 8px;
+        top: 8px;
+        width: 32px;
+
+        &:active { background: rgba(255, 255, 255, 0.2); }
       }
 
       .neighbor-two-ahead,
       .neighbor-ahead,
       .neighbor-behind,
       .neighbor-two-behind {
+        opacity: 0.75;
         width: 18%;
         padding: 0 2px;
       }
@@ -1078,76 +1400,12 @@ export default {
       }
 
       img {
+        border-radius: 4px;
         max-width: 100%;
       }
     }
 
-    .rating-breakdown-accordion {
-      .accordion-item {
-        border: 0;
-
-        .accordion-collapse.show {
-          margin-bottom: 1rem;
-        }
-      }
-
-      table {
-        font-size: 0.75rem;
-
-        td:nth-child(1) {
-          text-align: right;
-        }
-
-        tfoot {
-          td {
-            font-weight: bold;
-          }
-        }
-      }
-    }
-
-    .submit-button {
-      &[disabled] {
-        .disabled-show {
-          display: inline-block;
-        }
-      }
-
-      .disabled-show {
-        display: none;
-      }
-    }
-
-    .previous-ratings {
-      .accordion-button {
-        background-color: white;
-        color: black;
-
-        &:focus {
-          box-shadow: none;
-        }
-      }
-
-      table {
-        th {
-          span {
-            display: inline-block;
-            font-size: 0.6rem;
-            transform: rotate(60deg);
-          }
-        }
-
-        td {
-          font-size: 0.6rem;
-        }
-      }
-    }
-  }
-
-  .bg-dark {
-    .rate-movie {
-      color: white;
-    }
+    .modal-note { color: #ccc; }
   }
 </style>
 
