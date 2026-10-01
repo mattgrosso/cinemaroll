@@ -9,9 +9,9 @@
 //      Subscriptions persist under `{topKey}/push/subscriptions/{id}` via
 //      store actions; the id is a hash of the endpoint so re-subscribing
 //      the same device updates in place instead of accumulating.
-//   3. Talk to the push Lambda (aws-lambda/push-notify.js) for the two
-//      client-initiated sends: the friend-log fan-out and the settings
-//      screen's test notification. Same authenticated-post shape as
+//   3. Talk to the push Lambda (aws-lambda/push-notify.js) for the
+//      client-initiated sends: the friend-log fan-out, friend requests, and
+//      the settings screen's test notification. Same authenticated-post shape as
 //      utils/aiRequest.js — a Firebase ID token is the gate, CORS is not.
 
 import axios from 'axios';
@@ -178,5 +178,20 @@ export async function announceLoggedMovie ({ tmdbId, title, score }) {
     await postToPushApi('/push/friend-logged', { tmdbId, title, score });
   } catch (e) {
     console.warn('Friend-log push announcement failed (non-fatal):', e?.message);
+  }
+}
+
+/**
+ * Fire-and-forget after sending a friend request (kind 'request') or
+ * accepting one (kind 'accepted'): the other person gets a push. The Lambda
+ * checks the friend graph before sending, so this only announces. Never
+ * throws — the friendship itself is already saved.
+ */
+export async function announceFriendRequest ({ toKey, kind }) {
+  if (!pushApiConfigured()) return;
+  try {
+    await postToPushApi('/push/friend-request', { toKey, kind });
+  } catch (e) {
+    console.warn('Friend-request push failed (non-fatal):', e?.message);
   }
 }

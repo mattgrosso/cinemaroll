@@ -394,6 +394,42 @@ function friendLogBody (scoreLine, prefs) {
   return prefs && prefs.friendLogScores === false ? quiet : scoreLine;
 }
 
+// --- Friend requests --------------------------------------------------------
+//
+// Matt, 2026-10-01: "I should get a notification so I know that they're in my
+// film club now." Two moments, both announced by the client that made them
+// and CHECKED here against the friend graph, so a caller can only ever
+// trigger a push about something that is really true:
+//   'request'  - I sent toKey a request: my edge to them exists, their inbox
+//                holds it, and theirs to me doesn't (that would be a friendship).
+//   'accepted' - I accepted toKey's request: both edges now exist.
+// Returns { title, body, navigate, tag } or null. The tag is per sender, so a
+// repeated announcement replaces the notification instead of stacking.
+const FRIEND_REQUEST_KINDS = ['request', 'accepted'];
+
+function friendRequestMessage ({ kind, myKey, toKey, edges, request, name }) {
+  if (!FRIEND_REQUEST_KINDS.includes(kind) || !myKey || !toKey || myKey === toKey) return null;
+  const mine = edges?.[myKey]?.[toKey];
+  const theirs = edges?.[toKey]?.[myKey];
+  const who = (typeof name === 'string' && name.trim()) || 'Someone';
+  if (kind === 'request') {
+    if (!mine || theirs || !request) return null;
+    return {
+      title: `${who} sent you a friend request`,
+      body: 'Open Film Club to accept it.',
+      navigate: '/film-club',
+      tag: `friend-request-${myKey}`
+    };
+  }
+  if (!mine || !theirs) return null;
+  return {
+    title: `${who} accepted your friend request`,
+    body: "They're in your Film Club now.",
+    navigate: '/film-club',
+    tag: `friend-accepted-${myKey}`
+  };
+}
+
 // --- End-of-day friends -----------------------------------------------------
 //
 // Matt, 2026-09-30: some of his Film Club are coworkers, and "I would rather
@@ -1328,6 +1364,7 @@ module.exports = {
   emailGuessFromKey,
   composeSignupMessages,
   friendLogBody,
+  friendRequestMessage,
   DAY_FRIEND,
   localDayStart,
   nextLocalMidnight,

@@ -215,7 +215,8 @@ it isn't. The script uses `~/aws-cli/aws` (the PATH `aws` is Intel on this Mac).
 ## The push Lambda (`aws-lambda/push-notify.js`, deployed as `cinemaroll-push`)
 
 Web push notifications (2026-08-27). Same auth pattern as the AI lambda — Firebase ID
-token verified with node crypto for the HTTP routes (`/push/test`, `/push/friend-logged`)
+token verified with node crypto for the HTTP routes (`/push/test`, `/push/friend-logged`,
+`/push/friend-request`)
 — plus a second entry mode: an EventBridge rule (`cinemaroll-push-hourly`, now
 `rate(15 minutes)` — the name is historical) that runs the chore sweep with **admin**
 RTDB access. Admin access
@@ -534,6 +535,18 @@ what's missing — profiles are ~100KB each.
 Friend-log body: `prefs.friendLogScores` (default on) is the RECIPIENT's choice to hear
 about the film without the number; a null score is the rater's sharing tier. Both cases
 live in `pushCadence.friendLogBody`, where the tests are.
+
+### Friend-request pushes (2026-10-01)
+
+"I should get a notification so I know that they're in my film club now." Store
+`sendFriendRequest` / `acceptFriendRequest` call `announceFriendRequest` (push.js,
+fire-and-forget) AFTER their writes; `POST /push/friend-request` { toKey, kind:
+'request' | 'accepted' } re-reads the graph and `pushCadence.friendRequestMessage`
+(tested) refuses anything the graph doesn't show — a request needs my edge, their
+inbox entry and no edge back; an acceptance needs both edges. Gated only on the
+recipient's master switch (`prefs.enabled`), not `friendLogs`; tap opens `/film-club`;
+tag per sender so repeats replace. QA accounts never receive one.
+`FriendRequestPush.test.js` pins the ordering.
 
 ### End-of-day friends (2026-09-30)
 

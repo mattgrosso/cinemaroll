@@ -5,6 +5,8 @@
 //        POST /push/test          - test notification to the caller's devices
 //        POST /push/friend-logged - fan a "friend logged a movie" push out to
 //                                   the caller's MUTUAL friends who opted in
+//        POST /push/friend-request - tell one person the caller sent them a
+//                                   friend request, or accepted theirs
 //   2. Scheduled (EventBridge, every 15 min): the chore sweep. Reads each
 //      account's `{topKey}/push/` node - prefs, subscriptions, and the
 //      DIGEST the app itself published (src/assets/javascript/pushDigest.js;
@@ -32,7 +34,7 @@
 const crypto = require('crypto');
 const webpush = require('web-push');
 const {
-  dueFromDigest, nextBaseline, shouldSend, composeMessage, friendLogBody, EMPTY_BASELINE,
+  dueFromDigest, nextBaseline, shouldSend, composeMessage, friendLogBody, friendRequestMessage, EMPTY_BASELINE,
   DAY_FRIEND, localDayStart, dayProfileFrom, dayFriendsByOwner, dayCopyDue, dayNews, composeDayMessage,
   gamesDue, shouldSendGames, composeGamesMessage,
   externalWatches, externalLogsDue,
@@ -852,6 +854,29 @@ const notifyFriendsOfLog = async (myKey, { tmdbId, title, score }) => {
   return { notified };
 };
 
+// --- Friend requests --------------------------------------------------------
+//
+// The client announces a request it just sent or accepted; whether that's
+// true is checked against the graph (friendRequestMessage), never trusted.
+// Only the master switch applies: a friend request is not a friend's log.
+const notifyFriendRequest = async (myKey, { toKey, kind }) => {
+  if (typeof toKey !== 'string' || !toKey || toKey.includes('/') || QA_ACCOUNT_KEYS.has(toKey)) return { notified: 0 };
+
+  const [edges, request, myProfileName, myDirectory] = await Promise.all([
+    dbGet('social/friends'),
+    dbGet(`social/requests/${toKey}/${myKey}`),
+    dbGet(`social/profiles/${myKey}/name`),
+    dbGet(`social/directory/${myKey}/name`)
+  ]);
+  const name = myProfileName || myDirectory || request?.name;
+  const message = friendRequestMessage({ kind, myKey, toKey, edges, request, name });
+  if (!message) return { notified: 0 };
+
+  const push = await dbGet(`${toKey}/push`);
+  if (!push || !push.subscriptions || push.prefs?.enabled === false) return { notified: 0 };
+  return { notified: await sendToAccount(toKey, push.subscriptions, buildPayload(message)) };
+};
+
 // --- End-of-day friends -----------------------------------------------------
 //
 // "I would rather not see exactly when I watch a movie" (Matt, 2026-09-30).
@@ -1034,6 +1059,10 @@ exports.handler = async (event) => {
     if (path.endsWith('/push/friend-logged')) {
       const result = await notifyFriendsOfLog(myKey, body);
       return response(200, result);
+    }
+
+    if (path.endsWith('/push/friend-request')) {
+      return response(200, await notifyFriendRequest(myKey, body));
     }
 
     return response(404, { error: 'Unknown route' });

@@ -43,6 +43,7 @@ import { buildPushDigest } from "../assets/javascript/pushDigest.js";
 import { appBadgeCount } from "../assets/javascript/appBadge.js";
 import { buildNewsletterProfile } from "../assets/javascript/newsletterProfile.js";
 import { postToNewsletter } from "../utils/newsletterRequest.js";
+import { announceFriendRequest } from "../utils/push.js";
 
 // A rebuild takes about a minute end to end (measured at ~52s against the
 // real APIs), so the poll has to outlast that with room to spare without
@@ -2884,6 +2885,8 @@ export default createStore({
         name: context.getters.socialSettings.displayName || 'A Cinema Roll user',
         at: Date.now()
       });
+      // Not awaited: the request is saved; the push is a courtesy.
+      announceFriendRequest({ toKey, kind: 'request' });
     },
     async cancelFriendRequest (context, toKey) {
       const me = context.getters.socialUserKey;
@@ -2898,6 +2901,9 @@ export default createStore({
       if (!me || !fromKey) return;
       await set(ref(db, `social/friends/${me}/${fromKey}`), true);
       await set(ref(db, `social/requests/${me}/${fromKey}`), null);
+      // "I should get a notification so I know that they're in my film club
+      // now" (2026-10-01). After both writes, so the Lambda sees the edge.
+      announceFriendRequest({ toKey: fromKey, kind: 'accepted' });
       context.dispatch('fetchFriendProfiles');
     },
     async declineFriendRequest (context, fromKey) {

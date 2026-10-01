@@ -7,6 +7,7 @@ import {
   shouldSend,
   composeMessage,
   friendLogBody,
+  friendRequestMessage,
   stickinessLead,
   EMPTY_BASELINE,
   localDateKey,
@@ -448,6 +449,54 @@ describe('friendLogBody', () => {
 
   it('has nothing to hide when the rater does not share ratings', () => {
     expect(friendLogBody(null, { friendLogScores: true })).toBe('Tap to see it in their library.');
+  });
+});
+
+// "I should get a notification so I know that they're in my film club now"
+// (2026-10-01). The client announces; the graph decides whether it's true.
+describe('friendRequestMessage', () => {
+  const sent = { me: { them: true } };
+  const mutual = { me: { them: true }, them: { me: true } };
+  const request = { name: 'Seth', at: 1 };
+
+  it('tells the requester their request was accepted once both edges exist', () => {
+    const message = friendRequestMessage({ kind: 'accepted', myKey: 'me', toKey: 'them', edges: mutual, name: 'Seth' });
+    expect(message.title).toBe('Seth accepted your friend request');
+    expect(message.body).toBe("They're in your Film Club now.");
+    expect(message.navigate).toBe('/film-club');
+  });
+
+  it('counts an end-of-day edge as a friendship', () => {
+    const edges = { me: { them: 'day' }, them: { me: true } };
+    expect(friendRequestMessage({ kind: 'accepted', myKey: 'me', toKey: 'them', edges, name: 'Seth' })).not.toBeNull();
+  });
+
+  it('refuses an acceptance the graph does not show', () => {
+    expect(friendRequestMessage({ kind: 'accepted', myKey: 'me', toKey: 'them', edges: sent, name: 'Seth' })).toBeNull();
+    expect(friendRequestMessage({ kind: 'accepted', myKey: 'me', toKey: 'them', edges: {}, name: 'Seth' })).toBeNull();
+  });
+
+  it('tells someone about a request waiting in their inbox', () => {
+    const message = friendRequestMessage({ kind: 'request', myKey: 'me', toKey: 'them', edges: sent, request, name: 'Seth' });
+    expect(message.title).toBe('Seth sent you a friend request');
+    expect(message.navigate).toBe('/film-club');
+  });
+
+  it('refuses a request that was cancelled, never made, or is already a friendship', () => {
+    expect(friendRequestMessage({ kind: 'request', myKey: 'me', toKey: 'them', edges: sent, request: null, name: 'Seth' })).toBeNull();
+    expect(friendRequestMessage({ kind: 'request', myKey: 'me', toKey: 'them', edges: {}, request, name: 'Seth' })).toBeNull();
+    expect(friendRequestMessage({ kind: 'request', myKey: 'me', toKey: 'them', edges: mutual, request, name: 'Seth' })).toBeNull();
+  });
+
+  it('refuses unknown kinds and messages to yourself', () => {
+    expect(friendRequestMessage({ kind: 'poke', myKey: 'me', toKey: 'them', edges: mutual, name: 'Seth' })).toBeNull();
+    expect(friendRequestMessage({ kind: 'accepted', myKey: 'me', toKey: 'me', edges: { me: { me: true } }, name: 'Seth' })).toBeNull();
+  });
+
+  it('tags by sender so a repeat replaces rather than stacks, and survives a missing name', () => {
+    const a = friendRequestMessage({ kind: 'accepted', myKey: 'me', toKey: 'them', edges: mutual });
+    expect(a.title).toBe('Someone accepted your friend request');
+    expect(a.tag).toBe('friend-accepted-me');
   });
 });
 
