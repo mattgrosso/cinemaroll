@@ -16,11 +16,25 @@
 // One row of the movie page (2026-09-30 redesign — Matt: "The movie detail
 // page has gotten away from us. There's too much info for the current
 // design."). Closed, a section is its label and a one-line summary of what's
-// inside; open, it is the full list. The choice is remembered per section
-// across films, because someone who always wants the cast open always wants
-// it open. The body is v-show, not v-if: the content stays in the DOM for
-// in-page search and the tests, it just folds.
-const STORAGE_PREFIX = 'cinemaRoll.movieDetail.open.';
+// inside; open, it is the full list. The body is v-show, not v-if: the
+// content stays in the DOM for in-page search and the tests, it just folds.
+//
+// Every section starts closed on every film, and nothing is remembered.
+// The first version kept each open/closed choice in localStorage, shared
+// across films, so whichever row you last opened came up open on every movie
+// after it — "some of the panels open by default ... not always the same
+// panel" (report, 2026-10-01). MovieDetail is reused when you go from one
+// film to the next, so the sections also fold again on a route change.
+const STALE_STORAGE_PREFIX = 'cinemaRoll.movieDetail.open.';
+
+// Clear what the first version saved, once per page load.
+try {
+  Object.keys(window.localStorage)
+    .filter((key) => key.startsWith(STALE_STORAGE_PREFIX))
+    .forEach((key) => window.localStorage.removeItem(key));
+} catch {
+  // Private browsing: there is nothing to clear.
+}
 
 export default {
   name: 'DetailSection',
@@ -33,24 +47,19 @@ export default {
     tone: { type: String, default: 'film' }
   },
   data () {
-    return { open: this.remembered() ?? this.defaultOpen };
+    return { open: this.defaultOpen };
+  },
+  created () {
+    this.$watch(
+      () => this.$route && this.$route.params && this.$route.params.tmdbId,
+      (next, previous) => {
+        if (next !== previous) this.open = this.defaultOpen;
+      }
+    );
   },
   methods: {
-    remembered () {
-      try {
-        const value = window.localStorage.getItem(STORAGE_PREFIX + this.id);
-        return value === null ? null : value === '1';
-      } catch {
-        return null;
-      }
-    },
     toggle () {
       this.open = !this.open;
-      try {
-        window.localStorage.setItem(STORAGE_PREFIX + this.id, this.open ? '1' : '0');
-      } catch {
-        // Private browsing or a full quota: the choice just isn't remembered.
-      }
     }
   }
 };

@@ -31,8 +31,12 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
   Composer, Cinematography, Editors, Producers), then Artwork. Every band row is a
   `DetailSection`: closed, it is its label and a ONE-LINE SUMMARY (`listSummary`,
   `awardsSummary`, `boxOfficeSummary`, `placesSummary`, `letterboxdSummary`); open, the
-  original list body. **Nothing is open by default** (Matt, second pass); the choice is
-  remembered per section in `localStorage` (`cinemaRoll.movieDetail.open.<id>`). Second
+  original list body. **Nothing is open by default** (Matt, second pass), and **nothing is
+  remembered** (2026-10-01): every row starts closed on every film and folds again on
+  a route change (MovieDetail is reused film to film). The first version kept each
+  choice in `localStorage` (`cinemaRoll.movieDetail.open.<id>`) shared across films,
+  so the last row you opened came up open everywhere — "not always the same panel".
+  `DetailSection` deletes those old keys on load. Second
   pass, same night: the facts strip is THREE across (year, runtime, your score — the
   Letterboxd crowd tile was "too prominent" and lives as the Letterboxd row's summary
   when there is no review), the three actions are tiles in the same style, the Ratings
