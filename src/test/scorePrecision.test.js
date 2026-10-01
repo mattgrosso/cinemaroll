@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { formatScore } from '../assets/javascript/formatScore.js';
 import { tweakDeltaForRank } from '../assets/javascript/tieBreakTournament.js';
+import { ratingBreakdown } from '../assets/javascript/ratingMath.js';
+
+const WEIGHTS = { love: 2.8, overall: 2, story: 1.25, direction: 1.1, imagery: 0.9, stickiness: 1.9, performance: 0.7, soundtrack: 0.3 };
 
 // Matt, 2026-08-21: "maintain scores to three decimal places or even four...
 // the additional decimal places that we track but don't display would only
@@ -17,15 +20,22 @@ import { tweakDeltaForRank } from '../assets/javascript/tieBreakTournament.js';
 // scarce visible slots. At 4dp there are 100,000.
 
 describe('the 4dp/2dp precision contract', () => {
-  // GetRating pulls in the store, so the rounding contract is asserted
-  // against the source — the same honest approach the stylesheet tests take.
+  // The ÷ 10 and the rounding live in ratingMath.js (since 2026-10-01, so
+  // the Rate page's table and the score share one piece of arithmetic). It's
+  // store-free, so the contract is asserted on real numbers; GetRating must
+  // still route through it.
   it('computes scores to four decimals', () => {
+    const r = { direction: 7, imagery: 7, story: 7, performance: 7, soundtrack: 7, love: 3, overall: 7, stickiness: 3, tweakValue: 0.00007 }
+    // weighted sum 57.85 + 2 × 0.00007 = 57.85014 → ÷ 10 → 5.785014 → 5.785
+    expect(ratingBreakdown(r, (n) => WEIGHTS[n]).score).toBe(5.785)
     const source = readFileSync(
       join(process.cwd(), 'src/assets/javascript/GetRating.js'), 'utf8',
     ).replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
-    expect(source).toContain('return parseFloat((total / 10).toFixed(4));');
+    expect(source).toContain('ratingBreakdown(rating');
     // The old rounding must be gone, not merely joined.
     expect(source).not.toContain('.toFixed(2));');
+    expect(readFileSync(join(process.cwd(), 'src/assets/javascript/ratingMath.js'), 'utf8'))
+      .toContain('parseFloat((sum / 10).toFixed(4))');
   });
 
   it('displays every score at two decimals regardless of stored precision', () => {

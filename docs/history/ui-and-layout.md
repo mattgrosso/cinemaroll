@@ -651,3 +651,15 @@ a weight. The empty Medium tile didn't read as something to fill in: it now
 gets a dashed green outline, "Choose medium" and a down arrow until chosen.
 And the tag pills went back to the old Bootstrap badge scale ("I liked them
 small") while keeping the green selected look.
+
+Second follow-up the same night: "The math" then read 45.25 next to a 4.71
+rating — numbers that can't come from each other. The table still summed the
+page's raw values, so an unset Stickiness counted as 0 where the score counts
+it as 1 (1.9 points), and the ÷ 10 that turns the weighted sum into a 0-10
+score was never shown. Fix: `src/assets/javascript/ratingMath.js` builds the
+per-criterion rows (value, weight, product), the sum and the four-decimal
+score; GetRating's `rawCalculatedTotal` totals those same rows and the table
+renders them, so they can't drift apart again. The summary reads
+"55.20 ÷ 10 = 5.52", products are rounded to two decimals, and the footer
+has a "÷ 10 = Rating" row. `RateMovieMath.test.js` runs the REAL GetRating
+against the page and fails on the old code with "stickiness × 1.9 = 0".

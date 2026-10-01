@@ -122,13 +122,15 @@ describe('RateMovie folded rows', () => {
   it('the math totals only the eight weighted criteria', async () => {
     const w = mountWith(film, [], ALL_WEIGHTS)
     await w.setData({ overall: '7' })
-    // criteria default to 5, stickiness to unset (0); overall 7:
-    // 5 × (2.8 + 1.25 + 1.1 + 0.9 + 0.7 + 0.3) + 7 × 2 = 49.25
-    expect(w.vm.weightedTotal).toBeCloseTo(49.25)
+    // criteria default to 5, overall 7, and an unset stickiness counts as 1
+    // exactly as the score counts it (the follow-up report: "45.25 doesn't
+    // make any sense" — the table had it as 0):
+    // 5 × (2.8 + 1.25 + 1.1 + 0.9 + 0.7 + 0.3) + 7 × 2 + 1 × 1.9 = 51.15
+    expect(w.vm.weightedTotal).toBeCloseTo(51.15)
     const breakdown = w.find('.breakdown-table')
     expect(breakdown.findAll('tbody tr')).toHaveLength(8)
     expect(breakdown.text()).not.toContain('normalizedRating')
-    expect(w.text()).toContain('49.25 weighted')
+    expect(w.text()).toContain('51.15 ÷ 10 =')
   })
 
   it('lists earlier viewings with their eight criteria', async () => {

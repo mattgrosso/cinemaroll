@@ -1,5 +1,6 @@
 import store from '../../store/index';
 import { baseNormalized, applyNormalization } from './normalizationPicker.js';
+import { ratingBreakdown } from './ratingMath.js';
 
 // The library-wide score range that normalization stretches every rating
 // across. allMediaRatingsArray is a cached Vuex getter - the same array
@@ -33,25 +34,7 @@ const scoreRange = () => {
 // The raw weighted score alone — shared by the display path below and by
 // anchor resolution (which must NOT recurse into normalization).
 const rawCalculatedTotal = (rating) => {
-  const tweakValue = parseFloat(rating.tweakValue || 0);
-
-  const direction = store.getters.weight("direction") * parseFloat(rating.direction);
-  const imagery = store.getters.weight("imagery") * parseFloat(rating.imagery);
-  const love = store.getters.weight("love") * parseFloat(rating.love);
-  const overall = store.getters.weight("overall") * (parseFloat(rating.overall) + tweakValue);
-  const performance = store.getters.weight("performance") * parseFloat(rating.performance);
-  const soundtrack = store.getters.weight("soundtrack") * parseFloat(rating.soundtrack);
-  const story = store.getters.weight("story") * parseFloat(rating.story);
-
-  let cleanStickiness = rating.stickiness;
-
-  if ((!cleanStickiness || cleanStickiness > 5) && cleanStickiness !== 0) {
-    cleanStickiness = parseFloat(rating.impression) || 1;
-  }
-
-  const stickiness = store.getters.weight("stickiness") * parseFloat(cleanStickiness);
-
-  const total = direction + imagery + story + performance + soundtrack + love + overall + stickiness;
+  const { score } = ratingBreakdown(rating, (name) => store.getters.weight(name));
   // FOUR decimal places kept, TWO displayed (formatScore.js is the only
   // display path). Matt, 2026-08-21: "maintain scores to three decimal places
   // or even four... the additional decimal places that we track but don't
@@ -67,7 +50,8 @@ const rawCalculatedTotal = (rating) => {
   // (tweakDeltaForRank), invisible in every display but decisive in every
   // sort. Films whose criteria produce genuinely identical weighted sums
   // still tie exactly - that's what the tournament is for.
-  return parseFloat((total / 10).toFixed(4));
+  // (The ÷ 10 and the rounding live in ratingMath.js now.)
+  return score;
 };
 
 // Rating-curve anchors (settings.normalizationAnchors = { ten, five } as

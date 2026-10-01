@@ -129,12 +129,13 @@ describe('RateMovie', () => {
         story: 7,
         direction: 8,
         imagery: 7,
-        stickiness: 6,
+        stickiness: 4,
         performance: 6,
         soundtrack: 5
       })
-      // 9*2.8 + 8*2 + 7*1.25 + 8*1.1 + 7*0.9 + 6*1.9 + 6*0.7 + 5*0.3
-      expect(wrapper.vm.weightedTotal).toBeCloseTo(82.15, 5)
+      // 9*2.8 + 8*2 + 7*1.25 + 8*1.1 + 7*0.9 + 4*1.9 + 6*0.7 + 5*0.3
+      // (Stickiness tops out at 5; anything above counts as 1, like the score.)
+      expect(wrapper.vm.weightedTotal).toBeCloseTo(78.35, 5)
     })
 
     it('defaults unset criteria to 5 in the rating computed', () => {

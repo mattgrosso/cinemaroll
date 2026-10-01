@@ -103,25 +103,27 @@
         </template>
       </div>
 
-      <DetailSection id="rate.breakdown" label="The math" tone="you" :summary="`${formatScore(weightedTotal)} weighted, rating ${formatScore(rating.calculatedTotal)}`">
+      <!-- The rows come from ratingMath.js, the same rows the score is built
+           from, so the table always lands on the rating above it. -->
+      <DetailSection id="rate.breakdown" label="The math" tone="you" :summary="`${formatScore(breakdown.sum)} ÷ 10 = ${formatScore(rating.calculatedTotal)}`">
         <table class="breakdown-table">
           <tbody>
-            <tr v-for="(value, key) in ratingWithoutDate" :key="key">
-              <td class="breakdown-name">{{ key }}</td>
-              <td>{{ value }}</td>
+            <tr v-for="row in breakdownRows" :key="row.key">
+              <td class="breakdown-name">{{ row.key }}</td>
+              <td>{{ row.value }}</td>
               <td class="breakdown-op">×</td>
-              <td>{{ weights[key] }}</td>
+              <td>{{ row.weight }}</td>
               <td class="breakdown-op">=</td>
-              <td class="breakdown-product">{{ weights[key] * value }}</td>
+              <td class="breakdown-product">{{ formatScore(row.product) }}</td>
             </tr>
           </tbody>
           <tfoot>
             <tr>
               <td class="breakdown-name" colspan="5">Total</td>
-              <td class="breakdown-product">{{weightedTotal}}</td>
+              <td class="breakdown-product">{{ formatScore(breakdown.sum) }}</td>
             </tr>
             <tr>
-              <td class="breakdown-name" colspan="5">Rating</td>
+              <td class="breakdown-name" colspan="5">÷ 10 = Rating</td>
               <td class="breakdown-product">{{formatScore(rating.calculatedTotal)}}</td>
             </tr>
           </tfoot>
@@ -281,6 +283,7 @@
 import { formatScore } from '../assets/javascript/formatScore.js';
 import addRating from "../assets/javascript/AddRating.js";
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
+import { ratingBreakdown } from "../assets/javascript/ratingMath.js";
 import ErrorLogService from "../services/ErrorLogService.js";
 import { postToAi } from '../utils/aiRequest.js';
 import { announceLoggedMovie } from '../utils/push.js';
@@ -454,16 +457,18 @@ export default {
 
       return getRating(ratingOnPage);
     },
-    // Only the weighted criteria. getRating also hands back calculatedTotal,
-    // normalizedRating and the date, none of which has a weight — summing
-    // those made "The math" NaN (shown as a dash) and gave the table a junk
-    // row (bug report 2026-10-01).
-    ratingWithoutDate () {
-      const criteria = {};
-      for (const key in this.rating) {
-        if (key in this.weights) criteria[key] = this.rating[key];
-      }
-      return criteria;
+    // The score's own arithmetic, row by row (ratingMath.js). Reading the
+    // page's raw values instead made the table disagree with the score: an
+    // unset Stickiness counts as 1 in the score, and the ÷ 10 was never
+    // shown (bug report 2026-10-01: "45.25, which doesn't make any sense").
+    breakdown () {
+      return ratingBreakdown(this.rating, (name) => this.weights[name]);
+    },
+    // In the on-screen order of the rating selects.
+    breakdownRows () {
+      const byKey = {};
+      for (const row of this.breakdown.rows) byKey[row.key] = row;
+      return RATING_FIELDS.map((field) => byKey[field.key]);
     },
     weights () {
       const weights = {};
@@ -475,13 +480,7 @@ export default {
       return weights;
     },
     weightedTotal () {
-      let total = 0;
-
-      for (const key in this.ratingWithoutDate) {
-        total += this.ratingWithoutDate[key] * this.weights[key];
-      }
-
-      return total;
+      return this.breakdown.sum;
     },
     movieAsRatedOnPage () {
       return {
