@@ -199,16 +199,31 @@
         </div>
       </DetailSection>
 
-      <!-- Two above, this film, two below, by rating. Last, so the sticky
+      <!-- Four above, this film, four below, by rating. Last, so the sticky
            strip has the whole form to ride along over. -->
       <div v-if="movieToRate" ref="neighbors" class="neighbors" :class="{ unstuck: !neighborsPinned }">
+        <!-- Four either side, all small (2026-10-01: "show more poster in the
+             row and make them all smaller"). Near the top or bottom of the
+             rankings a side just runs short. -->
+        <div class="neighbor-posters">
+          <div v-for="entry in neighbors.ahead" :key="entry.movie.id" class="neighbor">
+            <img :src="posterUrl(entry.movie, entry)" :alt="`${entry.movie.title} poster`">
+          </div>
+          <div class="current-movie">
+            <img :src="posterUrl(movieToRate, previousEntry)" :alt="`${movieToRate.title} poster`">
+          </div>
+          <div v-for="entry in neighbors.behind" :key="entry.movie.id" class="neighbor">
+            <img :src="posterUrl(entry.movie, entry)" :alt="`${entry.movie.title} poster`">
+          </div>
+        </div>
         <!-- A pin, not the up/down arrows this used to show. Those read as a
              sort control - reported as exactly that on 2026-08-21: "I'm
              assuming it's supposed to make that list be sorted ascending or
              descending". Sorting these makes no sense; the strip is
-             positional (two above, this film, two below, by rating). What
+             positional (films above, this film, films below). What
              the button actually does is pin the strip to the bottom of the
-             screen or let it scroll away. -->
+             screen or let it scroll away. It sits at the end of the row, not
+             on top of a poster. -->
         <div
           class="hide-neighbors"
           role="button"
@@ -221,21 +236,6 @@
         >
           <i class="bi bi-pin-angle-fill"/>
           <i class="bi bi-pin-angle"/>
-        </div>
-        <div v-if="neighborTwoAhead" class="neighbor-two-ahead">
-          <img :src="posterUrl(neighborTwoAhead.movie, neighborTwoAhead)" :alt="`${neighborTwoAhead.movie.title} poster`">
-        </div>
-        <div v-if="neighborAhead" class="neighbor-ahead">
-          <img :src="posterUrl(neighborAhead.movie, neighborAhead)" :alt="`${neighborAhead.movie.title} poster`">
-        </div>
-        <div v-if="movieToRate" class="current-movie">
-          <img :src="posterUrl(movieToRate, previousEntry)" :alt="`${movieToRate.title} poster`">
-        </div>
-        <div v-if="neighborBehind" class="neighbor-behind">
-          <img :src="posterUrl(neighborBehind.movie, neighborBehind)" :alt="`${neighborBehind.movie.title} poster`">
-        </div>
-        <div v-if="neighborTwoBehind" class="neighbor-two-behind">
-          <img :src="posterUrl(neighborTwoBehind.movie, neighborTwoBehind)" :alt="`${neighborTwoBehind.movie.title} poster`">
         </div>
       </div>
     </div>
@@ -292,6 +292,9 @@ import { countViewingTagUsage, sortVocabularyByUsage } from "../utils/tags.js";
 import RatingSelect from "./RatingSelect.vue";
 import DetailSection from "./DetailSection.vue";
 import notFoundImage from "../assets/images/Image_not_available.png";
+import { neighborWindow } from "../assets/javascript/rankNeighbors.js";
+
+const NEIGHBORS_PER_SIDE = 4;
 
 // Option label text for each rating scale, indexed by option value ("0", "1"…).
 // The leading empty option is rendered by RatingSelect, not listed here.
@@ -527,21 +530,16 @@ export default {
       const count = this.previousViewings.length;
       return `${count} logged`;
     },
-    neighborAhead () {
-      const index = this.movieIndex - 1;
-      return index >= 0 ? this.allMoviesRanked[index] : undefined;
-    },
-    neighborTwoAhead () {
-      const index = this.movieIndex - 2;
-      return index >= 0 ? this.allMoviesRanked[index] : undefined;
-    },
-    neighborBehind () {
-      const index = this.movieIndex;
-      return index < this.allMoviesRanked.length ? this.allMoviesRanked[index] : undefined;
-    },
-    neighborTwoBehind () {
-      const index = this.movieIndex + 1;
-      return index < this.allMoviesRanked.length ? this.allMoviesRanked[index] : undefined;
+    // The films either side of where this rating lands. A film being
+    // re-rated is left out, or its own old entry would sit in the strip
+    // next to it.
+    neighbors () {
+      const ranked = this.previousEntry
+        ? this.allMoviesRanked.filter((entry) => entry !== this.previousEntry)
+        : this.allMoviesRanked;
+      const ownOldRank = this.previousEntry ? this.allMoviesRanked.indexOf(this.previousEntry) : -1;
+      const insertAt = ownOldRank !== -1 && ownOldRank < this.movieIndex ? this.movieIndex - 1 : this.movieIndex;
+      return neighborWindow(ranked, insertAt, NEIGHBORS_PER_SIDE);
     },
     allMoviesRanked () {
       const movies = [...this.$store.getters.allMoviesAsArray];
@@ -1413,33 +1411,48 @@ export default {
         border-radius: 50%;
         cursor: pointer;
         display: flex;
-        height: 32px;
+        flex: none;
+        height: 40px;
         justify-content: center;
-        position: absolute;
-        right: 8px;
-        top: 8px;
-        width: 32px;
+        margin-left: 4px;
+        width: 40px;
 
         &:active { background: rgba(255, 255, 255, 0.2); }
       }
 
-      .neighbor-two-ahead,
-      .neighbor-ahead,
-      .neighbor-behind,
-      .neighbor-two-behind {
+      /* Nine small posters rather than five big ones (2026-10-01: the pinned
+         strip took about a third of a phone screen). They shrink together on
+         a narrow screen, capped so a wide one doesn't blow them back up. */
+      .neighbor-posters {
+        align-items: center;
+        display: flex;
+        flex: 1 1 auto;
+        gap: 3px;
+        justify-content: center;
+        min-width: 0;
+      }
+
+      .neighbor {
+        flex: 1 1 0;
+        max-width: 40px;
+        min-width: 0;
         opacity: 0.75;
-        width: 18%;
-        padding: 0 2px;
       }
 
       .current-movie {
-        width: 28%;
-        padding: 0 2px;
+        flex: 1.4 1 0;
+        max-width: 56px;
+        min-width: 0;
+
+        img { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85); }
       }
 
       img {
-        border-radius: 4px;
-        max-width: 100%;
+        aspect-ratio: 2 / 3;
+        border-radius: 3px;
+        display: block;
+        object-fit: cover;
+        width: 100%;
       }
     }
 

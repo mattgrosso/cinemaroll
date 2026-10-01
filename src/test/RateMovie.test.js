@@ -195,10 +195,39 @@ describe('RateMovie', () => {
       // Current movie rates to 7 (via overall), landing between 8 and 6.
       await wrapper.setData({ overall: 7 })
       expect(wrapper.vm.movieIndex).toBe(2)
-      expect(wrapper.vm.neighborAhead.movie.title).toBe('Eight Movie')
-      expect(wrapper.vm.neighborTwoAhead.movie.title).toBe('Nine Movie')
-      expect(wrapper.vm.neighborBehind.movie.title).toBe('Six Movie')
-      expect(wrapper.vm.neighborTwoBehind.movie.title).toBe('Four Movie')
+      const titles = (list) => list.map((entry) => entry.movie.title)
+      expect(titles(wrapper.vm.neighbors.ahead)).toEqual(['Nine Movie', 'Eight Movie'])
+      expect(titles(wrapper.vm.neighbors.behind)).toEqual(['Six Movie', 'Four Movie'])
+    })
+
+    it('renders the strip as ahead, this film, behind', async () => {
+      await wrapper.setData({ overall: 7 })
+      const alts = wrapper.findAll('.neighbors img').map((img) => img.attributes('alt'))
+      expect(alts).toEqual([
+        'Nine Movie poster', 'Eight Movie poster',
+        'Movie Under Test poster',
+        'Six Movie poster', 'Four Movie poster'
+      ])
+      expect(wrapper.find('.neighbors .current-movie img').attributes('alt')).toBe('Movie Under Test poster')
+    })
+
+    it('shows nothing above a rating that tops the library', async () => {
+      await wrapper.setData({ overall: 10 })
+      expect(wrapper.vm.neighbors.ahead).toEqual([])
+      expect(wrapper.vm.neighbors.behind).toHaveLength(4)
+    })
+
+    // Re-rating a film already in the library: its own old entry is in the
+    // rankings, and used to be able to turn up in the strip beside itself.
+    it('leaves a re-rated film\'s own old entry out of the strip', async () => {
+      await wrapper.setData({ id: 103, overall: 7 })
+      const titles = (list) => list.map((entry) => entry.movie.title)
+      expect(titles(wrapper.vm.neighbors.ahead)).toEqual(['Nine Movie', 'Eight Movie'])
+      expect(titles(wrapper.vm.neighbors.behind)).toEqual(['Four Movie'])
+
+      await wrapper.setData({ overall: 3 })
+      expect(titles(wrapper.vm.neighbors.ahead)).toEqual(['Nine Movie', 'Eight Movie', 'Four Movie'])
+      expect(wrapper.vm.neighbors.behind).toEqual([])
     })
   })
 

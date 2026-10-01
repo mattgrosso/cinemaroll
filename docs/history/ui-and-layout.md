@@ -663,3 +663,15 @@ renders them, so they can't drift apart again. The summary reads
 "55.20 ÷ 10 = 5.52", products are rounded to two decimals, and the footer
 has a "÷ 10 = Rating" row. `RateMovieMath.test.js` runs the REAL GetRating
 against the page and fails on the old code with "stickiness × 1.9 = 0".
+
+### Rate page neighbours strip: more, smaller posters (2026-10-01)
+
+Matt liked the pinned strip but it took about a third of a phone screen (five
+posters sized at 18%/28% of the width, ~168px tall in the middle). His call:
+"show more poster in the row and make them all smaller". Now four films either
+side, flex-shrunk together and capped at 40px (this film 56px, with a light ring
+instead of extra size alone), so the strip is ~85px plus the safe area. The pin
+moved off the posters to its own 40px slot at the end of the row. The four
+`neighborAhead`/`TwoAhead`/... computeds became one `neighbors` window
+(`rankNeighbors.js`, `NEIGHBORS_PER_SIDE`), which also leaves a re-rated film's
+own old entry out — with nine slots it would otherwise often sit beside itself.
