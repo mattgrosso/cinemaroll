@@ -640,3 +640,14 @@ only — the scoring, saving and edit paths are untouched.
   dark surface, siblings dimmed, no coloured outline. `neighborsPin.test.js` still holds.
 - `data-bs-theme="dark"` on the content wrapper gives the inputs dark chrome and a light
   select arrow. Tests: `src/test/RateMovieLayout.test.js`.
+
+### Rate page follow-up (2026-10-01)
+
+Matt's first pass on the restyle: three fixes. "The math" read "— weighted" —
+`getRating` now also returns `normalizedRating`, and `ratingWithoutDate` only
+stripped `date` and `calculatedTotal`, so the sum hit an unweighted field and
+went NaN (and the open table grew a junk row). It now keeps only keys that have
+a weight. The empty Medium tile didn't read as something to fill in: it now
+gets a dashed green outline, "Choose medium" and a down arrow until chosen.
+And the tag pills went back to the old Bootstrap badge scale ("I liked them
+small") while keeping the green selected look.

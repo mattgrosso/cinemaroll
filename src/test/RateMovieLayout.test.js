@@ -20,7 +20,9 @@ vi.mock('@/assets/javascript/GetRating.js', () => ({
     const calculatedTotal = r.calculatedTotal != null
       ? r.calculatedTotal
       : (r.overall != null ? Number(r.overall) : 5)
-    return { ...r, calculatedTotal }
+    // The real getRating also returns normalizedRating — a field with no
+    // weight, which is what broke "The math" (bug report 2026-10-01).
+    return { ...r, calculatedTotal, normalizedRating: 7 }
   }),
   getAllRatings: vi.fn(() => null)
 }))
@@ -32,14 +34,21 @@ const entry = (id, title, calculatedTotal, releaseDate = '2020-06-15') => ({
   dbKey: `key-${id}`
 })
 
-function mountWith (movieToRate, library = []) {
+const ALL_WEIGHTS = [
+  { name: 'love', weight: 2.8 }, { name: 'overall', weight: 2 },
+  { name: 'story', weight: 1.25 }, { name: 'direction', weight: 1.1 },
+  { name: 'imagery', weight: 0.9 }, { name: 'stickiness', weight: 1.9 },
+  { name: 'performance', weight: 0.7 }, { name: 'soundtrack', weight: 0.3 }
+]
+
+function mountWith (movieToRate, library = [], weights = [{ name: 'overall', weight: 2 }]) {
   localStorage.clear()
   const $store = {
     state: {
       movieLog: {},
       movieToRate,
       settings: { tags: { 'viewing-tags': { t1: { title: 'date-night' } } } },
-      weights: [{ name: 'overall', weight: 2 }],
+      weights,
       databaseTopKey: 'test-user'
     },
     getters: { allMoviesAsArray: library },
@@ -92,10 +101,36 @@ describe('RateMovie facts strip', () => {
     const w = mountWith(film)
     await w.find('select#medium').setValue('Theater')
     expect(w.find('.action-medium').text()).toContain('Theater')
+    expect(w.find('.action-medium').classes()).not.toContain('needs-choice')
+  })
+
+  // Bug report 2026-10-01: the Medium tile "doesn't look like a button I
+  // need to click on" — empty, it has to read as a field to fill in.
+  it('an empty medium tile asks to be chosen', () => {
+    const w = mountWith(film)
+    const tile = w.find('.action-medium')
+    expect(tile.classes()).toContain('needs-choice')
+    expect(tile.text()).toContain('Choose medium')
+    expect(tile.find('.bi-chevron-down').exists()).toBe(true)
   })
 })
 
 describe('RateMovie folded rows', () => {
+  // Bug report 2026-10-01: the summary read "— weighted, rating 4.71".
+  // getRating also returns normalizedRating, which has no weight, so summing
+  // every field made the total NaN (and the open table got a junk row).
+  it('the math totals only the eight weighted criteria', async () => {
+    const w = mountWith(film, [], ALL_WEIGHTS)
+    await w.setData({ overall: '7' })
+    // criteria default to 5, stickiness to unset (0); overall 7:
+    // 5 × (2.8 + 1.25 + 1.1 + 0.9 + 0.7 + 0.3) + 7 × 2 = 49.25
+    expect(w.vm.weightedTotal).toBeCloseTo(49.25)
+    const breakdown = w.find('.breakdown-table')
+    expect(breakdown.findAll('tbody tr')).toHaveLength(8)
+    expect(breakdown.text()).not.toContain('normalizedRating')
+    expect(w.text()).toContain('49.25 weighted')
+  })
+
   it('lists earlier viewings with their eight criteria', async () => {
     getAllRatings.mockReturnValueOnce([{ date: new Date(2024, 0, 2).getTime(), calculatedTotal: 8.1234, direction: 7, love: 4 }])
     const w = mountWith(film, [{ ...entry(555, 'Under Test', 8), movie: film }])

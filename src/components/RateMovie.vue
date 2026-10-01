@@ -44,9 +44,15 @@
       </div>
 
       <div class="rate-actions">
-        <label class="action-tile action-medium" for="medium">
+        <!-- Empty, the tile has to read as a field to fill in (bug report
+             2026-10-01: "doesn't look like a button I need to click on"):
+             dashed green outline, "Choose medium" and a down arrow. Chosen,
+             it shows the medium with a small label under it. -->
+        <label class="action-tile action-medium" :class="{ 'needs-choice': !medium }" for="medium">
           <i class="bi bi-film"></i>
-          <span>{{ medium || 'Medium' }}</span>
+          <span v-if="medium" class="medium-value">{{ medium }}</span>
+          <span v-else class="medium-prompt">Choose medium <i class="bi bi-chevron-down"></i></span>
+          <span v-if="medium" class="medium-label">Medium</span>
           <select class="fact-overlay-input" name="medium" id="medium" v-model="medium">
             <option value=""></option>
             <option value="Theater">Theater</option>
@@ -448,9 +454,16 @@ export default {
 
       return getRating(ratingOnPage);
     },
+    // Only the weighted criteria. getRating also hands back calculatedTotal,
+    // normalizedRating and the date, none of which has a weight — summing
+    // those made "The math" NaN (shown as a dash) and gave the table a junk
+    // row (bug report 2026-10-01).
     ratingWithoutDate () {
-      const { date, calculatedTotal, ...ratingWithoutDate } = this.rating;
-      return ratingWithoutDate;
+      const criteria = {};
+      for (const key in this.rating) {
+        if (key in this.weights) criteria[key] = this.rating[key];
+      }
+      return criteria;
     },
     weights () {
       const weights = {};
@@ -1092,6 +1105,30 @@ export default {
       &:disabled { color: #ccc; }
     }
 
+    .action-medium {
+      .medium-prompt {
+        align-items: center;
+        display: inline-flex;
+        gap: 4px;
+
+        i { font-size: 0.75rem; }
+      }
+
+      .medium-label {
+        color: #ccc;
+        font-size: 0.58rem;
+        letter-spacing: 0.06em;
+      }
+
+      &.needs-choice {
+        background: rgba(111, 211, 155, 0.08);
+        border: 1px dashed #6fd39b;
+        color: #6fd39b;
+      }
+
+      &.needs-choice:active { background: rgba(111, 211, 155, 0.18); }
+    }
+
     /* The real control, laid over its tile and invisible: the tile shows the
        value, the tap opens the phone's own date or option picker. */
     .fact-overlay-input {
@@ -1186,10 +1223,13 @@ export default {
       color: #fff;
       cursor: pointer;
       display: inline-flex;
-      font-size: 0.85rem;
-      gap: 4px;
-      min-height: 36px;
-      padding: 0 0 0 12px;
+      /* Back to the old Bootstrap badge scale (bug report 2026-10-01: "I
+         liked them small"). */
+      font-size: 0.75em;
+      font-weight: 700;
+      gap: 3px;
+      line-height: 1;
+      padding: 0.35em 0.25em 0.35em 0.65em;
 
       &:active { background: rgba(255, 255, 255, 0.12); }
 
@@ -1208,11 +1248,10 @@ export default {
       border: 0;
       color: #9a9a9a;
       display: inline-flex;
-      font-size: 1rem;
+      font-size: 0.85em;
       justify-content: center;
-      min-height: 36px;
-      min-width: 32px;
-      padding: 0 6px 0 2px;
+      line-height: 1;
+      padding: 0 2px;
 
       &:active { color: #fff; }
     }
