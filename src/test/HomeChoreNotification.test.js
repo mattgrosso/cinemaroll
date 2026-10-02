@@ -149,6 +149,30 @@ describe('opening a chore from a notification', () => {
     expect(wrapper.vm.openChoreRequested).toBe(true);
   });
 
+  // Report 2026-10-02: the tap opened the right card but scrolled the notices
+  // section flush to the top of the screen, cutting the header off. "I want
+  // it to stay scrolled to the top of the page."
+  it('scrolls to the very top of the page, not to the notices card', async () => {
+    Element.prototype.scrollIntoView = Element.prototype.scrollIntoView || function () {};
+    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+
+    const { route } = mountHome();
+    await nextTick();
+    scrollTo.mockClear();
+
+    route.query = { open: 'tiebreak' };
+    await nextTick();
+    await nextTick();
+    await nextTick();
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'instant' });
+
+    scrollIntoView.mockRestore();
+    scrollTo.mockRestore();
+  });
+
   it('ignores a route change that carries no chore', async () => {
     const { wrapper, route, router } = mountHome();
     await nextTick();

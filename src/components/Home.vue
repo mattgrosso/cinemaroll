@@ -568,7 +568,7 @@
       </div>
     </div>
 
-    <section ref="homeNotices" class="home-notices">
+    <section class="home-notices">
       <!-- Friend requests: prominent ON PURPOSE. Bug report, 2026-08-19:
            "unless I think to look there I won't ever know that they're
            pending." -->
@@ -4347,7 +4347,7 @@ export default {
       this.openChoreRequested = false;
       this.$nextTick(() => {
         this.openChoreRequested = true;
-        this.scrollChorePromptIntoView();
+        this.scrollToTopForChore();
       });
 
       // Read once: a refresh, or a back navigation, must not re-open
@@ -4361,13 +4361,15 @@ export default {
      * card can be several screens above the fold, which reads exactly like
      * the notification having done nothing. A cold launch is already at the
      * top and this is a no-op.
+     *
+     * The PAGE top, not the notices' top. Scrolling the notices section
+     * flush to the screen pushed the header off it (report, 2026-10-02:
+     * "it cuts off the header... I want it to stay scrolled to the top of
+     * the page"). The notices sit right under the header, so the open card
+     * is still in view.
      */
-    scrollChorePromptIntoView () {
-      this.$nextTick(() => {
-        const notices = this.$refs.homeNotices;
-        if (!notices?.scrollIntoView) return;
-        notices.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
+    scrollToTopForChore () {
+      this.$nextTick(() => scrollWindowTo(0));
     },
 
     // The loading spinner only earns its place on a genuinely slow load.
