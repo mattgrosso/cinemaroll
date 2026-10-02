@@ -88,3 +88,31 @@ describe('ratingBreakdown', () => {
     expect(criterionValue({ stickiness: 3 }, 'stickiness')).toBe(3)
   })
 })
+
+// Bug report 2026-10-02: a fresh Rate page showed a score (4.71) before any
+// criterion was picked — every unpicked criterion counts as 5, so the blank
+// form produced a number nobody gave.
+describe('The score before anything is picked', () => {
+  it('shows dashes, not a made-up score, until the first pick', async () => {
+    const w = mountPage()
+    expect(w.find('.score-card-value').text()).toBe('–')
+    expect(w.find('.score-card-waiting').text()).toBe('Not rated yet')
+    expect(w.find('.score-rank-overall .score-rank-value').text()).toBe('–')
+    expect(w.find('.score-rank-year .score-rank-value').text()).toBe('–')
+    expect(w.find('.score-card-since').exists()).toBe(false)
+    expect(w.findAll('.breakdown-table tfoot .breakdown-product').map((td) => td.text())).toEqual(['–', '–'])
+
+    await w.setData({ love: '6' })
+    expect(w.find('.score-card-value').text()).toMatch(/^\d+\.\d\d$/)
+    expect(w.find('.score-card-waiting').exists()).toBe(false)
+    expect(w.find('.score-rank-overall .score-rank-value').text()).toBe('#1')
+    expect(w.find('.score-rank-year .score-rank-value').text()).toBe('#1')
+    expect(w.find('.score-card-since').exists()).toBe(true)
+  })
+
+  it('counts a pick of 0 as a pick', async () => {
+    const w = mountPage()
+    await w.setData({ stickiness: '0' })
+    expect(w.find('.score-card-value').text()).not.toBe('–')
+  })
+})

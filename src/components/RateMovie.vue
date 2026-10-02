@@ -87,24 +87,29 @@
       <!-- The score, where you land after answering the questions (bug
            report 2026-10-02: "The place where I wanna see the rating is when
            I get to the bottom of the form"): the number, where it ranks, and
-           how it compares. The arithmetic is folded away underneath. -->
-      <div class="score-card">
+           how it compares. The arithmetic is folded away underneath.
+           Nothing picked yet, it shows dashes: every unpicked criterion
+           counts as 5, so a blank form would claim a score you never gave
+           (bug report 2026-10-02: "I haven't even given any of its ratings
+           yet"). -->
+      <div class="score-card" :class="{ 'score-card-empty': !hasPicks }">
         <span class="score-card-label">Your score</span>
-        <span class="score-card-value">{{ formatScore(rating.calculatedTotal) }}</span>
-        <span v-if="scoreChange" class="score-card-change" :class="scoreChange.direction">
+        <span class="score-card-value">{{ hasPicks ? formatScore(rating.calculatedTotal) : '–' }}</span>
+        <span v-if="!hasPicks" class="score-card-waiting">Not rated yet</span>
+        <span v-if="hasPicks && scoreChange" class="score-card-change" :class="scoreChange.direction">
           <i class="bi" :class="scoreChange.icon"></i>{{ scoreChange.text }}
         </span>
         <div class="score-card-ranks">
           <div class="score-card-rank score-rank-overall">
-            <span class="score-rank-value">#{{ (movieIndex + 1).toLocaleString('en-US') }}</span>
+            <span class="score-rank-value">{{ hasPicks ? `#${(movieIndex + 1).toLocaleString('en-US')}` : '–' }}</span>
             <span class="score-rank-label">of {{ numberOfMoviesAfterRating.toLocaleString('en-US') }} overall</span>
           </div>
           <div class="score-card-rank score-rank-year">
-            <span class="score-rank-value">{{ releaseYearKnown ? `#${yearIndex + 1}` : '–' }}</span>
+            <span class="score-rank-value">{{ hasPicks && releaseYearKnown ? `#${yearIndex + 1}` : '–' }}</span>
             <span class="score-rank-label">{{ releaseYearKnown ? `in ${movieYear(movieToRate)}` : 'in its year' }}</span>
           </div>
         </div>
-        <p class="score-card-since">
+        <p v-if="hasPicks" class="score-card-since">
           <template v-if="lastHigherRatedMovie">
             The best movie you've watched since
             <strong>{{ lastHigherRatedMovie.title }}</strong><template v-if="lastHigherRatedMovie.date">, {{ relativeTime(lastHigherRatedMovie.date) }}</template>.
@@ -134,11 +139,11 @@
           <tfoot>
             <tr>
               <td class="breakdown-name" colspan="5">Total</td>
-              <td class="breakdown-product">{{ formatScore(breakdown.sum) }}</td>
+              <td class="breakdown-product">{{ hasPicks ? formatScore(breakdown.sum) : '–' }}</td>
             </tr>
             <tr>
               <td class="breakdown-name" colspan="5">÷ 10 = Rating</td>
-              <td class="breakdown-product">{{formatScore(rating.calculatedTotal)}}</td>
+              <td class="breakdown-product">{{ hasPicks ? formatScore(rating.calculatedTotal) : '–' }}</td>
             </tr>
           </tfoot>
         </table>
@@ -540,6 +545,11 @@ export default {
       if (this.isEditing) return getRating({ ratings: [this.editingRating.rating] })?.calculatedTotal ?? null;
       if (this.previousEntry) return getRating(this.previousEntry)?.calculatedTotal ?? null;
       return null;
+    },
+    // Whether any criterion has been picked. Until one is, the score is
+    // made of nothing but defaults, so the card holds back its numbers.
+    hasPicks () {
+      return RATING_FIELDS.some(({ key }) => this[key] !== null && this[key] !== '');
     },
     scoreChange () {
       if (this.previousScore == null) return null;
@@ -1221,6 +1231,14 @@ export default {
       font-variant-numeric: tabular-nums;
       font-weight: 700;
       line-height: 1;
+    }
+
+    /* No picks yet: a grey dash, not a green number. */
+    .score-card-empty .score-card-value { color: #ccc; }
+
+    .score-card-waiting {
+      color: #ccc;
+      font-size: 0.8rem;
     }
 
     .score-card-change {

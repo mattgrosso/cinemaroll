@@ -684,3 +684,11 @@ top strip; the top is now one row of date / Medium / More context. After the rat
 questions sits one full-width score card in the tiles' style: the score, "#N of M
 overall", "#N in YEAR", the best-since line, and — when re-rating or editing — how far it
 moved. The arithmetic stays as a closed "How it's scored" row with no summary text.
+
+Same day, a second report: "it says that this movie was a 4.71, but I haven't even given
+any of its ratings yet." Every unpicked criterion counts as 5 in the score, so a blank
+form always produced a number. Until the first criterion is picked (`hasPicks`), the
+card shows a grey dash and "Not rated yet", both ranks are dashes, the best-since line is
+hidden, and the scoring table's Total/Rating cells are dashes. A pick of 0 counts.
+Editing is unaffected, since the old values load in. The poster strip at the bottom
+still places the film by the default score.
