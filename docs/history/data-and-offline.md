@@ -432,3 +432,25 @@ open, so the takeover-under-an-open-page case was checked by fetching the
 old file from a fresh page instead. And Playwright's `waitForFunction`
 treats an async predicate's promise as truthy - poll with `evaluate`.
 
+
+## "Two months ago the refresh was under a second" (2026-10-02)
+
+After the auto-update fixes, the report's own timing (`update.lastUpdate`)
+showed the remaining delay was the wait for the new service worker: 6.7s
+before the reload. The worker installs every precached file whose URL is
+new, and since the Vite move (2026-09-14) nearly every URL was new on every
+deploy. Rollup put the store, Vue, Firebase etc. in the entry chunk next to
+the router; every screen imported the entry, and the entry's name changes
+whenever any screen does (the router names them all), so every screen's
+name changed too. A one-word change to Insights: 51 of 124 files new,
+2.6 MB. Webpack's chunk-vendors split had hidden this before.
+
+Fix: `coreChunk` (`vite.config.mjs`) moves everything loaded up front except
+`main.js` and the router into `js/core.<hash>.js`. Two things then still
+changed core on every build: the store importing the router (now
+`router/appRouter.js`, set by the router, used by the store), and the build
+stamp's version/time inlined into `buildStamp.js` (now handed over by
+`main.js`) - which also reshuffled esbuild's minified names across the whole
+chunk, since it picks names by character frequency. After: the same change
+gives 2 new files (the screen and `app.js`). Shared-code changes still mean a
+big download; that's inherent.

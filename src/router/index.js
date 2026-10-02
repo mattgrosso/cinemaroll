@@ -3,6 +3,7 @@ import store from "../store";
 import { appScrollBehavior, rememberNavigationSource } from "./scrollBehavior.js";
 import { handleRouterChunkError, lazyScreen } from "../utils/staleChunkReload.js";
 import { nextFrame } from "../utils/nextFrame.js";
+import { setAppRouter } from "./appRouter.js";
 
 const Home = lazyScreen(() => import(/* webpackChunkName: "home" */ "../components/Home.vue"));
 const Login = lazyScreen(() => import(/* webpackChunkName: "login" */ "../components/Login.vue"));
@@ -747,6 +748,7 @@ const router = createRouter({
   // returning from a movie detail page — see scrollBehavior.js.
   scrollBehavior: appScrollBehavior
 })
+setAppRouter(router)
 
 // scrollBehavior runs AFTER the target component mounts, so it can't tell
 // Home whether this was the one navigation that restores a scroll position.

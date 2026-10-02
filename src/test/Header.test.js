@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import AppHeader from '@/components/Header.vue';
+import { setBuildInfo } from '@/assets/javascript/buildStamp.js';
 
 function factory (stateOverrides = {}) {
   return mount(AppHeader, {
@@ -60,14 +61,12 @@ describe('Header', () => {
     // the footer. Assert the text, not just that the element exists — an empty
     // .version would satisfy the two tests above.
     it('renders the version with the house "v" prefix, in both placements', () => {
-      const originalVersion = process.env.VUE_APP_VERSION;
-      process.env.VUE_APP_VERSION = '1.96.4';
+      setBuildInfo({ version: '1.96.4' });
 
       expect(factory().find('.home-link .version').text()).toBe('v1.96.4');
       expect(factory({ hideHeaderLogo: true }).find('.version-only .version').text()).toBe('v1.96.4');
 
-      process.env.VUE_APP_VERSION = originalVersion;
-      if (originalVersion === undefined) delete process.env.VUE_APP_VERSION;
+      setBuildInfo({});
     });
 
     it('.version-only also navigates home on click, same as the normal title', async () => {

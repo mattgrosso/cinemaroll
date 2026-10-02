@@ -12,7 +12,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('axios')
 vi.mock('@sentry/vue')
-vi.mock('@/router', () => ({ default: { push: vi.fn() } }))
 vi.mock('@/assets/javascript/GetRating.js', () => ({
   getRating: vi.fn(() => ({ calculatedTotal: 0 }))
 }))

@@ -6,7 +6,7 @@ vi.mock('axios')
 vi.mock('@sentry/vue')
 
 const routerPushMock = vi.fn()
-vi.mock('@/router', () => ({ default: { push: (...args) => routerPushMock(...args) } }))
+vi.mock('@/router/appRouter.js', () => ({ pushRoute: (...args) => routerPushMock(...args) }))
 vi.mock('@/assets/javascript/GetRating.js', () => ({
   getRating: vi.fn(() => ({ calculatedTotal: 0 }))
 }))

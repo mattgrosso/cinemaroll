@@ -155,3 +155,15 @@ joins a check already in flight and skips one that just finished or a worker
 already installing. A second `update()` queues behind the first one's install
 on iOS, which is what made every auto-refresh sit out the 5-second cap.
 Bug reports carry `update.lastUpdate` (spotted-after, wait time, result, landed-after).
+
+**A small deploy must stay a small download (2026-10-02).** `vite.config.mjs`'s
+`coreChunk` puts everything loaded up front in `js/core.<hash>.js`; only
+`main.js` and `router/index.js` (which names every screen file) stay in
+`js/app.<hash>.js`. Nothing in core may import the router index (the store
+uses `router/appRouter.js`) or read a per-build value like
+`VUE_APP_VERSION`/`VUE_APP_BUILD_TIME` (main.js hands those to
+`buildStamp.js`) - either one makes every screen's file change on every
+deploy, and the new worker then downloads ~50 files before the auto-update
+can reload (measured: 51 files / 2.6 MB for a one-screen tweak, 2 after).
+`sharedChunks.test.js` guards both. To check by hand: build twice with a
+one-screen change and count new file names in `js/`.

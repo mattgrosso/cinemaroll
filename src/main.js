@@ -27,11 +27,17 @@ import VueLazyLoad from 'vue3-lazyload';
 import './registerServiceWorker'
 import axios from 'axios';
 import { installNetworkHealth } from './utils/networkHealth.js';
+import { setBuildInfo } from './assets/javascript/buildStamp.js';
 
 // Every network request gets a timeout, and a request nothing answers flips
 // the app to its offline paths (lie-fi, bug report 2026-09-23). Before the
 // app mounts, so no component can fire a request without it.
 installNetworkHealth({ store, axios });
+
+// The build stamp's values are read here, in the entry chunk, and handed
+// over - never in the shared core chunk, which must stay byte-identical
+// between builds that didn't change shared code (buildStamp.js).
+setBuildInfo({ version: process.env.VUE_APP_VERSION, buildTime: process.env.VUE_APP_BUILD_TIME });
 
 const app = createApp(App);
 

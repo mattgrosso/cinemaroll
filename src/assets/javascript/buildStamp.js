@@ -8,7 +8,7 @@
 // The timestamp is stamped at BUILD time, not page-load time — that's the
 // distinction that makes it useful. A tab left open for a week keeps showing
 // the build it is still running, so a stale one is obvious at a glance. Here
-// the build time arrives as `VUE_APP_BUILD_TIME`, set in `vue.config.js` when
+// the build time arrives as `VUE_APP_BUILD_TIME`, set in `vite.config.mjs` when
 // the build starts (see the comment there), and the version is the existing
 // `VUE_APP_VERSION` that `yarn deploy` bumps — no second version number.
 
@@ -49,13 +49,21 @@ export function buildStampText ({ version, buildTime, now } = {}) {
   return parts.join(' · ');
 }
 
-// Both of these are replaced inline by webpack's DefinePlugin at build time
-// (vue-cli defines the whole `process.env` object, so the substitution works
-// inside a function body just as well as at module scope — and reading them
-// per call is what lets a test stub them). Under Vitest they're undefined
-// unless a test sets them, which is exactly the degraded case above.
-export const appVersion = () => process.env.VUE_APP_VERSION || null;
-export const buildTime = () => process.env.VUE_APP_BUILD_TIME || null;
+// Handed over by main.js, the one place that reads the build-time values
+// (Vite's `define` inlines VUE_APP_VERSION / VUE_APP_BUILD_TIME there).
+// They used to be read right here, but this module lives in the shared core
+// chunk, and a value that changes on every build made that chunk - and so
+// every screen's file - change on every deploy (bug report, 2026-10-02; see
+// coreChunk in vite.config.mjs). Unset (Vitest, unless a test sets them) is
+// exactly the degraded case above.
+let build = {};
+
+export function setBuildInfo ({ version = null, buildTime = null } = {}) {
+  build = { version, buildTime };
+}
+
+export const appVersion = () => build.version || null;
+export const buildTime = () => build.buildTime || null;
 
 /** The full house stamp for this build. */
 export function buildStamp () {

@@ -17,7 +17,7 @@ import {
 } from "firebase/auth";
 import * as Sentry from "@sentry/vue";
 import { getRating, rawScore } from "../assets/javascript/GetRating";
-import router from '@/router';
+import { pushRoute } from '@/router/appRouter.js';
 import ErrorLogService from "../services/ErrorLogService.js";
 import { markStalled } from '../utils/networkHealth.js';
 import { placeholdersReadyToFinish, finalizePlaceholder } from '../assets/javascript/reconcilePlaceholder.js';
@@ -1085,7 +1085,7 @@ export default createStore({
       // into an address, so the raw email has to be stored separately.
       window.localStorage.setItem('userEmail', email);
       context.dispatch('initializeDB');
-      router.push('/');
+      pushRoute('/');
     },
     async login (context) {
       // Kept under its original name so existing callers keep working.
@@ -1147,7 +1147,7 @@ export default createStore({
       context.commit('setUserRealName', null);
       context.commit('setDatabaseTopKey', null);
       await context.dispatch('resetLocalDB');
-      router.push('/login');
+      pushRoute('/login');
     },
     // The router decides you're signed in synchronously from localStorage,
     // which is the only thing that ever gated access while the database rules

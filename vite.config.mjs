@@ -68,6 +68,50 @@ function dropDsStore () {
   };
 }
 
+// Everything the app loads up front, except the two modules that name the
+// screens' files, goes in its own chunk, js/core.<hash>.js.
+//
+// Bug report (Matt, 2026-10-02): "two months ago the refresh delay was less
+// than a second, and now it's 4 or 5 seconds." Since the Vite move, the
+// store, Vue, Firebase and the rest lived in the entry chunk alongside the
+// router - and the router names every screen's file. So every screen
+// imported a file whose name changed whenever ANY screen changed, which
+// changed every screen's own name, and a one-screen tweak sent a phone 51
+// new files (2.6 MB) for the new worker to install before the reload. With
+// the shared code here instead, screens import a file that only changes when
+// shared code does; a one-screen tweak is that screen plus app.js.
+//
+// The rule that keeps it working: nothing in core may import main.js or
+// router/index.js (that's why the store reaches the router through
+// router/appRouter.js). One import back into app.js and every screen
+// changes on every deploy again - sharedChunks.test.js guards it.
+const ENTRY_ONLY = [/\/src\/main\.js$/, /\/src\/router\/index\.js$/];
+
+function coreChunk () {
+  let core = null;
+  return (id, { getModuleIds, getModuleInfo }) => {
+    if (!core) {
+      core = new Set();
+      const entries = [...getModuleIds()].filter((moduleId) => getModuleInfo(moduleId)?.isEntry);
+      const queue = [...entries];
+      const seen = new Set(queue);
+      while (queue.length) {
+        const current = queue.pop();
+        if (!entries.includes(current) && !ENTRY_ONLY.some((pattern) => pattern.test(current))) {
+          core.add(current);
+        }
+        for (const next of getModuleInfo(current)?.importedIds || []) {
+          if (!seen.has(next)) {
+            seen.add(next);
+            queue.push(next);
+          }
+        }
+      }
+    }
+    return core.has(id) ? 'core' : undefined;
+  };
+}
+
 export default defineConfig(({ mode }) => {
   // Same files, same precedence as Vue CLI: .env, .env.local, .env.[mode],
   // .env.[mode].local, plus any VUE_APP_* already in the shell. Only keys
@@ -119,10 +163,7 @@ export default defineConfig(({ mode }) => {
       // them (globIgnores below).
       sourcemap: true,
       // Everything non-lazy (vue, vuex, firebase, sentry, bootstrap, axios)
-      // lands in the one entry chunk; Vue CLI split its node_modules half
-      // into chunk-vendors, Vite doesn't by default. The total is what it
-      // was, so the warning threshold is raised rather than adding a manual
-      // chunking rule.
+      // lands in one big chunk - core, since 2026-10-02 (coreChunk above).
       chunkSizeWarningLimit: 1500,
       rollupOptions: {
         // Naming the entry `app` (not Vite's default `index`) is what makes
@@ -138,6 +179,7 @@ export default defineConfig(({ mode }) => {
           hashCharacters: 'hex',
           entryFileNames: 'js/[name].[hash].js',
           chunkFileNames: 'js/[name].[hash].js',
+          manualChunks: coreChunk(),
           // Same top-level folders as the webpack build: css/, fonts/
           // (bootstrap-icons), img/ (bundled banners and placeholders -
           // public/img/icons/ is copied as-is, untouched by this).

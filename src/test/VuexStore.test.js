@@ -7,7 +7,6 @@ vi.mock('firebase/app')
 vi.mock('firebase/database')
 vi.mock('firebase/auth')
 vi.mock('@sentry/vue')
-vi.mock('@/router')
 
 // Mock the getRating utility
 vi.mock('@/assets/javascript/GetRating.js', () => ({

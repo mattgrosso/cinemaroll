@@ -11,7 +11,6 @@ import { toInterchange } from '@/assets/javascript/interchange.js';
 
 vi.mock('axios');
 vi.mock('@sentry/vue');
-vi.mock('@/router', () => ({ default: { push: vi.fn() } }));
 vi.mock('@/assets/javascript/GetRating.js', () => ({
   getRating: vi.fn((entry) => ({ calculatedTotal: entry?.ratings?.[0]?.calculatedTotal ?? 0 }))
 }));

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import Footer from '@/components/Footer.vue';
+import { setBuildInfo } from '@/assets/javascript/buildStamp.js';
 
 function factory (devModeValue) {
   const commit = vi.fn();
@@ -22,20 +23,14 @@ function factory (devModeValue) {
 describe('Footer build stamp', () => {
   // The house standard (Matt, 2026-08-22): one muted line, version and the
   // time the BUILD was made — not page-load time — so a stale tab is obvious.
-  const originalVersion = process.env.VUE_APP_VERSION;
-  const originalBuildTime = process.env.VUE_APP_BUILD_TIME;
-
+  // main.js hands the build's values over (buildStamp.js setBuildInfo).
   afterEach(() => {
-    process.env.VUE_APP_VERSION = originalVersion;
-    process.env.VUE_APP_BUILD_TIME = originalBuildTime;
-    if (originalVersion === undefined) delete process.env.VUE_APP_VERSION;
-    if (originalBuildTime === undefined) delete process.env.VUE_APP_BUILD_TIME;
+    setBuildInfo({});
   });
 
   it('renders version and build time in the house format', () => {
-    process.env.VUE_APP_VERSION = '1.96.4';
     // Local parts in, local time out — no timezone drift.
-    process.env.VUE_APP_BUILD_TIME = new Date(2026, 7, 22, 1, 32).toISOString();
+    setBuildInfo({ version: '1.96.4', buildTime: new Date(2026, 7, 22, 1, 32).toISOString() });
 
     const { wrapper } = factory(false);
 
@@ -47,8 +42,7 @@ describe('Footer build stamp', () => {
   });
 
   it('still shows the version when no build time was injected', () => {
-    process.env.VUE_APP_VERSION = '1.96.4';
-    delete process.env.VUE_APP_BUILD_TIME;
+    setBuildInfo({ version: '1.96.4' });
 
     const { wrapper } = factory(false);
 
