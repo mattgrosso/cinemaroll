@@ -675,3 +675,12 @@ moved off the posters to its own 40px slot at the end of the row. The four
 `neighborAhead`/`TwoAhead`/... computeds became one `neighbors` window
 (`rankNeighbors.js`, `NEIGHBORS_PER_SIDE`), which also leaves a re-rated film's
 own old entry out — with nine slots it would otherwise often sit beside itself.
+
+## Rate page: the score moves to the bottom (2026-10-02)
+
+Report: "The place where I wanna see the rating is when I get to the bottom of the form,
+not at the top ... I don't like seeing the math." The score and year-rank tiles left the
+top strip; the top is now one row of date / Medium / More context. After the rating
+questions sits one full-width score card in the tiles' style: the score, "#N of M
+overall", "#N in YEAR", the best-since line, and — when re-rating or editing — how far it
+moved. The arithmetic stays as a closed "How it's scored" row with no summary text.

@@ -23,36 +23,27 @@
     </div>
 
     <div class="rate-movie-content" data-bs-theme="dark">
-      <!-- The facts strip, as on the film page: the live score with its
-           place in the library, its place in its year, and the watch date.
-           The date tile is a real datetime-local input laid invisibly over
-           the tile, so a tap opens the phone's own picker. -->
-      <div class="fact-strip">
-        <div class="fact fact-score">
-          <span class="fact-value">{{formatScore(rating.calculatedTotal)}}</span>
-          <span class="fact-label">#{{movieIndex + 1}} of {{numberOfMoviesAfterRating}}</span>
-        </div>
-        <div class="fact fact-year-rank">
-          <span class="fact-value">{{ releaseYearKnown ? `#${yearIndex + 1}` : '–' }}</span>
-          <span class="fact-label">{{ releaseYearKnown ? `in ${movieYear(movieToRate)}` : 'in its year' }}</span>
-        </div>
+      <!-- One row of three tiles: the watch date, the medium, and More
+           context. The score used to lead this row, but you want it once
+           you've answered the questions, so it lives in the score card at
+           the bottom of the form (bug report 2026-10-02). The date tile is a
+           real datetime-local input laid invisibly over the tile, so a tap
+           opens the phone's own picker. -->
+      <div class="rate-actions">
         <label class="fact fact-date" for="date">
           <span class="fact-value">{{ watchedDay }}</span>
           <span class="fact-label">{{ watchedLabel }}</span>
           <input class="fact-overlay-input" name="date" id="date" type="datetime-local" v-model="date">
         </label>
-      </div>
-
-      <div class="rate-actions">
         <!-- Empty, the tile has to read as a field to fill in (bug report
              2026-10-01: "doesn't look like a button I need to click on"):
-             dashed green outline, "Choose medium" and a down arrow. Chosen,
-             it shows the medium with a small label under it. -->
+             dashed green outline, "Choose" and a down arrow. Chosen, it
+             shows the medium. Either way it is labelled Medium underneath. -->
         <label class="action-tile action-medium" :class="{ 'needs-choice': !medium }" for="medium">
           <i class="bi bi-film"></i>
           <span v-if="medium" class="medium-value">{{ medium }}</span>
-          <span v-else class="medium-prompt">Choose medium <i class="bi bi-chevron-down"></i></span>
-          <span v-if="medium" class="medium-label">Medium</span>
+          <span v-else class="medium-prompt">Choose <i class="bi bi-chevron-down"></i></span>
+          <span class="medium-label">Medium</span>
           <select class="fact-overlay-input" name="medium" id="medium" v-model="medium">
             <option value=""></option>
             <option value="Theater">Theater</option>
@@ -93,19 +84,42 @@
         :options="field.options"
       />
 
-      <div class="best-since">
-        <template v-if="lastHigherRatedMovie">
-          The best movie you've watched since
-          <strong>{{ lastHigherRatedMovie.title }}</strong><template v-if="lastHigherRatedMovie.date">, {{ relativeTime(lastHigherRatedMovie.date) }}</template>.
-        </template>
-        <template v-else>
-          This would be your highest rated movie.
-        </template>
+      <!-- The score, where you land after answering the questions (bug
+           report 2026-10-02: "The place where I wanna see the rating is when
+           I get to the bottom of the form"): the number, where it ranks, and
+           how it compares. The arithmetic is folded away underneath. -->
+      <div class="score-card">
+        <span class="score-card-label">Your score</span>
+        <span class="score-card-value">{{ formatScore(rating.calculatedTotal) }}</span>
+        <span v-if="scoreChange" class="score-card-change" :class="scoreChange.direction">
+          <i class="bi" :class="scoreChange.icon"></i>{{ scoreChange.text }}
+        </span>
+        <div class="score-card-ranks">
+          <div class="score-card-rank score-rank-overall">
+            <span class="score-rank-value">#{{ (movieIndex + 1).toLocaleString('en-US') }}</span>
+            <span class="score-rank-label">of {{ numberOfMoviesAfterRating.toLocaleString('en-US') }} overall</span>
+          </div>
+          <div class="score-card-rank score-rank-year">
+            <span class="score-rank-value">{{ releaseYearKnown ? `#${yearIndex + 1}` : '–' }}</span>
+            <span class="score-rank-label">{{ releaseYearKnown ? `in ${movieYear(movieToRate)}` : 'in its year' }}</span>
+          </div>
+        </div>
+        <p class="score-card-since">
+          <template v-if="lastHigherRatedMovie">
+            The best movie you've watched since
+            <strong>{{ lastHigherRatedMovie.title }}</strong><template v-if="lastHigherRatedMovie.date">, {{ relativeTime(lastHigherRatedMovie.date) }}</template>.
+          </template>
+          <template v-else>
+            This would be your highest rated movie.
+          </template>
+        </p>
       </div>
 
       <!-- The rows come from ratingMath.js, the same rows the score is built
-           from, so the table always lands on the rating above it. -->
-      <DetailSection id="rate.breakdown" label="The math" tone="you" :summary="`${formatScore(breakdown.sum)} ÷ 10 = ${formatScore(rating.calculatedTotal)}`">
+           from, so the table always lands on the score above it. Closed, it
+           says nothing: the card already shows the score, and the division
+           on the closed line was "not helpful" (2026-10-02). -->
+      <DetailSection id="rate.breakdown" label="How it's scored" tone="you">
         <table class="breakdown-table">
           <tbody>
             <tr v-for="row in breakdownRows" :key="row.key">
@@ -519,6 +533,25 @@ export default {
     watchedLabel () {
       if (!this.watchedAt || this.watchedAt.getFullYear() === new Date().getFullYear()) return 'watched';
       return `watched ${this.watchedAt.getFullYear()}`;
+    },
+    // The score before this visit: the viewing being edited, or the film's
+    // latest score when it's being rated again. Null for a first rating.
+    previousScore () {
+      if (this.isEditing) return getRating({ ratings: [this.editingRating.rating] })?.calculatedTotal ?? null;
+      if (this.previousEntry) return getRating(this.previousEntry)?.calculatedTotal ?? null;
+      return null;
+    },
+    scoreChange () {
+      if (this.previousScore == null) return null;
+      const delta = Number((this.rating.calculatedTotal - this.previousScore).toFixed(4));
+      const since = this.isEditing ? 'before this edit' : 'last time';
+      if (Math.abs(delta) < 0.005) return { direction: 'same', icon: 'bi-dash', text: `Same as ${since}` };
+      const up = delta > 0;
+      return {
+        direction: up ? 'up' : 'down',
+        icon: up ? 'bi-arrow-up-short' : 'bi-arrow-down-short',
+        text: `${formatScore(Math.abs(delta))} ${up ? 'higher' : 'lower'} than ${since}`
+      };
     },
     titleSummary () {
       return [this.title, this.year].filter(Boolean).join(' · ');
@@ -1034,17 +1067,11 @@ export default {
       max-width: 100%;
     }
 
-    .fact-strip,
     .rate-actions {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 6px;
-      margin: 0 0 8px;
-    }
-
-    .rate-actions {
-      grid-template-columns: repeat(2, 1fr);
-      margin-bottom: 14px;
+      margin: 0 0 14px;
     }
 
     .fact,
@@ -1087,8 +1114,6 @@ export default {
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
-
-    .fact-score .fact-value { color: #6fd39b; }
 
     .action-tile {
       font-size: 0.7rem;
@@ -1169,14 +1194,76 @@ export default {
       &::placeholder { color: #9a9a9a; }
     }
 
-    .best-since {
-      background: rgba(255, 255, 255, 0.04);
+    /* Same surface as the tiles at the top, full width. */
+    .score-card {
+      align-items: center;
+      background: rgba(255, 255, 255, 0.06);
       border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin: 10px 0;
+      padding: 14px 12px 12px;
+      text-align: center;
+    }
+
+    .score-card-label,
+    .score-rank-label {
+      color: #ccc;
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .score-card-value {
+      color: #6fd39b;
+      font-size: 2.6rem;
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .score-card-change {
+      align-items: center;
+      display: inline-flex;
+      font-size: 0.8rem;
+      gap: 2px;
+
+      i { font-size: 1.1rem; line-height: 1; }
+      &.up { color: #6fd39b; }
+      &.down { color: #ff9b8a; }
+      &.same { color: #ccc; }
+    }
+
+    .score-card-ranks {
+      display: grid;
+      gap: 6px;
+      grid-template-columns: repeat(2, 1fr);
+      margin-top: 8px;
+      width: 100%;
+    }
+
+    .score-card-rank {
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 8px 6px;
+    }
+
+    .score-rank-value {
+      color: #fff;
+      font-size: 1.2rem;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .score-card-since {
       color: #ccc;
       font-size: 0.85rem;
       line-height: 1.35;
-      margin: 4px 0 10px;
-      padding: 10px 12px;
+      margin: 8px 0 0;
 
       strong { color: #fff; }
     }

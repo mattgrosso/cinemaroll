@@ -3,9 +3,9 @@ import { mount } from '@vue/test-utils'
 import RateMovie from '@/components/RateMovie.vue'
 import { getAllRatings } from '@/assets/javascript/GetRating.js'
 
-// The 2026-09-30 restyle in the film page's language: a facts strip of
-// score / rank in its year / watch date, a Medium tile over a real select,
-// folded rows for the math and earlier viewings, and pill tags.
+// The 2026-09-30 restyle in the film page's language: a top row of watch
+// date / Medium / More context, the score card at the bottom of the form
+// (2026-10-02), folded rows for the math and earlier viewings, and pill tags.
 
 vi.mock('axios', () => ({
   default: {
@@ -62,32 +62,74 @@ function mountWith (movieToRate, library = [], weights = [{ name: 'overall', wei
 
 const film = { id: 555, title: 'Under Test', release_date: '2020-06-01', poster_path: '/u.jpg', backdrop_path: '/b.jpg' }
 
-describe('RateMovie facts strip', () => {
+describe('RateMovie score card', () => {
+  // Bug report 2026-10-02: "The place where I wanna see the rating is when
+  // I get to the bottom of the form, not at the top."
+  it('the score comes after the rating questions, not in the top row', () => {
+    const w = mountWith(film)
+    const html = w.html()
+    expect(w.find('.rate-actions').text()).not.toMatch(/\d\.\d\d/)
+    expect(html.indexOf('score-card')).toBeGreaterThan(html.lastIndexOf('rating-card'))
+    expect(html.indexOf('score-card')).toBeLessThan(html.indexOf('breakdown-table'))
+  })
+
+  it('the top row is date, medium and more context', () => {
+    const w = mountWith(film)
+    const row = w.find('.rate-actions')
+    expect(row.element.children).toHaveLength(3)
+    expect(row.find('.fact-date').exists()).toBe(true)
+    expect(row.find('.action-medium').exists()).toBe(true)
+    expect(row.text()).toContain('More context')
+  })
+
   it('shows the live score with its place in the whole library', async () => {
     const w = mountWith(film, [entry(1, 'Nine', 9), entry(2, 'Three', 3)])
     await w.setData({ overall: '7' })
-    const tile = w.find('.fact-score')
-    expect(tile.find('.fact-value').text()).toBe('7.00')
-    expect(tile.find('.fact-label').text()).toBe('#2 of 3')
+    const card = w.find('.score-card')
+    expect(card.find('.score-card-value').text()).toBe('7.00')
+    expect(card.find('.score-rank-overall .score-rank-value').text()).toBe('#2')
+    expect(card.find('.score-rank-overall .score-rank-label').text()).toBe('of 3 overall')
   })
 
   it('ranks it among films of its release year only', async () => {
     const w = mountWith(film, [entry(1, 'Nine', 9, '1999-06-15'), entry(2, 'Eight', 8), entry(3, 'Three', 3)])
     await w.setData({ overall: '7' })
-    const tile = w.find('.fact-year-rank')
-    expect(tile.find('.fact-value').text()).toBe('#2')
-    expect(tile.find('.fact-label').text()).toBe('in 2020')
+    const tile = w.find('.score-rank-year')
+    expect(tile.find('.score-rank-value').text()).toBe('#2')
+    expect(tile.find('.score-rank-label').text()).toBe('in 2020')
   })
 
   // new Date(null) is 1970: an offline placeholder must not be ranked
   // "in 1970".
   it('does not invent a year for a film with no release date', () => {
     const w = mountWith({ ...film, id: 'offline-x', release_date: null }, [entry(1, 'Old', 9, '1970-05-01')])
-    const tile = w.find('.fact-year-rank')
+    const tile = w.find('.score-rank-year')
     expect(tile.text()).not.toContain('1970')
-    expect(tile.find('.fact-value').text()).toBe('–')
+    expect(tile.find('.score-rank-value').text()).toBe('–')
   })
 
+  it('folds in the best-since line', async () => {
+    const w = mountWith(film, [entry(1, 'Nine', 9)])
+    await w.setData({ overall: '7' })
+    expect(w.find('.score-card-since').text()).toContain('The best movie you\'ve watched since')
+    expect(w.find('.score-card-since').text()).toContain('Nine')
+  })
+
+  it('says how a re-rating moved from last time', async () => {
+    const w = mountWith(film, [{ ...entry(555, 'Under Test', 6), movie: film }])
+    await w.setData({ overall: '7' })
+    const change = w.find('.score-card-change')
+    expect(change.text()).toBe('1.00 higher than last time')
+    expect(change.classes()).toContain('up')
+  })
+
+  it('shows no change line for a first rating', () => {
+    const w = mountWith(film)
+    expect(w.find('.score-card-change').exists()).toBe(false)
+  })
+})
+
+describe('RateMovie top row', () => {
   it('the date tile is the real date input, showing the chosen day', async () => {
     const w = mountWith(film)
     await w.setData({ date: '2024-03-14T20:30' })
@@ -110,7 +152,8 @@ describe('RateMovie facts strip', () => {
     const w = mountWith(film)
     const tile = w.find('.action-medium')
     expect(tile.classes()).toContain('needs-choice')
-    expect(tile.text()).toContain('Choose medium')
+    expect(tile.text()).toContain('Choose')
+    expect(tile.text()).toContain('Medium')
     expect(tile.find('.bi-chevron-down').exists()).toBe(true)
   })
 })
@@ -130,7 +173,10 @@ describe('RateMovie folded rows', () => {
     const breakdown = w.find('.breakdown-table')
     expect(breakdown.findAll('tbody tr')).toHaveLength(8)
     expect(breakdown.text()).not.toContain('normalizedRating')
-    expect(w.text()).toContain('51.15 ÷ 10 =')
+    // Closed, the row says nothing: the score card already shows the
+    // score, and the division was "not helpful" (2026-10-02).
+    const header = w.findAll('.detail-section-header').find((h) => h.text().includes("How it's scored"))
+    expect(header.text()).toBe("How it's scored")
   })
 
   it('lists earlier viewings with their eight criteria', async () => {

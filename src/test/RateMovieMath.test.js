@@ -59,7 +59,7 @@ describe('The math on the Rate page', () => {
     expect(table.find('tfoot').text()).toContain('55.20')
     expect(w.vm.rating.calculatedTotal).toBe(5.52)
     expect(table.find('tfoot').text()).toContain('5.52')
-    expect(w.text()).toContain('55.20 ÷ 10 = 5.52')
+    expect(w.find('.score-card-value').text()).toBe('5.52')
   })
 
   it('the table total ÷ 10 is the score for every Stickiness choice', async () => {
