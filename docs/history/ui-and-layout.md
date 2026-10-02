@@ -692,3 +692,16 @@ card shows a grey dash and "Not rated yet", both ranks are dashes, the best-sinc
 hidden, and the scoring table's Total/Rating cells are dashes. A pick of 0 counts.
 Editing is unaffected, since the old values load in. The poster strip at the bottom
 still places the film by the default score.
+
+## Rate page strip goes Cover Flow (2026-10-02)
+
+The nine flat small posters of 2026-10-01 were "a bit too far". Now seven (three
+per side), ~10% bigger, in a Mac Finder Cover Flow: the centre film faces you and
+neighbours turn 40/58/70 degrees toward it, receding and dimming
+(`coverFlowPose` in `rankNeighbors.js`). Every poster is absolutely placed from the
+centre, so the film stays centred when a side runs short. The DOM order is
+deliberately the neighbours in rank order with the rated film LAST: as a score
+moves the film past a neighbour, no node moves in the DOM, so CSS transitions on
+each poster's transform carry the slide-and-turn. Rendering ahead/current/behind
+in DOM order would make Vue re-insert the passed neighbour, and a re-inserted
+element jumps instead of transitioning. Reduced motion turns the animation off.

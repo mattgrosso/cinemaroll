@@ -200,9 +200,15 @@ describe('RateMovie', () => {
       expect(titles(wrapper.vm.neighbors.behind)).toEqual(['Six Movie', 'Four Movie'])
     })
 
+    // Read in screen order (by each poster's offset from the centre), not
+    // DOM order: the DOM keeps this film last so posters can slide.
+    const stripInScreenOrder = (wrapper) => wrapper.findAll('.neighbors .neighbor')
+      .map((el) => ({ offset: Number(el.attributes('data-offset')), el }))
+      .sort((a, b) => a.offset - b.offset)
+
     it('renders the strip as ahead, this film, behind', async () => {
       await wrapper.setData({ overall: 7 })
-      const alts = wrapper.findAll('.neighbors img').map((img) => img.attributes('alt'))
+      const alts = stripInScreenOrder(wrapper).map(({ el }) => el.find('img').attributes('alt'))
       expect(alts).toEqual([
         'Nine Movie poster', 'Eight Movie poster',
         'Movie Under Test poster',
@@ -211,10 +217,35 @@ describe('RateMovie', () => {
       expect(wrapper.find('.neighbors .current-movie img').attributes('alt')).toBe('Movie Under Test poster')
     })
 
+    // Cover Flow: the centre faces you, and each side turns its face toward
+    // the centre — more the further out it sits.
+    it('tilts each side toward the centre, more with distance', async () => {
+      await wrapper.setData({ overall: 7 })
+      const angles = stripInScreenOrder(wrapper).map(({ offset, el }) => {
+        const match = el.attributes('style').match(/rotateY\((-?[\d.]+)deg\)/)
+        expect(match, `poster at ${offset} should carry a rotateY`).not.toBeNull()
+        return Number(match[1])
+      })
+      // offsets -2, -1, 0, 1, 2
+      expect(angles[2]).toBe(0)
+      expect(angles[0]).toBeGreaterThan(angles[1])
+      expect(angles[1]).toBeGreaterThan(0)
+      expect(angles[3]).toBeLessThan(0)
+      expect(angles[4]).toBeLessThan(angles[3])
+    })
+
+    // A side that runs short doesn't push the film off centre.
+    it('keeps this film centred when nothing ranks above it', async () => {
+      await wrapper.setData({ overall: 10 })
+      const current = wrapper.find('.neighbors .current-movie')
+      expect(current.attributes('data-offset')).toBe('0')
+      expect(current.attributes('style')).toMatch(/translateX\(0px\)/)
+    })
+
     it('shows nothing above a rating that tops the library', async () => {
       await wrapper.setData({ overall: 10 })
       expect(wrapper.vm.neighbors.ahead).toEqual([])
-      expect(wrapper.vm.neighbors.behind).toHaveLength(4)
+      expect(wrapper.vm.neighbors.behind).toHaveLength(3)
     })
 
     // Re-rating a film already in the library: its own old entry is in the

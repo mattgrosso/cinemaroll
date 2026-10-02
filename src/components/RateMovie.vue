@@ -218,21 +218,28 @@
         </div>
       </DetailSection>
 
-      <!-- Four above, this film, four below, by rating. Last, so the sticky
+      <!-- Three above, this film, three below, by rating. Last, so the sticky
            strip has the whole form to ride along over. -->
       <div v-if="movieToRate" ref="neighbors" class="neighbors" :class="{ unstuck: !neighborsPinned }">
-        <!-- Four either side, all small (2026-10-01: "show more poster in the
-             row and make them all smaller"). Near the top or bottom of the
-             rankings a side just runs short. -->
+        <!-- Cover Flow (2026-10-02): the film being rated faces you in the
+             middle, and its neighbours turn closer to edge-on the further out
+             they sit. Every poster is positioned from the centre, so the film
+             stays centred when one side runs short near the top or bottom of
+             the rankings.
+             DOM order is the neighbours in rank order with this film LAST, on
+             purpose: as a score moves the film past a neighbour, no element
+             changes place in the DOM, so each poster's transform transitions
+             (slides and turns) instead of being re-inserted and jumping. -->
         <div class="neighbor-posters">
-          <div v-for="entry in neighbors.ahead" :key="entry.movie.id" class="neighbor">
-            <img :src="posterUrl(entry.movie, entry)" :alt="`${entry.movie.title} poster`">
-          </div>
-          <div class="current-movie">
-            <img :src="posterUrl(movieToRate, previousEntry)" :alt="`${movieToRate.title} poster`">
-          </div>
-          <div v-for="entry in neighbors.behind" :key="entry.movie.id" class="neighbor">
-            <img :src="posterUrl(entry.movie, entry)" :alt="`${entry.movie.title} poster`">
+          <div
+            v-for="poster in coverFlow"
+            :key="poster.key"
+            class="neighbor"
+            :class="{ 'current-movie': poster.offset === 0 }"
+            :data-offset="poster.offset"
+            :style="coverFlowStyle(poster.offset)"
+          >
+            <img :src="posterUrl(poster.movie, poster.result)" :alt="`${poster.movie.title} poster`">
           </div>
         </div>
         <!-- A pin, not the up/down arrows this used to show. Those read as a
@@ -311,9 +318,9 @@ import { countViewingTagUsage, sortVocabularyByUsage } from "../utils/tags.js";
 import RatingSelect from "./RatingSelect.vue";
 import DetailSection from "./DetailSection.vue";
 import notFoundImage from "../assets/images/Image_not_available.png";
-import { neighborWindow } from "../assets/javascript/rankNeighbors.js";
+import { coverFlowPose, neighborWindow } from "../assets/javascript/rankNeighbors.js";
 
-const NEIGHBORS_PER_SIDE = 4;
+const NEIGHBORS_PER_SIDE = 3;
 
 // Option label text for each rating scale, indexed by option value ("0", "1"…).
 // The leading empty option is rendered by RatingSelect, not listed here.
@@ -584,6 +591,18 @@ export default {
       const insertAt = ownOldRank !== -1 && ownOldRank < this.movieIndex ? this.movieIndex - 1 : this.movieIndex;
       return neighborWindow(ranked, insertAt, NEIGHBORS_PER_SIDE);
     },
+    // The strip's posters with their place relative to this film (negative
+    // above, positive below), neighbours in rank order and this film last —
+    // see the template for why it's last.
+    coverFlow () {
+      const { ahead, behind } = this.neighbors;
+      const neighbor = (entry, offset) => ({ key: entry.movie.id, movie: entry.movie, result: entry, offset });
+      return [
+        ...ahead.map((entry, i) => neighbor(entry, i - ahead.length)),
+        ...behind.map((entry, i) => neighbor(entry, i + 1)),
+        { key: "current", movie: this.movieToRate, result: this.previousEntry, offset: 0 },
+      ];
+    },
     allMoviesRanked () {
       const movies = [...this.$store.getters.allMoviesAsArray];
       return movies.sort(this.sortByRating);
@@ -761,6 +780,14 @@ export default {
       } else {
         this.selectedViewingTags.push(tag);
       }
+    },
+    coverFlowStyle (offset) {
+      const pose = coverFlowPose(offset);
+      return {
+        opacity: pose.opacity,
+        transform: `translate(-50%, -50%) translateX(${pose.x}px) translateZ(${pose.z}px) rotateY(${pose.angle}deg)`,
+        zIndex: pose.layer,
+      };
     },
     posterUrl (movie, result) {
       // Check if user has selected a custom poster in the result object
@@ -1525,31 +1552,41 @@ export default {
         &:active { background: rgba(255, 255, 255, 0.2); }
       }
 
-      /* Nine small posters rather than five big ones (2026-10-01: the pinned
-         strip took about a third of a phone screen). They shrink together on
-         a narrow screen, capped so a wide one doesn't blow them back up. */
+      /* Seven posters in Cover Flow (2026-10-02, after nine small flat ones
+         on 2026-10-01 went "a bit too far"): about 10% bigger than those
+         rendered on a phone, one fewer each side. Each poster is placed from
+         the centre by its inline transform (`coverFlowPose`), so the row is
+         a fixed-height stage rather than a flex row. */
       .neighbor-posters {
-        align-items: center;
-        display: flex;
         flex: 1 1 auto;
-        gap: 3px;
-        justify-content: center;
+        height: 88px;
         min-width: 0;
+        perspective: 500px;
+        position: relative;
       }
 
       .neighbor {
-        flex: 1 1 0;
-        max-width: 40px;
-        min-width: 0;
-        opacity: 0.75;
+        left: 50%;
+        position: absolute;
+        top: 50%;
+        transition: transform 320ms ease, opacity 320ms ease;
+        width: 46px;
+        /* A poster newly in the window (the film moved past the edge of it)
+           fades in where it lands instead of popping. */
+        animation: neighbor-arrive 320ms ease;
       }
 
       .current-movie {
-        flex: 1.4 1 0;
-        max-width: 56px;
-        min-width: 0;
+        width: 54px;
 
         img { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .neighbor {
+          animation: none;
+          transition: none;
+        }
       }
 
       img {
@@ -1559,6 +1596,10 @@ export default {
         object-fit: cover;
         width: 100%;
       }
+    }
+
+    @keyframes neighbor-arrive {
+      from { opacity: 0; }
     }
 
     .modal-note { color: #ccc; }
