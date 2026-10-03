@@ -16,9 +16,14 @@
       <!-- The heading is the only thing distinguishing an edit from a new
            rating on a screen that otherwise looks identical, and getting that
            wrong means overwriting a viewing you meant to keep. -->
+      <!-- The title sits on a fade across the whole bottom of the backdrop,
+           large and left-aligned (bug report 2026-10-02: "I would like the
+           title to be more prominently displayed"); it used to be a small
+           translucent box in the bottom-right corner. -->
       <h1 class="rate-title">
         <span class="rate-kicker">{{ isEditing ? 'Edit rating' : 'Rate' }}</span>
-        {{title}}
+        <span class="rate-title-text">{{ title }}</span>
+        <span v-if="year" class="rate-title-year">{{ year }}</span>
       </h1>
     </div>
 
@@ -1055,25 +1060,48 @@ export default {
         &:active { opacity: 0.6; }
       }
 
+      /* Full-width fade rather than a corner box, so a bright backdrop
+         still gives the white title a near-black ground: the bottom stop is
+         .85 black, and the text shadow covers the lighter top of the fade. */
       .rate-title {
-        background-color: rgba(0, 0, 0, 0.5);
+        background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.6) 45%, rgba(0, 0, 0, 0.85) 100%);
         bottom: 0;
         color: #fff;
-        font-size: 1.75rem;
-        line-height: 1.15;
+        font-size: 2.3rem;
+        font-weight: 700;
+        left: 0;
+        line-height: 1.1;
         margin: 0;
-        padding: 6px 12px;
+        overflow-wrap: anywhere;
+        padding: 40px 14px 10px;
         position: absolute;
         right: 0;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9), 0 0 12px rgba(0, 0, 0, 0.6);
+      }
+
+      .rate-title-text {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
       }
 
       .rate-kicker {
         color: #6fd39b;
         display: block;
-        font-size: 0.62rem;
+        font-size: 0.75rem;
         font-weight: 700;
         letter-spacing: 0.08em;
+        margin-bottom: 2px;
         text-transform: uppercase;
+      }
+
+      .rate-title-year {
+        color: #ddd;
+        display: block;
+        font-size: 1rem;
+        font-weight: 400;
+        margin-top: 2px;
       }
 
       .backdrop-image {

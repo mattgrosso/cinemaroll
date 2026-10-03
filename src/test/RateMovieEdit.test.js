@@ -155,6 +155,32 @@ describe('editing an existing rating', () => {
   })
 })
 
+// Bug report 2026-10-02: "I would like the title to be more prominently
+// displayed". The header now carries the kicker, the title and the year as
+// separate pieces; the kicker is what tells an edit from a new rating.
+describe('the header', () => {
+  it('labels a new rating "Rate", with the title and year', async () => {
+    const { wrapper } = mountEditing({ ratingToEdit: null })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.rate-kicker').text()).toBe('Rate')
+    expect(wrapper.find('.rate-title-text').text()).toBe('Movie Under Test')
+    expect(wrapper.find('.rate-title-year').text()).toBe('2021')
+  })
+
+  it('labels an edit "Edit rating"', async () => {
+    const { wrapper } = mountEditing({ ratingToEdit: { dbKey: 'key-555', index: 1 } })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.rate-kicker').text()).toBe('Edit rating')
+    expect(wrapper.find('.rate-title-text').text()).toBe('Movie Under Test')
+  })
+
+  it('leaves the year out when the film has no release date', async () => {
+    const { wrapper } = mountEditing({ ratingToEdit: null })
+    await wrapper.setData({ year: '' })
+    expect(wrapper.find('.rate-title-year').exists()).toBe(false)
+  })
+})
+
 describe('saving an edit', () => {
   // THE data-safety assertion: an edit must not add a viewing.
   it('replaces the viewing in place instead of appending another', async () => {
