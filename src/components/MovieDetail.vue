@@ -158,7 +158,7 @@
           <FriendsWhoSaw :tmdbId="movie && movie.id" label="Club" />
         </div>
 
-        <!-- Letterboxd, Tags and Best since are tiles, two across, like the film band. -->
+        <!-- Letterboxd and Tags are tiles, two across, like the film band. -->
         <div class="detail-tiles">
         <DetailSection v-if="letterboxdWrittenReviews.length || letterboxdFilmLine" id="letterboxd" tile label="Letterboxd" tone="you" :summary="letterboxdSummary" class="letterboxd-section">
           <p v-if="letterboxdFilmLine" class="letterboxd-film mb-1">
@@ -260,30 +260,6 @@
             </div>
           </div>
         </div>
-        </DetailSection>
-        <!-- "Best in <span>" leads with the time span (2026-09-30, second try:
-               "on the date this movie was released, it was the best movie that
-               had come out for six weeks"). lastHigherRatedMovie is the most
-               recently RELEASED earlier film you rated higher; the poster is it.
-               Third try, same day: the sentence reads "The best movie released
-               since E.T., 6 years prior." A tie doesn't end the run. Fourth
-               tweak: the "Best in 6 years" label is gone — just the sentence.
-               Fifth move (2026-10-04): out of the top panel into a folded tile —
-               "it doesn't need to be this prominently featured". Closed, the
-               film and the span; open, the sentence and the poster. -->
-        <DetailSection v-if="lastHigherRatedMovie" id="best-since" tile label="Best since" tone="you" :summary="bestSinceSummary">
-          <button type="button" class="best-since-row" @click="navigateToMovie(lastHigherRatedMovie.movie.id)">
-            <img
-              v-if="getPosterPath(lastHigherRatedMovie)"
-              :src="`https://image.tmdb.org/t/p/w154${getPosterPath(lastHigherRatedMovie)}`"
-              :alt="lastHigherRatedMovie.movie.title"
-              class="best-since-thumb">
-            <span class="best-since-text">
-              The best movie released since
-              <strong>{{ lastHigherRatedMovie.movie.title }}</strong>, {{ bestSinceSpan }} prior.
-            </span>
-            <i class="bi bi-chevron-right best-since-chevron"></i>
-          </button>
         </DetailSection>
         </div>
 
@@ -581,6 +557,33 @@
         </div>
 
         <div class="detail-band detail-band--last">
+        <!-- "Best in <span>" leads with the time span (2026-09-30, second try:
+               "on the date this movie was released, it was the best movie that
+               had come out for six weeks"). lastHigherRatedMovie is the most
+               recently RELEASED earlier film you rated higher; the poster is it.
+               Third try, same day: the sentence reads "The best movie released
+               since E.T., 6 years prior." A tie doesn't end the run. Fourth
+               tweak: the "Best in 6 years" label is gone — just the sentence.
+               Fifth move (2026-10-04): out of the top panel into a folded tile —
+               "it doesn't need to be this prominently featured". Closed, the
+               film and the span; open, the sentence and the poster. Sixth
+               (2026-10-04, same night): alone on a line under Letterboxd and
+               Tags it looked lopsided — "move the best since message lower" —
+               so it's a plain row at the foot of the page, above Artwork. -->
+        <DetailSection v-if="lastHigherRatedMovie" id="best-since" label="Best since" tone="you" :summary="bestSinceSummary">
+          <button type="button" class="best-since-row" @click="navigateToMovie(lastHigherRatedMovie.movie.id)">
+            <img
+              v-if="getPosterPath(lastHigherRatedMovie)"
+              :src="`https://image.tmdb.org/t/p/w154${getPosterPath(lastHigherRatedMovie)}`"
+              :alt="lastHigherRatedMovie.movie.title"
+              class="best-since-thumb">
+            <span class="best-since-text">
+              The best movie released since
+              <strong>{{ lastHigherRatedMovie.movie.title }}</strong>, {{ bestSinceSpan }} prior.
+            </span>
+            <i class="bi bi-chevron-right best-since-chevron"></i>
+          </button>
+        </DetailSection>
         <DetailSection id="artwork" label="Artwork" tone="plain" :summary="'Choose another poster or backdrop'">
         <!-- Choose Alternate Poster & Backdrop Section -->
         <div class="alternate-media-section">
@@ -2553,6 +2556,9 @@ export default {
     display: grid;
     gap: 6px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    /* An odd tile out takes the whole line, so a grid never ends on a gap. */
+    > :last-child:nth-child(odd) { grid-column: 1 / -1; }
   }
 
   /* A band title is a heading, a row label is a field name — they must not

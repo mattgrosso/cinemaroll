@@ -84,6 +84,13 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
   when there are viewings OR club ratings (`clubFriends`). Best since is a folded
   `#best-since` tile after Letterboxd and Tags, summary "E.T., 6 years"
   (`bestSinceSummary`), the sentence and a 40×60 poster inside.
+  **Third pass, same night** ("I don't like the asymmetry. Let's move the best since
+  message lower"): alone on a line under Letterboxd and Tags it looked lopsided, so
+  `#best-since` is now a plain (non-tile) row in `.detail-band--last`, just above
+  Artwork; the You band's grid is Letterboxd + Tags only. Any `.detail-tiles` grid
+  stretches an odd last tile to full width (`:last-child:nth-child(odd)`), so no grid
+  ends on a gap. Offered alternative if the foot of the page is too far: a row right
+  under the film tiles.
 - **Old section order** (pre-redesign, for reading old history): Genres → Awards → Cast →
   Keywords → Box Office → Country of Origin → Set In → Filmed In → Tags. "Country of Origin" is TMDB's production countries; it was
   headed "Made In" until 2026-09-08, when Matt couldn't tell it from Filmed In. Don't

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { shallowMount } from '@vue/test-utils'
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import MovieDetail from '@/components/MovieDetail.vue'
 import { getAllRatings } from '@/assets/javascript/GetRating.js'
 
@@ -161,6 +163,14 @@ describe('MovieDetail', () => {
       const letterboxd = tiles.find('#letterboxd')
       expect(letterboxd.exists()).toBe(true)
       expect(letterboxd.attributes('tile')).toBeDefined()
+    })
+
+    it('stretches an odd tile out to the full width, so no grid ends on a gap', () => {
+      // jsdom loads no CSS, so read the rule from the component's stylesheet.
+      const source = readFileSync(resolve(__dirname, '../components/MovieDetail.vue'), 'utf8')
+      const grid = source.slice(source.indexOf('  .detail-tiles {'))
+      const block = grid.slice(0, grid.indexOf('\n  }\n'))
+      expect(block).toMatch(/> :last-child:nth-child\(odd\) \{ grid-column: 1 \/ -1; \}/)
     })
   })
 
@@ -670,11 +680,16 @@ describe('MovieDetail — Best in <span>', () => {
     const wrapper = mountWith(library)
     await wrapper.setData({ result: current, movie: current.movie })
 
-    // A folded tile beside Letterboxd and Tags (2026-10-04: "it doesn't
-    // need to be this prominently featured right up at the top").
-    const tile = wrapper.find('.detail-band--you .detail-tiles #best-since')
+    // Folded, and low on the page (2026-10-04: "it doesn't need to be this
+    // prominently featured", then "I don't like the asymmetry. Let's move
+    // the best since message lower"): a plain row just above Artwork, out
+    // of the You band's tiles so Letterboxd and Tags pair up.
+    expect(wrapper.find('.detail-band--you #best-since').exists()).toBe(false)
+    const tile = wrapper.find('.detail-band--last #best-since')
     expect(tile.exists()).toBe(true)
-    expect(tile.attributes('tile')).toBeDefined()
+    expect(tile.attributes('tile')).toBeUndefined()
+    const lastBand = wrapper.findAll('.detail-band--last > *').map(el => el.attributes('id'))
+    expect(lastBand).toEqual(['best-since', 'artwork'])
     expect(tile.attributes('summary')).toBe('Older Better, 6 weeks')
     expect(wrapper.find('.you-panel .best-since-row').exists()).toBe(false)
 
