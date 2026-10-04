@@ -705,3 +705,18 @@ moves the film past a neighbour, no node moves in the DOM, so CSS transitions on
 each poster's transform carry the slide-and-turn. Rendering ahead/current/behind
 in DOM order would make Vue re-insert the passed neighbour, and a re-inserted
 element jumps instead of transitioning. Reduced motion turns the animation off.
+
+## Rate page Cover Flow fills the strip (2026-10-04)
+
+Bug report: the overlapping posters were liked, but "they don't use enough of the
+space" (the note cut off at "they need to be a…", read as "a bit bigger"). The
+spread was fixed px (outermost at 106px from centre, 46px posters), so on a 402px
+phone the row covered about 230px of a ~346px stage. `coverFlowLayout(stageWidth)`
+in `rankNeighbors.js` now sizes it to the stage, measured with a ResizeObserver on
+the Rate page: it projects each turned card's edges through the 500px perspective,
+packs the cards out from the centre each tucked a little under the next, and bisects
+for the poster width that lands the outer edge on the stage's edge. Posters are
+capped at 70px (centre 82px; was 46/54) so a wide screen spaces them out instead of
+growing the strip forever — on Matt's phone they hit the cap and overlap by ~1.5px.
+Angles, fading and the sliding transitions are unchanged; depth now scales with
+poster width.

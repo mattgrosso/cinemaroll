@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { coverFlowPose, neighborWindow } from '@/assets/javascript/rankNeighbors';
+import { COVER_FLOW_PERSPECTIVE, coverFlowLayout, coverFlowPose, neighborWindow } from '@/assets/javascript/rankNeighbors';
 
 const ranked = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'];
 
@@ -50,5 +50,52 @@ describe('coverFlowPose', () => {
   it('stacks the outer posters behind the inner ones', () => {
     expect(coverFlowPose(0).layer).toBeGreaterThan(coverFlowPose(1).layer);
     expect(coverFlowPose(-1).layer).toBeGreaterThan(coverFlowPose(-3).layer);
+  });
+
+  it('poses from the layout it is given', () => {
+    const wide = coverFlowLayout(600);
+    expect(coverFlowPose(3, wide).x).toBe(wide.steps[3].x);
+    expect(coverFlowPose(-3, wide).x).toBe(-wide.steps[3].x);
+  });
+});
+
+// 2026-10-04 bug report: the strip "doesn't use enough of the space". The
+// spread was fixed px, so the row filled about two thirds of a phone.
+describe('coverFlowLayout', () => {
+  // Where the outermost poster's outer edge lands on screen, from the centre.
+  const outerEdge = (layout) => {
+    const step = layout.steps[layout.steps.length - 1];
+    const rad = (step.angle * Math.PI) / 180;
+    const half = layout.poster / 2;
+    const p = COVER_FLOW_PERSPECTIVE;
+    return ((step.x + half * Math.cos(rad)) * p) / (p - (step.z + half * Math.sin(rad)));
+  };
+
+  it.each([250, 346, 390, 600])('reaches both edges of a %ipx stage', (width) => {
+    expect(outerEdge(coverFlowLayout(width))).toBeCloseTo(width / 2, 0);
+  });
+
+  it('spreads wider on a wider stage', () => {
+    const outer = (width) => coverFlowLayout(width).steps[3].x;
+    expect(outer(390)).toBeGreaterThan(outer(346));
+    expect(outer(346)).toBeGreaterThan(outer(250));
+  });
+
+  // Matt's phone: 402px wide leaves a 346px stage beside the pin button.
+  it('fills a phone with bigger posters that still overlap', () => {
+    const layout = coverFlowLayout(346);
+    expect(layout.poster).toBeGreaterThanOrEqual(58);
+    expect(layout.current).toBeGreaterThan(layout.poster);
+    expect(layout.height).toBeGreaterThanOrEqual(layout.current * 1.5);
+    const right = [1, 2, 3].map((d) => coverFlowPose(d, layout));
+    expect(right.map((p) => p.x)).toEqual([...right.map((p) => p.x)].sort((a, b) => a - b));
+  });
+
+  it('stops growing the posters on a wide stage', () => {
+    expect(coverFlowLayout(800).poster).toBe(coverFlowLayout(400).poster);
+  });
+
+  it('lays out for a phone before the stage is measured', () => {
+    expect(coverFlowLayout(0)).toEqual(coverFlowLayout(346));
   });
 });

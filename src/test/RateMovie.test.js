@@ -242,6 +242,21 @@ describe('RateMovie', () => {
       expect(current.attributes('style')).toMatch(/translateX\(0px\)/)
     })
 
+    // 2026-10-04: the strip spreads to the width it's measured at, rather
+    // than a fixed spread that left a third of a phone's strip empty.
+    it('spreads the posters wider when the strip is wider', async () => {
+      await wrapper.setData({ overall: 7 })
+      const outerX = () => {
+        const outer = stripInScreenOrder(wrapper).at(-1).el
+        return Number(outer.attributes('style').match(/translateX\((-?[\d.]+)px\)/)[1])
+      }
+      await wrapper.setData({ stageWidth: 300 })
+      const narrow = outerX()
+      await wrapper.setData({ stageWidth: 500 })
+      expect(outerX()).toBeGreaterThan(narrow)
+      expect(wrapper.find('.neighbor-posters').attributes('style')).toMatch(/height: \d+px/)
+    })
+
     it('shows nothing above a rating that tops the library', async () => {
       await wrapper.setData({ overall: 10 })
       expect(wrapper.vm.neighbors.ahead).toEqual([])

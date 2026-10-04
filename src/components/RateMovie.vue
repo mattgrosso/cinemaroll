@@ -235,7 +235,7 @@
              purpose: as a score moves the film past a neighbour, no element
              changes place in the DOM, so each poster's transform transitions
              (slides and turns) instead of being re-inserted and jumping. -->
-        <div class="neighbor-posters">
+        <div :ref="observeStage" class="neighbor-posters" :style="{ height: `${coverFlowLayout.height}px` }">
           <div
             v-for="poster in coverFlow"
             :key="poster.key"
@@ -323,7 +323,7 @@ import { countViewingTagUsage, sortVocabularyByUsage } from "../utils/tags.js";
 import RatingSelect from "./RatingSelect.vue";
 import DetailSection from "./DetailSection.vue";
 import notFoundImage from "../assets/images/Image_not_available.png";
-import { coverFlowPose, neighborWindow } from "../assets/javascript/rankNeighbors.js";
+import { coverFlowLayout, coverFlowPose, neighborWindow } from "../assets/javascript/rankNeighbors.js";
 
 const NEIGHBORS_PER_SIDE = 3;
 
@@ -401,6 +401,9 @@ export default {
       // that made the only evidence of this feature a class mutation no test
       // could see, which is part of how it sat broken for eleven months.
       neighborsPinned: true,
+      // The Cover Flow stage's measured width (px); 0 until measured, which
+      // lays it out for a phone. See `observeStage`.
+      stageWidth: 0,
       direction: null,
       imagery: null,
       story: null,
@@ -608,6 +611,11 @@ export default {
         { key: "current", movie: this.movieToRate, result: this.previousEntry, offset: 0 },
       ];
     },
+    // Poster sizes and poses sized to the stage's width, so the strip fills it
+    // (2026-10-04: it "doesn't use enough of the space").
+    coverFlowLayout () {
+      return coverFlowLayout(this.stageWidth);
+    },
     allMoviesRanked () {
       const movies = [...this.$store.getters.allMoviesAsArray];
       return movies.sort(this.sortByRating);
@@ -786,9 +794,23 @@ export default {
         this.selectedViewingTags.push(tag);
       }
     },
+    // Function ref on the Cover Flow stage: watch its width so the posters
+    // spread to its edges. Called with the element on mount, null on unmount.
+    observeStage (el) {
+      if (el === this.observedStage) return;
+      this.stageObserver?.disconnect();
+      this.observedStage = el;
+      if (!el || typeof ResizeObserver === 'undefined') return;
+      this.stageObserver = new ResizeObserver(([entry]) => {
+        this.stageWidth = Math.round(entry.contentRect.width);
+      });
+      this.stageObserver.observe(el);
+    },
     coverFlowStyle (offset) {
-      const pose = coverFlowPose(offset);
+      const layout = this.coverFlowLayout;
+      const pose = coverFlowPose(offset, layout);
       return {
+        width: `${offset === 0 ? layout.current : layout.poster}px`,
         opacity: pose.opacity,
         transform: `translate(-50%, -50%) translateX(${pose.x}px) translateZ(${pose.z}px) rotateY(${pose.angle}deg)`,
         zIndex: pose.layer,
@@ -1584,10 +1606,12 @@ export default {
          on 2026-10-01 went "a bit too far"): about 10% bigger than those
          rendered on a phone, one fewer each side. Each poster is placed from
          the centre by its inline transform (`coverFlowPose`), so the row is
-         a fixed-height stage rather than a flex row. */
+         a stage rather than a flex row. Since 2026-10-04 its height and the
+         posters' widths are inline too: `coverFlowLayout` sizes them to the
+         stage's measured width so the row reaches both edges. Keep
+         `perspective` in step with COVER_FLOW_PERSPECTIVE. */
       .neighbor-posters {
         flex: 1 1 auto;
-        height: 88px;
         min-width: 0;
         perspective: 500px;
         position: relative;
@@ -1598,15 +1622,12 @@ export default {
         position: absolute;
         top: 50%;
         transition: transform 320ms ease, opacity 320ms ease;
-        width: 46px;
         /* A poster newly in the window (the film moved past the edge of it)
            fades in where it lands instead of popping. */
         animation: neighbor-arrive 320ms ease;
       }
 
       .current-movie {
-        width: 54px;
-
         img { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85); }
       }
 
