@@ -75,6 +75,15 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
   it. Club pills follow under a small "Club" label (`FriendsWhoSaw`'s `label` prop),
   no divider. Letterboxd and Tags are `tile`s in their own `.detail-tiles` grid, so a
   test looking for the film band's grid must pick the one holding `#genres`.
+  **Second pass, same night** ("best movie released since needs a whole new home ...
+  get rid of the title that literally says the word you ... we're stuck with this like
+  pill with name and stars"): the You band has NO title — the panel sits straight under
+  the action tiles. The club is lines inside `.you-panel`, after the viewings:
+  `FriendsWhoSaw` renders a thin "Club" divider then `.friend-row`s, name left, stars
+  right, with a hidden chevron so the stars line up under your score. The panel shows
+  when there are viewings OR club ratings (`clubFriends`). Best since is a folded
+  `#best-since` tile after Letterboxd and Tags, summary "E.T., 6 years"
+  (`bestSinceSummary`), the sentence and a 40×60 poster inside.
 - **Old section order** (pre-redesign, for reading old history): Genres → Awards → Cast →
   Keywords → Box Office → Country of Origin → Set In → Filmed In → Tags. "Country of Origin" is TMDB's production countries; it was
   headed "Made In" until 2026-09-08, when Matt couldn't tell it from Filmed In. Don't

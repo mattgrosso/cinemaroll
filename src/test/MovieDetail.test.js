@@ -119,10 +119,11 @@ describe('MovieDetail', () => {
   })
 
   // Report 2026-10-04: "the section about me is a bit messy and needs to be
-  // cleaned up and tightened up." Viewings and Best since share one panel,
-  // there is no RATINGS label, and Letterboxd and Tags are tiles.
+  // cleaned up and tightened up." Second pass the same night: no "You"
+  // heading, Best since down to a tile, and the club as lines in the same
+  // panel as the viewings rather than pills.
   describe('You band', () => {
-    it('puts each viewing on one line in a single panel, with no Ratings label', async () => {
+    it('puts each viewing on one line in a single panel, with no heading', async () => {
       getAllRatings.mockImplementation((entry) => entry?.ratings || null)
       try {
         const ratings = [
@@ -130,7 +131,9 @@ describe('MovieDetail', () => {
           { medium: 'Netflix', date: new Date(2025, 5, 6).getTime(), calculatedTotal: 7.5 }
         ]
         await wrapper.setData({ previousEntry: { ratings } })
-        const panel = wrapper.find('.detail-band--you .you-panel')
+        const band = wrapper.find('.detail-band--you')
+        expect(band.find('.band-title').exists()).toBe(false)
+        const panel = band.find('.you-panel')
         expect(panel.exists()).toBe(true)
         expect(panel.find('h4').exists()).toBe(false)
         const lines = panel.findAll('.accordion-button')
@@ -141,6 +144,12 @@ describe('MovieDetail', () => {
         // Tapping a line still opens the criteria and Edit / Delete.
         expect(panel.text()).toContain('Edit Rating')
         expect(panel.text()).toContain('Delete Rating')
+        // The club continues the same list, under a Club label.
+        const club = panel.findComponent({ name: 'FriendsWhoSaw' })
+        expect(club.exists()).toBe(true)
+        expect(club.props('label')).toBe('Club')
+        // Best since is not in the panel any more.
+        expect(panel.find('.best-since-row').exists()).toBe(false)
       } finally {
         getAllRatings.mockImplementation(() => [])
       }
@@ -152,11 +161,6 @@ describe('MovieDetail', () => {
       const letterboxd = tiles.find('#letterboxd')
       expect(letterboxd.exists()).toBe(true)
       expect(letterboxd.attributes('tile')).toBeDefined()
-    })
-
-    it('labels the club pills instead of giving them a divider', () => {
-      const pills = wrapper.findComponent({ name: 'FriendsWhoSaw' })
-      expect(pills.props('label')).toBe('Club')
     })
   })
 
@@ -666,7 +670,15 @@ describe('MovieDetail — Best in <span>', () => {
     const wrapper = mountWith(library)
     await wrapper.setData({ result: current, movie: current.movie })
 
-    const row = wrapper.find('.best-since-row')
+    // A folded tile beside Letterboxd and Tags (2026-10-04: "it doesn't
+    // need to be this prominently featured right up at the top").
+    const tile = wrapper.find('.detail-band--you .detail-tiles #best-since')
+    expect(tile.exists()).toBe(true)
+    expect(tile.attributes('tile')).toBeDefined()
+    expect(tile.attributes('summary')).toBe('Older Better, 6 weeks')
+    expect(wrapper.find('.you-panel .best-since-row').exists()).toBe(false)
+
+    const row = tile.find('.best-since-row')
     // Fourth tweak (2026-09-30): no "Best in 6 weeks" label, just the sentence.
     expect(row.find('.best-since-label').exists()).toBe(false)
     const text = row.find('.best-since-text').text().replace(/\s+/g, ' ')
@@ -685,5 +697,6 @@ describe('MovieDetail — Best in <span>', () => {
     const wrapper = mountWith([current, film(2, 'Worse', '2019-05-01', 7.0)])
     await wrapper.setData({ result: current, movie: current.movie })
     expect(wrapper.find('.best-since-row').exists()).toBe(false)
+    expect(wrapper.find('#best-since').exists()).toBe(false)
   })
 })

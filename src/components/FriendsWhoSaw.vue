@@ -1,7 +1,12 @@
 <template>
-  <div v-if="friends.length" class="friends-who-saw mb-3">
-    <span v-if="label" class="friends-who-saw-label">{{ label }}</span>
-    <span v-for="friend in friends" :key="friend.key" class="friend-pill">
+  <!-- Lines, not pills (2026-10-04: "we're stuck with this like pill with
+       name and stars"). On the movie page they continue your own viewing
+       lines in one panel: the label is a thin divider, then the name on the
+       left and the stars where your score sits. The hidden chevron matches
+       the one on your lines, so the stars line up under your score. -->
+  <div v-if="friends.length" class="friends-who-saw">
+    <div v-if="label" class="friends-who-saw-label">{{ label }}</div>
+    <div v-for="friend in friends" :key="friend.key" class="friend-row">
       <span class="friend-name">{{ friend.name }}</span>
       <span v-if="friend.stars !== null" class="friend-stars" :aria-label="`${friend.stars} out of 5`">
         <i v-for="i in fullStars(friend)" :key="`f${i}`" class="bi bi-star-fill"/>
@@ -9,9 +14,10 @@
       </span>
       <!-- No stars published yet: their app assigns those, and an older
            profile simply doesn't carry them. The composite is worth less as a
-           comparison but it's what we have, and it beats a blank pill. -->
+           comparison but it's what we have, and it beats a blank line. -->
       <span v-else class="friend-score">{{ formatScore(friend.score) }}</span>
-    </span>
+      <i class="bi bi-chevron-down friend-row-spacer" aria-hidden="true"></i>
+    </div>
   </div>
 </template>
 
@@ -109,44 +115,54 @@ export default {
 <style lang="scss">
 @import '@/assets/scss/detail-scale';
   .friends-who-saw {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-
     .friends-who-saw-label {
-      align-self: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
       color: #6fb8ff;
       font-size: ds(0.62rem);
       font-weight: 700;
       letter-spacing: 0.08em;
-      margin-right: 0.2rem;
+      padding: 0.4rem 0.6rem 0.1rem;
       text-transform: uppercase;
     }
 
-    .friend-pill {
+    /* Same measure as a viewing line on the movie page. */
+    .friend-row {
       align-items: center;
-      background: #2e2e2e;
-      border-radius: 999px;
-      display: inline-flex;
+      display: flex;
       font-size: ds(0.8rem);
-      gap: 0.4rem;
-      padding: 0.2rem 0.6rem;
+      gap: 8px;
+      padding: 0.35rem 0.6rem;
+    }
+
+    .friend-name {
+      color: #fff;
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .friend-stars {
       color: #f8d62b;
       display: inline-flex;
-      font-size: ds(0.7rem);
-      gap: 0.05rem;
+      flex: 0 0 auto;
+      font-size: ds(0.75rem);
+      gap: 0.1rem;
       white-space: nowrap;
     }
 
     .friend-score {
-      /* Tabular so a column of pills doesn't jitter, and #ccc rather than
+      /* Tabular so the column doesn't jitter, and #ccc rather than
          Bootstrap's .text-muted, which fails contrast on this app's dark
          panels (see .claude/rules/vue-ui.md). */
       color: #ccc;
+      flex: 0 0 auto;
       font-variant-numeric: tabular-nums;
+    }
+
+    .friend-row-spacer {
+      flex: 0 0 auto;
+      font-size: ds(0.7rem);
+      visibility: hidden;
     }
   }
 </style>

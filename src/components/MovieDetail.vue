@@ -80,13 +80,12 @@
         </div>
 
         <div class="detail-band detail-band--you">
-          <p class="band-title">You</p>
-        <!-- One panel, the film band's look (report, 2026-10-04: "the section
-             about me is a bit messy and needs to be cleaned up and tightened
-             up"): a thin line per viewing — how and when, then the score;
-             tap for the criteria and Edit/Delete — and Best since as the
-             panel's last line. The You heading names it, so no RATINGS label. -->
-        <div v-if="getAllRatings(previousEntry) || lastHigherRatedMovie" class="you-panel">
+        <!-- One panel, one list: a thin line per viewing — how and when, then
+             the score; tap for the criteria and Edit/Delete — then the club,
+             a line per friend with their stars where your score sits (report,
+             2026-10-04, second pass: no "You" heading, and the club out of
+             its pills). Best since moved down to a tile of its own. -->
+        <div v-if="getAllRatings(previousEntry) || clubFriends.length" class="you-panel">
           <div v-if="getAllRatings(previousEntry)" class="ratings-and-comparison-wrapper">
           <div class="ratings-section">
             <div class="accordion">
@@ -156,32 +155,10 @@
           </div>
           </div>
 
-          <!-- "Best in <span>" leads with the time span (2026-09-30, second try:
-               "on the date this movie was released, it was the best movie that
-               had come out for six weeks"). lastHigherRatedMovie is the most
-               recently RELEASED earlier film you rated higher; the poster is it.
-               Third try, same day: the sentence reads "The best movie released
-               since E.T., 6 years prior." A tie doesn't end the run. Fourth
-               tweak: the "Best in 6 years" label is gone — just the sentence. -->
-          <button v-if="lastHigherRatedMovie" type="button" class="best-since-row" @click="navigateToMovie(lastHigherRatedMovie.movie.id)">
-            <img
-              v-if="getPosterPath(lastHigherRatedMovie)"
-              :src="`https://image.tmdb.org/t/p/w154${getPosterPath(lastHigherRatedMovie)}`"
-              :alt="lastHigherRatedMovie.movie.title"
-              class="best-since-thumb">
-            <span class="best-since-text">
-              The best movie released since
-              <strong>{{ lastHigherRatedMovie.movie.title }}</strong>, {{ bestSinceSpan }} prior.
-            </span>
-            <i class="bi bi-chevron-right best-since-chevron"></i>
-          </button>
+          <FriendsWhoSaw :tmdbId="movie && movie.id" label="Club" />
         </div>
 
-        <!-- Club friends who have rated this, as pills, under a small label
-             rather than a divider of their own. -->
-        <FriendsWhoSaw :tmdbId="movie && movie.id" label="Club" />
-
-        <!-- Letterboxd and Tags are tiles, two across, like the film band. -->
+        <!-- Letterboxd, Tags and Best since are tiles, two across, like the film band. -->
         <div class="detail-tiles">
         <DetailSection v-if="letterboxdWrittenReviews.length || letterboxdFilmLine" id="letterboxd" tile label="Letterboxd" tone="you" :summary="letterboxdSummary" class="letterboxd-section">
           <p v-if="letterboxdFilmLine" class="letterboxd-film mb-1">
@@ -283,6 +260,30 @@
             </div>
           </div>
         </div>
+        </DetailSection>
+        <!-- "Best in <span>" leads with the time span (2026-09-30, second try:
+               "on the date this movie was released, it was the best movie that
+               had come out for six weeks"). lastHigherRatedMovie is the most
+               recently RELEASED earlier film you rated higher; the poster is it.
+               Third try, same day: the sentence reads "The best movie released
+               since E.T., 6 years prior." A tie doesn't end the run. Fourth
+               tweak: the "Best in 6 years" label is gone — just the sentence.
+               Fifth move (2026-10-04): out of the top panel into a folded tile —
+               "it doesn't need to be this prominently featured". Closed, the
+               film and the span; open, the sentence and the poster. -->
+        <DetailSection v-if="lastHigherRatedMovie" id="best-since" tile label="Best since" tone="you" :summary="bestSinceSummary">
+          <button type="button" class="best-since-row" @click="navigateToMovie(lastHigherRatedMovie.movie.id)">
+            <img
+              v-if="getPosterPath(lastHigherRatedMovie)"
+              :src="`https://image.tmdb.org/t/p/w154${getPosterPath(lastHigherRatedMovie)}`"
+              :alt="lastHigherRatedMovie.movie.title"
+              class="best-since-thumb">
+            <span class="best-since-text">
+              The best movie released since
+              <strong>{{ lastHigherRatedMovie.movie.title }}</strong>, {{ bestSinceSpan }} prior.
+            </span>
+            <i class="bi bi-chevron-right best-since-chevron"></i>
+          </button>
         </DetailSection>
         </div>
 
@@ -654,6 +655,7 @@ import { formatScore } from '../assets/javascript/formatScore.js';
 import axios from 'axios';
 import ToggleableRating from './ToggleableRating.vue';
 import FriendsWhoSaw from './FriendsWhoSaw.vue';
+import { friendsWhoRated } from '../assets/javascript/friendViewings.js';
 import DetailSection from './DetailSection.vue';
 import { formatMoneyShort } from '../assets/javascript/formatMoney.js';
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
@@ -1133,6 +1135,15 @@ export default {
       return earlierMovies.length > 0 ? earlierMovies[0] : null;
     },
 
+    // The Best since tile's folded line: "E.T., 6 years".
+    bestSinceSummary () {
+      if (!this.lastHigherRatedMovie) return '';
+      return `${this.lastHigherRatedMovie.movie.title}, ${this.bestSinceSpan}`;
+    },
+    // Only to decide whether the panel shows; FriendsWhoSaw draws the lines.
+    clubFriends () {
+      return friendsWhoRated(this.$store.getters.filmClubFriends, this.movie && this.movie.id);
+    },
     bestSinceSpan () {
       if (!this.lastHigherRatedMovie) return '';
       return this.formatTimeDifference(this.lastHigherRatedMovie.movie.release_date, this.movie.release_date);
@@ -2491,20 +2502,24 @@ export default {
     margin-bottom: 6px;
     overflow: hidden;
 
-    .accordion-item + .accordion-item,
-    .ratings-and-comparison-wrapper + .best-since-row {
+    .accordion-item + .accordion-item {
       border-top: 1px solid rgba(255, 255, 255, 0.08);
     }
+
+    /* With no viewings of your own the club opens the panel: no divider. */
+    :deep(.friends-who-saw:first-child .friends-who-saw-label) { border-top: 0; }
   }
 
+  /* Inside the Best since tile: the sentence beside a poster you can tap. */
   .best-since-row {
     align-items: center;
     background: none;
     border: 0;
+    border-radius: 6px;
     color: #fff;
     display: flex;
-    gap: 8px;
-    padding: 0.35rem 0.6rem;
+    gap: 10px;
+    padding: 2px 0;
     text-align: left;
     width: 100%;
 
@@ -2512,11 +2527,11 @@ export default {
   }
 
   .best-since-thumb {
-    border-radius: 2px;
+    border-radius: 3px;
     flex: 0 0 auto;
-    height: 30px;
+    height: 60px;
     object-fit: cover;
-    width: 20px;
+    width: 40px;
   }
 
   .best-since-text {
@@ -2538,14 +2553,6 @@ export default {
     display: grid;
     gap: 6px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  /* The friends' pills sit under a small Club label instead of a rule of
-     their own. The component renders nothing when nobody in the club has
-     seen the film, so no empty gap. */
-  :deep(.friends-who-saw) {
-    margin-bottom: 6px !important;
-    padding: 2px 0;
   }
 
   /* A band title is a heading, a row label is a field name — they must not

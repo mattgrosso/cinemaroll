@@ -27,16 +27,19 @@ const mountPills = (friends, props = {}, store = mockStore(friends)) => mount(Fr
 })
 
 describe('FriendsWhoSaw', () => {
-  it('shows one pill per friend who rated it, with their stars', () => {
+  it('shows one line per friend who rated it, with their stars', () => {
+    // 2026-10-04: lines, not pills ("we're stuck with this like pill with
+    // name and stars").
     const wrapper = mountPills([rated('Ben', 9.2, 4.5)])
-    expect(wrapper.findAll('.friend-pill')).toHaveLength(1)
+    expect(wrapper.findAll('.friend-row')).toHaveLength(1)
+    expect(wrapper.find('.friend-pill').exists()).toBe(false)
     expect(wrapper.find('.friend-name').text()).toBe('Ben')
     expect(wrapper.findAll('.bi-star-fill')).toHaveLength(4)
     expect(wrapper.find('.bi-star-half').exists()).toBe(true)
   })
 
-  it('names the pills with a small label when given one, and only when there are pills', () => {
-    // Movie page, 2026-10-04: "Club" replaces the divider the pills had.
+  it('heads the lines with a small label when given one, and only when there are lines', () => {
+    // Movie page, 2026-10-04: a thin "Club" divider inside the viewings panel.
     expect(mountPills([rated('Ben', 9.2, 4)], { label: 'Club' }).find('.friends-who-saw-label').text()).toBe('Club')
     expect(mountPills([rated('Ben', 9.2, 4)]).find('.friends-who-saw-label').exists()).toBe(false)
     expect(mountPills([], { label: 'Club' }).find('.friends-who-saw-label').exists()).toBe(false)
@@ -64,7 +67,7 @@ describe('FriendsWhoSaw', () => {
     expect(wrapper.find('.friend-stars').exists()).toBe(false)
   })
 
-  it('orders the pills by score, highest first', () => {
+  it('orders the lines by score, highest first', () => {
     const wrapper = mountPills([rated('Sarah', 8.5, 4), rated('Ben', 9.2, 4.5)])
     expect(wrapper.findAll('.friend-name').map((n) => n.text())).toEqual(['Ben', 'Sarah'])
   })
