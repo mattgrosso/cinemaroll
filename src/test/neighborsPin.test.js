@@ -89,3 +89,34 @@ describe('the pin control', () => {
     expect(source).not.toMatch(/classList\.toggle\(["']unstuck["']\)/);
   });
 });
+
+// Bug report (2026-10-04), after Cover Flow grew to fill the strip: "the pin
+// icon is way too big over there now... make the pin smaller". It used to be
+// a 40px dark circle taking a slot at the end of the flex row, squeezing the
+// posters. Now it floats over the corner, out of the row.
+describe('the pin stays out of the poster row', () => {
+  const pinDeclarations = () => {
+    const start = styles.indexOf('.hide-neighbors {');
+    expect(start, '.hide-neighbors rule should exist').toBeGreaterThan(-1);
+    const body = styles.slice(start + '.hide-neighbors {'.length);
+    return body.slice(0, body.indexOf('{'));
+  };
+
+  it('is positioned over the strip, not laid out in it', () => {
+    expect(positionIn(pinDeclarations())).toBe('absolute');
+  });
+
+  it('is a small bare icon, not a dark circle', () => {
+    const decls = pinDeclarations();
+    expect(Number(decls.match(/font-size\s*:\s*(\d+)px/)?.[1])).toBeLessThanOrEqual(16);
+    expect(decls).not.toMatch(/background/);
+    expect(decls).not.toMatch(/border-radius/);
+  });
+
+  // Small icon, but the tap target keeps the house 40px minimum.
+  it('keeps a 40px tap area', () => {
+    const decls = pinDeclarations();
+    expect(decls).toMatch(/width\s*:\s*40px/);
+    expect(decls).toMatch(/height\s*:\s*40px/);
+  });
+});

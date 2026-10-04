@@ -253,8 +253,10 @@
              descending". Sorting these makes no sense; the strip is
              positional (films above, this film, films below). What
              the button actually does is pin the strip to the bottom of the
-             screen or let it scroll away. It sits at the end of the row, not
-             on top of a poster. -->
+             screen or let it scroll away. Since 2026-10-04 it floats small
+             over the strip's top-right corner instead of taking a slot at the
+             end of the row ("the pin icon is way too big over there now"),
+             so Cover Flow gets the full width. -->
         <div
           class="hide-neighbors"
           role="button"
@@ -1587,19 +1589,28 @@ export default {
         display: block;
       }
 
+      /* A small bare pin floating over the strip's top-right corner, out of
+         the flex row so the posters (sized to the stage's measured width)
+         reach the edge. The icon is 14px but the tap area stays 40px, tucked
+         into the corner; the shadow keeps it legible over a poster's edge. */
       .hide-neighbors {
-        align-items: center;
-        background: rgba(0, 0, 0, 0.6);
-        border-radius: 50%;
+        align-items: flex-start;
+        color: #ccc;
         cursor: pointer;
         display: flex;
-        flex: none;
+        font-size: 14px;
         height: 40px;
-        justify-content: center;
-        margin-left: 4px;
+        justify-content: flex-end;
+        line-height: 1;
+        padding: 5px 6px 0 0;
+        position: absolute;
+        right: 0;
+        text-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+        top: 0;
         width: 40px;
+        z-index: 1;
 
-        &:active { background: rgba(255, 255, 255, 0.2); }
+        &:active { color: #fff; }
       }
 
       /* Seven posters in Cover Flow (2026-10-02, after nine small flat ones
