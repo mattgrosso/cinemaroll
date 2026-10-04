@@ -1,0 +1,25 @@
+// The size dial for the Rate page and the movie detail page (report,
+// 2026-10-04: "I want the text and just generally the scale of the content on
+// both the rating page and the movie detail page to be a little bit bigger").
+//
+// One number. Each page root sets --detail-scale from it, and every size on
+// those pages (and in the pieces they show — DetailSection, RatingSelect,
+// ToggleableRating, FriendsWhoSaw) goes through ds(). Anywhere else the
+// variable is unset, so ds() falls back to 1 and those shared pieces keep
+// their size on Home and Film Club. The Rate page's Cover Flow strip resets
+// it to 1 on purpose. detailScale.test.js keeps raw sizes from creeping back.
+//
+// Scaled sizes rather than CSS zoom on the page: zoom changes what
+// getBoundingClientRect and scroll offsets report on iOS, and both pages
+// measure and scroll.
+$detail-scale: 1.12;
+
+@function ds($size) {
+  @return calc(#{$size} * var(--detail-scale, 1));
+}
+
+@mixin detail-scale-root {
+  --detail-scale: #{$detail-scale};
+  // Unsized text and em-based sizes (the tag pills) inherit this.
+  font-size: ds(1rem);
+}

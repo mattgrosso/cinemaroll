@@ -94,6 +94,17 @@ first attempt at the games scroll-to-top do nothing at all.
   older screens still carry left-accent banners (Reel Wordle/Connections/Clue Budget
   result banners, target-clues) — sweep candidates, don't add new ones.
 
+## The Rate page and movie detail page run a size dial
+
+`src/assets/scss/_detail-scale.scss` (2026-10-04, Matt: "the text and just generally
+the scale of the content on both the rating page and the movie detail page to be a
+little bit bigger"). `$detail-scale` (1.12) is the one number; both page roots
+`@include detail-scale-root`, and every font size there — and in DetailSection,
+RatingSelect, ToggleableRating, FriendsWhoSaw — is `ds(...)`, which falls back to 1
+anywhere the dial isn't on. The Cover Flow strip resets it to 1. Write new sizes on
+those screens as `ds(0.8rem)`, never a raw rem/px; `detailScale.test.js` fails on a
+raw one. Chosen over CSS `zoom`, which skews measured rects and scroll offsets on iOS.
+
 ## The Web is the one screen that hides the shared header
 
 `WebScreen.vue` commits `setShowHeader(false)` in `created` and `true` in

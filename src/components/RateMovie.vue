@@ -1056,12 +1056,14 @@ export default {
 </script>
 
 <style lang="scss">
+@import '@/assets/scss/detail-scale';
   /* 2026-09-30: restyled in the film page's language (Matt: "take the styling
      changes that we've made other places, especially the ones recently in
      the movie detail page, and apply a similar redesign to the rate a movie
      page"). Dark tiles at rgba(255,255,255,.06), uppercase .62rem labels in
      #ccc, folded DetailSection rows, :active press states only. */
   .rate-movie {
+    @include detail-scale-root;
     color: #fff;
 
     .rate-movie-header {
@@ -1091,7 +1093,7 @@ export default {
         background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.6) 45%, rgba(0, 0, 0, 0.85) 100%);
         bottom: 0;
         color: #fff;
-        font-size: 2.3rem;
+        font-size: ds(2.3rem);
         font-weight: 700;
         left: 0;
         line-height: 1.1;
@@ -1113,7 +1115,7 @@ export default {
       .rate-kicker {
         color: #6fd39b;
         display: block;
-        font-size: 0.75rem;
+        font-size: ds(0.75rem);
         font-weight: 700;
         letter-spacing: 0.08em;
         margin-bottom: 2px;
@@ -1123,7 +1125,7 @@ export default {
       .rate-title-year {
         color: #ddd;
         display: block;
-        font-size: 1rem;
+        font-size: ds(1rem);
         font-weight: 400;
         margin-top: 2px;
       }
@@ -1184,35 +1186,35 @@ export default {
 
     .fact {
       gap: 2px;
-      min-height: 64px;
-      padding: 10px 6px 8px;
+      min-height: ds(64px);
+      padding: ds(10px) 6px ds(8px);
     }
 
     .fact-date:active,
     .action-tile:active { background: rgba(255, 255, 255, 0.12); }
 
     .fact-value {
-      font-size: 1.35rem;
+      font-size: ds(1.35rem);
       font-weight: 700;
       line-height: 1.1;
     }
 
     .fact-label {
       color: #ccc;
-      font-size: 0.62rem;
+      font-size: ds(0.62rem);
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
 
     .action-tile {
-      font-size: 0.7rem;
+      font-size: ds(0.7rem);
       gap: 4px;
       letter-spacing: 0.04em;
-      min-height: 56px;
-      padding: 8px 6px;
+      min-height: ds(56px);
+      padding: ds(8px) 6px;
       text-transform: uppercase;
 
-      i { font-size: 1.15rem; line-height: 1; }
+      i { font-size: ds(1.15rem); line-height: 1; }
       &:disabled { color: #ccc; }
     }
 
@@ -1222,12 +1224,12 @@ export default {
         display: inline-flex;
         gap: 4px;
 
-        i { font-size: 0.75rem; }
+        i { font-size: ds(0.75rem); }
       }
 
       .medium-label {
         color: #ccc;
-        font-size: 0.58rem;
+        font-size: ds(0.58rem);
         letter-spacing: 0.06em;
       }
 
@@ -1244,7 +1246,7 @@ export default {
        value, the tap opens the phone's own date or option picker. */
     .fact-overlay-input {
       cursor: pointer;
-      font-size: 16px; /* under 16px, iOS zooms the page on focus */
+      font-size: ds(16px); /* under 16px, iOS zooms the page on focus */
       height: 100%;
       inset: 0;
       opacity: 0;
@@ -1254,7 +1256,7 @@ export default {
 
     .band-title {
       color: #fff;
-      font-size: 1rem;
+      font-size: ds(1rem);
       font-weight: 600;
       margin: 18px 0 8px;
     }
@@ -1267,7 +1269,7 @@ export default {
 
     .field-label {
       color: #ccc;
-      font-size: 0.62rem;
+      font-size: ds(0.62rem);
       letter-spacing: 0.06em;
       margin-bottom: 2px;
       text-transform: uppercase;
@@ -1278,7 +1280,7 @@ export default {
       background-color: #1c1c1c;
       border-color: rgba(255, 255, 255, 0.15);
       color: #fff;
-      font-size: 16px;
+      font-size: ds(16px);
 
       &::placeholder { color: #9a9a9a; }
     }
@@ -1292,21 +1294,21 @@ export default {
       flex-direction: column;
       gap: 4px;
       margin: 10px 0;
-      padding: 14px 12px 12px;
+      padding: ds(14px) 12px ds(12px);
       text-align: center;
     }
 
     .score-card-label,
     .score-rank-label {
       color: #ccc;
-      font-size: 0.62rem;
+      font-size: ds(0.62rem);
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
 
     .score-card-value {
       color: #6fd39b;
-      font-size: 2.6rem;
+      font-size: ds(2.6rem);
       font-variant-numeric: tabular-nums;
       font-weight: 700;
       line-height: 1;
@@ -1317,16 +1319,16 @@ export default {
 
     .score-card-waiting {
       color: #ccc;
-      font-size: 0.8rem;
+      font-size: ds(0.8rem);
     }
 
     .score-card-change {
       align-items: center;
       display: inline-flex;
-      font-size: 0.8rem;
+      font-size: ds(0.8rem);
       gap: 2px;
 
-      i { font-size: 1.1rem; line-height: 1; }
+      i { font-size: ds(1.1rem); line-height: 1; }
       &.up { color: #6fd39b; }
       &.down { color: #ff9b8a; }
       &.same { color: #ccc; }
@@ -1351,14 +1353,14 @@ export default {
 
     .score-rank-value {
       color: #fff;
-      font-size: 1.2rem;
+      font-size: ds(1.2rem);
       font-weight: 700;
       line-height: 1.1;
     }
 
     .score-card-since {
       color: #ccc;
-      font-size: 0.85rem;
+      font-size: ds(0.85rem);
       line-height: 1.35;
       margin: 8px 0 0;
 
@@ -1366,7 +1368,7 @@ export default {
     }
 
     .breakdown-table {
-      font-size: 0.75rem;
+      font-size: ds(0.75rem);
       font-variant-numeric: tabular-nums;
       width: 100%;
 
@@ -1471,12 +1473,12 @@ export default {
       border-radius: 8px;
       color: #0d0d0d; /* dark on the green: ~11:1, where white would be ~1.9:1 */
       display: flex;
-      font-size: 1rem;
+      font-size: ds(1rem);
       font-weight: 700;
       justify-content: center;
       letter-spacing: 0.02em;
       margin: 8px 0 18px;
-      min-height: 52px;
+      min-height: ds(52px);
       width: 100%;
 
       &:active { background: #5bbd88; }
@@ -1506,7 +1508,7 @@ export default {
 
     .previous-viewing-head {
       display: flex;
-      font-size: 0.85rem;
+      font-size: ds(0.85rem);
       justify-content: space-between;
       margin-bottom: 4px;
 
@@ -1530,17 +1532,21 @@ export default {
 
     .previous-cell-label {
       color: #ccc;
-      font-size: 0.58rem;
+      font-size: ds(0.58rem);
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
 
     .previous-cell-value {
-      font-size: 0.85rem;
+      font-size: ds(0.85rem);
       font-variant-numeric: tabular-nums;
     }
 
     .neighbors {
+      /* Cover Flow keeps its own size: it is sized to the stage's measured
+         width, and the dial is for the form above it. */
+      --detail-scale: 1;
+      font-size: ds(1rem);
       align-items: center;
       background: rgba(18, 18, 18, 0.96);
       border-top: 1px solid rgba(255, 255, 255, 0.12);
@@ -1598,7 +1604,7 @@ export default {
         color: #ccc;
         cursor: pointer;
         display: flex;
-        font-size: 14px;
+        font-size: 14px; /* outside the dial: Cover Flow */
         height: 40px;
         justify-content: flex-end;
         line-height: 1;

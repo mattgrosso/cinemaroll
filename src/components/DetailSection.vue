@@ -66,6 +66,7 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+@import '@/assets/scss/detail-scale';
 .detail-section {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 
@@ -89,7 +90,7 @@ export default {
 .detail-section-label {
   color: var(--sec, #ccc);
   flex: 0 0 auto;
-  font-size: 0.62rem;
+  font-size: ds(0.62rem);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -99,7 +100,7 @@ export default {
 .detail-section-summary {
   color: #ccc;
   flex: 1 1 auto;
-  font-size: 0.8rem;
+  font-size: ds(0.8rem);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -116,7 +117,7 @@ export default {
 .detail-section-chevron {
   color: #9a9a9a;
   flex: 0 0 auto;
-  font-size: 0.7rem;
+  font-size: ds(0.7rem);
 }
 
 .detail-section-body {

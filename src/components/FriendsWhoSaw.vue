@@ -100,6 +100,7 @@ export default {
 </script>
 
 <style lang="scss">
+@import '@/assets/scss/detail-scale';
   .friends-who-saw {
     display: flex;
     flex-wrap: wrap;
@@ -110,7 +111,7 @@ export default {
       background: #2e2e2e;
       border-radius: 999px;
       display: inline-flex;
-      font-size: 0.8rem;
+      font-size: ds(0.8rem);
       gap: 0.4rem;
       padding: 0.2rem 0.6rem;
     }
@@ -118,7 +119,7 @@ export default {
     .friend-stars {
       color: #f8d62b;
       display: inline-flex;
-      font-size: 0.7rem;
+      font-size: ds(0.7rem);
       gap: 0.05rem;
       white-space: nowrap;
     }

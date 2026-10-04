@@ -128,10 +128,11 @@ export default {
 </script>
 
 <style lang="scss">
+@import '@/assets/scss/detail-scale';
   .toggleable-rating {
     cursor: pointer;
     display: flex;
-    font-size: 1.25rem;
+    font-size: ds(1.25rem);
     height: 36px;
     justify-content: flex-end;
     min-width: 100px;
@@ -164,7 +165,7 @@ export default {
         align-items: center;
         cursor: pointer;
         display: flex;
-        font-size: 0.5rem;
+        font-size: ds(0.5rem);
         margin-left: 0.25rem;
         position: absolute;
         bottom: -5px;

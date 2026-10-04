@@ -43,6 +43,7 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+@import '@/assets/scss/detail-scale';
 /* One dark card per criterion, in the film page's tile language
    (2026-09-30). The select stays native: on a phone it opens the system
    wheel, which is the fastest way to pick one of eleven labelled values. */
@@ -56,7 +57,7 @@ export default {
 .rating-card-label {
   color: #6fb8ff;
   display: block;
-  font-size: 0.7rem;
+  font-size: ds(0.7rem);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -64,7 +65,7 @@ export default {
 
 .rating-card-description {
   color: #ccc;
-  font-size: 0.8rem;
+  font-size: ds(0.8rem);
   line-height: 1.35;
   margin: 2px 0 8px;
 }

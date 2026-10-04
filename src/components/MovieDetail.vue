@@ -2141,7 +2141,9 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+@import '@/assets/scss/detail-scale';
 .movie-detail-page {
+  @include detail-scale-root;
   background: #000;
   color: #fff;
 }
@@ -2189,7 +2191,7 @@ export default {
 
     h1 {
       position: absolute;
-      font-size: 2rem;
+      font-size: ds(2rem);
       margin: 0;
       bottom: 0;
       color: white;
@@ -2252,7 +2254,7 @@ export default {
   .ratings-and-comparison-wrapper > .ratings-section > h4,
   .ratings-and-comparison-wrapper > .comparison-poster-section > h4 {
     color: #1D8BF1;
-    font-size: 0.65rem;
+    font-size: ds(0.65rem);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -2264,7 +2266,7 @@ export default {
   }
 
   h4 {
-    font-size: 0.75rem;
+    font-size: ds(0.75rem);
     margin-bottom: 2px;
     color: #fff;
   }
@@ -2277,7 +2279,7 @@ export default {
     > .tags-header > h4,
     > .keywords-header > h4 {
       color: var(--sec);
-      font-size: 0.65rem;
+      font-size: ds(0.65rem);
       font-weight: 700;
       letter-spacing: 0.08em;
       text-transform: uppercase;
@@ -2303,7 +2305,7 @@ export default {
   }
 
   p {
-    font-size: 1rem;
+    font-size: ds(1rem);
     margin-bottom: 1rem;
   }
 
@@ -2314,7 +2316,7 @@ export default {
     border-radius: 4px;
     padding: 0.5rem 0.75rem;
     margin-bottom: 1rem;
-    font-size: 0.9rem;
+    font-size: ds(0.9rem);
 
     a {
       color: #ffc107;
@@ -2360,13 +2362,13 @@ export default {
       flex-direction: column;
       gap: 4px;
       justify-content: center;
-      min-height: 56px;
-      padding: 8px 6px;
-      font-size: 0.7rem;
+      min-height: ds(56px);
+      padding: ds(8px) 6px;
+      font-size: ds(0.7rem);
       letter-spacing: 0.04em;
       text-transform: uppercase;
 
-      i { font-size: 1.15rem; line-height: 1; }
+      i { font-size: ds(1.15rem); line-height: 1; }
       &:active { background: rgba(255, 255, 255, 0.12); }
     }
 
@@ -2376,7 +2378,7 @@ export default {
     .action-letterboxd.logged { color: #6fd39b; }
 
     .action-letterboxd-icon {
-      height: 1.15rem;
+      height: ds(1.15rem);
       width: auto;
     }
 
@@ -2396,7 +2398,7 @@ export default {
 
       h5 {
         color: #adb5bd;
-        font-size: 0.85rem;
+        font-size: ds(0.85rem);
         text-transform: uppercase;
         letter-spacing: 0.03em;
         margin-bottom: 0.25rem;
@@ -2404,7 +2406,7 @@ export default {
 
       h6 {
         color: #6c757d;
-        font-size: 0.75rem;
+        font-size: ds(0.75rem);
         margin-bottom: 0;
         padding-left: 6px;
       }
@@ -2431,26 +2433,26 @@ export default {
       flex-direction: column;
       justify-content: center;
       gap: 2px;
-      padding: 10px 6px 8px;
+      padding: ds(10px) 6px ds(8px);
       border-radius: 6px;
       background: rgba(255, 255, 255, 0.06);
       color: #fff;
       text-align: center;
       text-decoration: none;
-      min-height: 64px;
+      min-height: ds(64px);
 
       &:active { background: rgba(255, 255, 255, 0.12); }
     }
 
     .fact-value {
-      font-size: 1.35rem;
+      font-size: ds(1.35rem);
       font-weight: 700;
       line-height: 1.1;
     }
 
     .fact-label {
       color: #ccc;
-      font-size: 0.62rem;
+      font-size: ds(0.62rem);
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
@@ -2463,17 +2465,17 @@ export default {
         height: auto;
         min-width: 0;
         justify-content: center;
-        font-size: 1.35rem;
+        font-size: ds(1.35rem);
         line-height: 1.1;
       }
-      :deep(.toggleable-rating h3) { font-size: 1.35rem; font-weight: 700; line-height: 1.1; }
+      :deep(.toggleable-rating h3) { font-size: ds(1.35rem); font-weight: 700; line-height: 1.1; }
       /* The parenthetical sits on the second line, in the other tiles'
          label size and colour; "your score" is gone. Not uppercased or
          letter-spaced like "RELEASED": "(normalized rating)" has to fit a
          third of a 402px phone, and "(1203RD)" reads badly. */
       :deep(.toggleable-rating label),
       :deep(.toggleable-rating .sub-line-spacer) {
-        font-size: 0.62rem;
+        font-size: ds(0.62rem);
         color: #ccc;
       }
     }
@@ -2506,13 +2508,13 @@ export default {
   .best-since-text {
     color: #ccc;
     flex: 1 1 auto;
-    font-size: 0.8rem;
+    font-size: ds(0.8rem);
     line-height: 1.35;
 
     strong { color: #fff; }
   }
 
-  .best-since-chevron { color: #9a9a9a; font-size: 0.7rem; }
+  .best-since-chevron { color: #9a9a9a; font-size: ds(0.7rem); }
 
   .detail-band {
     margin: 0 0 14px;
@@ -2531,7 +2533,7 @@ export default {
      read alike (2026-09-30). */
   .band-title {
     color: #fff;
-    font-size: 1rem;
+    font-size: ds(1rem);
     font-weight: 600;
     margin: 18px 0 6px;
   }
@@ -2542,7 +2544,7 @@ export default {
      in-page search and the tests. */
   :deep(.detail-section-body) {
     h4:not(.sub) { display: none; }
-    h4.sub { font-size: 0.62rem; color: #9a9a9a; letter-spacing: 0.06em; text-transform: uppercase; margin: 6px 0 2px; }
+    h4.sub { font-size: ds(0.62rem); color: #9a9a9a; letter-spacing: 0.06em; text-transform: uppercase; margin: 6px 0 2px; }
     > div { margin-bottom: 0 !important; }
     .long-list { box-shadow: none; padding: 2px 0; max-height: none; margin-bottom: 0; }
     p { margin-bottom: 0; }
@@ -2553,7 +2555,7 @@ export default {
   .letterboxd-section {
     .letterboxd-film a {
       color: #fff;
-      font-size: 0.9rem;
+      font-size: ds(0.9rem);
       text-decoration: none;
 
       &:active { color: #ccc; }
@@ -2570,7 +2572,7 @@ export default {
       border-radius: 4px;
       background: rgba(255, 255, 255, 0.05);
       color: #ccc;
-      font-size: 0.75rem;
+      font-size: ds(0.75rem);
       text-align: left;
 
       &:active { background: rgba(255, 255, 255, 0.12); }
@@ -2584,7 +2586,7 @@ export default {
     }
 
     .letterboxd-review-date {
-      font-size: 0.75rem;
+      font-size: ds(0.75rem);
       color: #ccc;
       text-decoration: none;
 
@@ -2593,7 +2595,7 @@ export default {
 
     .letterboxd-review-text {
       margin-top: 4px;
-      font-size: 0.85rem;
+      font-size: ds(0.85rem);
       line-height: 1.4;
       white-space: pre-line;
       color: #fff;
@@ -2626,7 +2628,7 @@ export default {
       min-height: 32px;
 
       i {
-        font-size: 1rem;
+        font-size: ds(1rem);
       }
     }
   }
@@ -2650,7 +2652,7 @@ export default {
       color: #fff;
       padding: 4px 4px 4px 10px;
       border-radius: 999px;
-      font-size: 0.85rem;
+      font-size: ds(0.85rem);
       line-height: 1.2;
 
       .keyword-chip-label {
@@ -2670,7 +2672,7 @@ export default {
         padding: 0;
 
         i {
-          font-size: 0.9rem;
+          font-size: ds(0.9rem);
           line-height: 1;
         }
       }
@@ -2732,7 +2734,7 @@ export default {
       min-width: 28px;
       opacity: 0.8;
       &:active { opacity: 1; }
-      i { font-size: 1rem; }
+      i { font-size: ds(1rem); }
     }
     .tag-edit-toggle {
       color: #fff;
@@ -2741,7 +2743,7 @@ export default {
       min-height: 32px;
 
       i {
-        font-size: 1rem;
+        font-size: ds(1rem);
       }
     }
   }
@@ -2778,10 +2780,10 @@ export default {
         display: flex;
         align-items: center;
         gap: 6px;
-        font-size: 0.9rem;
+        font-size: ds(0.9rem);
 
         i {
-          font-size: 0.85rem;
+          font-size: ds(0.85rem);
         }
       }
 
@@ -2790,7 +2792,7 @@ export default {
       }
 
       .viewing-tag-preview {
-        font-size: 0.75rem;
+        font-size: ds(0.75rem);
         color: #ccc;
         padding-left: 20px;
         white-space: nowrap;
@@ -2818,7 +2820,7 @@ export default {
       color: #fff;
       padding: 4px 4px 4px 10px;
       border-radius: 999px;
-      font-size: 0.85rem;
+      font-size: ds(0.85rem);
       line-height: 1.2;
 
       .tag-chip-label {
@@ -2838,7 +2840,7 @@ export default {
         padding: 0;
 
         i {
-          font-size: 0.9rem;
+          font-size: ds(0.9rem);
           line-height: 1;
         }
       }
@@ -2909,7 +2911,7 @@ export default {
       border-radius: 6px !important;
       color: #fff;
       padding: 10px 12px;
-      font-size: 0.9rem;
+      font-size: ds(0.9rem);
 
       &:not(.collapsed) { background-color: rgba(255, 255, 255, 0.1); color: #fff; box-shadow: none; }
       &:focus { box-shadow: none; }
@@ -2936,13 +2938,13 @@ export default {
           color: #ccc;
           span {
             display: inline-block;
-            font-size: 0.6rem;
+            font-size: ds(0.6rem);
             transform: rotate(60deg);
           }
         }
 
         td {
-          font-size: 0.7rem;
+          font-size: ds(0.7rem);
         }
       }
     }
@@ -2952,7 +2954,7 @@ export default {
     bottom: 3px;
     /* 0.5rem was under the legibility floor; 0.62rem still sits inside the
        1rem line box, so lines don't grow. */
-    font-size: 0.62rem;
+    font-size: ds(0.62rem);
     position: relative;
   }
 
@@ -2960,7 +2962,7 @@ export default {
   .letterboxd-actions {
     .letterboxd-status {
       .badge {
-        font-size: 0.75rem;
+        font-size: ds(0.75rem);
         padding: 0.5rem 0.75rem;
 
         i {
@@ -2975,12 +2977,12 @@ export default {
 
     .letterboxd-buttons {
       .btn {
-        font-size: 0.7rem;
+        font-size: ds(0.7rem);
         padding: 0.375rem 0.5rem;
 
         i {
           margin-right: 0.25rem;
-          font-size: 0.8rem;
+          font-size: ds(0.8rem);
         }
       }
 
