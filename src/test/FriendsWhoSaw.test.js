@@ -35,6 +35,13 @@ describe('FriendsWhoSaw', () => {
     expect(wrapper.find('.bi-star-half').exists()).toBe(true)
   })
 
+  it('names the pills with a small label when given one, and only when there are pills', () => {
+    // Movie page, 2026-10-04: "Club" replaces the divider the pills had.
+    expect(mountPills([rated('Ben', 9.2, 4)], { label: 'Club' }).find('.friends-who-saw-label').text()).toBe('Club')
+    expect(mountPills([rated('Ben', 9.2, 4)]).find('.friends-who-saw-label').exists()).toBe(false)
+    expect(mountPills([], { label: 'Club' }).find('.friends-who-saw-label').exists()).toBe(false)
+  })
+
   it('draws whole stars with no half', () => {
     const wrapper = mountPills([rated('Ben', 9.2, 4)])
     expect(wrapper.findAll('.bi-star-fill')).toHaveLength(4)

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { shallowMount } from '@vue/test-utils'
 import MovieDetail from '@/components/MovieDetail.vue'
+import { getAllRatings } from '@/assets/javascript/GetRating.js'
 
 // created() fires loadMovieData() which uses axios; resolve it benignly.
 vi.mock('axios', () => ({
@@ -105,8 +106,8 @@ describe('MovieDetail', () => {
   // higher up." The film band is a grid of tiles; the people stay rows.
   describe('film band tiles', () => {
     it('puts the film rows in the tile grid and leaves the people as rows', () => {
-      const tiles = wrapper.find('.detail-tiles')
-      expect(tiles.exists()).toBe(true)
+      const tiles = wrapper.findAll('.detail-tiles').find(grid => grid.find('#genres').exists())
+      expect(tiles).toBeDefined()
       const genres = tiles.find('#genres')
       expect(genres.exists()).toBe(true)
       expect(genres.attributes('tile')).toBeDefined()
@@ -114,6 +115,48 @@ describe('MovieDetail', () => {
       expect(directors.exists()).toBe(true)
       expect(tiles.find('#directors').exists()).toBe(false)
       expect(directors.attributes('tile')).toBeUndefined()
+    })
+  })
+
+  // Report 2026-10-04: "the section about me is a bit messy and needs to be
+  // cleaned up and tightened up." Viewings and Best since share one panel,
+  // there is no RATINGS label, and Letterboxd and Tags are tiles.
+  describe('You band', () => {
+    it('puts each viewing on one line in a single panel, with no Ratings label', async () => {
+      getAllRatings.mockImplementation((entry) => entry?.ratings || null)
+      try {
+        const ratings = [
+          { medium: 'Theater', date: new Date(2024, 0, 2).getTime(), calculatedTotal: 8.123 },
+          { medium: 'Netflix', date: new Date(2025, 5, 6).getTime(), calculatedTotal: 7.5 }
+        ]
+        await wrapper.setData({ previousEntry: { ratings } })
+        const panel = wrapper.find('.detail-band--you .you-panel')
+        expect(panel.exists()).toBe(true)
+        expect(panel.find('h4').exists()).toBe(false)
+        const lines = panel.findAll('.accordion-button')
+        expect(lines).toHaveLength(2)
+        expect(lines[0].classes()).toContain('collapsed')
+        expect(lines[0].find('.medium-and-date').text()).toContain('Theater')
+        expect(lines[0].find('.viewing-score').text()).toBe('8.12')
+        // Tapping a line still opens the criteria and Edit / Delete.
+        expect(panel.text()).toContain('Edit Rating')
+        expect(panel.text()).toContain('Delete Rating')
+      } finally {
+        getAllRatings.mockImplementation(() => [])
+      }
+    })
+
+    it('makes Letterboxd and Tags tiles, side by side', async () => {
+      await wrapper.setData({ letterboxdFilmStats: { slug: 'heat-1995', rating: 4.32, ratingCount: 1307901, fans: 61000 } })
+      const tiles = wrapper.find('.detail-band--you .detail-tiles')
+      const letterboxd = tiles.find('#letterboxd')
+      expect(letterboxd.exists()).toBe(true)
+      expect(letterboxd.attributes('tile')).toBeDefined()
+    })
+
+    it('labels the club pills instead of giving them a divider', () => {
+      const pills = wrapper.findComponent({ name: 'FriendsWhoSaw' })
+      expect(pills.props('label')).toBe('Club')
     })
   })
 

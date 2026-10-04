@@ -1,5 +1,6 @@
 <template>
   <div v-if="friends.length" class="friends-who-saw mb-3">
+    <span v-if="label" class="friends-who-saw-label">{{ label }}</span>
     <span v-for="friend in friends" :key="friend.key" class="friend-pill">
       <span class="friend-name">{{ friend.name }}</span>
       <span v-if="friend.stars !== null" class="friend-stars" :aria-label="`${friend.stars} out of 5`">
@@ -42,6 +43,12 @@ export default {
     tmdbId: {
       type: [Number, String],
       default: null
+    },
+    // A small field-name label before the pills ("Club" on the movie page),
+    // shown only when there are pills to name.
+    label: {
+      type: String,
+      default: ''
     }
   },
   computed: {
@@ -105,6 +112,16 @@ export default {
     display: flex;
     flex-wrap: wrap;
     gap: 0.35rem;
+
+    .friends-who-saw-label {
+      align-self: center;
+      color: #6fb8ff;
+      font-size: ds(0.62rem);
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      margin-right: 0.2rem;
+      text-transform: uppercase;
+    }
 
     .friend-pill {
       align-items: center;

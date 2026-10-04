@@ -79,23 +79,28 @@
           </button>
         </div>
 
-        <div class="detail-band">
+        <div class="detail-band detail-band--you">
           <p class="band-title">You</p>
-        <!-- Previous ratings if any -->
-        <div v-if="getAllRatings(previousEntry)" class="ratings-and-comparison-wrapper mb-3">
+        <!-- One panel, the film band's look (report, 2026-10-04: "the section
+             about me is a bit messy and needs to be cleaned up and tightened
+             up"): a thin line per viewing — how and when, then the score;
+             tap for the criteria and Edit/Delete — and Best since as the
+             panel's last line. The You heading names it, so no RATINGS label. -->
+        <div v-if="getAllRatings(previousEntry) || lastHigherRatedMovie" class="you-panel">
+          <div v-if="getAllRatings(previousEntry)" class="ratings-and-comparison-wrapper">
           <div class="ratings-section">
-            <h4>Ratings</h4>
-            <div class="accordion mt-2">
+            <div class="accordion">
               <div class="accordion-item" v-for="(rating, index) in getAllRatings(previousEntry)" :key="index">
                 <h2 class="accordion-header" :id="`heading-${index}`">
-                  <button class="accordion-button col-12 d-flex" type="button" data-bs-toggle="collapse" :data-bs-target="`#collapse-${index}`" aria-expanded="false" :aria-controls="`collapse-${index}`">
-                    <span class="medium-and-date col-9">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" :data-bs-target="`#collapse-${index}`" aria-expanded="false" :aria-controls="`collapse-${index}`">
+                    <span class="medium-and-date">
                       <span>{{rating.medium}}</span>
                       <span v-if="rating.medium && rating.date">&nbsp;on&nbsp;</span>
                       <span v-else-if="rating.date">On&nbsp;</span>
                       <span>{{formattedDate(rating.date)}}</span>
                     </span>
-                    <p class="col-3 m-0 text-center border-start">{{formatScore(rating.calculatedTotal)}}</p>
+                    <span class="viewing-score">{{formatScore(rating.calculatedTotal)}}</span>
+                    <i class="bi bi-chevron-down viewing-chevron"></i>
                   </button>
                 </h2>
                 <div :id="`collapse-${index}`" class="accordion-collapse collapse" :aria-labelledby="`heading-${index}`">
@@ -149,30 +154,36 @@
               </div>
             </div>
           </div>
+          </div>
 
+          <!-- "Best in <span>" leads with the time span (2026-09-30, second try:
+               "on the date this movie was released, it was the best movie that
+               had come out for six weeks"). lastHigherRatedMovie is the most
+               recently RELEASED earlier film you rated higher; the poster is it.
+               Third try, same day: the sentence reads "The best movie released
+               since E.T., 6 years prior." A tie doesn't end the run. Fourth
+               tweak: the "Best in 6 years" label is gone — just the sentence. -->
+          <button v-if="lastHigherRatedMovie" type="button" class="best-since-row" @click="navigateToMovie(lastHigherRatedMovie.movie.id)">
+            <img
+              v-if="getPosterPath(lastHigherRatedMovie)"
+              :src="`https://image.tmdb.org/t/p/w154${getPosterPath(lastHigherRatedMovie)}`"
+              :alt="lastHigherRatedMovie.movie.title"
+              class="best-since-thumb">
+            <span class="best-since-text">
+              The best movie released since
+              <strong>{{ lastHigherRatedMovie.movie.title }}</strong>, {{ bestSinceSpan }} prior.
+            </span>
+            <i class="bi bi-chevron-right best-since-chevron"></i>
+          </button>
         </div>
 
-        <!-- "Best in <span>" leads with the time span (2026-09-30, second try:
-             "on the date this movie was released, it was the best movie that
-             had come out for six weeks"). lastHigherRatedMovie is the most
-             recently RELEASED earlier film you rated higher; the poster is it.
-             Third try, same day: the sentence reads "The best movie released
-             since E.T., 6 years prior." A tie doesn't end the run. Fourth
-             tweak: the "Best in 6 years" label is gone — just the sentence. -->
-        <button v-if="lastHigherRatedMovie" type="button" class="best-since-row" @click="navigateToMovie(lastHigherRatedMovie.movie.id)">
-          <img
-            v-if="getPosterPath(lastHigherRatedMovie)"
-            :src="`https://image.tmdb.org/t/p/w154${getPosterPath(lastHigherRatedMovie)}`"
-            :alt="lastHigherRatedMovie.movie.title"
-            class="best-since-thumb">
-          <span class="best-since-text">
-            The best movie released since
-            <strong>{{ lastHigherRatedMovie.movie.title }}</strong>, {{ bestSinceSpan }} prior.
-          </span>
-          <i class="bi bi-chevron-right best-since-chevron"></i>
-        </button>
+        <!-- Club friends who have rated this, as pills, under a small label
+             rather than a divider of their own. -->
+        <FriendsWhoSaw :tmdbId="movie && movie.id" label="Club" />
 
-        <DetailSection v-if="letterboxdWrittenReviews.length || letterboxdFilmLine" id="letterboxd" label="Letterboxd" tone="you" :summary="letterboxdSummary" class="letterboxd-section">
+        <!-- Letterboxd and Tags are tiles, two across, like the film band. -->
+        <div class="detail-tiles">
+        <DetailSection v-if="letterboxdWrittenReviews.length || letterboxdFilmLine" id="letterboxd" tile label="Letterboxd" tone="you" :summary="letterboxdSummary" class="letterboxd-section">
           <p v-if="letterboxdFilmLine" class="letterboxd-film mb-1">
             <a :href="letterboxdFilmUrl" target="_blank" rel="noopener">{{ letterboxdFilmLine }}</a>
           </p>
@@ -184,10 +195,7 @@
             </div>
           </div>
         </DetailSection>
-        <!-- Club friends who have rated this, as pills. Sits directly above
-             Awards by request (2026-08-25). -->
-        <FriendsWhoSaw :tmdbId="movie && movie.id" />
-        <DetailSection v-if="(viewingTags && viewingTags.length) || isEditingTags" id="tags" label="Tags" tone="film" :summary="tagsSummary">
+        <DetailSection v-if="(viewingTags && viewingTags.length) || isEditingTags" id="tags" tile label="Tags" tone="film" :summary="tagsSummary">
         <!-- Tags -->
         <div v-if="(viewingTags && viewingTags.length) || isEditingTags" class="tags mb-3">
           <div class="tags-header d-flex align-items-center">
@@ -276,6 +284,7 @@
           </div>
         </div>
         </DetailSection>
+        </div>
 
         </div>
 
@@ -2253,17 +2262,6 @@ export default {
      nominated is a muted amber (#b9a06a, ~8:1 on this background). */
   .awards .nominees a.link { color: #b9a06a; }
 
-  /* The ratings block is the Ratings tab's subject, so it takes that accent
-     — on the labels only, since the scores themselves are the point. */
-  .ratings-and-comparison-wrapper > .ratings-section > h4,
-  .ratings-and-comparison-wrapper > .comparison-poster-section > h4 {
-    color: #1D8BF1;
-    font-size: ds(0.65rem);
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
   a {
     color: white;
     cursor: pointer;
@@ -2485,35 +2483,47 @@ export default {
     }
   }
 
+  /* The You band's panel: viewings and Best since as thin lines in one
+     rounded surface, the film tiles' look (report, 2026-10-04). */
+  .you-panel {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    overflow: hidden;
+
+    .accordion-item + .accordion-item,
+    .ratings-and-comparison-wrapper + .best-since-row {
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+  }
+
   .best-since-row {
     align-items: center;
-    background: rgba(255, 255, 255, 0.04);
+    background: none;
     border: 0;
-    border-radius: 6px;
     color: #fff;
     display: flex;
-    gap: 10px;
-    margin: 8px 0 4px;
-    padding: 8px 10px;
+    gap: 8px;
+    padding: 0.35rem 0.6rem;
     text-align: left;
     width: 100%;
 
-    &:active { background: rgba(255, 255, 255, 0.1); }
+    &:active { background: rgba(255, 255, 255, 0.05); }
   }
 
   .best-since-thumb {
-    border-radius: 3px;
+    border-radius: 2px;
     flex: 0 0 auto;
-    height: 54px;
+    height: 30px;
     object-fit: cover;
-    width: 36px;
+    width: 20px;
   }
 
   .best-since-text {
     color: #ccc;
     flex: 1 1 auto;
-    font-size: ds(0.8rem);
-    line-height: 1.35;
+    font-size: ds(0.75rem);
+    line-height: 1.3;
 
     strong { color: #fff; }
   }
@@ -2530,13 +2540,12 @@ export default {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* The friends' chips sit between two folded rows; they get a rule of
-     their own so they read as a row too. The component renders nothing
-     when nobody in the club has seen the film, so no empty gap. */
+  /* The friends' pills sit under a small Club label instead of a rule of
+     their own. The component renders nothing when nobody in the club has
+     seen the film, so no empty gap. */
   :deep(.friends-who-saw) {
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    margin-bottom: 0 !important;
-    padding: 10px 0 8px;
+    margin-bottom: 6px !important;
+    padding: 2px 0;
   }
 
   /* A band title is a heading, a row label is a field name — they must not
@@ -2906,31 +2915,52 @@ export default {
     .ratings-section { min-width: 0; }
   }
 
-  .previous-ratings,
   .ratings-section {
     .accordion { --bs-accordion-bg: transparent; --bs-accordion-border-color: transparent; }
 
     .accordion-item {
       background: transparent;
       border: 0;
-      margin-bottom: 4px;
     }
 
+    /* One thin line per viewing: how and when on the left, the score and a
+       chevron on the right. */
     .accordion-button {
-      background-color: rgba(255, 255, 255, 0.06);
-      border-radius: 6px !important;
+      align-items: center;
+      background-color: transparent;
+      border-radius: 0 !important;
       color: #fff;
-      padding: 10px 12px;
-      font-size: ds(0.9rem);
+      gap: 8px;
+      padding: 0.45rem 0.6rem;
+      font-size: ds(0.8rem);
 
-      &:not(.collapsed) { background-color: rgba(255, 255, 255, 0.1); color: #fff; box-shadow: none; }
+      &:not(.collapsed) { background-color: rgba(255, 255, 255, 0.05); color: #fff; box-shadow: none; }
+      &:not(.collapsed) .viewing-chevron { transform: rotate(180deg); }
+      &:active { background-color: rgba(255, 255, 255, 0.08); }
       &:focus { box-shadow: none; }
       &::after { display: none; }
-      .border-start { border-color: rgba(255, 255, 255, 0.2) !important; }
+    }
+
+    .medium-and-date {
+      color: #ccc;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .viewing-score {
+      flex: 0 0 auto;
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+    }
+
+    .viewing-chevron {
+      color: #9a9a9a;
+      flex: 0 0 auto;
+      font-size: ds(0.7rem);
     }
 
     .accordion-body {
-      padding: 6px 4px 8px;
+      padding: 4px 0.6rem 0.6rem;
 
       table {
         --bs-table-bg: transparent;

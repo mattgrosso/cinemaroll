@@ -67,6 +67,14 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
   the full width (`grid-column: 1 / -1`) with the same body as before. The You and
   The people bands stay rows. Fallback Matt was offered if it feels cramped: genres as
   plain chips, the rest back to rows.
+- **The You band is one panel plus tiles (2026-10-04, report: "the section about me
+  is a bit messy and needs to be cleaned up and tightened up").** `.you-panel` holds
+  a thin line per viewing (how/when left, score + chevron right; tap for the criteria
+  table and Edit/Delete — still Bootstrap collapse, buttons start `collapsed`) and Best
+  since as its last line with a 20×30 thumb. No RATINGS label — the band title names
+  it. Club pills follow under a small "Club" label (`FriendsWhoSaw`'s `label` prop),
+  no divider. Letterboxd and Tags are `tile`s in their own `.detail-tiles` grid, so a
+  test looking for the film band's grid must pick the one holding `#genres`.
 - **Old section order** (pre-redesign, for reading old history): Genres → Awards → Cast →
   Keywords → Box Office → Country of Origin → Set In → Filmed In → Tags. "Country of Origin" is TMDB's production countries; it was
   headed "Made In" until 2026-09-08, when Matt couldn't tell it from Filmed In. Don't
