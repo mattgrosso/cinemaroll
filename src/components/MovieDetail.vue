@@ -281,7 +281,10 @@
 
         <div class="detail-band">
           <p class="band-title">The film</p>
-        <DetailSection id="genres" label="Genres" tone="film" :summary="listSummary(turnArrayIntoList(topStructure(result).genres, 'name'), 4)">
+          <!-- Tiles, two across, so the people band sits half as far down
+               (report, 2026-10-04). An open tile takes the full width. -->
+          <div class="detail-tiles">
+        <DetailSection id="genres" tile label="Genres" tone="film" :summary="listSummary(turnArrayIntoList(topStructure(result).genres, 'name'), 4)">
         <div class="genres mb-3">
           <h4>Genre<span v-if="multipleEntries(turnArrayIntoList(topStructure(result).genres, 'name'))">s</span></h4>
           <p class="long-list">
@@ -296,7 +299,7 @@
           </p>
         </div>
         </DetailSection>
-        <DetailSection v-if="academyAwardWins.length || academyAwardNominations.length || personalAwardWins.length || personalAwardNominations.length || otherAwardWins.length || otherAwardNominations.length" id="awards" label="Awards" tone="awards" :summary="awardsSummary">
+        <DetailSection v-if="academyAwardWins.length || academyAwardNominations.length || personalAwardWins.length || personalAwardNominations.length || otherAwardWins.length || otherAwardNominations.length" id="awards" tile label="Awards" tone="awards" :summary="awardsSummary">
         <!-- Awards -->
         <div v-if="academyAwardWins.length || academyAwardNominations.length || personalAwardWins.length || personalAwardNominations.length || otherAwardWins.length || otherAwardNominations.length" class="awards mb-3">
           <h4>Awards</h4>
@@ -357,7 +360,7 @@
           </div>
         </div>
         </DetailSection>
-        <DetailSection v-if="(topStructure(result).flatKeywords && topStructure(result).flatKeywords.length) || isEditingKeywords" id="keywords" label="Keywords" tone="film" :summary="listSummary(sortedFlatKeywords, 4)">
+        <DetailSection v-if="(topStructure(result).flatKeywords && topStructure(result).flatKeywords.length) || isEditingKeywords" id="keywords" tile label="Keywords" tone="film" :summary="listSummary(sortedFlatKeywords, 4)">
         <!-- Keywords -->
         <div v-if="(topStructure(result).flatKeywords && topStructure(result).flatKeywords.length) || isEditingKeywords" class="keywords mb-3">
           <div class="keywords-header d-flex align-items-center">
@@ -424,7 +427,7 @@
           </div>
         </div>
         </DetailSection>
-        <DetailSection v-if="hasBoxOfficeInfo" id="boxoffice" label="Box office" tone="plain" :summary="boxOfficeSummary">
+        <DetailSection v-if="hasBoxOfficeInfo" id="boxoffice" tile label="Box office" tone="plain" :summary="boxOfficeSummary">
         <!-- Box Office -->
         <div v-if="hasBoxOfficeInfo" class="box-office mb-3">
           <h4>Box Office</h4>
@@ -435,7 +438,7 @@
           </p>
         </div>
         </DetailSection>
-        <DetailSection v-if="productionCountries.length || narrativePlaces.length || filmingPlaces.length" id="places" label="Places" tone="plain" :summary="placesSummary">
+        <DetailSection v-if="productionCountries.length || narrativePlaces.length || filmingPlaces.length" id="places" tile label="Places" tone="plain" :summary="placesSummary">
         <!-- Production countries (TMDB): whose film industry made it, which is
              a different fact from where the cameras were. Matt read "Made In"
              next to "Filmed In" and couldn't tell them apart (2026-09-08), so
@@ -465,7 +468,7 @@
           </p>
         </div>
         </DetailSection>
-        <DetailSection v-if="topStructure(result).production_companies && topStructure(result).production_companies.length" id="companies" label="Studios" tone="people" :summary="listSummary(turnArrayIntoList(topStructure(result).production_companies, 'name'), 3)">
+        <DetailSection v-if="topStructure(result).production_companies && topStructure(result).production_companies.length" id="companies" tile label="Studios" tone="people" :summary="listSummary(turnArrayIntoList(topStructure(result).production_companies, 'name'), 3)">
         <!-- Production Companies -->
         <div v-if="topStructure(result).production_companies && topStructure(result).production_companies.length" class="production-companies mb-3">
           <h4>Production <span v-if="multipleEntries(turnArrayIntoList(topStructure(result).production_companies, 'name'))">Companies</span><span v-else>Company</span></h4>
@@ -476,6 +479,7 @@
           </p>
         </div>
         </DetailSection>
+          </div>
         </div>
 
         <div class="detail-band">
@@ -2518,6 +2522,12 @@ export default {
 
   .detail-band {
     margin: 0 0 14px;
+  }
+
+  .detail-tiles {
+    display: grid;
+    gap: 6px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   /* The friends' chips sit between two folded rows; they get a rule of

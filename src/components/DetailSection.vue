@@ -1,5 +1,5 @@
 <template>
-  <section class="detail-section" :class="[`detail-section--${tone}`, { open }]">
+  <section class="detail-section" :class="[`detail-section--${tone}`, { open, 'detail-section--tile': tile }]">
     <button type="button" class="detail-section-header" :aria-expanded="open ? 'true' : 'false'" @click="toggle">
       <span class="detail-section-label">{{ label }}</span>
       <span v-if="!open" class="detail-section-summary">{{ summary }}</span>
@@ -44,7 +44,12 @@ export default {
     summary: { type: String, default: '' },
     defaultOpen: { type: Boolean, default: false },
     // Colour family for the label — matches the page's existing groups.
-    tone: { type: String, default: 'film' }
+    tone: { type: String, default: 'film' },
+    // A small tile instead of a full-width row: label on top, the summary
+    // under it, two to a line in a .detail-tiles grid. Open, it spans the
+    // grid's full width. The film band uses it so the people come up sooner
+    // (report, 2026-10-04: "I'm often glancing for like the cast").
+    tile: { type: Boolean, default: false }
   },
   data () {
     return { open: this.defaultOpen };
@@ -122,6 +127,31 @@ export default {
 
 .detail-section-body {
   padding: 0 0 0.6rem;
+}
+
+/* Tile form: a rounded panel, label and chevron on the first line, the
+   summary on the second. The grid itself lives on the page (.detail-tiles). */
+.detail-section--tile {
+  background: rgba(255, 255, 255, 0.05);
+  border: 0;
+  border-radius: 8px;
+  min-width: 0;
+
+  &:last-child { border-bottom: 0; }
+  &.open { grid-column: 1 / -1; }
+
+  .detail-section-header {
+    align-items: center;
+    border-radius: 8px;
+    flex-wrap: wrap;
+    padding: 0.4rem 0.6rem;
+    row-gap: 0.1rem;
+  }
+
+  .detail-section-label { flex: 1 1 auto; min-width: 0; }
+  .detail-section-actions, .detail-section-chevron { order: 2; }
+  .detail-section-summary { flex: 1 1 100%; order: 3; }
+  .detail-section-body { padding: 0 0.6rem 0.6rem; }
 }
 
 /* The page's existing colour groups, so a label reads as its family. */

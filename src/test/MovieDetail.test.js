@@ -101,6 +101,22 @@ describe('MovieDetail', () => {
     await wrapper.setData({ result: makeResult(), movie: makeResult().movie })
   })
 
+  // Report 2026-10-04: "I find myself wishing that the people section was
+  // higher up." The film band is a grid of tiles; the people stay rows.
+  describe('film band tiles', () => {
+    it('puts the film rows in the tile grid and leaves the people as rows', () => {
+      const tiles = wrapper.find('.detail-tiles')
+      expect(tiles.exists()).toBe(true)
+      const genres = tiles.find('#genres')
+      expect(genres.exists()).toBe(true)
+      expect(genres.attributes('tile')).toBeDefined()
+      const directors = wrapper.find('#directors')
+      expect(directors.exists()).toBe(true)
+      expect(tiles.find('#directors').exists()).toBe(false)
+      expect(directors.attributes('tile')).toBeUndefined()
+    })
+  })
+
   describe('Letterboxd section', () => {
     it('renders nothing until there is something', async () => {
       await wrapper.setData({ letterboxdReviews: [], letterboxdFilmStats: null })

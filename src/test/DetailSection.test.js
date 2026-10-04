@@ -51,4 +51,21 @@ describe('DetailSection', () => {
     await wrapper.find('.extra').trigger('click');
     expect(hidden(wrapper)).toBe(true);
   });
+
+  // Report 2026-10-04: the film band's rows became tiles so the people
+  // come up sooner. A tile still folds the same way; open, it is marked so
+  // the grid can give it the full width.
+  it('a tile folds like a row and is marked open when tapped', async () => {
+    const wrapper = factory({ tile: true });
+    expect(wrapper.classes()).toContain('detail-section--tile');
+    expect(wrapper.find('.detail-section-summary').text()).toBe('A, B, C +35');
+    expect(hidden(wrapper)).toBe(true);
+    await wrapper.find('.detail-section-header').trigger('click');
+    expect(hidden(wrapper)).toBe(false);
+    expect(wrapper.classes()).toContain('open');
+  });
+
+  it('is a plain row unless asked to be a tile', () => {
+    expect(factory().classes()).not.toContain('detail-section--tile');
+  });
 });

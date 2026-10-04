@@ -59,6 +59,14 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
   friends, and mount with a pass-through `DetailSection` stub. The page went from four
   phone screens to two. Country of Origin / Set In / Filmed In now share the Places row;
   the naming rule below still holds.
+- **The film band is TILES (2026-10-04, report: "I find myself wishing that the people
+  section was higher up ... maybe the film categories need a different visual
+  treatment so that they can be a little tighter").** Genres, Awards, Keywords, Box
+  office, Places, Studios sit in a two-across `.detail-tiles` grid (`DetailSection`'s
+  `tile` prop: label + chevron on one line, the summary under it); an open tile spans
+  the full width (`grid-column: 1 / -1`) with the same body as before. The You and
+  The people bands stay rows. Fallback Matt was offered if it feels cramped: genres as
+  plain chips, the rest back to rows.
 - **Old section order** (pre-redesign, for reading old history): Genres → Awards → Cast →
   Keywords → Box Office → Country of Origin → Set In → Filmed In → Tags. "Country of Origin" is TMDB's production countries; it was
   headed "Made In" until 2026-09-08, when Matt couldn't tell it from Filmed In. Don't
