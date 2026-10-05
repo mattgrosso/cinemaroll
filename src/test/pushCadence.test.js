@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import {
   dueFromDigest,
   newsIn,
@@ -834,6 +836,18 @@ describe('theater listings', () => {
     expect(alamoListings({ data: {} }, '1101')).toEqual([]);
     expect(alamoListings({ data: { sessions: [{ cinemaId: '1101', presentationSlug: 'x' }] } }, '1101'))
       .toEqual([{ slug: 'x', title: 'x', firstShowTime: null, url: 'https://drafthouse.com/dc-metro-area/show/x?cinemaId=1101', poster: null }]);
+  });
+
+  // 2026-10-05: "the Crystal City Alamo is probably my number two". Same
+  // market feed, its own cinema id, second in the pecking order.
+  it('reads Crystal City out of the same feed, and ranks it right after Bryant Street', () => {
+    const crystal = alamoListings(feed, '1102');
+    expect(crystal.map((l) => l.title)).toEqual(['Elsewhere']);
+    expect(crystal[0].url).toBe('https://drafthouse.com/dc-metro-area/show/crystal-city-only?cinemaId=1102');
+    const source = readFileSync(resolve(__dirname, '../../aws-lambda/push-notify.js'), 'utf8');
+    const order = [...source.slice(source.indexOf('const THEATERS = [')).matchAll(/viaAlamoDc\('([a-z-]+)'.*'(\d+)'\)|key: '([a-z-]+)'/g)]
+      .slice(0, 3).map((m) => m[1] ? `${m[1]}:${m[2]}` : m[3]);
+    expect(order).toEqual(['alamo-bryant-street:1101', 'alamo-crystal-city:1102', 'miracle-theatre']);
   });
 
   it('the first run announces nothing and records the whole board', () => {

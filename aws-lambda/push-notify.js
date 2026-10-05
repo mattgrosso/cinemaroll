@@ -131,14 +131,31 @@ const viaCinemaclock = (key, name, page, site, { smithsonian = false } = {}) => 
 // theaters"; among the IMAXs "Udvar-Hazy the best, then the Mall, then
 // Silver Spring"). AFI's place after Cinema Arts is a guess he hasn't
 // confirmed.
+// Both Alamos are in one market feed (cinema ids 1101, 1102), so a sweep
+// downloads it once: the first theater's fetch is shared for a minute.
+const ALAMO_DC_FEED = 'https://drafthouse.com/s/mother/v2/schedule/market/dc-metro-area';
+let alamoFeed = null;
+const alamoDcFeed = () => {
+  if (!alamoFeed || Date.now() - alamoFeed.at > 60 * 1000) {
+    const pending = fetchJson(ALAMO_DC_FEED);
+    alamoFeed = { at: Date.now(), pending };
+    pending.catch(() => { if (alamoFeed && alamoFeed.pending === pending) alamoFeed = null; });
+  }
+  return alamoFeed.pending;
+};
+const viaAlamoDc = (key, name, cinemaclock, theaterSlug, cinemaId) => ({
+  key,
+  cinemaclock,
+  name,
+  url: `https://drafthouse.com/dc-metro-area/theater/${theaterSlug}`,
+  listings: async () => alamoListings(await alamoDcFeed(), cinemaId)
+});
+
 const THEATERS = [
-  {
-    key: 'alamo-bryant-street',
-    cinemaclock: 'alamo-drafthouse-dc-bryant-street',
-    name: 'Alamo Bryant Street',
-    url: 'https://drafthouse.com/dc-metro-area/theater/dc-bryant-street',
-    listings: async () => alamoListings(await fetchJson('https://drafthouse.com/s/mother/v2/schedule/market/dc-metro-area'), '1101')
-  },
+  viaAlamoDc('alamo-bryant-street', 'Alamo Bryant Street', 'alamo-drafthouse-dc-bryant-street', 'dc-bryant-street', '1101'),
+  // 2026-10-05: "my own Bryant Street Alamo is my number one, but the
+  // Crystal City Alamo is probably my number two".
+  viaAlamoDc('alamo-crystal-city', 'Alamo Crystal City', 'alamo-drafthouse-crystal-city', 'crystal-city', '1102'),
   {
     key: 'miracle-theatre',
     cinemaclock: 'miracle-theatre',

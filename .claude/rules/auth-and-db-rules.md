@@ -314,7 +314,8 @@ dropped when any earlier theater's current board carries the same film (`uncover
 `titleKey`, tested — case, bracketed years, "in 35mm", "New Restoration", Alamo's event
 suffixes all fold). If a better theater's board couldn't be read, the lower ones WAIT that
 sweep rather than announce something the Alamo may have. Covered listings are still recorded.
-Order: Alamo, Miracle, Cinema Arts, AFI (its slot is a guess Matt hasn't confirmed), then the
+Order: Alamo Bryant Street, Alamo Crystal City (added 2026-10-05: "probably my number two";
+same market feed, cinema `1102`, fetched once a sweep for both via `alamoDcFeed`), Miracle, Cinema Arts, AFI (its slot is a guess Matt hasn't confirmed), then the
 IMAXs: Udvar-Hazy, Air and Space (the Mall), Regal Majestic (Silver Spring), AMC Georgetown,
 AMC Tysons. Regal Gallery Place has 4DX and RPX, no IMAX. AMC Hoffman Center was on the
 list until 2026-09-29, when Matt asked for it off ("I don't really know where AMC Hoffman
