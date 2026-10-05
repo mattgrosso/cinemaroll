@@ -5,7 +5,10 @@
     ".write": false,
     "bugReports": {
       ".read": false,
-      ".write": true
+      "$reportId": {
+        ".write": "!data.exists() && newData.exists()",
+        ".validate": "newData.hasChildren(['transcript']) && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000 && (!newData.hasChild('appState') || (newData.child('appState').isString() && newData.child('appState').val().length <= 50000))"
+      }
     },
     "social": {
       "directory": {

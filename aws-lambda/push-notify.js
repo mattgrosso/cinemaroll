@@ -747,20 +747,48 @@ const notifyReminders = async (topKey, now) => {
 // The sweep already visits every account every 15 minutes, so it reads the
 // feeds too. All of the quiet-keeping is in pushCadence's externalLogsDue,
 // where the tests are; this function fetches, sends and records.
+// A friend's feedUrl is a string THE USER typed (or pasted from an invite),
+// and this Lambda fetches it from inside AWS every 15 minutes. Without a check
+// that is a free SSRF primitive: http://169.254.169.254, the Lambda runtime
+// API on 127.0.0.1:9001, anything on the VPC. Feeds are Firebase RTDB REST
+// URLs (clubFeed/<uid>/<secret>.json) and nothing else, so only those are
+// fetched, and the body is size-capped before it is parsed.
+const FEED_HOST_RE = /^[a-z0-9-]+\.(firebaseio\.com|firebasedatabase\.app)$/i;
+const MAX_FEED_BYTES = 2 * 1024 * 1024;
+const safeFeedUrl = (value) => {
+  try {
+    const url = new URL(String(value).trim());
+    if (url.protocol !== 'https:') return null;
+    if (!FEED_HOST_RE.test(url.hostname)) return null;
+    if (!/\.json$/i.test(url.pathname)) return null;
+    if (url.username || url.password) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+};
+const readFeed = async (feedUrl) => {
+  const response = await fetch(feedUrl, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`feed responded ${response.status}`);
+  const text = await response.text();
+  if (text.length > MAX_FEED_BYTES) throw new Error('feed too large');
+  return JSON.parse(text);
+};
+
 const notifyExternalLogs = async (topKey, push, prefs) => {
   const friends = (await dbGet(`${topKey}/settings/externalFriends`)) || {};
-  const entries = Object.entries(friends).filter(([, friend]) => friend && friend.feedUrl);
+  const entries = Object.entries(friends)
+    .map(([id, friend]) => [id, friend, friend && safeFeedUrl(friend.feedUrl)])
+    .filter(([, friend, feedUrl]) => friend && feedUrl);
   if (!entries.length) return 0;
 
   const seen = (push.state && push.state.externalSeen) || {};
   let delivered = 0;
   let seeded = 0;
 
-  for (const [id, friend] of entries) {
+  for (const [id, friend, feedUrl] of entries) {
     try {
-      const response = await fetch(friend.feedUrl, { cache: 'no-store' });
-      if (!response.ok) throw new Error(`feed responded ${response.status}`);
-      const watches = externalWatches(await response.json());
+      const watches = externalWatches(await readFeed(feedUrl));
       const { announce, nextSeenAt } = externalLogsDue({
         watches,
         seenAt: Number(seen[id]) || 0,

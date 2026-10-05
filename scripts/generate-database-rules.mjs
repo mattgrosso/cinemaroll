@@ -65,9 +65,16 @@ const rules = {
     // login screen, before anyone has signed in — so reports have to be
     // writable without a session. Write-only: the pile can't be read back out
     // by clients. Triage goes through the Admin SDK, which bypasses rules.
+    // Create-only (2026-10-05): the parent used to be '.write': true, which
+    // let anyone on the internet PUT null over the whole pile or overwrite a
+    // report. A report can now only be created, never changed or deleted by
+    // clients, and its two big strings are capped. Still no session needed.
     bugReports: {
       '.read': false,
-      '.write': true
+      $reportId: {
+        '.write': '!data.exists() && newData.exists()',
+        '.validate': "newData.hasChildren(['transcript']) && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000 && (!newData.hasChild('appState') || (newData.child('appState').isString() && newData.child('appState').val().length <= 50000))"
+      }
     },
 
     // Social layer (2026-08-15): publish-don't-peek. Each user's app
