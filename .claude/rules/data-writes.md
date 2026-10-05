@@ -167,3 +167,13 @@ deploy, and the new worker then downloads ~50 files before the auto-update
 can reload (measured: 51 files / 2.6 MB for a one-screen tweak, 2 after).
 `sharedChunks.test.js` guards both. To check by hand: build twice with a
 one-screen change and count new file names in `js/`.
+
+## Published feeds follow library writes
+
+Every `movieLog*` write through `writeDurably` or `writeDatabaseEntryNow` schedules
+two debounced republishes: the Film Club profile (`scheduleSocialPublish`, 20s) and
+the Magic Mirror feed (`scheduleMirrorPublish`, 5s). Both are flushed on
+pagehide / hidden in `App.vue`, because a backgrounded PWA doesn't run timers.
+Home's six-hourly watchers are only backstops. A new published feed should hook in
+the same way, not via a Home watcher (2026-10-05: the mirror kept showing a film as
+"Now Showing" for hours after it was rated).

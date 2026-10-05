@@ -351,6 +351,7 @@ export default {
         // PWA does not run setTimeout, so this is the difference between a
         // friend seeing today's rating and seeing it six hours from now.
         this.$store.dispatch('flushSocialPublish');
+        this.$store.dispatch('flushMirrorPublish');
         this.flushPushDigest();
       }
     });
@@ -359,6 +360,7 @@ export default {
     // pending, so firing on both costs nothing.
     window.addEventListener('pagehide', () => {
       this.$store.dispatch('flushSocialPublish');
+      this.$store.dispatch('flushMirrorPublish');
       this.flushPushDigest();
     });
     window.addEventListener('pageshow', () => {

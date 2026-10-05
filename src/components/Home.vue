@@ -2074,7 +2074,6 @@ export default {
         if (Date.now() - last < 6 * 60 * 60 * 1000) return;
         if (!this.$store.state.settings?.mirrorFeedKey) return;
         this.$store.dispatch('publishMirrorFeed');
-        localStorage.setItem('cinemaRoll.mirrorFeed.lastPublish', String(Date.now()));
       }
     },
     socialPublishReady: {

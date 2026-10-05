@@ -200,6 +200,8 @@ let letterboxdLoadInFlight = null;
 
 // Pending debounced profile publish (see scheduleSocialPublish).
 let socialPublishTimer = null;
+// Pending debounced Magic Mirror feed publish (see scheduleMirrorPublish).
+let mirrorPublishTimer = null;
 // The one ensureMovieHatContents read in progress, shared by every caller.
 let movieHatContentsInFlight = null;
 
@@ -1831,9 +1833,10 @@ export default createStore({
       await performDatabaseWrite(context, dbEntry);
       // A brand-new rating comes through HERE, not writeDurably — AddRating
       // owns its own durability machinery — so the staleness fix has to hook
-      // both. Double-firing is fine: scheduleSocialPublish is debounced.
+      // both. Double-firing is fine: both publishes are debounced.
       if (typeof dbEntry?.path === 'string' && dbEntry.path.startsWith('movieLog')) {
         context.dispatch('scheduleSocialPublish');
+        context.dispatch('scheduleMirrorPublish');
       }
     },
     // General-purpose "offline-safe write" for the features that don't need
@@ -1861,6 +1864,7 @@ export default createStore({
       // several places, and Home may not even be mounted.
       if (typeof dbEntry?.path === 'string' && dbEntry.path.startsWith('movieLog')) {
         context.dispatch('scheduleSocialPublish');
+        context.dispatch('scheduleMirrorPublish');
       }
 
       // Bug report ("I get the tie break message again just for a second or
@@ -2296,6 +2300,28 @@ export default createStore({
       if (!entries.length) return;
       const feed = buildMirrorFeed(entries, getRating);
       await set(ref(db, `mirrorFeed/${me}/${secret}`), feed);
+      localStorage.setItem('cinemaRoll.mirrorFeed.lastPublish', String(Date.now()));
+    },
+    // Bug report, 2026-10-05: Matt rated The Fall and the Magic Mirror kept
+    // showing it as Now Showing. The mirror hides a Movie Hat pick once its id
+    // is in the feed's ratedIds, but the feed was only republished from Home's
+    // six-hourly watcher, so a fresh rating could sit unpublished for hours.
+    // Same shape as scheduleSocialPublish: debounced so a run of edits writes
+    // the (small) feed once, flushed on pagehide/hidden because a backgrounded
+    // PWA doesn't run setTimeout. Home's six-hour watcher stays as a backstop.
+    scheduleMirrorPublish (context, { delay = 5000 } = {}) {
+      if (!context.state.settings?.mirrorFeedKey) return;
+      if (mirrorPublishTimer) clearTimeout(mirrorPublishTimer);
+      mirrorPublishTimer = setTimeout(() => {
+        mirrorPublishTimer = null;
+        context.dispatch('publishMirrorFeed');
+      }, delay);
+    },
+    flushMirrorPublish (context) {
+      if (!mirrorPublishTimer) return Promise.resolve();
+      clearTimeout(mirrorPublishTimer);
+      mirrorPublishTimer = null;
+      return context.dispatch('publishMirrorFeed');
     },
 
     // ------------------------------------------------------------------
