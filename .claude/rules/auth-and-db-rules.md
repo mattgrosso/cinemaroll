@@ -255,6 +255,18 @@ with everything played sends nothing. Once a day at the chosen hour, `state/game
 tag `games` (never replaces a chores notification), no badge. All decisions in
 `pushCadence.js`, tested alongside the chores.
 
+**The digest is flushed when the app goes away** (2026-10-05: "I just received a
+notification that two films were tied. I tapped the notification, it brought me to the
+home screen. There's no tie being presented to me"). App.vue republishes the digest on a
+5-second trailing debounce, and a backgrounded PWA runs no timers — so a change made just
+before the phone went in a pocket never reached the server. Here: a tiebreak settled at
+3:09 restarted the tiebreak quota (next one 5:33), the digest saying so never left, and
+at 3:50 the sweep announced a tie from the pre-tiebreak copy that Home then refused to
+show. `flushPushDigest` runs a PENDING digest from `visibilitychange → hidden` and
+`pagehide`, the same pair `flushSocialPublish` uses (no-op when nothing is pending).
+`App.test.js` guards it. Anything else the server decides from a debounced client
+write needs the same flush.
+
 **The icon badge is set by the app too, never just cleared** (2026-09-27: "never shows
 badges when it has things I need to do"). `refreshAppBadge` (store) counts chores with
 `appBadge.js` — a mirror of `dueFromDigest`'s arithmetic, pinned to it by

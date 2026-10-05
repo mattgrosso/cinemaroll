@@ -24,7 +24,7 @@ function factory () {
     dispatch: vi.fn()
   }
 
-  shallowMount(App, {
+  const wrapper = shallowMount(App, {
     global: {
       mocks: {
         $store: store
@@ -32,7 +32,7 @@ function factory () {
     }
   })
 
-  return { listeners, store }
+  return { listeners, store, wrapper }
 }
 
 describe('App - service worker update checks', () => {
@@ -334,5 +334,65 @@ describe('App - icon badge', () => {
     expect(store.dispatch.mock.calls.filter((call) => call[0] === 'refreshAppBadge')).toHaveLength(2)
     expect(clearAppBadge).not.toHaveBeenCalled()
     delete navigator.clearAppBadge
+  })
+})
+
+// Bug report 2026-10-05: a tiebreak settled seconds before the phone was put
+// away restarted the tiebreak quota, but the debounced digest saying so never
+// ran (a backgrounded PWA runs no timers). The push sweep then announced a tie
+// from the stale copy, and Home - honouring the quota - showed nothing.
+describe('App - the push digest survives the app going away', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  const digestPublishes = (store) =>
+    store.dispatch.mock.calls.filter(([action]) => action === 'publishPushDigest').length
+
+  it('publishes a pending digest the moment the page is hidden', () => {
+    const { listeners, store, wrapper } = factory()
+    wrapper.vm.schedulePushDigest()
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+
+    listeners['document:visibilitychange']()
+
+    expect(digestPublishes(store)).toBe(1)
+  })
+
+  it('publishes a pending digest on pagehide', () => {
+    const { listeners, store, wrapper } = factory()
+    wrapper.vm.schedulePushDigest()
+
+    listeners['window:pagehide']()
+
+    expect(digestPublishes(store)).toBe(1)
+  })
+
+  it('cancels the debounce rather than publishing twice', async () => {
+    const { listeners, store, wrapper } = factory()
+    wrapper.vm.schedulePushDigest()
+
+    listeners['window:pagehide']()
+    await vi.advanceTimersByTimeAsync(10000)
+
+    expect(digestPublishes(store)).toBe(1)
+  })
+
+  it('writes nothing when no digest is pending', async () => {
+    const { listeners, store, wrapper } = factory()
+    wrapper.vm.schedulePushDigest()
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(digestPublishes(store)).toBe(1)
+
+    listeners['window:pagehide']()
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+    listeners['document:visibilitychange']()
+
+    expect(digestPublishes(store)).toBe(1)
   })
 })

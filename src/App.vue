@@ -149,9 +149,23 @@ export default {
       // the same as fifty along the way.
       clearTimeout(this.pushDigestTimer);
       this.pushDigestTimer = setTimeout(() => {
+        this.pushDigestTimer = null;
         this.$store.dispatch('publishPushDigest');
         this.$store.dispatch('refreshAppBadge');
       }, 5000);
+    },
+    // Going away: publish a pending digest NOW. A backgrounded PWA does not
+    // run setTimeout, so a change made in the last five seconds before the
+    // phone went in a pocket never reached the server. Bug report
+    // (2026-10-05): a tiebreak settled at 3:09 restarted the tiebreak quota,
+    // the digest saying so never left the phone, and at 3:50 the sweep
+    // announced a tie from the pre-tiebreak copy - which Home, honouring the
+    // quota, then refused to show. A no-op when nothing is pending.
+    flushPushDigest () {
+      if (!this.pushDigestTimer) return;
+      clearTimeout(this.pushDigestTimer);
+      this.pushDigestTimer = null;
+      this.$store.dispatch('publishPushDigest');
     },
     scrollToTop () {
       window.scrollTo({
@@ -337,6 +351,7 @@ export default {
         // PWA does not run setTimeout, so this is the difference between a
         // friend seeing today's rating and seeing it six hours from now.
         this.$store.dispatch('flushSocialPublish');
+        this.flushPushDigest();
       }
     });
     // pagehide is the reliable half of this on iOS (same reasoning as the
@@ -344,6 +359,7 @@ export default {
     // pending, so firing on both costs nothing.
     window.addEventListener('pagehide', () => {
       this.$store.dispatch('flushSocialPublish');
+      this.flushPushDigest();
     });
     window.addEventListener('pageshow', () => {
       this.lastBecameVisibleAt = Date.now();
