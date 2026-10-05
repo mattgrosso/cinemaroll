@@ -38,6 +38,10 @@ export const PUSH_PREF_DEFAULTS = {
   // reminder without anyone touching a switch (and an empty map, which
   // Firebase would drop anyway, means "all of them"). See gameReminderOn.
   games: false,
+  // Films still waiting on the Showtimes screen add to the icon badge. OFF
+  // by default - Matt, 2026-10-05: "it should be possible to turn that off
+  // under notifications ... and it should be off by default."
+  showtimes: false,
   // Evening, like the daily cadence: games are a wind-down thing.
   gamesHour: 20,
   cadence: 'asTheyCome',

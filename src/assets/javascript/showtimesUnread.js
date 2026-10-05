@@ -18,3 +18,22 @@ export function hasUnseenShowtimes ({ board, dismissed = {}, reminders = {}, see
     !l.coveredBy && !dismissed[t.key]?.[l.slug] && !waiting(t, l) && Number(l.firstSeenAt) > seenAt
   ));
 }
+
+// How many films are still waiting on the board, for the icon badge
+// ("Showtimes waiting" under Notifications, off by default - Matt,
+// 2026-10-05). One per film not dismissed, not snoozed (a reminder set and
+// not yet sent; a sent one is back on screen), and not a film a better
+// theater also has. A mirror of aws-lambda/pushCadence.js showtimesWaiting,
+// which the push Lambda's badge uses; src/test/showtimesBadge.test.js pins
+// the two together.
+export function showtimesWaiting ({ board, dismissed = {}, reminders = {} }) {
+  const theaters = Array.isArray(board?.theaters) ? board.theaters : [];
+  let count = 0;
+  theaters.forEach((t) => (Array.isArray(t.listings) ? t.listings : []).forEach((l) => {
+    if (l.coveredBy || dismissed?.[t.key]?.[l.slug]) return;
+    const r = reminders?.[t.key]?.[l.slug];
+    if (r && !r.sentAt) return;
+    count += 1;
+  }));
+  return count;
+}

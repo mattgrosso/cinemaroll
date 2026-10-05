@@ -900,6 +900,14 @@
                       <input class="form-check-input" type="checkbox" id="pushAwardsToggle" :checked="pushPrefs.awards" @change="updatePushPref('awards', $event)">
                       <label class="form-check-label" for="pushAwardsToggle">Award years needing input</label>
                     </div>
+                    <!-- Off by default (2026-10-05: "Movies in the Showtime
+                         screen that I have not yet either dismissed or snoozed
+                         should contribute to my badge count ... off by
+                         default"). Badge only; it sends nothing. -->
+                    <div class="form-check form-switch mb-1">
+                      <input class="form-check-input" type="checkbox" id="pushShowtimesToggle" :checked="pushPrefs.showtimes" @change="updatePushPref('showtimes', $event)">
+                      <label class="form-check-label" for="pushShowtimesToggle">Showtimes films on the icon badge</label>
+                    </div>
                     <div class="form-check form-switch" :class="pushPrefs.friendLogs ? 'mb-1' : 'mb-3'">
                       <input class="form-check-input" type="checkbox" id="pushFriendLogsToggle" :checked="pushPrefs.friendLogs" @change="updatePushPref('friendLogs', $event)">
                       <label class="form-check-label" for="pushFriendLogsToggle">A friend logs a movie</label>

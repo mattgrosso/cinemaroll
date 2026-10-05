@@ -116,6 +116,22 @@ export default {
     },
     '$store.state.settings' () {
       this.schedulePushDigest();
+    },
+    // The icon badge can count Showtimes films (a Notifications switch, off
+    // by default): recount when the switch flips, the board arrives, or a
+    // film is dismissed or snoozed. refreshAppBadge no-ops the films part
+    // unless the switch is on.
+    '$store.state.pushPrefs' () {
+      this.$store.dispatch('refreshAppBadge');
+    },
+    '$store.state.theaterBoard' () {
+      this.$store.dispatch('refreshAppBadge');
+    },
+    '$store.state.theaterDismissed' () {
+      this.$store.dispatch('refreshAppBadge');
+    },
+    '$store.state.theaterReminders' () {
+      this.$store.dispatch('refreshAppBadge');
     }
   },
   methods: {

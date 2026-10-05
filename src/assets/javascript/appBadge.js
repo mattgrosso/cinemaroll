@@ -13,10 +13,14 @@
 // pushCadence.js is CommonJS for the Lambda, so this is a mirror rather than
 // an import; src/test/appBadge.test.js pins the two together.
 //
+// Showtimes (2026-10-05): with the "Showtimes waiting" switch on - off by
+// default, so only `prefs.showtimes === true` counts - every film still
+// waiting on the Showtimes screen adds one (showtimesUnread.js).
+//
 // Film Club activity is deliberately not counted here. A friend-log push adds
 // one to the badge; the app setting the chore count on open is what drops it.
 
-export function appBadgeCount (digest, prefs = {}, now = Date.now()) {
+export function appBadgeCount (digest, prefs = {}, now = Date.now(), showtimes = 0) {
   const open = (section) => {
     const at = Number(section?.eligibleAt);
     return !Number.isFinite(at) || at <= now;
@@ -35,5 +39,7 @@ export function appBadgeCount (digest, prefs = {}, now = Date.now()) {
     ? 0
     : (digest?.awards?.years || []).length;
 
-  return stickiness + tiebreak + awards;
+  const films = prefs?.showtimes === true ? (Number(showtimes) || 0) : 0;
+
+  return stickiness + tiebreak + awards + films;
 }

@@ -347,6 +347,16 @@ to localStorage `showtimesSeenAt`), store `loadTheaterBoard` (one `get`, never a
 deleting `push/state/theaters/<key>` first announces the difference as news — the IMAX-only →
 all-screens switch sent five pushes. Delete the key, deploy, let the sweep re-seed.
 
+**Showtimes on the icon badge** (2026-10-05, opt-in: push prefs `showtimes`, default
+`false`; a switch in the Notifications card). One per film still waiting: not dismissed,
+not snoozed (reminder set, no `sentAt`), not `coveredBy`. `showtimesWaiting` exists twice —
+`pushCadence.js` for the Lambda, `showtimesUnread.js` for the app — and
+`showtimesBadge.test.js` pins them together. Every badge the Lambda sends goes through
+`accountBadge` in push-notify.js (chores + extra + films when on), so a push never knocks
+the number back down. The app re-reads the board for the badge at most every 15 minutes
+(`THEATER_BOARD_FRESH_MS`), and App.vue recounts when prefs, board, dismissals or
+reminders change.
+
 **Posters and dismissals** (same night: "I'd rather see movie posters than names … a way for
 me to dismiss things off of this screen … swipe it off or maybe hit an X"). Every adapter now
 carries `poster` where the source has one (Alamo `show.posterImages[0].uri`, Veezi

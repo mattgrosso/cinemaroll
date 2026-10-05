@@ -1346,6 +1346,28 @@ function remindersDue (reminders, now = Date.now()) {
   return due.sort((a, b) => a.remindAt - b.remindAt);
 }
 
+// --- Showtimes on the icon badge (Matt, 2026-10-05) --------------------------
+//
+// "Movies in the Showtime screen that I have not yet either dismissed or
+// snoozed should contribute to my badge count ... it should be off by
+// default." One per film still waiting on the board: not dismissed, not
+// snoozed (a reminder set and not yet sent - a sent one is back on screen),
+// and not a film a better theater on the list also has. Counted only with
+// prefs.showtimes === true. Mirrored in src/assets/javascript/
+// showtimesUnread.js; src/test/showtimesBadge.test.js pins the two together.
+function showtimesWaiting (board, dismissed, reminders) {
+  const theaters = board && Array.isArray(board.theaters) ? board.theaters : [];
+  let count = 0;
+  theaters.forEach((t) => (Array.isArray(t.listings) ? t.listings : []).forEach((l) => {
+    if (l.coveredBy) return;
+    if (dismissed && dismissed[t.key] && dismissed[t.key][l.slug]) return;
+    const r = reminders && reminders[t.key] && reminders[t.key][l.slug];
+    if (r && !r.sentAt) return;
+    count += 1;
+  }));
+  return count;
+}
+
 function composeReminderMessage (reminder) {
   const when = showTimeLabel(reminder.firstShowTime);
   const where = reminder.theaterName ? ` at ${reminder.theaterName}` : '';
@@ -1401,6 +1423,7 @@ module.exports = {
   uncovered,
   boardForApp,
   remindersDue,
+  showtimesWaiting,
   composeReminderMessage,
   composeListingMessages,
   SIGNUP_MAX_PER_SWEEP,

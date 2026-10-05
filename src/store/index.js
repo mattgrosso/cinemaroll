@@ -41,6 +41,7 @@ import { buildSocialProfile, socialSettingsWithDefaults, countNewFriendUpdates, 
 import { buildMirrorFeed } from "../assets/javascript/mirrorFeed.js";
 import { buildPushDigest } from "../assets/javascript/pushDigest.js";
 import { appBadgeCount } from "../assets/javascript/appBadge.js";
+import { showtimesWaiting } from "../assets/javascript/showtimesUnread.js";
 import { buildNewsletterProfile } from "../assets/javascript/newsletterProfile.js";
 import { postToNewsletter } from "../utils/newsletterRequest.js";
 import { announceFriendRequest } from "../utils/push.js";
@@ -60,6 +61,8 @@ async function fetchAcademyAwardsDataset () {
 }
 const NEWSLETTER_REBUILD_POLL_MS = 5000;
 const NEWSLETTER_REBUILD_TRIES = 30;
+// The push sweep rewrites the theater board every 15 minutes.
+const THEATER_BOARD_FRESH_MS = 15 * 60 * 1000;
 import { pushPrefsWithDefaults } from "../assets/javascript/pushPrefs.js";
 import { pendingUpdates, reconcilePending } from "../assets/javascript/recommendationStats.js";
 import { toInterchange, profileFromFeed, buildInvite, parseInvite, buildConnectRequest, normalizeInboxRequests, buildDirectoryEntry, normalizeDirectory, findSubscription, dedupeExternalFriends, FEDERATED_APPS } from "../assets/javascript/interchange.js";
@@ -455,6 +458,9 @@ export default createStore({
     // The theater board the push sweep publishes (aws-lambda/push-notify.js):
     // every followed theater's upcoming listings, in pecking order.
     theaterBoard: null,
+    // When loadTheaterBoard last committed (0 = never). The icon badge's
+    // Showtimes count re-reads the board when this is older than a sweep.
+    theaterBoardLoadedAt: 0,
     // { [theaterKey]: { [slug]: dismissedAt } } - films Matt has waved off the
     // Showtimes screen. Pruned to what is still on the board when it loads.
     theaterDismissed: {},
@@ -790,6 +796,7 @@ export default createStore({
     },
     setTheaterBoard (state, value) {
       state.theaterBoard = value || null;
+      state.theaterBoardLoadedAt = Date.now();
     },
     setTheaterDismissed (state, value) {
       state.theaterDismissed = value && typeof value === 'object' ? value : {};
@@ -2885,7 +2892,23 @@ export default createStore({
         settings: context.state.settings || {},
         getRating
       });
-      const count = appBadgeCount(digest, context.state.pushPrefs || {});
+      // "Showtimes waiting" (off by default): the films still waiting on the
+      // Showtimes screen count too. The sweep rewrites the board every 15
+      // minutes, so it's re-read at most that often, and only when online.
+      const prefs = context.state.pushPrefs || {};
+      let films = 0;
+      if (prefs.showtimes === true) {
+        const stale = Date.now() - (context.state.theaterBoardLoadedAt || 0) > THEATER_BOARD_FRESH_MS;
+        if (stale && context.state.isOnline !== false) {
+          try { await context.dispatch('loadTheaterBoard'); } catch { /* keep what we have */ }
+        }
+        films = showtimesWaiting({
+          board: context.state.theaterBoard,
+          dismissed: context.state.theaterDismissed,
+          reminders: context.state.theaterReminders
+        });
+      }
+      const count = appBadgeCount(digest, prefs, Date.now(), films);
       try {
         if (count > 0) await navigator.setAppBadge(count);
         else await navigator.clearAppBadge?.();
