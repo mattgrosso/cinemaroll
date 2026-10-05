@@ -75,6 +75,18 @@ function shipWorktreeToMain ({ worktreeRoot, mainRoot }) {
 function main () {
   const roots = ensureWorktreeSetup();
   if (!existsSync(join(roots.worktreeRoot, '.env'))) fail('No .env here or in the main checkout.');
+
+  // 2026-10-05: lint + tests run HERE, before anything merges or ships. CI runs
+  // the same two commands after the push, so a red tree used to reach
+  // cinemaroll.org first and GitHub's failure email second (four times that
+  // day). Nothing red leaves this machine now. `--skip-checks` is for a
+  // hotfix when the suite itself is what's broken; CI still runs regardless.
+  if (!process.argv.includes('--skip-checks')) {
+    console.log('\nChecking before shipping (yarn lint, yarn test:run; --skip-checks to bypass)...');
+    run('yarn', ['lint']);
+    run('yarn', ['test:run']);
+  }
+
   if (roots.isLinkedWorktree) shipWorktreeToMain(roots);
 
   run('node', ['scripts/bump-and-build.mjs']);

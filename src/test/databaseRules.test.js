@@ -87,10 +87,15 @@ describe('database.rules.json', () => {
       expect(rules.$topKey.sharedDBSearches['.read']).toBeUndefined();
     });
 
-    it('accepts bug reports from anyone but lets nobody read the pile back', () => {
-      // The report button renders on the login screen too, before any session.
-      expect(rules.bugReports['.write']).toBe(true);
+    it('accepts bug reports from anyone but lets nobody read, edit, or wipe the pile', () => {
+      // The report button renders on the login screen too, before any session,
+      // so a report needs no auth — but (2026-10-05) each one is create-only:
+      // no top-level write, so nobody can delete the inbox or rewrite a report.
       expect(rules.bugReports['.read']).toBe(false);
+      expect(rules.bugReports['.write']).toBeUndefined();
+      const report = rules.bugReports.$reportId;
+      expect(report['.write']).toBe('!data.exists() && newData.exists()');
+      expect(report['.validate']).toContain("hasChildren(['transcript'])");
     });
 
     // 2026-09-30: an end-of-day friend (my edge to them is 'day') may not
