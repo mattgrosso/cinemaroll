@@ -121,6 +121,10 @@ const verifyIdToken = async (authorization) => {
   if (payload.aud !== FIREBASE_PROJECT_ID) return null;
   if (payload.iss !== `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`) return null;
   if (!payload.sub) return null;
+  // Anonymous sessions (the bug button signs in anonymously) are valid project
+  // tokens anyone can mint with one curl; this endpoint spends money, so they
+  // are refused (house rule since the 2026-08-29 anon-auth work).
+  if (payload.firebase && payload.firebase.sign_in_provider === 'anonymous') return null;
 
   return payload;
 };
