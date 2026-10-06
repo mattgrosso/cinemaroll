@@ -518,8 +518,8 @@
 
         <div class="detail-band">
           <p class="band-title">The crew</p>
-        <DetailSection v-if="writers.length" id="writers" label="Writers" tone="people" :summary="listSummary(writers, 3)">
-          <template #summary><NameRow :people="people(writers)" @pick="searchFor($event, 'writer')" /></template>
+        <DetailSection :expandable="crewOverflow.writers !== 0" v-if="writers.length" id="writers" label="Writers" tone="people" :summary="listSummary(writers, 3)">
+          <template #summary><NameRow :people="people(writers)" @overflow="crewOverflow.writers = $event" @pick="searchFor($event, 'writer')" /></template>
         <!-- Writers -->
         <div v-if="writers.length" class="writers mb-3">
           <h4>Writer<span v-if="multipleEntries(writers)">s</span></h4>
@@ -530,8 +530,8 @@
           </p>
         </div>
         </DetailSection>
-        <DetailSection v-if="getCrewMember('Composer').length" id="composers" label="Composer" tone="people" :summary="listSummary(getCrewMember('Composer'), 3)">
-          <template #summary><NameRow :people="people(getCrewMember('Composer'))" @pick="searchFor($event, 'composer')" /></template>
+        <DetailSection :expandable="crewOverflow.composers !== 0" v-if="getCrewMember('Composer').length" id="composers" label="Composer" tone="people" :summary="listSummary(getCrewMember('Composer'), 3)">
+          <template #summary><NameRow :people="people(getCrewMember('Composer'))" @overflow="crewOverflow.composers = $event" @pick="searchFor($event, 'composer')" /></template>
         <!-- Composers -->
         <div v-if="getCrewMember('Composer').length" class="composers mb-3">
           <h4>Composer<span v-if="multipleEntries(getCrewMember('Composer'))">s</span></h4>
@@ -542,8 +542,8 @@
           </p>
         </div>
         </DetailSection>
-        <DetailSection v-if="getCrewMember('Photo').length" id="cinematographers" label="Visuals" tone="people" :summary="listSummary(getCrewMember('Photo'), 3)">
-          <template #summary><NameRow :people="people(getCrewMember('Photo'))" @pick="searchFor($event, 'photo')" /></template>
+        <DetailSection :expandable="crewOverflow.cinematographers !== 0" v-if="getCrewMember('Photo').length" id="cinematographers" label="Visuals" tone="people" :summary="listSummary(getCrewMember('Photo'), 3)">
+          <template #summary><NameRow :people="people(getCrewMember('Photo'))" @overflow="crewOverflow.cinematographers = $event" @pick="searchFor($event, 'photo')" /></template>
         <!-- Cinematographers -->
         <div v-if="getCrewMember('Photo').length" class="cinematographers mb-3">
           <h4>Cinematographer<span v-if="multipleEntries(getCrewMember('Photo'))">s</span></h4>
@@ -554,8 +554,8 @@
           </p>
         </div>
         </DetailSection>
-        <DetailSection v-if="getCrewMember('Editor').length" id="editors" label="Editors" tone="people" :summary="listSummary(getCrewMember('Editor'), 3)">
-          <template #summary><NameRow :people="people(getCrewMember('Editor'))" @pick="searchFor($event, 'editor')" /></template>
+        <DetailSection :expandable="crewOverflow.editors !== 0" v-if="getCrewMember('Editor').length" id="editors" label="Editors" tone="people" :summary="listSummary(getCrewMember('Editor'), 3)">
+          <template #summary><NameRow :people="people(getCrewMember('Editor'))" @overflow="crewOverflow.editors = $event" @pick="searchFor($event, 'editor')" /></template>
         <!-- Editors -->
         <div v-if="getCrewMember('Editor').length" class="editors mb-3">
           <h4>Editor<span v-if="multipleEntries(getCrewMember('Editor'))">s</span></h4>
@@ -566,8 +566,8 @@
           </p>
         </div>
         </DetailSection>
-        <DetailSection v-if="getCrewMember('Producer').length" id="producers" label="Producers" tone="people" :summary="listSummary(getCrewMember('Producer'), 3)">
-          <template #summary><NameRow :people="people(getCrewMember('Producer'))" @pick="searchFor($event, 'producer')" /></template>
+        <DetailSection :expandable="crewOverflow.producers !== 0" v-if="getCrewMember('Producer').length" id="producers" label="Producers" tone="people" :summary="listSummary(getCrewMember('Producer'), 3)">
+          <template #summary><NameRow :people="people(getCrewMember('Producer'))" @overflow="crewOverflow.producers = $event" @pick="searchFor($event, 'producer')" /></template>
         <!-- Producers -->
         <div v-if="getCrewMember('Producer').length" class="producers mb-3">
           <h4>Producer<span v-if="multipleEntries(getCrewMember('Producer'))">s</span></h4>
@@ -745,7 +745,10 @@ export default {
       cinemaScore: { tmdbId: null, score: null },
       cinemaScoreSite: CINEMASCORE_SITE,
       // The cast line: one line of whole names until "+N more" is tapped.
-      castExpanded: false
+      castExpanded: false,
+      // Per crew row, how many names its NameRow clips; 0 means the row has
+      // nothing more to open and loses its chevron.
+      crewOverflow: {}
     };
   },
   created () {
@@ -1246,6 +1249,7 @@ export default {
     },
     async loadMovieData (tmdbId) {
       this.castExpanded = false;
+      this.crewOverflow = {};
       try {
         // Wait for database to be loaded if it isn't already
         if (!this.$store.state.dbLoaded) {

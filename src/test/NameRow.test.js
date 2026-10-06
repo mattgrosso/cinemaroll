@@ -49,6 +49,16 @@ describe('NameRow', () => {
     expect(wrapper.emitted('more')).toEqual([[]]);
   });
 
+  it('reports how many names are clipped, so a folding row can stop folding when it is 0', async () => {
+    const wrapper = mount(NameRow, { props: { people } });
+    expect(wrapper.emitted('overflow')).toEqual([[0]]);
+    layOut(wrapper, [0, 24, 24]);
+    wrapper.vm.measure();
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.emitted('overflow').at(-1)).toEqual([2]);
+  });
+
   it('expanded, it shows everything and no "more"', async () => {
     const wrapper = mount(NameRow, { props: { people, expanded: true } });
     layOut(wrapper, [0, 24, 48]);

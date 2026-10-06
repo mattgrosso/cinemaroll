@@ -12,7 +12,8 @@
         {{ person.name }}<CountMark :count="person.count" />
       </button>
     </span>
-    <button v-if="hiddenCount > 0 && !expanded" type="button" class="name-row-more" @click.stop="$emit('more')">+{{ hiddenCount }} more</button>
+    <!-- Not .stop: inside a folding row's header the tap also opens the row. -->
+    <button v-if="hiddenCount > 0 && !expanded" type="button" class="name-row-more" @click="$emit('more')">+{{ hiddenCount }} more</button>
   </div>
 </template>
 
@@ -31,11 +32,14 @@ export default {
     // How many lines show when closed. The cast gets two; a crew row, one.
     lines: { type: Number, default: 1 }
   },
-  emits: ['pick', 'more'],
+  // `overflow` reports how many names are clipped (0 = everyone is on show),
+  // so a folding row can stop being foldable when there is nothing more.
+  emits: ['pick', 'more', 'overflow'],
   data () {
     return { hiddenCount: 0 };
   },
   watch: {
+    hiddenCount: { immediate: true, handler (n) { this.$emit('overflow', n); } },
     people () { this.$nextTick(() => this.measure()); },
     expanded () { this.$nextTick(() => this.measure()); }
   },

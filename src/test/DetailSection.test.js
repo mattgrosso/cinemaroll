@@ -105,6 +105,17 @@ describe('DetailSection', () => {
     expect(source).not.toMatch(/&\.open \{ grid-column: 1 \/ -1; \}/);
   });
 
+  // Matt, 2026-10-06: "if everybody is included in the header and they're
+  // already clickable, there's no reason to make that an expansion thing."
+  it('without expandable it has no chevron, no button role, and does not open', async () => {
+    const wrapper = factory({ expandable: false });
+    expect(wrapper.find('.detail-section-chevron').exists()).toBe(false);
+    expect(wrapper.find('.detail-section-header').attributes('role')).toBeUndefined();
+    await wrapper.find('.detail-section-header').trigger('click');
+    expect(hidden(wrapper)).toBe(true);
+    expect(wrapper.emitted('toggle')).toBeUndefined();
+  });
+
   // The Critics row looks its reviews up only when opened (2026-10-06).
   it('tells the page when it opens and closes', async () => {
     const wrapper = factory();

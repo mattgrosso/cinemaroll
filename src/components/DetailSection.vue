@@ -2,13 +2,13 @@
   <section class="detail-section" :class="[`detail-section--${tone}`, { open, 'detail-section--tile': tile }]">
     <!-- A div, not a button: the summary may hold tappable names (NameRow),
          and a button inside a button is not a thing. Enter and Space toggle. -->
-    <div class="detail-section-header" role="button" tabindex="0" :aria-expanded="open ? 'true' : 'false'" @click="toggle" @keydown.enter.prevent="toggle" @keydown.space.prevent="toggle">
+    <div class="detail-section-header" :role="expandable ? 'button' : null" :tabindex="expandable ? 0 : null" :aria-expanded="expandable ? (open ? 'true' : 'false') : null" @click="toggle" @keydown.enter.prevent="toggle" @keydown.space.prevent="toggle">
       <span class="detail-section-label">{{ label }}</span>
       <span v-if="!open" class="detail-section-summary" :class="{ 'detail-section-summary--rich': !!$slots.summary }"><slot name="summary">{{ summary }}</slot></span>
       <span class="detail-section-actions" @click.stop><slot name="actions"/></span>
-      <i class="bi detail-section-chevron" :class="open ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+      <i v-if="expandable" class="bi detail-section-chevron" :class="open ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
     </div>
-    <div v-show="open" class="detail-section-body">
+    <div v-show="open && expandable" class="detail-section-body">
       <slot/>
     </div>
   </section>
@@ -51,7 +51,11 @@ export default {
     // under it, two to a line in a .detail-tiles grid. Open, it spans the
     // grid's full width. The film band uses it so the people come up sooner
     // (report, 2026-10-04: "I'm often glancing for like the cast").
-    tile: { type: Boolean, default: false }
+    tile: { type: Boolean, default: false },
+    // False when the closed summary already shows everything (a crew row
+    // whose NameRow clips nobody — Matt, 2026-10-06): no chevron, no tap,
+    // nothing to open.
+    expandable: { type: Boolean, default: true }
   },
   // Slot `summary` replaces the one-line text with anything — the crew rows
   // put a NameRow there so every name is tappable without opening the row.
@@ -71,6 +75,7 @@ export default {
   },
   methods: {
     toggle () {
+      if (!this.expandable) return;
       this.open = !this.open;
       this.$emit('toggle', this.open);
     }
