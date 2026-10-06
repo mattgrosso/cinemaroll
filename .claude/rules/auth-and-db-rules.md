@@ -185,8 +185,12 @@ a search-and-judge call can outlast API Gateway's 30s. The route answers from Dy
 table **`cinemaroll-film-reviews`** (key `film#<tmdbId>`, TTL `expiresAt`, one answer per
 film for everyone), else claims the film with a conditional put and Event-invokes the same
 function with `{ reviewsJob }` (a top-level event key an HTTP caller can't set), answering
-`pending`. Only a lookup that starts a job counts against its own daily caps (25 per
-person, 150 overall, ~20 cents each). Needs, beyond the code: the table, an inline role
+`pending`. **The request supplies only the id**: title, year and director come from
+TMDB's record of it (`lookupFilm`, env `TMDB_API_KEY`; the pure `filmFromTmdb` is tested) —
+on 2026-10-06 a smoke test sent Godfather Part III's title with The Little Mermaid's id and
+the Mermaid's shared entry held Godfather reviews until it was deleted by hand. An unknown
+id is a 404 and starts nothing. Only a lookup that starts a job counts against its own daily
+caps (25 per person, 150 overall, ~20 cents each). Needs, beyond the code: the table, an inline role
 policy (Get/Put on it, InvokeFunction on `cinemaroll-ai` itself), the function timeout at
 120s, and the route + permission per the THREE-things rule. Uses the BASIC
 `web_search_20250305` with `blocked_domains` — `allowed_domains` is refused outright when

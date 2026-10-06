@@ -583,23 +583,35 @@ const checkReviewsQuota = async (uid) => {
   return null;
 };
 
-const filmFromBody = (body) => {
+// Only the id is taken from the request. The title, year and director the
+// search runs on come from TMDB's record of that id (lookupFilm) - a client
+// that sent one film's title with another's id would otherwise store the
+// wrong reviews under the key everyone reads (it happened, 2026-10-06).
+const tmdbIdFromBody = (body) => {
   const tmdbId = String(body?.tmdbId || '').trim();
-  return {
-    tmdbId: /^\d{1,10}$/.test(tmdbId) ? tmdbId : null,
-    title: String(body?.title || '').trim().slice(0, 200),
-    year: Number(body?.year) || null,
-    director: String(body?.director || '').trim().slice(0, 100)
-  };
+  return /^\d{1,10}$/.test(tmdbId) ? tmdbId : null;
+};
+
+const TMDB_API = 'https://api.themoviedb.org/3';
+
+/** TMDB's record of the film: { tmdbId, title, year, director }, or null for an unknown id. */
+const lookupFilm = async (tmdbId) => {
+  const key = process.env.TMDB_API_KEY;
+  if (!key) throw new Error('TMDB_API_KEY is not set');
+  const res = await fetch(`${TMDB_API}/movie/${tmdbId}?api_key=${key}&append_to_response=credits`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`TMDB ${res.status} for movie ${tmdbId}`);
+  const film = critics.filmFromTmdb(await res.json());
+  return film ? { tmdbId, ...film } : null;
 };
 
 const getReviews = async (body, uid, functionName) => {
-  const film = filmFromBody(body);
-  if (!film.tmdbId || !film.title) {
-    return response(400, { error: 'A film id and title are required', reviews: [] });
+  const tmdbId = tmdbIdFromBody(body);
+  if (!tmdbId) {
+    return response(400, { error: 'A film id is required', reviews: [] });
   }
 
-  const stored = await readStoredReviews(film.tmdbId);
+  const stored = await readStoredReviews(tmdbId);
   if (stored?.status === 'ready') {
     return response(200, { status: 'ready', reviews: stored.reviews });
   }
@@ -608,6 +620,12 @@ const getReviews = async (body, uid, functionName) => {
   }
   if (stored?.status === 'pending' && Date.now() - stored.startedAt < REVIEWS_JOB_STALE_MS) {
     return response(200, { status: 'pending', reviews: [] });
+  }
+
+  // Only a lookup that is about to start a job pays for the TMDB read.
+  const film = await lookupFilm(tmdbId);
+  if (!film) {
+    return response(404, { error: 'No film with that id', reviews: [] });
   }
 
   const blocked = await checkReviewsQuota(uid);

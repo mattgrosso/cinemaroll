@@ -5,6 +5,7 @@ import {
   normalizeUrl,
   isTrustedOutlet,
   cacheLifetime,
+  filmFromTmdb,
   SYSTEM_PROMPT,
   TRUSTED_OUTLETS,
   BLOCKED_DOMAINS
@@ -125,5 +126,27 @@ describe('cacheLifetime', () => {
     expect(cacheLifetime({ filmYear: 2026, found: true, nowYear: 2026 })).toBe(30 * 24 * 3600);
     expect(cacheLifetime({ filmYear: 1958, found: false, nowYear: 2026 })).toBe(30 * 24 * 3600);
     expect(cacheLifetime({ failed: true })).toBe(3600);
+  });
+});
+
+// The film comes from TMDB's record of the id, never the request body
+// (2026-10-06: a request with the wrong id stored one film's reviews under
+// another's key for everyone).
+describe('filmFromTmdb', () => {
+  it('takes the title, year and director from the TMDB record', () => {
+    expect(filmFromTmdb({
+      title: 'The Little Mermaid',
+      release_date: '1989-11-17',
+      credits: { crew: [{ job: 'Producer', name: 'Howard Ashman' }, { job: 'Director', name: 'Ron Clements' }, { job: 'Director', name: 'John Musker' }] }
+    })).toEqual({ title: 'The Little Mermaid', year: 1989, director: 'Ron Clements, John Musker' });
+  });
+
+  it('copes with a record that has no date or crew', () => {
+    expect(filmFromTmdb({ title: 'Untitled', credits: {} })).toEqual({ title: 'Untitled', year: null, director: '' });
+  });
+
+  it('is null for nothing, or for a record without a title', () => {
+    expect(filmFromTmdb(null)).toBeNull();
+    expect(filmFromTmdb({ release_date: '1990-01-01' })).toBeNull();
   });
 });

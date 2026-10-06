@@ -137,6 +137,23 @@ const RECORD_TOOL = {
   }
 };
 
+/**
+ * The film the search is about, from TMDB's own record of the id — never
+ * from the request. On 2026-10-06 a smoke test posted The Godfather Part
+ * III's title with The Little Mermaid's id, and Godfather reviews were
+ * stored under the Mermaid for everyone. The id is the key, so the id has
+ * to be the source of the title, year and director too. Null when TMDB has
+ * no usable film for it.
+ */
+const filmFromTmdb = (details) => {
+  const title = String(details?.title || details?.original_title || '').trim();
+  if (!details || !title) return null;
+  const year = Number(String(details.release_date || '').slice(0, 4)) || null;
+  const crew = Array.isArray(details.credits?.crew) ? details.credits.crew : [];
+  const director = crew.filter((c) => c && c.job === 'Director' && c.name).map((c) => c.name).join(', ') || '';
+  return { title: title.slice(0, 200), year, director: director.slice(0, 100) };
+};
+
 const userPrompt = ({ title, year, director }) => {
   const film = `"${String(title).slice(0, 200)}"${year ? ` (${year})` : ''}`;
   const by = director ? `, directed by ${String(director).slice(0, 100)}` : '';
@@ -252,6 +269,7 @@ module.exports = {
   SYSTEM_PROMPT,
   RECORD_TOOL,
   userPrompt,
+  filmFromTmdb,
   normalizeUrl,
   searchedUrls,
   acceptReviews,
