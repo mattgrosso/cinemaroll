@@ -2494,6 +2494,16 @@ export default {
         font-size: ds(0.62rem);
         color: #ccc;
       }
+      /* Five stars at the number's size overflow a third of a phone
+         (report, 2026-10-06), so they run at 80% on one line. The
+         line-height makes up the difference (0.8 × 1.375 = 1.1) so the
+         row stays the number's height and nothing jumps while tapping. */
+      :deep(.toggleable-rating .has-stars),
+      :deep(.toggleable-rating .no-stars) {
+        font-size: 0.8em;
+        line-height: 1.375;
+        white-space: nowrap;
+      }
     }
   }
 
