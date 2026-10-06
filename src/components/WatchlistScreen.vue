@@ -442,7 +442,10 @@ export default {
           // Both sides out of 10 (report 2026-10-06): Letterboxd's stars were
           // shown raw beside your 0–10 score, so the gap couldn't be read at a
           // glance. `community` is already the crowd doubled, as ranked.
-          `${candidate.communitySource === 'letterboxd' ? 'Letterboxd' : 'World'} ${formatScore(candidate.community)}`
+          // "LB", not "Letterboxd", and a non-breaking space (report
+          // 2026-10-06): the caption beside the X gets ~70px, and "Letterboxd
+          // 7.70" wrapped its number onto a line of its own.
+          `${candidate.communitySource === 'letterboxd' ? 'LB' : 'World'}\u00a0${formatScore(candidate.community)}`
         ],
         source: candidate.entry
       }));

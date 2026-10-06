@@ -862,11 +862,19 @@ describe('Give these another shot labels', () => {
 
   it('shows the Letterboxd crowd out of 10, like your own score', () => {
     const [item] = anotherShotItems.call(ctx({ entry: film, yours: 5.4, crowd: 3.85, community: 7.7, communitySource: 'letterboxd' }));
-    expect(item.metaLines).toEqual(['You 5.40', 'Letterboxd 7.70']);
+    expect(item.metaLines).toEqual(['You 5.40', 'LB\u00a07.70']);
+  });
+
+  // Report 2026-10-06: "Letterboxd 7.70" didn't fit the ~70px beside the X
+  // and wrapped the number onto its own line. Short label, unbreakable space.
+  it('keeps the crowd score on one unbreakable line', () => {
+    const [item] = anotherShotItems.call(ctx({ entry: film, yours: 5.4, crowd: 3.85, community: 7.7, communitySource: 'letterboxd' }));
+    expect(item.metaLines[1]).not.toContain(' ');
+    expect(item.metaLines[1].length).toBeLessThanOrEqual(10);
   });
 
   it('keeps the TMDB fallback out of 10', () => {
     const [item] = anotherShotItems.call(ctx({ entry: film, yours: 5.4, crowd: null, community: 7.9, communitySource: 'tmdb' }));
-    expect(item.metaLines).toEqual(['You 5.40', 'World 7.90']);
+    expect(item.metaLines).toEqual(['You 5.40', 'World\u00a07.90']);
   });
 });
