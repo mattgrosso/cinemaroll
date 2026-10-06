@@ -622,6 +622,20 @@ export default createStore({
       });
       return countNewFriendUpdates(profiles, state.filmClubLastSeen);
     },
+    // Showtimes films on the icon badge: every film still waiting on the
+    // Showtimes screen, while the "Showtimes waiting" switch is on (off by
+    // default, so only `true` counts). ONE number for the badge
+    // (refreshAppBadge), Home's Showtimes card and the Watchlist's - bug
+    // report 2026-10-06: "there's nothing on the home screen that guides me
+    // to where I need to go" to clear the badge.
+    showtimesBadgeCount (state) {
+      if (state.pushPrefs?.showtimes !== true) return 0;
+      return showtimesWaiting({
+        board: state.theaterBoard,
+        dismissed: state.theaterDismissed || {},
+        reminders: state.theaterReminders || {}
+      });
+    },
     // One list for the whole club: native mutual friends and friends on
     // other apps, in the same shape, so nothing downstream needs to care
     // which app someone uses.
@@ -2928,11 +2942,7 @@ export default createStore({
         if (stale && context.state.isOnline !== false) {
           try { await context.dispatch('loadTheaterBoard'); } catch { /* keep what we have */ }
         }
-        films = showtimesWaiting({
-          board: context.state.theaterBoard,
-          dismissed: context.state.theaterDismissed,
-          reminders: context.state.theaterReminders
-        });
+        films = context.getters.showtimesBadgeCount;
       }
       const count = appBadgeCount(digest, prefs, Date.now(), films);
       try {

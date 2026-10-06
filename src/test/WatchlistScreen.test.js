@@ -66,7 +66,7 @@ function tmdbImpl (url) {
   return Promise.reject(new Error(`unexpected url ${url}`));
 }
 
-function factory ({ isOnline = true, movies = library(), dispatch = vi.fn(), movieHatMovieIds = {}, movieHatContentsComplete = true, linkedMovieHats = [], state = {} } = {}) {
+function factory ({ isOnline = true, movies = library(), dispatch = vi.fn(), movieHatMovieIds = {}, movieHatContentsComplete = true, linkedMovieHats = [], state = {}, showtimesBadgeCount = 0 } = {}) {
   const pushSpy = vi.fn();
   const commitSpy = vi.fn();
   const wrapper = mount(WatchlistScreen, {
@@ -74,7 +74,7 @@ function factory ({ isOnline = true, movies = library(), dispatch = vi.fn(), mov
       mocks: {
         $store: {
           state: { isOnline, movieHatMovieIds, movieHatContentsComplete, ...state },
-          getters: { allMoviesAsArray: movies, linkedMovieHats },
+          getters: { allMoviesAsArray: movies, linkedMovieHats, showtimesBadgeCount },
           commit: commitSpy,
           dispatch
         },
@@ -849,6 +849,16 @@ describe('WatchlistScreen Showtimes card', () => {
     await flushPromises();
     expect(seen.wrapper.find('.showtimes-card').exists()).toBe(true);
     expect(seen.wrapper.find('.showtimes-card-new').exists()).toBe(false);
+  });
+
+  // Bug report 2026-10-06: the "new" tag went away after one visit while the
+  // icon badge kept counting. With the badge counting Showtimes films, the
+  // card shows that same number until they're dismissed or snoozed.
+  it('shows the badge\'s Showtimes number even after the screen has been seen', async () => {
+    window.localStorage.setItem('showtimesSeenAt', '1000');
+    const { wrapper } = factory({ state: { theaterBoard: board(500) }, showtimesBadgeCount: 2 });
+    await flushPromises();
+    expect(wrapper.find('.showtimes-card-new').text()).toBe('2 waiting');
   });
 });
 

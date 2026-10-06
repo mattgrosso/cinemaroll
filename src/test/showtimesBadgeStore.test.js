@@ -101,4 +101,22 @@ describe('refreshAppBadge and Showtimes', () => {
     expect(clearAppBadge).toHaveBeenCalled();
     expect(getMock).not.toHaveBeenCalled();
   });
+
+  // Bug report 2026-10-06: a badge on the icon and nothing on Home saying
+  // where it came from. Home's and the Watchlist's Showtimes cards read
+  // showtimesBadgeCount, so it has to be the badge's own number.
+  it('gives the cards the same number as the badge, and zero while the switch is off', async () => {
+    store.commit('setPushPrefs', { showtimes: true });
+    await store.dispatch('refreshAppBadge');
+    expect(store.getters.showtimesBadgeCount).toBe(2);
+    expect(setAppBadge).toHaveBeenLastCalledWith(store.getters.showtimesBadgeCount);
+
+    await store.dispatch('dismissListing', { theaterKey: 'alamo', slug: 'a' });
+    await store.dispatch('refreshAppBadge');
+    expect(store.getters.showtimesBadgeCount).toBe(1);
+    expect(setAppBadge).toHaveBeenLastCalledWith(1);
+
+    store.commit('setPushPrefs', { showtimes: false });
+    expect(store.getters.showtimesBadgeCount).toBe(0);
+  });
 });

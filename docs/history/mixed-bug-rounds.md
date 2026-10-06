@@ -748,3 +748,14 @@ Choices made and why:
 
 Open: Movie Log friends read the Interchange feed and have no switch; Matt hasn't said
 whether they need one.
+
+## Where did the badge come from? (2026-10-06)
+
+Matt: with a badge on the icon, "there's nothing on the home screen that guides me to
+where I need to go" — mostly Showtimes. The badge counted Showtimes films still waiting
+(the "Showtimes waiting" switch), but Home said nothing about them, and the Watchlist's
+Showtimes card only had a "new" tag that disappeared after one visit while the badge
+stayed until each film was dismissed or snoozed. Now the store's `showtimesBadgeCount`
+getter is the one number: `refreshAppBadge` puts it on the icon, Home shows a gold
+Showtimes prompt card with it, and the Watchlist card shows "N waiting". The Film Club
+number on Home was left alone (it isn't part of the app's own badge).

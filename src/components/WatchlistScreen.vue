@@ -11,7 +11,11 @@
     <button type="button" class="showtimes-card" @click="$router.push('/showtimes')">
       <i class="bi bi-ticket-perforated"></i>
       <span class="showtimes-card-label">Showtimes</span>
-      <span v-if="showtimesUnread" class="showtimes-card-new">new</span>
+      <!-- The icon badge's Showtimes number when it's counting them (the
+           same getter), so the card says how many are left to clear; the
+           "new" tag only lasts until the screen is opened once. -->
+      <span v-if="showtimesBadgeCount" class="showtimes-card-new">{{ showtimesBadgeCount }} waiting</span>
+      <span v-else-if="showtimesUnread" class="showtimes-card-new">new</span>
       <i class="bi bi-chevron-right showtimes-card-chevron"></i>
     </button>
 
@@ -410,6 +414,9 @@ export default {
     };
   },
   computed: {
+    showtimesBadgeCount () {
+      return this.$store.getters?.showtimesBadgeCount || 0;
+    },
     showtimesUnread () {
       let seenAt = 0;
       try { seenAt = Number(localStorage.getItem(SHOWTIMES_SEEN_KEY)) || 0; } catch { return false; }

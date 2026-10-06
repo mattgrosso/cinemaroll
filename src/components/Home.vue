@@ -585,6 +585,25 @@
         </span>
       </div>
 
+      <!-- Showtimes films on the icon badge. Bug report, 2026-10-06: with a
+           badge on the icon "there's nothing on the home screen that guides
+           me to where I need to go" - Showtimes was the usual source, and
+           only the Watchlist's card (one tap deeper) said anything. Same
+           number as the badge (showtimesBadgeCount); dismissing or
+           snoozing the films clears both. -->
+      <div
+        v-if="showtimesBadgeCount"
+        class="prompt-card showtimes-prompt"
+        @click="$router.push('/showtimes')"
+      >
+        <span class="prompt-badge prompt-badge-showtimes"><i class="bi bi-ticket-perforated"></i></span>
+        <span class="prompt-body">
+          <span class="prompt-label">Showtimes</span>
+          <p class="prompt-text">{{ showtimesPromptText }}</p>
+          <a class="prompt-action prompt-action-showtimes" @click.stop="$router.push('/showtimes')">See them</a>
+        </span>
+      </div>
+
       <BugResolutionNotice/>
 
       <NewsletterNotice/>
@@ -2648,6 +2667,15 @@ export default {
     },
     filmClubNewUpdateCount () {
       return this.$store.getters?.filmClubNewUpdateCount || 0;
+    },
+    showtimesBadgeCount () {
+      return this.$store.getters?.showtimesBadgeCount || 0;
+    },
+    showtimesPromptText () {
+      const n = this.showtimesBadgeCount;
+      return n === 1
+        ? '1 film at your theaters is waiting for you to dismiss it or set a reminder.'
+        : `${n} films at your theaters are waiting for you to dismiss them or set reminders.`;
     },
     friendRequestBannerText () {
       const requests = this.incomingFriendRequests;

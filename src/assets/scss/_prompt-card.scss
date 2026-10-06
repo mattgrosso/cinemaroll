@@ -28,6 +28,8 @@
 //   green  #24d776  stickiness    — Insights' Activity tab; stickiness is
 //                                   the question of how a film holds up over
 //                                   time
+//   gold   #ffc107  showtimes     — the Watchlist's Showtimes ticket; shares
+//                                   awards' gold rather than inventing one
 //
 // THE APP TALKING ABOUT ITSELF — updates, bug-report resolutions, and any
 // future housekeeping share ONE neutral accent:
@@ -88,6 +90,7 @@
 .prompt-badge-friends { background: #cd7fe8; }
 .prompt-badge-tiebreak { background: #1d8bf1; }
 .prompt-badge-stickiness { background: #24d776; }
+.prompt-badge-showtimes { background: #ffc107; }
 .prompt-badge-app { background: #d9d9d9; }
 
 .prompt-body {
@@ -125,6 +128,7 @@
 .prompt-action-friends { color: #cd7fe8; }
 .prompt-action-tiebreak { color: #4fa3e3; }
 .prompt-action-stickiness { color: #24d776; }
+.prompt-action-showtimes { color: #ffc107; }
 .prompt-action-app { color: #d9d9d9; }
 
 // The one place all of these render: the section at the top of Home. The
