@@ -181,7 +181,7 @@
           </h4>
           <p class="long-list">
             <a v-for="(name, index) in getCrewMember('Director', 'strict')" :key="index" class="link" @click.stop="searchFor(name)">
-              {{name}}<span v-if="countDirector(name)" class="small-count-bubble">&nbsp;({{ countDirector(name) }})</span><span v-if="index !== getCrewMember('Director', 'strict').length - 1">&nbsp;&nbsp;</span>
+              {{name}}<CountMark :count="countDirector(name)" /><span v-if="index !== getCrewMember('Director', 'strict').length - 1">&nbsp;&nbsp;</span>
             </a>
           </p>
         </div>
@@ -195,7 +195,7 @@
               class="link me-2"
               @click.stop="searchFor(genre.name)"
             >
-              {{genre.name}}<span v-if="countGenre(genre.name)" class="small-count-bubble">&nbsp;({{ countGenre(genre.name) }})</span>
+              {{genre.name}}<CountMark :count="countGenre(genre.name)" />
             </a>
           </p>
         </div>
@@ -223,7 +223,7 @@
           <h4>Cast</h4>
           <p class="long-list">
             <a v-for="(castMember, index) in topStructure(result).cast" :key="index" class="link" @click.stop="searchFor(castMember.name)">
-              {{castMember.name}}<span v-if="countCastCrew(castMember.name)" class="small-count-bubble">&nbsp;({{ countCastCrew(castMember.name) }})</span><span v-if="index !== topStructure(result).cast.length - 1">&nbsp;&nbsp;</span>
+              {{castMember.name}}<CountMark :count="countCastCrew(castMember.name)" /><span v-if="index !== topStructure(result).cast.length - 1">&nbsp;&nbsp;</span>
             </a>
           </p>
         </div>
@@ -233,7 +233,7 @@
           <p class="long-list">
             <a v-for="(keyword, index) in sortedFlatKeywords" :key="index" class="link" @click.stop="searchFor(keyword)">
 
-              {{keyword}}<span class="small-count-bubble">&nbsp;({{ keywordCounts[keyword] }})</span><span v-if="index !== topStructure(result).flatKeywords.length - 1">&nbsp;&nbsp;</span>
+              {{keyword}}<CountMark :count="keywordCounts[keyword]" /><span v-if="index !== topStructure(result).flatKeywords.length - 1">&nbsp;&nbsp;</span>
             </a>
           </p>
         </div>
@@ -242,7 +242,7 @@
           <h4>Writer<span v-if="multipleEntries(getCrewMember('Writer', false))">s</span></h4>
           <p class="long-list">
             <a v-for="(name, index) in getCrewMember('Writer', false)" :key="index" class="link" @click.stop="searchFor(name)">
-              {{name}}<span v-if="countCastCrew(name)" class="small-count-bubble">&nbsp;({{ countCastCrew(name) }})</span><span v-if="index !== getCrewMember('Writer', false).length - 1">&nbsp;&nbsp;</span>
+              {{name}}<CountMark :count="countCastCrew(name)" /><span v-if="index !== getCrewMember('Writer', false).length - 1">&nbsp;&nbsp;</span>
             </a>
           </p>
         </div>
@@ -251,7 +251,7 @@
           <h4>Composer<span v-if="multipleEntries(getCrewMember('Composer'))">s</span></h4>
           <p class="long-list">
             <a v-for="(name, index) in getCrewMember('Composer')" :key="index" class="link" @click.stop="searchFor(name)">
-              {{name}}<span v-if="countCastCrew(name)" class="small-count-bubble">&nbsp;({{ countCastCrew(name) }})</span><span v-if="index !== getCrewMember('Composer').length - 1">&nbsp;&nbsp;</span>
+              {{name}}<CountMark :count="countCastCrew(name)" /><span v-if="index !== getCrewMember('Composer').length - 1">&nbsp;&nbsp;</span>
             </a>
           </p>
         </div>
@@ -260,7 +260,7 @@
           <h4>Editor<span v-if="multipleEntries(getCrewMember('Editor'))">s</span></h4>
           <p class="long-list">
             <a v-for="(name, index) in getCrewMember('Editor')" :key="index" class="link" @click.stop="searchFor(name)">
-              {{name}}<span v-if="countCastCrew(name)" class="small-count-bubble">&nbsp;({{ countCastCrew(name) }})</span><span v-if="index !== getCrewMember('Editor').length - 1">&nbsp;&nbsp;</span>
+              {{name}}<CountMark :count="countCastCrew(name)" /><span v-if="index !== getCrewMember('Editor').length - 1">&nbsp;&nbsp;</span>
             </a>
           </p>
         </div>
@@ -269,7 +269,7 @@
           <h4>Cinematographer<span v-if="multipleEntries(getCrewMember('Photo'))">s</span></h4>
           <p class="long-list">
             <a v-for="(name, index) in getCrewMember('Photo')" :key="index" class="link" @click.stop="searchFor(name)">
-              {{name}}<span v-if="countCastCrew(name)" class="small-count-bubble">&nbsp;({{ countCastCrew(name) }})</span><span v-if="index !== getCrewMember('Photo').length - 1">&nbsp;&nbsp;</span>
+              {{name}}<CountMark :count="countCastCrew(name)" /><span v-if="index !== getCrewMember('Photo').length - 1">&nbsp;&nbsp;</span>
             </a>
           </p>
         </div>
@@ -278,7 +278,7 @@
           <h4>Production <span v-if="multipleEntries(turnArrayIntoList(topStructure(result).production_companies, 'name'))">Companies</span><span v-else>Company</span></h4>
           <p class="long-list">
             <a v-for="(productionCompany, index) in topStructure(result).production_companies" :key="index" class="link" @click.stop="searchFor(productionCompany.name)">
-              {{productionCompany.name}}<span v-if="countStudios(productionCompany.name)" class="small-count-bubble">&nbsp;({{ countStudios(productionCompany.name) }})</span><span v-if="index !== topStructure(result).production_companies.length - 1">&nbsp;&nbsp;</span>
+              {{productionCompany.name}}<CountMark :count="countStudios(productionCompany.name)" /><span v-if="index !== topStructure(result).production_companies.length - 1">&nbsp;&nbsp;</span>
             </a>
           </p>
         </div>
@@ -287,7 +287,7 @@
           <h4>Producer<span v-if="multipleEntries(getCrewMember('Producer'))">s</span></h4>
           <p class="long-list">
             <a v-for="(name, index) in getCrewMember('Producer')" :key="index" class="link" @click.stop="searchFor(name)">
-              {{name}}<span v-if="countCastCrew(name)" class="small-count-bubble">&nbsp;({{ countCastCrew(name) }})</span><span v-if="index !== getCrewMember('Producer').length - 1">&nbsp;&nbsp;</span>
+              {{name}}<CountMark :count="countCastCrew(name)" /><span v-if="index !== getCrewMember('Producer').length - 1">&nbsp;&nbsp;</span>
             </a>
           </p>
         </div>
@@ -321,6 +321,7 @@ import notFoundImage from '../assets/images/Image_not_available.png';
 import LetterboxdUrlService from '../services/LetterboxdUrlService.js';
 import ErrorLogService from '../services/ErrorLogService.js';
 import { sortByAcademyCategoryOrder } from '../assets/javascript/academyAwards.js';
+import CountMark from './CountMark.vue';
 
 // Same shorthand MovieDetail's ratings table uses, so one vocabulary covers
 // both places a criterion score is named.
@@ -386,6 +387,7 @@ export default {
     }
   },
   components: {
+    CountMark,
     Modal,
     InsetBrowserModal,
     ToggleableRating

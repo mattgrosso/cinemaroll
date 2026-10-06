@@ -9,7 +9,7 @@
          count, open or closed — no need to expand to tap one. -->
     <span ref="chips" class="name-row-chips">
       <button v-for="person in people" :key="person.name" type="button" class="name-chip" @click.stop="$emit('pick', person.name)">
-        {{ person.name }}<span v-if="person.count" class="small-count-bubble">&nbsp;({{ person.count }})</span>
+        {{ person.name }}<CountMark :count="person.count" />
       </button>
     </span>
     <button v-if="hiddenCount > 0 && !expanded" type="button" class="name-row-more" @click.stop="$emit('more')">+{{ hiddenCount }} more</button>
@@ -17,8 +17,11 @@
 </template>
 
 <script>
+import CountMark from './CountMark.vue';
+
 export default {
   name: 'NameRow',
+  components: { CountMark },
   props: {
     // [{ name, count }] in display order; count is how many films in the
     // library share the person, shown as the usual small bubble.

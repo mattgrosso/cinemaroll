@@ -21,10 +21,12 @@ const layOut = (wrapper, tops) => {
 };
 
 describe('NameRow', () => {
-  it('shows every name as a tappable chip with its count, and no "more" when all fit', () => {
+  it('shows every name as a tappable chip with its count as a superscript, and no "more" when all fit', () => {
     const wrapper = mount(NameRow, { props: { people } });
     const chips = wrapper.findAll('.name-chip');
-    expect(chips.map((c) => c.text().replace(/\u00a0/g, ' '))).toEqual(['Al Pacino (12)', 'Robert De Niro (9)', 'Val Kilmer']);
+    expect(chips.map((c) => c.text())).toEqual(['Al Pacino12', 'Robert De Niro9', 'Val Kilmer']);
+    expect(chips[0].find('sup.count-mark').text()).toBe('12');
+    expect(chips[2].find('sup').exists()).toBe(false);
     expect(wrapper.find('.name-row-more').exists()).toBe(false);
   });
 
