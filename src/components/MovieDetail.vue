@@ -474,6 +474,16 @@
              which reviews are worth showing. -->
         <DetailSection id="critics" label="Critics" tone="film" :summary="criticsRowSummary" @toggle="onCriticsToggle">
           <div class="critics">
+            <!-- CinemaScore (Matt, 2026-10-06): the opening-night exit poll,
+                 shown as one more review — a grade, who gave it, what it
+                 means — not as a guide. Looked up with the critics; it has
+                 its own cache and its own silence when there is no grade. -->
+            <div v-if="cinemaScore.score" class="critic-review cinemascore">
+              <p class="critic-role">Opening night<span class="critic-verdict">CinemaScore {{ cinemaScore.score.grade }}</span></p>
+              <p class="critic-byline">Audience exit poll, {{ cinemaScore.score.year }}</p>
+              <p class="critic-summary">{{ cinemaScoreReading(cinemaScore.score.grade) }}</p>
+              <a :href="cinemaScoreSite" target="_blank" rel="noopener" class="critic-link">About CinemaScore <i class="bi bi-box-arrow-up-right"></i></a>
+            </div>
             <p v-if="critics.state === 'loading'" class="critics-note">Searching for reviews. The first look at a film takes about half a minute.</p>
             <div v-for="review in critics.reviews" :key="review.url" class="critic-review">
               <p class="critic-role">{{ criticRoleLabel(review.role) }}<span v-if="review.verdict" class="critic-verdict">{{ review.verdict }}</span></p>
@@ -686,6 +696,8 @@ import { friendsWhoRated } from '../assets/javascript/friendViewings.js';
 import DetailSection from './DetailSection.vue';
 import { criticRoleLabel, criticByline, criticsSummary } from '../assets/javascript/criticReviews.js';
 import { fetchCriticReviews, criticErrorMessage } from '../utils/criticReviewsRequest.js';
+import { cinemaScoreReading, CINEMASCORE_SITE } from '../assets/javascript/cinemaScore.js';
+import { fetchCinemaScore } from '../utils/cinemaScoreRequest.js';
 import { formatMoneyShort } from '../assets/javascript/formatMoney.js';
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import ErrorLogService from "../services/ErrorLogService.js";
@@ -734,7 +746,10 @@ export default {
       tagInputs: {},
       expandedViewingKeys: {},
       // Critics row: idle until opened, then loading → ready | failed | error.
-      critics: { tmdbId: null, state: 'idle', reviews: [], message: '' }
+      critics: { tmdbId: null, state: 'idle', reviews: [], message: '' },
+      // CinemaScore, looked up alongside the critics: null until known.
+      cinemaScore: { tmdbId: null, score: null },
+      cinemaScoreSite: CINEMASCORE_SITE
     };
   },
   created () {
@@ -1189,6 +1204,21 @@ export default {
     criticByline,
     onCriticsToggle (open) {
       if (open && (this.critics.state === 'idle' || this.critics.tmdbId !== this.movie?.id)) this.loadCritics();
+      if (open && this.cinemaScore.tmdbId !== this.movie?.id) this.loadCinemaScore();
+    },
+    cinemaScoreReading,
+    async loadCinemaScore () {
+      const movie = this.movie;
+      if (!movie?.id) return;
+      const tmdbId = movie.id;
+      this.cinemaScore = { tmdbId, score: null };
+      const score = await fetchCinemaScore({
+        tmdbId,
+        title: movie.title,
+        year: Number(String(movie.release_date || '').slice(0, 4)) || null
+      });
+      if (this.movie?.id !== tmdbId) return;
+      this.cinemaScore = { tmdbId, score };
     },
     async loadCritics () {
       const movie = this.movie;
@@ -2729,6 +2759,8 @@ export default {
       letter-spacing: 0;
       text-transform: none;
     }
+
+    .cinemascore .critic-verdict { font-weight: 700; }
 
     .critic-byline {
       margin-top: 2px;

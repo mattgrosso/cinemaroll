@@ -10,7 +10,8 @@ vi.mock('@/assets/javascript/GetRating.js', () => ({
 vi.mock('@/services/ErrorLogService.js', () => ({ default: { error: vi.fn() } }));
 vi.mock('@/utils/letterboxdData.js', () => ({ myLetterboxdReviews: vi.fn(async () => []), letterboxdFilm: vi.fn(async () => null) }));
 
-const request = vi.hoisted(() => ({ fetchCriticReviews: vi.fn() }));
+const request = vi.hoisted(() => ({ fetchCriticReviews: vi.fn(), fetchCinemaScore: vi.fn(async () => null) }));
+vi.mock('@/utils/cinemaScoreRequest.js', () => ({ fetchCinemaScore: request.fetchCinemaScore }));
 vi.mock('@/utils/criticReviewsRequest.js', async () => {
   const actual = await vi.importActual('@/utils/criticReviewsRequest.js');
   return { ...actual, fetchCriticReviews: request.fetchCriticReviews };
@@ -42,6 +43,8 @@ describe('MovieDetail — Critics row', () => {
 
   beforeEach(async () => {
     request.fetchCriticReviews.mockReset();
+    request.fetchCinemaScore.mockReset();
+    request.fetchCinemaScore.mockResolvedValue(null);
     wrapper = shallowMount(MovieDetail, {
       global: {
         mocks: {
@@ -95,6 +98,37 @@ describe('MovieDetail — Critics row', () => {
     await flushPromises();
     expect(wrapper.vm.critics.state).toBe('idle');
     expect(wrapper.find('.critic-review').exists()).toBe(false);
+  });
+
+  // Matt, 2026-10-06: CinemaScore "on the movie details screen as a review,
+  // essentially, not as a guide for what I might want to go watch".
+  it('shows the CinemaScore as one more review when the film has one, and nothing when it does not', async () => {
+    request.fetchCriticReviews.mockResolvedValue({ status: 'ready', reviews: [ebert] });
+    request.fetchCinemaScore.mockResolvedValue({ title: 'THE GODFATHER PART III', grade: 'B+', year: 1990 });
+    wrapper.vm.onCriticsToggle(true);
+    await flushPromises();
+
+    expect(request.fetchCinemaScore).toHaveBeenCalledWith({ tmdbId: 10144, title: 'The Godfather Part III', year: 1990 });
+    const card = wrapper.find('.cinemascore');
+    expect(card.find('.critic-role').text()).toContain('Opening night');
+    expect(card.find('.critic-verdict').text()).toBe('CinemaScore B+');
+    expect(card.find('.critic-byline').text()).toBe('Audience exit poll, 1990');
+    expect(card.find('.critic-summary').text()).toBe('Liked, not loved, by the crowd that chose to be there.');
+    // The folded row's summary stays about the critics: the grade is a
+    // review, not a headline.
+    expect(wrapper.vm.criticsRowSummary).toBe('Roger Ebert');
+    // Opening again does not look again.
+    wrapper.vm.onCriticsToggle(true);
+    expect(request.fetchCinemaScore).toHaveBeenCalledTimes(1);
+
+    // A film with no grade shows no card, and the critics are untouched.
+    const next = movie(238, 'The Godfather');
+    await wrapper.setData({ movie: next, result: { dbKey: 'j', movie: next, ratings: [] } });
+    request.fetchCinemaScore.mockResolvedValue(null);
+    wrapper.vm.onCriticsToggle(true);
+    await flushPromises();
+    expect(wrapper.find('.cinemascore').exists()).toBe(false);
+    expect(wrapper.find('.critic-review').exists()).toBe(true);
   });
 
   it('says so, with a retry, when the lookup fails', async () => {
