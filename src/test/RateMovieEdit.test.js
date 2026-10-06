@@ -174,10 +174,72 @@ describe('the header', () => {
     expect(wrapper.find('.rate-title-text').text()).toBe('Movie Under Test')
   })
 
-  it('leaves the year out when the film has no release date', async () => {
+  it('shows no year when the film has no release date, but keeps a spot to tap', async () => {
     const { wrapper } = mountEditing({ ratingToEdit: null })
     await wrapper.setData({ year: '' })
-    expect(wrapper.find('.rate-title-year').exists()).toBe(false)
+    expect(wrapper.find('.rate-title-year').text()).toBe('')
+    expect(wrapper.find('.rate-title-year').classes()).toContain('rate-title-year-empty')
+  })
+})
+
+// Bug report 2026-10-06: "the title is already in the header, so I don't need
+// it to also be below" the tiles, with the year at the right of the title's
+// line — and (Matt, in reply) the header's title and year secretly editable.
+describe('the header title and year', () => {
+  it('drops the old Title box under the tiles', async () => {
+    const { wrapper } = mountEditing({ ratingToEdit: null })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('#title').exists()).toBe(false)
+    expect(wrapper.find('#year').exists()).toBe(false)
+    expect(wrapper.find('[id="rate.titleYear"]').exists()).toBe(false)
+  })
+
+  it('puts the year on the same row as the title', async () => {
+    const { wrapper } = mountEditing({ ratingToEdit: null })
+    await wrapper.vm.$nextTick()
+    const row = wrapper.find('.rate-title-row')
+    expect(row.find('.rate-title-text').exists()).toBe(true)
+    expect(row.find('.rate-title-year').text()).toBe('2021')
+  })
+
+  it('tapping the title opens an editor, and the edit is what gets saved', async () => {
+    const { wrapper } = mountEditing({ ratingToEdit: null })
+    await wrapper.vm.$nextTick()
+    await wrapper.find('.rate-title-text').trigger('click')
+    const input = wrapper.find('.rate-title-text-input')
+    expect(input.exists()).toBe(true)
+    expect(input.element.value).toBe('Movie Under Test')
+    await input.setValue('Renamed Movie')
+    await input.trigger('blur')
+    expect(wrapper.find('.rate-title-text-input').exists()).toBe(false)
+    expect(wrapper.find('.rate-title-text').text()).toBe('Renamed Movie')
+    await wrapper.setData({ love: 7 })
+    await wrapper.vm.addRating()
+    const written = addRatingMock.mock.calls[0][0]
+    expect(written[written.length - 1].title).toBe('Renamed Movie')
+  })
+
+  it('tapping the year opens a numeric editor, and Return keeps the edit', async () => {
+    const { wrapper } = mountEditing({ ratingToEdit: null })
+    await wrapper.vm.$nextTick()
+    await wrapper.find('.rate-title-year').trigger('click')
+    const input = wrapper.find('.rate-title-year-input')
+    expect(input.attributes('inputmode')).toBe('numeric')
+    await input.setValue('1999')
+    await input.trigger('keydown', { key: 'Enter' })
+    await input.trigger('blur')
+    expect(wrapper.vm.year).toBe('1999')
+    expect(wrapper.find('.rate-title-year').text()).toBe('1999')
+  })
+
+  it('a blank title goes back to the one it had', async () => {
+    const { wrapper } = mountEditing({ ratingToEdit: null })
+    await wrapper.vm.$nextTick()
+    await wrapper.find('.rate-title-text').trigger('click')
+    const input = wrapper.find('.rate-title-text-input')
+    await input.setValue('   ')
+    await input.trigger('blur')
+    expect(wrapper.find('.rate-title-text').text()).toBe('Movie Under Test')
   })
 })
 

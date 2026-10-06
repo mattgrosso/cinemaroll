@@ -20,10 +20,39 @@
            large and left-aligned (bug report 2026-10-02: "I would like the
            title to be more prominently displayed"); it used to be a small
            translucent box in the bottom-right corner. -->
+      <!-- The title and year are quietly editable (bug report 2026-10-06):
+           the Title box that used to sit under the tiles only repeated the
+           header, so it went, and a tap on either piece of the header swaps
+           it for a look-alike input. Return or tapping away keeps the edit;
+           a blank title falls back to the one it had. The year sits at the
+           right end of the title's last line. -->
       <h1 class="rate-title">
         <span class="rate-kicker">{{ isEditing ? 'Edit rating' : 'Rate' }}</span>
-        <span class="rate-title-text">{{ title }}</span>
-        <span v-if="year" class="rate-title-year">{{ year }}</span>
+        <span class="rate-title-row">
+          <input v-if="headerEditing === 'title'"
+                 ref="headerTitleInput"
+                 v-model="headerDraft"
+                 class="rate-title-input rate-title-text-input"
+                 type="text"
+                 aria-label="Title"
+                 @keydown.enter.prevent="$event.target.blur()"
+                 @keydown.esc="cancelHeaderEdit"
+                 @blur="commitHeaderEdit">
+          <span v-else class="rate-title-text" @click="startHeaderEdit('title')">{{ title }}</span>
+          <input v-if="headerEditing === 'year'"
+                 ref="headerYearInput"
+                 v-model="headerDraft"
+                 class="rate-title-input rate-title-year-input"
+                 type="text"
+                 inputmode="numeric"
+                 aria-label="Year"
+                 @keydown.enter.prevent="$event.target.blur()"
+                 @keydown.esc="cancelHeaderEdit"
+                 @blur="commitHeaderEdit">
+          <!-- Rendered even with no year, as an empty tap target, so a film
+               with no release date can still be given one. -->
+          <span v-else class="rate-title-year" :class="{ 'rate-title-year-empty': !year }" @click="startHeaderEdit('year')">{{ year }}</span>
+        </span>
       </h1>
     </div>
 
@@ -63,19 +92,6 @@
           <span>{{ movieContextLoading ? 'Thinking…' : 'More context' }}</span>
         </button>
       </div>
-
-      <DetailSection id="rate.titleYear" label="Title" tone="plain" :summary="titleSummary">
-        <div class="title-fields">
-          <div class="title-field">
-            <label class="field-label" for="title">Title</label>
-            <input class="form-control" name="title" type="text" id="title" v-model="title">
-          </div>
-          <div class="year-field">
-            <label class="field-label" for="year">Year</label>
-            <input class="form-control" name="year" id="year" type="text" inputmode="numeric" v-model="year">
-          </div>
-        </div>
-      </DetailSection>
 
       <p class="band-title">Your rating</p>
 
@@ -424,6 +440,8 @@ export default {
       selectedViewingTags: [],
       title: null,
       year: null,
+      headerEditing: null,
+      headerDraft: '',
       dbEntry: null,
       chatGPTKeywords: [],
       movieContext: null,
@@ -580,9 +598,6 @@ export default {
         text: `${formatScore(Math.abs(delta))} ${up ? 'higher' : 'lower'} than ${since}`
       };
     },
-    titleSummary () {
-      return [this.title, this.year].filter(Boolean).join(' · ');
-    },
     previousViewings () {
       return getAllRatings(this.previousEntry) || [];
     },
@@ -722,6 +737,33 @@ export default {
     }
   },
   methods: {
+    startHeaderEdit (field) {
+      if (this.headerEditing) return;
+      this.headerDraft = this[field] == null ? '' : String(this[field]);
+      this.headerEditing = field;
+      this.$nextTick(() => {
+        const input = this.$refs[field === 'title' ? 'headerTitleInput' : 'headerYearInput'];
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      });
+    },
+    commitHeaderEdit () {
+      const field = this.headerEditing;
+      if (!field) return;
+      const value = String(this.headerDraft).trim();
+      // A blank title would save a nameless viewing; keep the old one.
+      if (field === 'title' && !value) {
+        this.headerEditing = null;
+        return;
+      }
+      this[field] = value;
+      this.headerEditing = null;
+    },
+    cancelHeaderEdit () {
+      this.headerEditing = null;
+    },
     formatScore,
     shortDate (date) {
       return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -1122,12 +1164,60 @@ export default {
         text-transform: uppercase;
       }
 
-      .rate-title-year {
+      /* Title and year share a line: the year rides the right edge,
+         level with the title's last line. */
+      .rate-title-row {
+        align-items: flex-end;
+        column-gap: 12px;
+        display: flex;
+      }
+
+      .rate-title-text,
+      .rate-title-text-input {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .rate-title-year,
+      .rate-title-year-input {
         color: #ddd;
-        display: block;
+        flex: 0 0 auto;
         font-size: ds(1rem);
         font-weight: 400;
-        margin-top: 2px;
+        padding-bottom: 0.2em;
+      }
+
+      /* No year: an invisible but tappable spot at the right edge. */
+      .rate-title-year-empty {
+        min-height: 1.4em;
+        min-width: 3em;
+      }
+
+      /* The editors wear the header's own type, so a tap reads as the text
+         becoming editable rather than a form appearing. A faint underline
+         is the only tell. */
+      .rate-title-input {
+        background: transparent;
+        border: 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.45);
+        border-radius: 0;
+        color: inherit;
+        font-family: inherit;
+        line-height: inherit;
+        margin: 0;
+        outline: none;
+        padding: 0;
+        text-shadow: inherit;
+      }
+
+      .rate-title-text-input {
+        font-size: inherit;
+        font-weight: inherit;
+      }
+
+      .rate-title-year-input {
+        text-align: right;
+        width: 3.2em;
       }
 
       .backdrop-image {
@@ -1259,20 +1349,6 @@ export default {
       font-size: ds(1rem);
       font-weight: 600;
       margin: 18px 0 8px;
-    }
-
-    .title-fields {
-      display: grid;
-      gap: 8px;
-      grid-template-columns: minmax(0, 1fr) 5.5rem;
-    }
-
-    .field-label {
-      color: #ccc;
-      font-size: ds(0.62rem);
-      letter-spacing: 0.06em;
-      margin-bottom: 2px;
-      text-transform: uppercase;
     }
 
     .form-control,
