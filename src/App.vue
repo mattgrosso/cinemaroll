@@ -43,7 +43,7 @@ import { pickFallbackBanner } from "./assets/javascript/bannerFallback.js";
 import { flushStashedBugReports } from "./utils/bugReports.js";
 import { reloadForUpdate, isSafeMomentForReload, shouldAutoAttempt, markUpdateLanded, recordWorkerState, checkWorkerOnce, isFreshMoment, runUpdateCheck, QUIET_MS } from "./utils/appUpdate.js";
 import { fetchWithTimeout } from "./utils/networkHealth.js";
-import { refreshSubscriptionIfGranted } from "./utils/push.js";
+import { refreshSubscriptionIfGranted, closeDeliveredNotifications } from "./utils/push.js";
 
 export default {
   name: "Cinema-Roll",
@@ -139,6 +139,7 @@ export default {
       // Opening the app sets the icon badge to the chores actually waiting
       // (it used to clear it, which left the icon blank with work to do).
       this.$store.dispatch('refreshAppBadge');
+      closeDeliveredNotifications();
       await this.$store.dispatch('loadPushState');
       await refreshSubscriptionIfGranted(this.$store);
       this.$store.dispatch('publishPushDigest');
@@ -343,6 +344,7 @@ export default {
         // Recount rather than clear: a friend-log push's extra one drops,
         // the chores still waiting stay on the icon.
         this.$store.dispatch('refreshAppBadge');
+        closeDeliveredNotifications();
       } else {
         // Leaving: the icon should show what's left, as of now.
         this.$store.dispatch('refreshAppBadge');

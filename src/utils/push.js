@@ -195,3 +195,19 @@ export async function announceFriendRequest ({ toKey, kind }) {
     console.warn('Friend-request push failed (non-fatal):', e?.message);
   }
 }
+
+/**
+ * Opening the app also clears what it was told about: every notification
+ * still sitting in Notification Center is closed, the same way the badge
+ * is. iOS never does this on its own, so they piled up long after the thing
+ * they announced had been seen. Best-effort; never prompts.
+ */
+export async function closeDeliveredNotifications () {
+  try {
+    const registration = await navigator.serviceWorker?.getRegistration();
+    const notifications = await registration?.getNotifications?.();
+    for (const notification of notifications || []) notification.close();
+  } catch {
+    // No worker yet, or the platform refused: they stay until swiped.
+  }
+}
