@@ -6,6 +6,9 @@
        the one on your lines, so the stars line up under your score. -->
   <div v-if="friends.length" class="friends-who-saw" :class="{ 'friends-who-saw--compact': compact }">
     <div v-if="label" class="friends-who-saw-label">{{ label }}</div>
+    <!-- Compact, the rows wrap inside this column so a second line starts
+         under the first name, not under the label (Matt, 2026-10-06). -->
+    <div class="friend-rows">
     <div v-for="friend in friends" :key="friend.key" class="friend-row">
       <span class="friend-name">{{ friend.name }}</span>
       <span v-if="friend.stars !== null" class="friend-stars" :aria-label="`${friend.stars} out of 5`">
@@ -17,6 +20,7 @@
            comparison but it's what we have, and it beats a blank line. -->
       <span v-else class="friend-score">{{ formatScore(friend.score) }}</span>
       <i class="bi bi-chevron-down friend-row-spacer" aria-hidden="true"></i>
+    </div>
     </div>
   </div>
 </template>
@@ -176,12 +180,13 @@ export default {
     &--compact {
       align-items: baseline;
       border-top: 1px solid rgba(255, 255, 255, 0.08);
-      display: flex;
-      flex-wrap: wrap;
-      gap: 2px 12px;
+      column-gap: 12px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
       padding: 0.35rem 0.6rem 0.45rem;
 
-      .friends-who-saw-label { border-top: 0; flex: 0 0 auto; padding: 0; }
+      .friends-who-saw-label { border-top: 0; padding: 0; }
+      .friend-rows { display: flex; flex-wrap: wrap; gap: 2px 12px; min-width: 0; }
       .friend-row { display: inline-flex; font-size: ds(0.75rem); gap: 5px; padding: 0; }
       .friend-name { color: #ddd; flex: 0 0 auto; }
       .friend-stars { font-size: ds(0.6rem); }

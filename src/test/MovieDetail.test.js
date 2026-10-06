@@ -126,11 +126,14 @@ describe('MovieDetail', () => {
       await wrapper.setData({ result: full, movie: full.movie })
     })
 
-    it('leads with the director and the cast, under the facts and above the actions', () => {
+    // Second pass the same night: "put cast and directed by ... below the
+    // Letterboxd, Wikipedia, Add rating sections".
+    it('leads with the director and the cast, right under the action tiles', () => {
       const content = wrapper.find('.movie-content .container')
       const order = content.element.children ? Array.from(content.element.children).map(el => el.className.split(' ')[0]) : []
-      expect(order.indexOf('fact-strip')).toBeLessThan(order.indexOf('credits-band'))
-      expect(order.indexOf('credits-band')).toBeLessThan(order.indexOf('details-actions'))
+      expect(order.indexOf('fact-strip')).toBeLessThan(order.indexOf('details-actions'))
+      expect(order.indexOf('details-actions') + 1).toBe(order.indexOf('credits-band'))
+      expect(order.indexOf('credits-band')).toBeLessThan(order.indexOf('detail-band'))
       const directors = wrapper.find('.credits-band #directors')
       expect(directors.find('.credit-label').text()).toBe('Directed by')
       expect(directors.findAll('.credit-name').map(a => a.text())).toEqual(['Jane Director'])

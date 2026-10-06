@@ -55,29 +55,6 @@
           </div>
         </div>
 
-        <!-- Credits first (Matt, 2026-10-06: "what I'm looking for is
-             director, I'm looking for cast members, and I have to scroll
-             pretty far down to find them"). Who made it, in white and big
-             enough to read at a glance, before anything else. The cast line
-             shows as many whole names as fit — never part of a name — and
-             "+N more" opens the rest in place; every name is a link with its
-             count without opening anything. The film's web gets a labelled
-             button of its own, nowhere near a chevron. -->
-        <div v-if="directorNames.length || castPeople.length" class="credits-band">
-          <p v-if="directorNames.length" id="directors" class="credit-line credit-directors">
-            <span class="credit-label">Directed by</span>
-            <a v-for="name in directorNames" :key="name" class="credit-name" @click.stop="searchFor(name, 'director')">{{ name }}<span v-if="countDirector(name)" class="small-count-bubble">&nbsp;({{ countDirector(name) }})</span></a>
-          </p>
-          <div v-if="castPeople.length" id="cast" class="credit-line credit-cast">
-            <div class="credit-cast-head">
-              <span class="credit-label">Cast</span>
-              <button type="button" class="web-button" aria-label="See this film's web" @click.stop="openWeb"><i class="bi bi-diagram-3"></i><span>Web</span></button>
-            </div>
-            <NameRow :people="castPeople" :expanded="castExpanded" :lines="2" @pick="searchFor($event, 'cast')" @more="castExpanded = true" />
-            <button v-if="castExpanded" type="button" class="credit-fewer" @click="castExpanded = false">Fewer</button>
-          </div>
-        </div>
-
         <!-- Letterboxd | Wikipedia | Add rating (Matt, 2026-09-30). Two-up
              when there is no Letterboxd account to show. The old
              .letterboxd-status-button class is NOT used here: the grid
@@ -100,6 +77,30 @@
           <button type="button" class="action-tile action-primary" @click="rateMedia(topStructure(result))">
             <i class="bi bi-plus-circle"></i><span>Add rating</span>
           </button>
+        </div>
+
+        <!-- Credits (Matt, 2026-10-06: "what I'm looking for is director,
+             I'm looking for cast members, and I have to scroll pretty far
+             down to find them"). Who made it, in white and big enough to
+             read at a glance, right under the actions (his second pass the
+             same night: "below the Letterboxd, Wikipedia, Add rating"). The cast line
+             shows as many whole names as fit — never part of a name — and
+             "+N more" opens the rest in place; every name is a link with its
+             count without opening anything. The film's web gets a labelled
+             button of its own, nowhere near a chevron. -->
+        <div v-if="directorNames.length || castPeople.length" class="credits-band">
+          <p v-if="directorNames.length" id="directors" class="credit-line credit-directors">
+            <span class="credit-label">Directed by</span>
+            <a v-for="name in directorNames" :key="name" class="credit-name" @click.stop="searchFor(name, 'director')">{{ name }}<span v-if="countDirector(name)" class="small-count-bubble">&nbsp;({{ countDirector(name) }})</span></a>
+          </p>
+          <div v-if="castPeople.length" id="cast" class="credit-line credit-cast">
+            <div class="credit-cast-head">
+              <span class="credit-label">Cast</span>
+              <button type="button" class="web-button" aria-label="See this film's web" @click.stop="openWeb"><i class="bi bi-diagram-3"></i><span>Web</span></button>
+            </div>
+            <NameRow :people="castPeople" :expanded="castExpanded" :lines="2" @pick="searchFor($event, 'cast')" @more="castExpanded = true" />
+            <button v-if="castExpanded" type="button" class="credit-fewer" @click="castExpanded = false">Fewer</button>
+          </div>
         </div>
 
         <div class="detail-band detail-band--you">
@@ -2549,7 +2550,7 @@ export default {
   .credits-band {
     background: rgba(255, 255, 255, 0.06);
     border-radius: 6px;
-    margin: 0 0 8px;
+    margin: -12px 0 18px; /* the actions grid leaves 18px; sit 6px under it */
     padding: ds(8px) ds(10px) ds(10px);
   }
 
