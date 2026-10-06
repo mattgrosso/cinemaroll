@@ -74,6 +74,11 @@ if (allowDevSentry || process.env.NODE_ENV !== "development") {
     dsn: "https://25a3dc0387f04fd5923f226394a41e7d@o4504483013525504.ingest.sentry.io/4504642713944064",
     integrations: [
       new BrowserTracing({
+        // Hash routing means window.location.pathname is always "/", so
+        // without the router every transaction was named "/" and a Sentry
+        // alert couldn't say which screen it came from (the 2026-10-06
+        // "N+1 API Call" email). With it, transactions carry the route name.
+        routingInstrumentation: Sentry.vueRouterInstrumentation(router),
         tracePropagationTargets: ["localhost", "surge", /^\//],
       }),
     ],
