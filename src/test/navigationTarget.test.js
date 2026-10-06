@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { navigationTarget, pathOf, goBackFrom } from '@/utils/navigationTarget.js';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { navigationTarget, pathOf, goBackFrom, backOrFallback, BACK_FALLBACK_MS } from '@/utils/navigationTarget.js';
 
 // Matt, 2026-08-16: "our navigation within the app is a bit scattershot...
 // sometimes you land somewhere from a place, but then the button that you
@@ -36,7 +36,7 @@ describe('navigationTarget', () => {
       titleFor
     });
 
-    expect(target).toEqual({ path: '/insights', label: 'Insights', useBack: true });
+    expect(target).toEqual({ path: '/insights', label: 'Insights', useBack: true, fallback: '/games' });
   });
 
   // Deep link, cold PWA launch, hard refresh — history.state.back is null.
@@ -48,7 +48,7 @@ describe('navigationTarget', () => {
       titleFor
     });
 
-    expect(target).toEqual({ path: '/games', label: 'Games', useBack: false });
+    expect(target).toEqual({ path: '/games', label: 'Games', useBack: false, fallback: '/games' });
   });
 
   // The awards year strip replaces the route as you step through years, so
@@ -174,3 +174,52 @@ describe('screens you exit upward from (preferParent)', () => {
     expect(target.useBack).toBe(true)
   })
 })
+
+// Report, 2026-10-06: a friend's-rating notification opened a movie page,
+// and its back button then spun forever — history named a previous page the
+// browser couldn't step back to. "If it doesn't know where to go, it should
+// just take you home."
+describe('backOrFallback', () => {
+  function liveRouter (path, { popWorks }) {
+    const current = { value: { fullPath: path } };
+    return {
+      currentRoute: current,
+      back: vi.fn(() => { if (popWorks) current.value = { fullPath: '/film-club' }; }),
+      push: vi.fn((to) => { current.value = { fullPath: to }; })
+    };
+  }
+
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('goes home when the step back leads nowhere', () => {
+    const router = liveRouter('/movie/42', { popWorks: false });
+    const beforeFallback = vi.fn();
+
+    backOrFallback(router, '/', { beforeFallback });
+    expect(router.back).toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(BACK_FALLBACK_MS);
+    expect(beforeFallback).toHaveBeenCalled();
+    expect(router.push).toHaveBeenCalledWith('/');
+  });
+
+  it('leaves a step back that worked alone', () => {
+    const router = liveRouter('/movie/42', { popWorks: true });
+
+    backOrFallback(router, '/');
+    vi.advanceTimersByTime(BACK_FALLBACK_MS * 2);
+
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('is what following a history target does, falling back to the parent', () => {
+    const router = { ...liveRouter('/games/trivia', { popWorks: false }), options: { history: { state: { back: '/insights' } } }, resolve: () => ({ meta: {} }) };
+
+    goBackFrom(router, { fullPath: '/games/trivia', meta: { parent: '/games' } });
+    vi.advanceTimersByTime(BACK_FALLBACK_MS);
+
+    expect(router.push).toHaveBeenCalledWith('/games');
+  });
+});

@@ -48,7 +48,7 @@
 // it with what we're looking at now", 2026-08-16).
 import PersonalAwardsModal from './PersonalAwardsModal.vue';
 import BackLink from './games/BackLink.vue';
-import { navigationTarget } from '../utils/navigationTarget.js';
+import { navigationTarget, followNavigationTarget } from '../utils/navigationTarget.js';
 import {
   awardNameWithThe,
   awardNameSingular,
@@ -152,11 +152,7 @@ export default {
         parentPath: this.$route?.meta?.parent || '/',
         avoid: ['/login']
       });
-      if (target.useBack) {
-        this.$router.back();
-      } else {
-        this.$router.push(target.path);
-      }
+      followNavigationTarget(this.$router, target);
     }
   }
 };

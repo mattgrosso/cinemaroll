@@ -26,7 +26,7 @@
 // Insights.vue's .home-link — escapes to the page's initial containing block
 // rather than the component's own top of content, landing it up in the
 // Header's space). No store interaction needed here at all.
-import { navigationTarget } from '../../utils/navigationTarget.js';
+import { navigationTarget, followNavigationTarget } from '../../utils/navigationTarget.js';
 
 export default {
   name: 'BackLink',
@@ -89,11 +89,7 @@ export default {
         this.$emit('click', this.target);
         return;
       }
-      if (this.target.useBack) {
-        this.$router.back();
-      } else {
-        this.$router.push(this.target.path);
-      }
+      followNavigationTarget(this.$router, this.target);
     },
     onTouchStart (event) {
       const touch = event.touches[0];

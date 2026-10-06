@@ -606,6 +606,34 @@ describe('MovieDetail', () => {
       expect(pushSpy).toHaveBeenCalledWith('/')
     })
 
+    // Report, 2026-10-06: after a friend's-rating notification, back spun
+    // forever — history named a page the browser couldn't step back to.
+    it('goBack goes home when the step back to the club leads nowhere', () => {
+      vi.useFakeTimers()
+      try {
+        const router = wrapper.vm.$router
+        router.back = vi.fn()
+        router.options = { history: { state: { back: '/film-club' } } }
+        router.currentRoute = { value: { fullPath: '/movie/42' } }
+
+        wrapper.vm.goBack()
+        expect(router.back).toHaveBeenCalled()
+        expect(pushSpy).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(1000)
+        expect(pushSpy).toHaveBeenCalledWith('/')
+        expect(mockStore.commit).toHaveBeenCalledWith('setHomePageNavigationIntent', 'close')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('the back spinner clears when the app comes back to the front', async () => {
+      await wrapper.setData({ isLoading: true })
+      window.dispatchEvent(new Event('pageshow'))
+      expect(wrapper.vm.isLoading).toBe(false)
+    })
+
     it('searchFor promotes the clicked type group and samples from results for the banner', () => {
       wrapper.vm.searchFor('Denis Villeneuve', 'director')
       expect(mockStore.commit).toHaveBeenCalledWith('setHomePagePromoteGroup', 'director')

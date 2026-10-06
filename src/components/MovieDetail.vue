@@ -677,7 +677,7 @@
 </template>
 
 <script>
-import { navigationTarget } from '../utils/navigationTarget.js';
+import { navigationTarget, backOrFallback } from '../utils/navigationTarget.js';
 import { formatScore } from '../assets/javascript/formatScore.js';
 import axios from 'axios';
 import ToggleableRating from './ToggleableRating.vue';
@@ -762,15 +762,23 @@ export default {
     // Get movie data from route parameter - don't await to render immediately
     const tmdbId = this.$route.params.tmdbId;
     this.loadMovieData(tmdbId);
+
+    // A back that never landed must not leave the spinner turning when the
+    // app comes back to the front.
+    window.addEventListener('pageshow', this.clearBackSpinner);
+    document.addEventListener('visibilitychange', this.clearBackSpinner);
   },
 
   beforeUnmount () {
     // Show header again when leaving this page
     this.$store.commit('setShowHeader', true);
+    window.removeEventListener('pageshow', this.clearBackSpinner);
+    document.removeEventListener('visibilitychange', this.clearBackSpinner);
   },
   watch: {
     '$route.params.tmdbId': {
       handler (newId) {
+        this.isLoading = false;
         if (newId) {
           // Scroll to top
           document.documentElement.scrollTop = 0;
@@ -1317,16 +1325,26 @@ export default {
       // returns you there instead of dumping you on the home screen.
       const cameFromAnotherMovie = target.useBack && target.path.startsWith('/movie/');
 
+      // If the pop leads nowhere (history.state.back can name a page the
+      // browser can no longer return to), go home rather than spin forever.
       if (target.useBack && !cameFromAnotherMovie) {
-        this.$router.back();
+        backOrFallback(this.$router, '/', { beforeFallback: () => this.prepareHomeHandoff() });
         return;
       }
 
-      // Home-specific handoffs: restore the scroll position it saved, and
-      // feature this movie in its banner.
+      this.prepareHomeHandoff();
+      this.$router.push('/');
+    },
+
+    // Home-specific handoffs: restore the scroll position it saved, and
+    // feature this movie in its banner.
+    prepareHomeHandoff () {
       this.$store.commit('setHomePageNavigationIntent', 'close');
       this.$store.commit('setBannerRequest', { type: 'movie', movieId: this.result && this.result.movie && this.result.movie.id });
-      this.$router.push('/');
+    },
+
+    clearBackSpinner () {
+      if (document.visibilityState !== 'hidden') this.isLoading = false;
     },
 
     /**

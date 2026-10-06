@@ -71,8 +71,38 @@ export function navigationTarget ({
     // Prefer history over a push even though both land in the same place: a
     // real back keeps the forward entry and restores the scroll position the
     // router already saved for it.
-    useBack: usable
+    useBack: usable,
+    // Where to go if the history pop turns out to lead nowhere.
+    fallback: parentPath
   };
+}
+
+// How long a history pop gets to change the screen before we stop trusting it.
+export const BACK_FALLBACK_MS = 600;
+
+/**
+ * Step back through history, and if the screen hasn't changed shortly after,
+ * go to `fallbackPath` instead.
+ *
+ * history.state.back can name a page the browser can no longer step back to.
+ * Report, 2026-10-06: a friend-rated-a-movie notification opened the movie
+ * page while the app was reloading itself for an update; the back button
+ * then asked for a pop that never came, and its spinner turned forever.
+ * "If it doesn't know where to go, it should just take you home."
+ */
+export function backOrFallback (router, fallbackPath = '/', {
+  wait = BACK_FALLBACK_MS,
+  beforeFallback = () => {},
+  setTimer = (fn, ms) => setTimeout(fn, ms)
+} = {}) {
+  const routeNow = () => router.currentRoute?.value?.fullPath;
+  const startedOn = routeNow();
+  router.back();
+  setTimer(() => {
+    if (routeNow() !== startedOn) return;
+    beforeFallback();
+    router.push(fallbackPath);
+  }, wait);
 }
 
 /**
@@ -82,7 +112,7 @@ export function navigationTarget ({
 export function followNavigationTarget (router, target) {
   if (!router || !target) return;
   if (target.useBack) {
-    router.back();
+    backOrFallback(router, target.fallback);
   } else {
     router.push(target.path);
   }

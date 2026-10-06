@@ -759,3 +759,16 @@ stayed until each film was dismissed or snoozed. Now the store's `showtimesBadge
 getter is the one number: `refreshAppBadge` puts it on the icon, Home shows a gold
 Showtimes prompt card with it, and the Watchlist card shows "N waiting". The Film Club
 number on Home was left alone (it isn't part of the app's own badge).
+
+## Back button spinning forever after a notification (2026-10-06)
+
+Matt tapped a friend-rated-a-movie notification, landed on the movie page, and
+its back button turned into a spinner that never went anywhere. The back
+buttons trusted `history.state.back` and called `router.back()` with no plan B;
+the notification tap had also triggered an update reload, which can leave a
+`back` entry the browser can no longer step to. Now every history pop goes
+through `backOrFallback` (`navigationTarget.js`): if the route hasn't changed
+600ms after `router.back()`, it pushes the screen's parent (home for a movie).
+MovieDetail also clears its spinner on a route change and on `pageshow` /
+`visibilitychange`. Not reproduced on a phone; the fallback covers any
+dead-end pop, whatever caused it.
