@@ -105,18 +105,84 @@ describe('MovieDetail', () => {
   })
 
   // Report 2026-10-04: "I find myself wishing that the people section was
-  // higher up." The film band is a grid of tiles; the people stay rows.
-  describe('film band tiles', () => {
-    it('puts the film rows in the tile grid and leaves the people as rows', () => {
+  // higher up." The film band is a grid of tiles; the crew stay rows. Then
+  // 2026-10-06: "what I'm looking for is director, I'm looking for cast
+  // members, and I have to scroll pretty far down to find them" — so those
+  // two lead the page, before the actions, and leave the crew band.
+  describe('credits band and film band tiles', () => {
+    beforeEach(async () => {
+      const full = makeResult({
+        movie: {
+          cast: [{ name: 'Actor One' }, { name: 'Actor Two' }],
+          keywords: [{ name: 'heist' }, { name: 'los angeles' }],
+          crew: [
+            { name: 'Jane Director', job: 'Director' },
+            { name: 'Joe Writer', job: 'Writer' },
+            { name: 'Pat Lens', job: 'Director of Photography' }
+          ]
+        }
+      })
+      full.ratings = [{ calculatedTotal: 8.5, normalizedRating: 8, date: Date.now(), tags: [{ title: 'with Carrie' }] }]
+      await wrapper.setData({ result: full, movie: full.movie })
+    })
+
+    it('leads with the director and the cast, under the facts and above the actions', () => {
+      const content = wrapper.find('.movie-content .container')
+      const order = content.element.children ? Array.from(content.element.children).map(el => el.className.split(' ')[0]) : []
+      expect(order.indexOf('fact-strip')).toBeLessThan(order.indexOf('credits-band'))
+      expect(order.indexOf('credits-band')).toBeLessThan(order.indexOf('details-actions'))
+      const directors = wrapper.find('.credits-band #directors')
+      expect(directors.find('.credit-label').text()).toBe('Directed by')
+      expect(directors.findAll('.credit-name').map(a => a.text())).toEqual(['Jane Director'])
+      const cast = wrapper.find('.credits-band #cast')
+      expect(cast.find('.credit-label').text()).toBe('Cast')
+      const row = cast.findComponent({ name: 'NameRow' })
+      expect(row.exists()).toBe(true)
+      expect(row.props('people').map(p => p.name)).toEqual(['Actor One', 'Actor Two'])
+      expect(row.props('expanded')).toBe(false)
+      expect(row.props('lines')).toBe(2)
+      // The film's web has a labelled button of its own, away from any chevron.
+      expect(cast.find('.web-button').text()).toBe('Web')
+      // Director and cast are no longer rows in the crew band.
+      expect(wrapper.find('.detail-section-stub#directors').exists()).toBe(false)
+      expect(wrapper.find('.detail-section-stub#cast').exists()).toBe(false)
+    })
+
+    it('a tap on a cast name searches for them; "+N more" opens the rest in place', async () => {
+      const row = wrapper.find('.credits-band #cast').findComponent({ name: 'NameRow' })
+      row.vm.$emit('pick', 'Actor Two')
+      expect(pushSpy).toHaveBeenCalled()
+      row.vm.$emit('more')
+      await wrapper.vm.$nextTick()
+      expect(row.props('expanded')).toBe(true)
+      await wrapper.find('.credit-fewer').trigger('click')
+      expect(row.props('expanded')).toBe(false)
+    })
+
+    it('the web button goes to the web, and does not fold anything', async () => {
+      await wrapper.find('.web-button').trigger('click')
+      expect(pushSpy).toHaveBeenCalledWith({ path: '/web', query: { movie: '42' } })
+    })
+
+    it('puts the film rows in the tile grid, tags beside keywords', () => {
       const tiles = wrapper.findAll('.detail-tiles').find(grid => grid.find('#genres').exists())
       expect(tiles).toBeDefined()
       const genres = tiles.find('#genres')
       expect(genres.exists()).toBe(true)
       expect(genres.attributes('tile')).toBeDefined()
-      const directors = wrapper.find('#directors')
-      expect(directors.exists()).toBe(true)
-      expect(tiles.find('#directors').exists()).toBe(false)
-      expect(directors.attributes('tile')).toBeUndefined()
+      // Tags sit with Keywords in the film band (2026-10-06: "keywords and
+      // tags ... kind of feel like they're related"), not up with the ratings.
+      expect(wrapper.find('.detail-band--you #tags').exists()).toBe(false)
+      const ids = tiles.findAll('.detail-section-stub').map(el => el.attributes('id'))
+      expect(ids.indexOf('keywords')).toBeGreaterThan(-1)
+      expect(ids.indexOf('tags')).toBe(ids.indexOf('keywords') + 1)
+    })
+
+    it('names the crew band and every crew row as tappable names', () => {
+      expect(wrapper.findAll('.band-title').map(t => t.text())).toContain('The crew')
+      // "Cinematography" pushed its content too far right (2026-10-06).
+      expect(wrapper.find('#cinematographers').attributes('label')).toBe('Visuals')
+      expect(wrapper.find('#writers').attributes('label')).toBe('Writers')
     })
   })
 
@@ -157,12 +223,20 @@ describe('MovieDetail', () => {
       }
     })
 
-    it('makes Letterboxd and Tags tiles, side by side', async () => {
+    // 2026-10-06: "group all of the critiques of the movie in one place ...
+    // critics, Letterboxd, the movie club and my stuff all in one
+    // conversation". Letterboxd and Critics are the pair of tiles under
+    // your lines and the club's; the club runs as one compact line.
+    it('makes Letterboxd and Critics tiles, side by side, under the club', async () => {
       await wrapper.setData({ letterboxdFilmStats: { slug: 'heat-1995', rating: 4.32, ratingCount: 1307901, fans: 61000 } })
       const tiles = wrapper.find('.detail-band--you .detail-tiles')
       const letterboxd = tiles.find('#letterboxd')
       expect(letterboxd.exists()).toBe(true)
       expect(letterboxd.attributes('tile')).toBeDefined()
+      const critics = tiles.find('#critics')
+      expect(critics.exists()).toBe(true)
+      expect(critics.attributes('tile')).toBeDefined()
+      expect(wrapper.find('.detail-band--you .you-panel').findComponent({ name: 'FriendsWhoSaw' }).props('compact')).toBe(true)
     })
 
     it('stretches an odd tile out to the full width, so no grid ends on a gap', () => {

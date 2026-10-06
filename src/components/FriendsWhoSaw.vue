@@ -4,7 +4,7 @@
        lines in one panel: the label is a thin divider, then the name on the
        left and the stars where your score sits. The hidden chevron matches
        the one on your lines, so the stars line up under your score. -->
-  <div v-if="friends.length" class="friends-who-saw">
+  <div v-if="friends.length" class="friends-who-saw" :class="{ 'friends-who-saw--compact': compact }">
     <div v-if="label" class="friends-who-saw-label">{{ label }}</div>
     <div v-for="friend in friends" :key="friend.key" class="friend-row">
       <span class="friend-name">{{ friend.name }}</span>
@@ -55,6 +55,14 @@ export default {
     label: {
       type: String,
       default: ''
+    },
+    // One wrapping line — "Club  Seth ★★★★  Brian ★★★½" — instead of a row
+    // per friend (Matt, 2026-10-06: the club "taking up a lot of space on
+    // the screen on the initial above-the-fold screen", and outweighing
+    // his own ratings).
+    compact: {
+      type: Boolean,
+      default: false
     }
   },
   computed: {
@@ -163,6 +171,22 @@ export default {
       flex: 0 0 auto;
       font-size: ds(0.7rem);
       visibility: hidden;
+    }
+
+    &--compact {
+      align-items: baseline;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px 12px;
+      padding: 0.35rem 0.6rem 0.45rem;
+
+      .friends-who-saw-label { border-top: 0; flex: 0 0 auto; padding: 0; }
+      .friend-row { display: inline-flex; font-size: ds(0.75rem); gap: 5px; padding: 0; }
+      .friend-name { color: #ddd; flex: 0 0 auto; }
+      .friend-stars { font-size: ds(0.6rem); }
+      .friend-score { font-size: ds(0.7rem); }
+      .friend-row-spacer { display: none; }
     }
   }
 </style>

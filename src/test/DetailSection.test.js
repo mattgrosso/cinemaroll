@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 
 // jsdom never lays anything out, so v-show is read from the style attribute.
 const hidden = (wrapper) => (wrapper.find('.detail-section-body').attributes('style') || '').includes('display: none');
@@ -67,6 +69,40 @@ describe('DetailSection', () => {
 
   it('is a plain row unless asked to be a tile', () => {
     expect(factory().classes()).not.toContain('detail-section--tile');
+  });
+
+  // The crew rows put a NameRow where the one-line summary goes, so every
+  // name is tappable without opening the row (2026-10-06).
+  it('a summary slot replaces the summary text, closed only', async () => {
+    const wrapper = mount(DetailSection, {
+      props: { id: 'writers', label: 'Writers', summary: 'A, B' },
+      slots: { default: '<p class="body">list</p>', summary: '<span class="names">A · B</span>' }
+    });
+    const summary = wrapper.find('.detail-section-summary');
+    expect(summary.classes()).toContain('detail-section-summary--rich');
+    expect(summary.find('.names').exists()).toBe(true);
+    expect(summary.text()).not.toContain('A, B');
+    await wrapper.find('.detail-section-header').trigger('click');
+    expect(wrapper.find('.detail-section-summary').exists()).toBe(false);
+  });
+
+  // Matt, 2026-10-06: an open tile used to take the full width and "pop
+  // down to the next row". Now the header keeps its cell and the body spans
+  // the line below — the stylesheet dissolves the open section into its two
+  // children. The header is a div (its summary may hold links) that still
+  // answers the keyboard.
+  it('an open tile keeps header and body as separate grid children, and the header answers Enter', async () => {
+    const wrapper = factory({ tile: true });
+    const header = wrapper.find('.detail-section-header');
+    expect(header.element.tagName).toBe('DIV');
+    expect(header.attributes('role')).toBe('button');
+    await header.trigger('keydown', { key: 'Enter' });
+    expect(hidden(wrapper)).toBe(false);
+    expect(wrapper.classes()).toContain('open');
+    const source = readFileSync(resolve(__dirname, '../components/DetailSection.vue'), 'utf8');
+    expect(source).toMatch(/&\.open \{\s*display: contents;/);
+    expect(source).toMatch(/> \.detail-section-body \{[^}]*grid-column: 1 \/ -1;/);
+    expect(source).not.toMatch(/&\.open \{ grid-column: 1 \/ -1; \}/);
   });
 
   // The Critics row looks its reviews up only when opened (2026-10-06).

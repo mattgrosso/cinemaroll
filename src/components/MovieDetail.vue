@@ -55,6 +55,29 @@
           </div>
         </div>
 
+        <!-- Credits first (Matt, 2026-10-06: "what I'm looking for is
+             director, I'm looking for cast members, and I have to scroll
+             pretty far down to find them"). Who made it, in white and big
+             enough to read at a glance, before anything else. The cast line
+             shows as many whole names as fit — never part of a name — and
+             "+N more" opens the rest in place; every name is a link with its
+             count without opening anything. The film's web gets a labelled
+             button of its own, nowhere near a chevron. -->
+        <div v-if="directorNames.length || castPeople.length" class="credits-band">
+          <p v-if="directorNames.length" id="directors" class="credit-line credit-directors">
+            <span class="credit-label">Directed by</span>
+            <a v-for="name in directorNames" :key="name" class="credit-name" @click.stop="searchFor(name, 'director')">{{ name }}<span v-if="countDirector(name)" class="small-count-bubble">&nbsp;({{ countDirector(name) }})</span></a>
+          </p>
+          <div v-if="castPeople.length" id="cast" class="credit-line credit-cast">
+            <div class="credit-cast-head">
+              <span class="credit-label">Cast</span>
+              <button type="button" class="web-button" aria-label="See this film's web" @click.stop="openWeb"><i class="bi bi-diagram-3"></i><span>Web</span></button>
+            </div>
+            <NameRow :people="castPeople" :expanded="castExpanded" :lines="2" @pick="searchFor($event, 'cast')" @more="castExpanded = true" />
+            <button v-if="castExpanded" type="button" class="credit-fewer" @click="castExpanded = false">Fewer</button>
+          </div>
+        </div>
+
         <!-- Letterboxd | Wikipedia | Add rating (Matt, 2026-09-30). Two-up
              when there is no Letterboxd account to show. The old
              .letterboxd-status-button class is NOT used here: the grid
@@ -155,10 +178,11 @@
           </div>
           </div>
 
-          <FriendsWhoSaw :tmdbId="movie && movie.id" label="Club" />
+          <FriendsWhoSaw :tmdbId="movie && movie.id" label="Club" compact />
         </div>
 
-        <!-- Letterboxd and Tags are tiles, two across, like the film band. -->
+        <!-- Letterboxd and Critics are tiles, two across, like the film band:
+             the outside voices, under your own lines and the club's. -->
         <div class="detail-tiles">
         <DetailSection v-if="letterboxdWrittenReviews.length || letterboxdFilmLine" id="letterboxd" tile label="Letterboxd" tone="you" :summary="letterboxdSummary" class="letterboxd-section">
           <p v-if="letterboxdFilmLine" class="letterboxd-film mb-1">
@@ -172,94 +196,41 @@
             </div>
           </div>
         </DetailSection>
-        <DetailSection v-if="(viewingTags && viewingTags.length) || isEditingTags" id="tags" tile label="Tags" tone="film" :summary="tagsSummary">
-        <!-- Tags -->
-        <div v-if="(viewingTags && viewingTags.length) || isEditingTags" class="tags mb-3">
-          <div class="tags-header d-flex align-items-center">
-            <h4 class="mb-0 me-2">Tag<span v-if="multipleEntries(viewingTags)">s</span></h4>
-            <button
-              v-if="result && result.ratings && result.ratings.length"
-              type="button"
-              class="tag-edit-toggle btn btn-sm btn-link p-0"
-              :aria-label="isEditingTags ? 'Close tag editor' : 'Edit tags'"
-              @click.stop="toggleTagEditor">
-              <i :class="isEditingTags ? 'bi bi-check-lg' : 'bi bi-pencil'"></i>
-            </button>
-          </div>
-
-          <p v-if="!isEditingTags && viewingTags.length" class="long-list">
-            <a v-for="(tag, index) in sortedTags" :key="index" class="link" @click.stop="searchForTag(tag)">
-              {{tag}}<span class="small-count-bubble">&nbsp;({{ tagCounts[tag] }})</span><span v-if="index !== viewingTags.length - 1">&nbsp;&nbsp;</span>
-            </a>
-          </p>
-
-          <div v-else-if="isEditingTags" class="tag-editor">
-            <div v-for="(rating, ratingIndex) in orderedRatingsForEditor" :key="rating._editorKey" class="viewing-block">
-              <button
-                type="button"
-                class="viewing-header"
-                :aria-expanded="expandedViewingKeys[rating._editorKey] ? 'true' : 'false'"
-                @click.stop="toggleViewingExpansion(rating._editorKey)">
-                <span class="viewing-header-label">
-                  <i :class="expandedViewingKeys[rating._editorKey] ? 'bi bi-chevron-down' : 'bi bi-chevron-right'"></i>
-                  <span v-if="rating.medium" class="viewing-medium">{{ rating.medium }}</span>
-                  <span v-if="rating.medium && rating.date">&nbsp;on&nbsp;</span>
-                  <span v-if="rating.date">{{ formattedDate(rating.date) }}</span>
-                  <span v-if="!rating.medium && !rating.date">Viewing {{ ratingIndex + 1 }}</span>
-                </span>
-                <span v-if="!expandedViewingKeys[rating._editorKey] && tagsForRating(rating).length" class="viewing-tag-preview">
-                  {{ tagsForRating(rating).join(', ') }}
-                </span>
-              </button>
-
-              <div v-if="expandedViewingKeys[rating._editorKey]" class="viewing-body">
-                <div class="tag-chip-list">
-                  <span v-for="tagTitle in tagsForRating(rating)" :key="`chip-${rating._editorKey}-${tagTitle}`" class="tag-chip">
-                    <span class="tag-chip-label">{{ tagTitle }}</span>
-                    <button
-                      type="button"
-                      class="tag-chip-remove"
-                      :aria-label="`Remove ${tagTitle}`"
-                      @click.stop="removeTagFromViewing(rating._editorKey, tagTitle)">
-                      <i class="bi bi-x"></i>
-                    </button>
-                  </span>
-                  <span v-if="!tagsForRating(rating).length" class="text-muted small">No tags on this viewing yet.</span>
-                </div>
-
-                <div class="tag-add-row">
-                  <input
-                    v-model="tagInputs[rating._editorKey]"
-                    type="text"
-                    class="form-control form-control-sm tag-add-input"
-                    placeholder="Add tag…"
-                    autocomplete="off"
-                    @keydown.enter.prevent="addTypedTag(rating._editorKey)"
-                    @keydown.esc.prevent="closeTagEditor"/>
-                </div>
-
-                <ul v-if="tagSuggestionsFor(rating._editorKey).length" class="tag-suggestion-list">
-                  <li
-                    v-for="suggestion in tagSuggestionsFor(rating._editorKey)"
-                    :key="`sug-${rating._editorKey}-${suggestion.name}`"
-                    class="tag-suggestion-item"
-                    @click.stop="addTagToViewing(rating._editorKey, suggestion.name)">
-                    <span class="tag-suggestion-name">{{ suggestion.name }}</span>
-                    <span v-if="suggestion.count" class="small-count-bubble">({{ suggestion.count }})</span>
-                  </li>
-                </ul>
-
-                <button
-                  v-if="canCreateTypedTagFor(rating._editorKey)"
-                  type="button"
-                  class="btn btn-sm btn-outline-light tag-create-new"
-                  @click.stop="addTypedTag(rating._editorKey)">
-                  Add new tag "{{ trimmedTagInputFor(rating._editorKey) }}"
-                </button>
-              </div>
+        <!-- Critics' reviews (report, 2026-10-06: "contemporary reviews ...
+             Ebert or Pauline Kael ... a brief summary and then a link to the
+             full article"). A tile beside Letterboxd since 2026-10-06 (Matt: "group
+             all of the critiques of the movie in one place"), so your
+             viewings, the club, Letterboxd and the critics read as one
+             conversation. Looked up only when opened, because the first look
+             at a film is a web search; aws-lambda/criticReviews.js decides
+             which reviews are worth showing. -->
+        <DetailSection id="critics" tile label="Critics" tone="film" :summary="criticsRowSummary" @toggle="onCriticsToggle">
+          <div class="critics">
+            <!-- CinemaScore (Matt, 2026-10-06): the opening-night exit poll,
+                 shown as one more review — a grade, who gave it, what it
+                 means — not as a guide. Looked up with the critics; it has
+                 its own cache and its own silence when there is no grade. -->
+            <div v-if="cinemaScore.score" class="critic-review cinemascore">
+              <p class="critic-role">Opening night<span class="critic-verdict">CinemaScore {{ cinemaScore.score.grade }}</span></p>
+              <p class="critic-byline">Audience exit poll, {{ cinemaScore.score.year }}</p>
+              <p class="critic-summary">{{ cinemaScoreReading(cinemaScore.score.grade) }}</p>
+              <a :href="cinemaScoreSite" target="_blank" rel="noopener" class="critic-link">About CinemaScore <i class="bi bi-box-arrow-up-right"></i></a>
             </div>
+            <p v-if="critics.state === 'loading'" class="critics-note">Searching for reviews. The first look at a film takes about half a minute.</p>
+            <div v-for="review in critics.reviews" :key="review.url" class="critic-review">
+              <p class="critic-role">{{ criticRoleLabel(review.role) }}<span v-if="review.verdict" class="critic-verdict">{{ review.verdict }}</span></p>
+              <p class="critic-byline">{{ criticByline(review) }}</p>
+              <p class="critic-summary">{{ review.summary }}</p>
+              <a :href="review.url" target="_blank" rel="noopener" class="critic-link">Read the review<span v-if="review.paywalled"> (may be paywalled)</span> <i class="bi bi-box-arrow-up-right"></i></a>
+            </div>
+            <p v-if="critics.state === 'ready' && !critics.reviews.length" class="critics-note">No reviews from the critics we trust turned up for this one.</p>
+            <p v-if="critics.state === 'failed'" class="critics-note">The search didn't come back. Try again later.</p>
+            <p v-if="critics.state === 'error'" class="critics-note">
+              {{ critics.message }}
+              <button type="button" class="critics-retry" @click="loadCritics">Try again</button>
+            </p>
+            <p v-if="critics.state === 'ready' && critics.reviews.length" class="critics-credit">Found by web search and summarised by AI. Tap through for the critic's own words.</p>
           </div>
-        </div>
         </DetailSection>
         </div>
 
@@ -413,6 +384,95 @@
           </div>
         </div>
         </DetailSection>
+        <DetailSection v-if="(viewingTags && viewingTags.length) || isEditingTags" id="tags" tile label="Tags" tone="film" :summary="tagsSummary">
+        <!-- Tags -->
+        <div v-if="(viewingTags && viewingTags.length) || isEditingTags" class="tags mb-3">
+          <div class="tags-header d-flex align-items-center">
+            <h4 class="mb-0 me-2">Tag<span v-if="multipleEntries(viewingTags)">s</span></h4>
+            <button
+              v-if="result && result.ratings && result.ratings.length"
+              type="button"
+              class="tag-edit-toggle btn btn-sm btn-link p-0"
+              :aria-label="isEditingTags ? 'Close tag editor' : 'Edit tags'"
+              @click.stop="toggleTagEditor">
+              <i :class="isEditingTags ? 'bi bi-check-lg' : 'bi bi-pencil'"></i>
+            </button>
+          </div>
+
+          <p v-if="!isEditingTags && viewingTags.length" class="long-list">
+            <a v-for="(tag, index) in sortedTags" :key="index" class="link" @click.stop="searchForTag(tag)">
+              {{tag}}<span class="small-count-bubble">&nbsp;({{ tagCounts[tag] }})</span><span v-if="index !== viewingTags.length - 1">&nbsp;&nbsp;</span>
+            </a>
+          </p>
+
+          <div v-else-if="isEditingTags" class="tag-editor">
+            <div v-for="(rating, ratingIndex) in orderedRatingsForEditor" :key="rating._editorKey" class="viewing-block">
+              <button
+                type="button"
+                class="viewing-header"
+                :aria-expanded="expandedViewingKeys[rating._editorKey] ? 'true' : 'false'"
+                @click.stop="toggleViewingExpansion(rating._editorKey)">
+                <span class="viewing-header-label">
+                  <i :class="expandedViewingKeys[rating._editorKey] ? 'bi bi-chevron-down' : 'bi bi-chevron-right'"></i>
+                  <span v-if="rating.medium" class="viewing-medium">{{ rating.medium }}</span>
+                  <span v-if="rating.medium && rating.date">&nbsp;on&nbsp;</span>
+                  <span v-if="rating.date">{{ formattedDate(rating.date) }}</span>
+                  <span v-if="!rating.medium && !rating.date">Viewing {{ ratingIndex + 1 }}</span>
+                </span>
+                <span v-if="!expandedViewingKeys[rating._editorKey] && tagsForRating(rating).length" class="viewing-tag-preview">
+                  {{ tagsForRating(rating).join(', ') }}
+                </span>
+              </button>
+
+              <div v-if="expandedViewingKeys[rating._editorKey]" class="viewing-body">
+                <div class="tag-chip-list">
+                  <span v-for="tagTitle in tagsForRating(rating)" :key="`chip-${rating._editorKey}-${tagTitle}`" class="tag-chip">
+                    <span class="tag-chip-label">{{ tagTitle }}</span>
+                    <button
+                      type="button"
+                      class="tag-chip-remove"
+                      :aria-label="`Remove ${tagTitle}`"
+                      @click.stop="removeTagFromViewing(rating._editorKey, tagTitle)">
+                      <i class="bi bi-x"></i>
+                    </button>
+                  </span>
+                  <span v-if="!tagsForRating(rating).length" class="text-muted small">No tags on this viewing yet.</span>
+                </div>
+
+                <div class="tag-add-row">
+                  <input
+                    v-model="tagInputs[rating._editorKey]"
+                    type="text"
+                    class="form-control form-control-sm tag-add-input"
+                    placeholder="Add tag…"
+                    autocomplete="off"
+                    @keydown.enter.prevent="addTypedTag(rating._editorKey)"
+                    @keydown.esc.prevent="closeTagEditor"/>
+                </div>
+
+                <ul v-if="tagSuggestionsFor(rating._editorKey).length" class="tag-suggestion-list">
+                  <li
+                    v-for="suggestion in tagSuggestionsFor(rating._editorKey)"
+                    :key="`sug-${rating._editorKey}-${suggestion.name}`"
+                    class="tag-suggestion-item"
+                    @click.stop="addTagToViewing(rating._editorKey, suggestion.name)">
+                    <span class="tag-suggestion-name">{{ suggestion.name }}</span>
+                    <span v-if="suggestion.count" class="small-count-bubble">({{ suggestion.count }})</span>
+                  </li>
+                </ul>
+
+                <button
+                  v-if="canCreateTypedTagFor(rating._editorKey)"
+                  type="button"
+                  class="btn btn-sm btn-outline-light tag-create-new"
+                  @click.stop="addTypedTag(rating._editorKey)">
+                  Add new tag "{{ trimmedTagInputFor(rating._editorKey) }}"
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        </DetailSection>
         <DetailSection v-if="hasBoxOfficeInfo" id="boxoffice" tile label="Box office" tone="plain" :summary="boxOfficeSummary">
         <!-- Box Office -->
         <div v-if="hasBoxOfficeInfo" class="box-office mb-3">
@@ -466,60 +526,12 @@
         </div>
         </DetailSection>
           </div>
-        <!-- Critics' reviews (report, 2026-10-06: "contemporary reviews ...
-             Ebert or Pauline Kael ... a brief summary and then a link to the
-             full article"). A row, not a tile: it is reading, and its summary
-             names critics. Looked up only when opened, because the first look
-             at a film is a web search; aws-lambda/criticReviews.js decides
-             which reviews are worth showing. -->
-        <DetailSection id="critics" label="Critics" tone="film" :summary="criticsRowSummary" @toggle="onCriticsToggle">
-          <div class="critics">
-            <!-- CinemaScore (Matt, 2026-10-06): the opening-night exit poll,
-                 shown as one more review — a grade, who gave it, what it
-                 means — not as a guide. Looked up with the critics; it has
-                 its own cache and its own silence when there is no grade. -->
-            <div v-if="cinemaScore.score" class="critic-review cinemascore">
-              <p class="critic-role">Opening night<span class="critic-verdict">CinemaScore {{ cinemaScore.score.grade }}</span></p>
-              <p class="critic-byline">Audience exit poll, {{ cinemaScore.score.year }}</p>
-              <p class="critic-summary">{{ cinemaScoreReading(cinemaScore.score.grade) }}</p>
-              <a :href="cinemaScoreSite" target="_blank" rel="noopener" class="critic-link">About CinemaScore <i class="bi bi-box-arrow-up-right"></i></a>
-            </div>
-            <p v-if="critics.state === 'loading'" class="critics-note">Searching for reviews. The first look at a film takes about half a minute.</p>
-            <div v-for="review in critics.reviews" :key="review.url" class="critic-review">
-              <p class="critic-role">{{ criticRoleLabel(review.role) }}<span v-if="review.verdict" class="critic-verdict">{{ review.verdict }}</span></p>
-              <p class="critic-byline">{{ criticByline(review) }}</p>
-              <p class="critic-summary">{{ review.summary }}</p>
-              <a :href="review.url" target="_blank" rel="noopener" class="critic-link">Read the review<span v-if="review.paywalled"> (may be paywalled)</span> <i class="bi bi-box-arrow-up-right"></i></a>
-            </div>
-            <p v-if="critics.state === 'ready' && !critics.reviews.length" class="critics-note">No reviews from the critics we trust turned up for this one.</p>
-            <p v-if="critics.state === 'failed'" class="critics-note">The search didn't come back. Try again later.</p>
-            <p v-if="critics.state === 'error'" class="critics-note">
-              {{ critics.message }}
-              <button type="button" class="critics-retry" @click="loadCritics">Try again</button>
-            </p>
-            <p v-if="critics.state === 'ready' && critics.reviews.length" class="critics-credit">Found by web search and summarised by AI. Tap through for the critic's own words.</p>
-          </div>
-        </DetailSection>
         </div>
 
         <div class="detail-band">
-          <p class="band-title">The people</p>
-        <DetailSection id="directors" label="Directors" tone="people" :summary="listSummary(getCrewMember('Director', 'strict'), 3)">
-        <!-- Directors -->
-        <div class="directors mb-3">
-          <h4>
-            Director<span v-if="multipleEntries(getCrewMember('Director', true))">s</span>
-          </h4>
-          <p class="long-list">
-            <a v-for="(name, index) in getCrewMember('Director', 'strict')" :key="index" class="link" @click.stop="searchFor(name, 'director')">
-              {{name}}<span v-if="countDirector(name)" class="small-count-bubble">&nbsp;({{ countDirector(name) }})</span><span v-if="index !== getCrewMember('Director', 'strict').length - 1">&nbsp;&nbsp;</span>
-            </a>
-          </p>
-        </div>
-
-        <!-- Genres -->
-        </DetailSection>
+          <p class="band-title">The crew</p>
         <DetailSection v-if="writers.length" id="writers" label="Writers" tone="people" :summary="listSummary(writers, 3)">
+          <template #summary><NameRow :people="people(writers)" @pick="searchFor($event, 'writer')" /></template>
         <!-- Writers -->
         <div v-if="writers.length" class="writers mb-3">
           <h4>Writer<span v-if="multipleEntries(writers)">s</span></h4>
@@ -530,21 +542,8 @@
           </p>
         </div>
         </DetailSection>
-        <DetailSection v-if="topStructure(result).cast && topStructure(result).cast.length" id="cast" label="Cast" tone="people" :summary="listSummary(turnArrayIntoList(topStructure(result).cast, 'name'), 3)">
-          <template #actions><button type="button" class="web-link btn btn-sm btn-link p-0" aria-label="See this film's web" @click.stop="openWeb"><i class="bi bi-diagram-3"></i></button></template>
-        <!-- Cast -->
-        <div v-if="topStructure(result).cast && topStructure(result).cast.length" class="cast mb-3">
-          <h4 class="d-flex align-items-center">
-            Cast
-          </h4>
-          <p class="long-list">
-            <a v-for="(castMember, index) in topStructure(result).cast" :key="index" class="link" @click.stop="searchFor(castMember.name, 'cast')">
-              {{castMember.name}}<span v-if="countCastCrew(castMember.name)" class="small-count-bubble">&nbsp;({{ countCastCrew(castMember.name) }})</span><span v-if="index !== topStructure(result).cast.length - 1">&nbsp;&nbsp;</span>
-            </a>
-          </p>
-        </div>
-        </DetailSection>
         <DetailSection v-if="getCrewMember('Composer').length" id="composers" label="Composer" tone="people" :summary="listSummary(getCrewMember('Composer'), 3)">
+          <template #summary><NameRow :people="people(getCrewMember('Composer'))" @pick="searchFor($event, 'composer')" /></template>
         <!-- Composers -->
         <div v-if="getCrewMember('Composer').length" class="composers mb-3">
           <h4>Composer<span v-if="multipleEntries(getCrewMember('Composer'))">s</span></h4>
@@ -555,7 +554,8 @@
           </p>
         </div>
         </DetailSection>
-        <DetailSection v-if="getCrewMember('Photo').length" id="cinematographers" label="Cinematography" tone="people" :summary="listSummary(getCrewMember('Photo'), 3)">
+        <DetailSection v-if="getCrewMember('Photo').length" id="cinematographers" label="Visuals" tone="people" :summary="listSummary(getCrewMember('Photo'), 3)">
+          <template #summary><NameRow :people="people(getCrewMember('Photo'))" @pick="searchFor($event, 'photo')" /></template>
         <!-- Cinematographers -->
         <div v-if="getCrewMember('Photo').length" class="cinematographers mb-3">
           <h4>Cinematographer<span v-if="multipleEntries(getCrewMember('Photo'))">s</span></h4>
@@ -567,6 +567,7 @@
         </div>
         </DetailSection>
         <DetailSection v-if="getCrewMember('Editor').length" id="editors" label="Editors" tone="people" :summary="listSummary(getCrewMember('Editor'), 3)">
+          <template #summary><NameRow :people="people(getCrewMember('Editor'))" @pick="searchFor($event, 'editor')" /></template>
         <!-- Editors -->
         <div v-if="getCrewMember('Editor').length" class="editors mb-3">
           <h4>Editor<span v-if="multipleEntries(getCrewMember('Editor'))">s</span></h4>
@@ -578,6 +579,7 @@
         </div>
         </DetailSection>
         <DetailSection v-if="getCrewMember('Producer').length" id="producers" label="Producers" tone="people" :summary="listSummary(getCrewMember('Producer'), 3)">
+          <template #summary><NameRow :people="people(getCrewMember('Producer'))" @pick="searchFor($event, 'producer')" /></template>
         <!-- Producers -->
         <div v-if="getCrewMember('Producer').length" class="producers mb-3">
           <h4>Producer<span v-if="multipleEntries(getCrewMember('Producer'))">s</span></h4>
@@ -698,6 +700,7 @@ import { criticRoleLabel, criticByline, criticsSummary } from '../assets/javascr
 import { fetchCriticReviews, criticErrorMessage } from '../utils/criticReviewsRequest.js';
 import { cinemaScoreReading, CINEMASCORE_SITE } from '../assets/javascript/cinemaScore.js';
 import { fetchCinemaScore } from '../utils/cinemaScoreRequest.js';
+import NameRow from './NameRow.vue';
 import { formatMoneyShort } from '../assets/javascript/formatMoney.js';
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import ErrorLogService from "../services/ErrorLogService.js";
@@ -719,6 +722,7 @@ import { WRITER_JOBS } from '../assets/javascript/personRoleGroups.js';
 export default {
   name: 'MovieDetail',
   components: {
+    NameRow,
     ToggleableRating,
     FriendsWhoSaw,
     DetailSection
@@ -749,7 +753,9 @@ export default {
       critics: { tmdbId: null, state: 'idle', reviews: [], message: '' },
       // CinemaScore, looked up alongside the critics: null until known.
       cinemaScore: { tmdbId: null, score: null },
-      cinemaScoreSite: CINEMASCORE_SITE
+      cinemaScoreSite: CINEMASCORE_SITE,
+      // The cast line: one line of whole names until "+N more" is tapped.
+      castExpanded: false
     };
   },
   created () {
@@ -796,6 +802,13 @@ export default {
     },
     tagsSummary () {
       return this.listSummary(this.sortedTags, 4) || 'No tags yet';
+    },
+    directorNames () {
+      return this.getCrewMember('Director', 'strict');
+    },
+    castPeople () {
+      const cast = this.topStructure(this.result)?.cast || [];
+      return this.people(cast.map((member) => member.name));
     },
     criticsRowSummary () {
       return criticsSummary(this.critics.state, this.critics.reviews);
@@ -1242,6 +1255,7 @@ export default {
       }
     },
     async loadMovieData (tmdbId) {
+      this.castExpanded = false;
       try {
         // Wait for database to be loaded if it isn't already
         if (!this.$store.state.dbLoaded) {
@@ -1600,6 +1614,10 @@ export default {
     watchedDateLabel,
     compactCount,
     // "A, B, C +12" — the first few names and how many more are folded away.
+    /** Names with their library counts, the shape NameRow takes. */
+    people (names) {
+      return (names || []).filter(Boolean).map((name) => ({ name, count: this.countCastCrew(name) }));
+    },
     listSummary (names, shown = 3) {
       const list = (names || []).filter(Boolean);
       if (!list.length) return '';
@@ -2526,6 +2544,88 @@ export default {
     }
   }
 
+  /* Who made it, first. The director in the facts' own size; the cast as
+     one line of whole names (NameRow) with "+N more". */
+  .credits-band {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+    margin: 0 0 8px;
+    padding: ds(8px) ds(10px) ds(10px);
+  }
+
+  .credit-line {
+    margin: 0;
+    min-width: 0;
+
+    + .credit-line { margin-top: 6px; }
+  }
+
+  .credit-label {
+    color: #cd7fe8; /* the people tone */
+    font-size: ds(0.62rem);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .credit-directors {
+    align-items: baseline;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 10px;
+
+    .credit-name {
+      color: #fff;
+      font-size: ds(1.05rem);
+      font-weight: 600;
+      line-height: 1.3;
+      text-decoration: none;
+      white-space: nowrap;
+
+      &:active { color: #ccc; }
+    }
+  }
+
+  .credit-cast {
+    font-size: ds(0.9rem);
+
+    .credit-cast-head {
+      align-items: center;
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+  }
+
+  .web-button {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.08);
+    border: 0;
+    border-radius: 999px;
+    color: #fff;
+    display: inline-flex;
+    font-size: ds(0.65rem);
+    gap: 4px;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    padding: 4px 9px;
+    text-transform: uppercase;
+
+    i { color: #cd7fe8; font-size: ds(0.85rem); }
+    &:active { background: rgba(255, 255, 255, 0.16); }
+  }
+
+  .credit-fewer {
+    background: none;
+    border: 0;
+    color: #ccc;
+    font-size: ds(0.65rem);
+    margin-top: 2px;
+    padding: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
   .fact-strip {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -2609,7 +2709,8 @@ export default {
     }
 
     /* With no viewings of your own the club opens the panel: no divider. */
-    :deep(.friends-who-saw:first-child .friends-who-saw-label) { border-top: 0; }
+    :deep(.friends-who-saw:first-child .friends-who-saw-label),
+    :deep(.friends-who-saw--compact:first-child) { border-top: 0; }
   }
 
   /* Inside the Best since tile: the sentence beside a poster you can tap. */
@@ -2654,7 +2755,13 @@ export default {
   .detail-tiles {
     display: grid;
     gap: 6px;
+    /* Dense, so an open tile's neighbour backfills the cell beside its
+       header while the body spans the line below (DetailSection). */
+    grid-auto-flow: dense;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    /* An odd tile out that is open: its header takes the line too. */
+    > :last-child:nth-child(odd).open > :deep(.detail-section-header) { grid-column: 1 / -1; }
 
     /* An odd tile out takes the whole line, so a grid never ends on a gap. */
     > :last-child:nth-child(odd) { grid-column: 1 / -1; }
@@ -3117,7 +3224,7 @@ export default {
       color: #fff;
       gap: 8px;
       padding: 0.45rem 0.6rem;
-      font-size: ds(0.8rem);
+      font-size: ds(0.85rem);
 
       &:not(.collapsed) { background-color: rgba(255, 255, 255, 0.05); color: #fff; box-shadow: none; }
       &:not(.collapsed) .viewing-chevron { transform: rotate(180deg); }
@@ -3134,6 +3241,7 @@ export default {
 
     .viewing-score {
       flex: 0 0 auto;
+      font-size: ds(0.95rem);
       font-variant-numeric: tabular-nums;
       font-weight: 700;
     }

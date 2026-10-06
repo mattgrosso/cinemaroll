@@ -1,11 +1,13 @@
 <template>
   <section class="detail-section" :class="[`detail-section--${tone}`, { open, 'detail-section--tile': tile }]">
-    <button type="button" class="detail-section-header" :aria-expanded="open ? 'true' : 'false'" @click="toggle">
+    <!-- A div, not a button: the summary may hold tappable names (NameRow),
+         and a button inside a button is not a thing. Enter and Space toggle. -->
+    <div class="detail-section-header" role="button" tabindex="0" :aria-expanded="open ? 'true' : 'false'" @click="toggle" @keydown.enter.prevent="toggle" @keydown.space.prevent="toggle">
       <span class="detail-section-label">{{ label }}</span>
-      <span v-if="!open" class="detail-section-summary">{{ summary }}</span>
+      <span v-if="!open" class="detail-section-summary" :class="{ 'detail-section-summary--rich': !!$slots.summary }"><slot name="summary">{{ summary }}</slot></span>
       <span class="detail-section-actions" @click.stop><slot name="actions"/></span>
       <i class="bi detail-section-chevron" :class="open ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
-    </button>
+    </div>
     <div v-show="open" class="detail-section-body">
       <slot/>
     </div>
@@ -51,6 +53,8 @@ export default {
     // (report, 2026-10-04: "I'm often glancing for like the cast").
     tile: { type: Boolean, default: false }
   },
+  // Slot `summary` replaces the one-line text with anything — the crew rows
+  // put a NameRow there so every name is tappable without opening the row.
   // `toggle` (open: boolean) lets a section fetch its contents only when
   // someone looks — the Critics row costs a web search the first time.
   emits: ['toggle'],
@@ -114,6 +118,9 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+
+  /* A NameRow clips itself, by whole names. */
+  &--rich { overflow: visible; text-overflow: clip; white-space: normal; display: flex; }
 }
 
 .open .detail-section-label { flex: 1 1 auto; }
@@ -142,7 +149,28 @@ export default {
   min-width: 0;
 
   &:last-child { border-bottom: 0; }
-  &.open { grid-column: 1 / -1; }
+
+  /* Open, the tile stays where it was (Matt, 2026-10-06: it used to take
+     the full width and "pop down to the next row"). The section dissolves
+     into its two children — the header keeps its cell, the body spans the
+     grid below the row (the grid flows dense, so the neighbour backfills).
+     The tone colour ties the two together. */
+  &.open {
+    display: contents;
+
+    > .detail-section-header {
+      background: rgba(255, 255, 255, 0.05);
+      box-shadow: inset 0 0 0 1px var(--sec);
+    }
+
+    > .detail-section-body {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      border-top: 2px solid var(--sec);
+      grid-column: 1 / -1;
+      padding: 0.4rem 0.6rem 0.6rem;
+    }
+  }
 
   .detail-section-header {
     align-items: center;

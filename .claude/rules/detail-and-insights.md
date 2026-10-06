@@ -22,6 +22,29 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
 
 ## MovieDetail
 
+- **The 2026-10-06 pass (Matt, scrolling the page out loud: "I'm not finding that the
+  information that I want is readily available at my fingertips first")**: the order is
+  now hero → facts strip → **credits band** (`.credits-band`: "Directed by <names>" in
+  the facts' size, then the cast as a `NameRow` — as many WHOLE names as fit on two
+  lines, "+N more" opens the rest in place, a labelled **Web** button of its own far
+  from any chevron) → the three action tiles → the **you** band as one conversation
+  (your viewing lines a notch louder, the club as ONE compact wrapping line —
+  `FriendsWhoSaw compact` — then Letterboxd | **Critics** as a pair of tiles; the
+  Critics tile holds the CinemaScore card) → **The film** tiles (Genres, Awards,
+  Keywords, **Tags** — moved down beside Keywords — Box office, Places, Studios) →
+  **The crew** rows (Writers, Composer, **Visuals** — was "Cinematography", too long a
+  label — Editors, Producers; directors and cast are gone from here) → Best since →
+  Artwork. Every crew row's closed summary is a `NameRow` in `DetailSection`'s
+  `summary` slot, so each name and its count is tappable without opening the row.
+  `NameRow` measures which chips wrapped past the shown line(s) (`offsetTop`) and shows
+  the count — never part of a name; jsdom reports 0 for every offset, so tests fake them.
+  **Open tiles stay put**: `DetailSection--tile.open` is `display: contents`, its header
+  keeps its grid cell (outlined in the tone colour) and its body spans the full width on
+  the line below; `.detail-tiles` flows `dense` so the neighbour backfills. The header is
+  a `div[role=button]` (a NameRow's buttons may sit inside it), toggled by click, Enter
+  or Space. The old Cast body heading showed because its `h4` carried `d-flex`
+  (`!important` beat the `:deep` hide) — the body is gone with the row.
+
 - **The 2026-09-30 redesign (Matt: "The movie detail page has gotten away from us.
   There's too much info for the current design.")**: hero, then a 2×2 **facts strip**
   (your score with rank — still the three-way `ToggleableRating` — the Letterboxd crowd's
