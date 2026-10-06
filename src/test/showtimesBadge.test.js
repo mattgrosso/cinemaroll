@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { showtimesWaiting, hasUnseenShowtimes, dismissedFilms, titleKey } from '../assets/javascript/showtimesUnread.js';
+import { showtimesWaiting, hasUnseenShowtimes, dismissedFilms, dismissedAtRank, titleKey } from '../assets/javascript/showtimesUnread.js';
 import { appBadgeCount } from '../assets/javascript/appBadge.js';
 import { PUSH_PREF_DEFAULTS, pushPrefsWithDefaults } from '../assets/javascript/pushPrefs.js';
-import { showtimesWaiting as lambdaShowtimesWaiting, dismissedFilms as lambdaDismissedFilms, titleKey as lambdaTitleKey } from '../../aws-lambda/pushCadence.js';
+import { showtimesWaiting as lambdaShowtimesWaiting, dismissedFilms as lambdaDismissedFilms, dismissedAtRank as lambdaDismissedAtRank, titleKey as lambdaTitleKey } from '../../aws-lambda/pushCadence.js';
 
 // Matt, 2026-10-05: films on the Showtimes screen he hasn't dismissed or
 // snoozed should count on the icon badge, behind a switch that's off by
@@ -77,43 +77,67 @@ describe('the icon badge with Showtimes', () => {
   });
 });
 
-// 2026-10-06: "At the Udvar-Hazy IMAX, I keep getting notifications for the
-// same movie over and over again." He had dismissed To Fly! and Hubble at the
-// Air and Space IMAX; the Udvar-Hazy copies were separate listings, so they
-// stayed on the screen and the badge, and Hubble was pushed again from there.
-describe('a dismissal covers the film at every theater', () => {
-  const imax = {
+// 2026-10-06, twice. Morning: "At the Udvar-Hazy IMAX, I keep getting
+// notifications for the same movie over and over again" - films dismissed at
+// one theater kept coming back from another. Afternoon: "I would may dismiss a
+// movie from a lesser theater but would still want to see it at like my home
+// Alamo". A dismissal covers that theater and every worse one, never a better.
+describe('a dismissal covers the film at that theater and worse ones', () => {
+  const board = {
     theaters: [
-      { key: 'imax-udvar-hazy', listings: [{ slug: '105761', title: 'To Fly!' }, { slug: '131404', title: 'Hubble', firstSeenAt: 5 }, { slug: '9', title: 'Interstellar' }] },
-      { key: 'imax-air-and-space', listings: [{ slug: '105761', title: 'To Fly!', coveredBy: 'imax-udvar-hazy' }, { slug: '131404', title: 'Hubble', coveredBy: 'imax-udvar-hazy' }] },
-      { key: 'regal', listings: [{ slug: '7', title: 'HUBBLE (in 35mm)' }] }
+      { key: 'alamo', listings: [{ slug: 'a1', title: 'Hubble', firstSeenAt: 5 }] },
+      { key: 'imax', listings: [{ slug: '105761', title: 'To Fly!' }, { slug: '131404', title: 'Hubble', coveredBy: 'alamo' }, { slug: '9', title: 'Interstellar' }] },
+      { key: 'regal', listings: [{ slug: '7', title: 'TO FLY! (in 35mm)', firstSeenAt: 5 }, { slug: '8', title: 'Interstellar', coveredBy: 'imax' }] }
     ]
   };
-  const atAirAndSpace = { 'imax-air-and-space': { 105761: 1, 131404: 1 } };
+  // Dismissed at the middle theater.
+  const atImax = { imax: { 105761: 1, 131404: 1 } };
 
-  it('takes the same film off the badge at the better theater and any other', () => {
-    // Only Interstellar is still waiting.
-    expect(showtimesWaiting({ board: imax, dismissed: atAirAndSpace })).toBe(1);
-    expect(lambdaShowtimesWaiting(imax, atAirAndSpace, null)).toBe(1);
+  it('still shows the film at a better theater', () => {
+    // Hubble at Alamo and Interstellar at the IMAX are still waiting.
+    expect(showtimesWaiting({ board, dismissed: atImax })).toBe(2);
+    expect(lambdaShowtimesWaiting(board, atImax, null)).toBe(2);
+    expect(hasUnseenShowtimes({ board, dismissed: atImax, seenAt: 1 })).toBe(true);
   });
 
-  it('is not "new" on the Watchlist card either', () => {
-    expect(hasUnseenShowtimes({ board: imax, dismissed: atAirAndSpace, seenAt: 1 })).toBe(false);
-    expect(hasUnseenShowtimes({ board: imax, dismissed: {}, seenAt: 1 })).toBe(true);
+  it('hides it at a worse theater', () => {
+    const toFlyOnly = { imax: { 105761: 1 } };
+    // Regal's 35mm To Fly! is not counted; Alamo's Hubble and Interstellar are.
+    expect(showtimesWaiting({ board, dismissed: toFlyOnly })).toBe(2);
+    expect(lambdaShowtimesWaiting(board, toFlyOnly, null)).toBe(2);
+    const onlyRegalNew = { theaters: [board.theaters[1], board.theaters[2]] };
+    expect(hasUnseenShowtimes({ board: onlyRegalNew, dismissed: toFlyOnly, seenAt: 1 })).toBe(false);
+    expect(hasUnseenShowtimes({ board: onlyRegalNew, dismissed: {}, seenAt: 1 })).toBe(true);
   });
 
-  it('knows the dismissed films by title, the same way in the app and the Lambda', () => {
-    expect([...dismissedFilms(imax.theaters, atAirAndSpace)].sort()).toEqual(['hubble', 'to fly']);
-    expect([...lambdaDismissedFilms(imax.theaters, atAirAndSpace)].sort()).toEqual(['hubble', 'to fly']);
-    expect(dismissedFilms(imax.theaters, null).size).toBe(0);
+  it('dismissed at the best theater, it is gone everywhere', () => {
+    const atAlamo = { alamo: { a1: 1 } };
+    const gone = dismissedFilms(board.theaters, atAlamo);
+    [0, 1, 2].forEach((rank) => expect(dismissedAtRank(gone, 'Hubble', rank)).toBe(true));
+  });
+
+  it('knows each film by its best dismissal, the same way in the app and the Lambda', () => {
+    const both = { imax: { 105761: 1 }, regal: { 7: 1 } };
+    expect([...dismissedFilms(board.theaters, both)]).toEqual([['to fly', 1]]);
+    expect([...lambdaDismissedFilms(board.theaters, both)]).toEqual([['to fly', 1]]);
+    const gone = dismissedFilms(board.theaters, both);
+    [0, 1, 2].forEach((rank) => expect(lambdaDismissedAtRank(gone, 'To Fly!', rank)).toBe(dismissedAtRank(gone, 'To Fly!', rank)));
+    expect(dismissedAtRank(gone, 'To Fly!', 0)).toBe(false);
+    expect(dismissedFilms(board.theaters, null).size).toBe(0);
     ['To Fly!', 'HUBBLE (in 35mm)', 'Dune: Part Three (Advance Screening)', "Pan's Labyrinth", 'Ozzy & Black Sabbath', 'WILDWOOD in 35mm', '']
       .forEach((t) => expect(titleKey(t)).toBe(lambdaTitleKey(t)));
   });
 
-  it('keeps the sweep from announcing a film dismissed at another theater', () => {
+  it('keeps the sweep from announcing a film dismissed here or at a better theater only', () => {
     const lambda = readFileSync(resolve(__dirname, '../../aws-lambda/push-notify.js'), 'utf8');
     const body = lambda.slice(lambda.indexOf('const notifyAccountListings'), lambda.indexOf('// --- Reminders'));
     expect(body).toContain('`${topKey}/theaters/dismissed`');
-    expect(body).toMatch(/const keep = open\.filter\(\(l\) => !gone\.has\(titleKey\(l\.title\)\)\)/);
+    expect(body).toMatch(/const keep = open\.filter\(\(l\) => !dismissedAtRank\(gone, l\.title, i\)\)/);
+  });
+
+  it('brings a film back by lifting dismissals here and above, not below', () => {
+    const screen = readFileSync(resolve(__dirname, '../components/ShowtimesScreen.vue'), 'utf8');
+    expect(screen).toMatch(/dismissedAtRank\(this\.dismissedTitles, l\.title, rank\)/);
+    expect(screen).toMatch(/rank > here/);
   });
 });

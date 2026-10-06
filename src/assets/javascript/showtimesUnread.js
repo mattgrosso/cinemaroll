@@ -15,8 +15,8 @@ export function hasUnseenShowtimes ({ board, dismissed = {}, reminders = {}, see
   if (!Array.isArray(theaters)) return false;
   const gone = dismissedFilms(theaters, dismissed);
   const waiting = (t, l) => reminders[t.key]?.[l.slug] && !reminders[t.key][l.slug].sentAt;
-  return theaters.some((t) => (t.listings || []).some((l) =>
-    !l.coveredBy && !dismissed[t.key]?.[l.slug] && !gone.has(titleKey(l.title)) && !waiting(t, l) && Number(l.firstSeenAt) > seenAt
+  return theaters.some((t, rank) => (t.listings || []).some((l) =>
+    !l.coveredBy && !dismissed[t.key]?.[l.slug] && !dismissedAtRank(gone, l.title, rank) && !waiting(t, l) && Number(l.firstSeenAt) > seenAt
   ));
 }
 
@@ -36,19 +36,28 @@ export function titleKey (title) {
     .trim();
 }
 
-// A dismissal is the film's, not one theater's (2026-10-06: "At the
-// Udvar-Hazy IMAX, I keep getting notifications for the same movie over and
-// over again" - he'd dismissed the same films at the Air and Space IMAX).
-// The titles dismissed at any theater on the board. Mirrors pushCadence.js.
+// A dismissal covers the film at that theater and every theater ranked
+// below it, never above (2026-10-06, twice: first "At the Udvar-Hazy IMAX, I
+// keep getting notifications for the same movie over and over again", then
+// "I would may dismiss a movie from a lesser theater but would still want to
+// see it at like my home Alamo"). Board theaters are in pecking order, so the
+// answer is each dismissed film's best-ranked dismissal: titleKey -> index.
+// Mirrors aws-lambda/pushCadence.js.
 export function dismissedFilms (theaters, dismissed) {
-  const gone = new Set();
+  const gone = new Map();
   if (!dismissed || typeof dismissed !== 'object') return gone;
-  (theaters || []).forEach((t) => (Array.isArray(t?.listings) ? t.listings : []).forEach((l) => {
+  (theaters || []).forEach((t, rank) => (Array.isArray(t?.listings) ? t.listings : []).forEach((l) => {
     if (!l || !dismissed[t.key]?.[l.slug]) return;
     const key = titleKey(l.title);
-    if (key) gone.add(key);
+    if (key && !gone.has(key)) gone.set(key, rank);
   }));
   return gone;
+}
+
+// Whether a film is hidden at the theater ranked `rank` (0 = best).
+export function dismissedAtRank (gone, title, rank) {
+  const key = titleKey(title);
+  return Boolean(key) && gone.has(key) && gone.get(key) <= rank;
 }
 
 // How many films are still waiting on the board, for the icon badge
@@ -62,8 +71,8 @@ export function showtimesWaiting ({ board, dismissed = {}, reminders = {} }) {
   const theaters = Array.isArray(board?.theaters) ? board.theaters : [];
   const gone = dismissedFilms(theaters, dismissed);
   let count = 0;
-  theaters.forEach((t) => (Array.isArray(t.listings) ? t.listings : []).forEach((l) => {
-    if (l.coveredBy || dismissed?.[t.key]?.[l.slug] || gone.has(titleKey(l.title))) return;
+  theaters.forEach((t, rank) => (Array.isArray(t.listings) ? t.listings : []).forEach((l) => {
+    if (l.coveredBy || dismissed?.[t.key]?.[l.slug] || dismissedAtRank(gone, l.title, rank)) return;
     const r = reminders?.[t.key]?.[l.slug];
     if (r && !r.sentAt) return;
     count += 1;

@@ -128,7 +128,7 @@ import SkeletonBlock from './SkeletonBlock.vue';
 import { lookupFilm, titleWithYear } from '../utils/posterLookup.js';
 import { reminderTimeFor } from '../utils/reminderTime.js';
 import { theaterHref, opensInNewTab } from '../assets/javascript/theaterLinks.js';
-import { SHOWTIMES_SEEN_KEY, dismissedFilms, titleKey } from '../assets/javascript/showtimesUnread.js';
+import { SHOWTIMES_SEEN_KEY, dismissedFilms, dismissedAtRank, titleKey } from '../assets/javascript/showtimesUnread.js';
 
 // Matt, 2026-09-28: "it would also be great if I could see this somewhere on
 // Cinemaroll, besides just the push notification … a page … that would show
@@ -196,7 +196,8 @@ export default {
     // The "Open Alamo" Shortcut is on Matt's phone only (theaterLinks.js).
     alamoApp () { return this.$store.state.databaseTopKey === 'mattgrosso-gmail-com'; },
     dismissedMap () { return this.$store.state.theaterDismissed || {}; },
-    // A film dismissed at one theater is dismissed at all of them (2026-10-06).
+    // A film dismissed at one theater is dismissed there and at every worse
+    // theater, but still shows at a better one (2026-10-06).
     dismissedTitles () {
       return dismissedFilms(Array.isArray(this.board?.theaters) ? this.board.theaters : [], this.dismissedMap);
     },
@@ -209,13 +210,13 @@ export default {
     },
     theaters () {
       const list = Array.isArray(this.board?.theaters) ? this.board.theaters : [];
-      return list.map((t) => {
+      return list.map((t, rank) => {
         const listings = (Array.isArray(t.listings) ? t.listings : [])
           .map((l) => {
             const reminder = this.remindersMap[t.key]?.[l.slug] || null;
             return {
               ...l,
-              dismissed: Boolean(this.dismissedMap[t.key]?.[l.slug]) || this.dismissedTitles.has(titleKey(l.title)),
+              dismissed: Boolean(this.dismissedMap[t.key]?.[l.slug]) || dismissedAtRank(this.dismissedTitles, l.title, rank),
               reminder,
               waiting: Boolean(reminder && !reminder.sentAt),
               reminded: Boolean(reminder && reminder.sentAt)
@@ -380,11 +381,14 @@ export default {
     toggleDismiss (theater, item) {
       const id = this.cardId(theater, item);
       if (item.dismissed) {
-        // Bringing a film back brings it back at every theater.
+        // Bringing a film back lifts every dismissal hiding this copy: its
+        // own, and the film's at this theater or any better one.
         const film = titleKey(item.title);
-        (this.board?.theaters || []).forEach((t) => (t.listings || []).forEach((l) => {
+        const list = this.board?.theaters || [];
+        const here = list.findIndex((t) => t.key === theater.key);
+        list.forEach((t, rank) => (t.listings || []).forEach((l) => {
           if (!this.dismissedMap[t.key]?.[l.slug]) return;
-          if (!(t.key === theater.key && l.slug === item.slug) && (!film || titleKey(l.title) !== film)) return;
+          if (!(t.key === theater.key && l.slug === item.slug) && (!film || rank > here || titleKey(l.title) !== film)) return;
           this.$store.dispatch('dismissListing', { theaterKey: t.key, slug: l.slug, restore: true }).catch(() => {});
         }));
         return;

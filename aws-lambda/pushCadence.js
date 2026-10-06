@@ -1346,26 +1346,36 @@ function remindersDue (reminders, now = Date.now()) {
   return due.sort((a, b) => a.remindAt - b.remindAt);
 }
 
-// --- A dismissal is the film's, not one theater's (2026-10-06) ---------------
+// --- A dismissal covers that theater and worse ones (2026-10-06) ------------
 //
-// "At the Udvar-Hazy IMAX, I keep getting notifications for the same movie
-// over and over again." He'd dismissed To Fly!, Hubble and the rest at the
-// Air and Space IMAX; the same films at Udvar-Hazy were separate listings, so
-// they stayed on the screen and the badge, and Hubble was pushed as new from
-// there. Same story at the chains (Other Mommy dismissed at three theaters).
-// A dismissal now covers the film - its titleKey - at every theater on the
-// board. Mirrored in src/assets/javascript/showtimesUnread.js.
+// Morning: "At the Udvar-Hazy IMAX, I keep getting notifications for the same
+// movie over and over again" - he'd dismissed To Fly!, Hubble and the rest at
+// the Air and Space IMAX, and the Udvar-Hazy copies were separate listings.
+// Afternoon, after a dismissal had briefly covered every theater: "I would may
+// dismiss a movie from a lesser theater but would still want to see it at like
+// my home Alamo". So a dismissal covers the film (its titleKey) at that
+// theater and every theater ranked below it, never above. Mirrored in
+// src/assets/javascript/showtimesUnread.js.
 
-/** theaters: [{ key, listings: [{ slug, title }] }] -> Set of dismissed titleKeys. */
+/**
+ * theaters: [{ key, listings: [{ slug, title }] }] in pecking order ->
+ * Map of dismissed titleKey -> index of the best theater it was dismissed at.
+ */
 function dismissedFilms (theaters, dismissed) {
-  const gone = new Set();
+  const gone = new Map();
   if (!dismissed || typeof dismissed !== 'object') return gone;
-  (theaters || []).forEach((t) => (Array.isArray(t && t.listings) ? t.listings : []).forEach((l) => {
+  (theaters || []).forEach((t, rank) => (Array.isArray(t && t.listings) ? t.listings : []).forEach((l) => {
     if (!l || !dismissed[t.key] || !dismissed[t.key][l.slug]) return;
     const key = titleKey(l.title);
-    if (key) gone.add(key);
+    if (key && !gone.has(key)) gone.set(key, rank);
   }));
   return gone;
+}
+
+/** Whether a film is hidden at the theater ranked `rank` (0 = best). */
+function dismissedAtRank (gone, title, rank) {
+  const key = titleKey(title);
+  return Boolean(key) && gone.has(key) && gone.get(key) <= rank;
 }
 
 // --- Showtimes on the icon badge (Matt, 2026-10-05) --------------------------
@@ -1381,10 +1391,10 @@ function showtimesWaiting (board, dismissed, reminders) {
   const theaters = board && Array.isArray(board.theaters) ? board.theaters : [];
   const gone = dismissedFilms(theaters, dismissed);
   let count = 0;
-  theaters.forEach((t) => (Array.isArray(t.listings) ? t.listings : []).forEach((l) => {
+  theaters.forEach((t, rank) => (Array.isArray(t.listings) ? t.listings : []).forEach((l) => {
     if (l.coveredBy) return;
     if (dismissed && dismissed[t.key] && dismissed[t.key][l.slug]) return;
-    if (gone.has(titleKey(l.title))) return;
+    if (dismissedAtRank(gone, l.title, rank)) return;
     const r = reminders && reminders[t.key] && reminders[t.key][l.slug];
     if (r && !r.sentAt) return;
     count += 1;
@@ -1446,6 +1456,7 @@ module.exports = {
   titleKey,
   uncovered,
   dismissedFilms,
+  dismissedAtRank,
   boardForApp,
   remindersDue,
   showtimesWaiting,

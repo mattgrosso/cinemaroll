@@ -407,16 +407,19 @@ scrolling never fires it. Verified with synthetic TouchEvents in the tester's if
 Dismissals are per listing and pruned when the film leaves the board, so a return years later
 is shown and pushed again — Matt asked for exactly that.
 
-**A dismissal is the FILM's, at every theater** (2026-10-06: "At the Udvar-Hazy IMAX, I keep
-getting notifications for the same movie over and over again"). He'd dismissed To Fly!,
-Hubble etc. at the Air and Space IMAX; the Udvar-Hazy copies were separate listings, so they
-stayed on the screen and badge and Hubble was pushed as new from there (the data showed the
-same pattern at the chains: Other Mommy dismissed at three theaters). Stored dismissals are
-still per `<theater>/<slug>`, but `dismissedFilms` (titleKeys dismissed anywhere on the
-board, in pushCadence.js AND showtimesUnread.js, with a `titleKey` copy pinned in
-`showtimesBadge.test.js`) now applies to the badge, the Watchlist "new" dot, the screen
-(bring back restores every theater's copy), and `notifyAccountListings`, which drops a
-fresh listing whose film is dismissed elsewhere (logged "already dismissed elsewhere").
+**A dismissal covers that theater and every WORSE one, never a better one** (2026-10-06,
+two rounds the same day). Morning: "At the Udvar-Hazy IMAX, I keep getting notifications for
+the same movie over and over again" - films dismissed at one theater came back from another,
+so a dismissal was made to cover the film at every theater. Afternoon, Matt: "I may dismiss a
+movie from a lesser theater but would still want to see it at like my home Alamo". So now
+`dismissedFilms` returns titleKey -> the board index of its BEST-ranked dismissal, and
+`dismissedAtRank(gone, title, rank)` hides a copy at that rank or worse. Same in
+pushCadence.js AND showtimesUnread.js (pinned by `showtimesBadge.test.js`), applied to the
+badge, the Watchlist "new" dot, the screen, and `notifyAccountListings` (rank = the board
+index `i`; logged "already dismissed here or at a better theater"). Bring back lifts the
+copy's own dismissal and the film's dismissals at that theater or better (not worse ones).
+Stored dismissals are still per `<theater>/<slug>`, and the board is in pecking order -
+that ordering is what the rank means.
 
 **Swipe left = remind me** (2026-09-28: "remind me again one week before the showtime. And if
 it's already within one week, remind me again the day before"). `src/utils/reminderTime.js`
