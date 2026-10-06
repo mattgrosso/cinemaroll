@@ -941,6 +941,9 @@ const notifyFriendsOfLog = async (myKey, { tmdbId, title, score }) => {
       console.error(`Friend-log push to ${friendKey} failed:`, error.message);
     }
   }));
+  // One line per announcement, so "did the push go out?" is a log search and
+  // not a guess from the invocation's duration (Sky's V/H/S, 2026-10-06).
+  console.log(`Friend log from ${myKey} (${title}): ${mutuals.length} live mutual(s), ${notified} push(es) delivered`);
   return { notified };
 };
 
@@ -1132,7 +1135,10 @@ exports.handler = async (event) => {
   if (method !== 'POST') return response(405, { error: 'POST only' });
 
   const auth = await verifyIdToken(event.headers?.authorization || event.headers?.Authorization);
-  if (!auth || !auth.email) return response(401, { error: 'Invalid or missing token' });
+  if (!auth || !auth.email) {
+    console.warn(`Rejected ${method} ${path}: invalid or missing token`);
+    return response(401, { error: 'Invalid or missing token' });
+  }
 
   const myKey = emailToDatabaseKey(auth.email);
   if (!myKey) return response(401, { error: 'Token has no email' });

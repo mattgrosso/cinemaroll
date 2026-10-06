@@ -216,7 +216,11 @@ it isn't. The script uses `~/aws-cli/aws` (the PATH `aws` is Intel on this Mac).
 
 Web push notifications (2026-08-27). Same auth pattern as the AI lambda — Firebase ID
 token verified with node crypto for the HTTP routes (`/push/test`, `/push/friend-logged`,
-`/push/friend-request`)
+`/push/friend-request`). **"Did a friend's push go out?" is a CloudWatch search, not a
+guess** (2026-10-06, Sky's V/H/S): every friend-log announcement logs
+`Friend log from <key> (<title>): N live mutual(s), M push(es) delivered`, and a rejected
+token logs `Rejected POST <path>`. No line at all means the client never announced
+(offline, sharing off, an edit, or a placeholder id)
 — plus a second entry mode: an EventBridge rule (`cinemaroll-push-hourly`, now
 `rate(15 minutes)` — the name is historical) that runs the chore sweep with **admin**
 RTDB access. Admin access
