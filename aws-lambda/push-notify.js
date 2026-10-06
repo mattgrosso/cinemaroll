@@ -40,7 +40,7 @@ const {
   externalWatches, externalLogsDue,
   signupsDue, composeSignupMessages,
   alamoListings, veeziListings, afiListings, boxofficeListings, afiFirstShowtime,
-  cinemaclockListings, uncovered, boardForApp, remindersDue, showtimesWaiting, composeReminderMessage, listingsDue, composeListingMessages,
+  cinemaclockListings, uncovered, dismissedFilms, titleKey, boardForApp, remindersDue, showtimesWaiting, composeReminderMessage, listingsDue, composeListingMessages,
   cinemaclockCitySlug, cinemaclockCityTheaters, followedTheaters
 } = require('./pushCadence');
 
@@ -664,6 +664,7 @@ const notifyTheaterListings = async (accounts, now) => {
 const notifyAccountListings = async (topKey, boards, now, { announce = true } = {}) => {
   const knownByKey = {};
   const pending = [];
+  let dismissed;
   for (let i = 0; i < boards.length; i += 1) {
     const { theater, listings } = boards[i];
     if (!listings) continue;
@@ -700,8 +701,13 @@ const notifyAccountListings = async (topKey, boards, now, { announce = true } = 
           }
         }));
       }
-      const { keep, dropped } = uncovered(fresh, better.map((b) => b.listings));
+      const { keep: open, dropped } = uncovered(fresh, better.map((b) => b.listings));
       if (dropped.length) console.log(`Listings (${topKey}/${theater.key}): ${dropped.length} covered by a better theater (${dropped.map((l) => l.title).join(', ')})`);
+      // A film dismissed at any theater is not news at another one.
+      if (open.length && dismissed === undefined) dismissed = await dbGet(`${topKey}/theaters/dismissed`).catch(() => null);
+      const gone = dismissedFilms(boards.map((b) => ({ key: b.theater.key, listings: b.listings })), dismissed);
+      const keep = open.filter((l) => !gone.has(titleKey(l.title)));
+      if (keep.length < open.length) console.log(`Listings (${topKey}/${theater.key}): ${open.length - keep.length} already dismissed elsewhere (${open.filter((l) => !keep.includes(l)).map((l) => l.title).join(', ')})`);
       if (keep.length) console.log(`Listings (${topKey}/${theater.key}): ${keep.length} new (${keep.map((l) => l.slug).join(', ')})`);
       pending.push({ theater, statePath, nextKnown, keep });
     } catch (error) {

@@ -391,6 +391,17 @@ scrolling never fires it. Verified with synthetic TouchEvents in the tester's if
 Dismissals are per listing and pruned when the film leaves the board, so a return years later
 is shown and pushed again — Matt asked for exactly that.
 
+**A dismissal is the FILM's, at every theater** (2026-10-06: "At the Udvar-Hazy IMAX, I keep
+getting notifications for the same movie over and over again"). He'd dismissed To Fly!,
+Hubble etc. at the Air and Space IMAX; the Udvar-Hazy copies were separate listings, so they
+stayed on the screen and badge and Hubble was pushed as new from there (the data showed the
+same pattern at the chains: Other Mommy dismissed at three theaters). Stored dismissals are
+still per `<theater>/<slug>`, but `dismissedFilms` (titleKeys dismissed anywhere on the
+board, in pushCadence.js AND showtimesUnread.js, with a `titleKey` copy pinned in
+`showtimesBadge.test.js`) now applies to the badge, the Watchlist "new" dot, the screen
+(bring back restores every theater's copy), and `notifyAccountListings`, which drops a
+fresh listing whose film is dismissed elsewhere (logged "already dismissed elsewhere").
+
 **Swipe left = remind me** (2026-09-28: "remind me again one week before the showtime. And if
 it's already within one week, remind me again the day before"). `src/utils/reminderTime.js`
 picks the first rung still ahead — a week before, the day before, three hours before — reading

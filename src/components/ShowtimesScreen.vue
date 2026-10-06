@@ -128,7 +128,7 @@ import SkeletonBlock from './SkeletonBlock.vue';
 import { lookupFilm, titleWithYear } from '../utils/posterLookup.js';
 import { reminderTimeFor } from '../utils/reminderTime.js';
 import { theaterHref, opensInNewTab } from '../assets/javascript/theaterLinks.js';
-import { SHOWTIMES_SEEN_KEY } from '../assets/javascript/showtimesUnread.js';
+import { SHOWTIMES_SEEN_KEY, dismissedFilms, titleKey } from '../assets/javascript/showtimesUnread.js';
 
 // Matt, 2026-09-28: "it would also be great if I could see this somewhere on
 // Cinemaroll, besides just the push notification … a page … that would show
@@ -196,8 +196,12 @@ export default {
     // The "Open Alamo" Shortcut is on Matt's phone only (theaterLinks.js).
     alamoApp () { return this.$store.state.databaseTopKey === 'mattgrosso-gmail-com'; },
     dismissedMap () { return this.$store.state.theaterDismissed || {}; },
+    // A film dismissed at one theater is dismissed at all of them (2026-10-06).
+    dismissedTitles () {
+      return dismissedFilms(Array.isArray(this.board?.theaters) ? this.board.theaters : [], this.dismissedMap);
+    },
     dismissedCount () {
-      return Object.values(this.dismissedMap).reduce((n, slugs) => n + Object.keys(slugs || {}).length, 0);
+      return this.theaters.reduce((n, t) => n + t.listings.filter((l) => l.dismissed).length, 0);
     },
     remindersMap () { return this.$store.state.theaterReminders || {}; },
     waitingCount () {
@@ -211,7 +215,7 @@ export default {
             const reminder = this.remindersMap[t.key]?.[l.slug] || null;
             return {
               ...l,
-              dismissed: Boolean(this.dismissedMap[t.key]?.[l.slug]),
+              dismissed: Boolean(this.dismissedMap[t.key]?.[l.slug]) || this.dismissedTitles.has(titleKey(l.title)),
               reminder,
               waiting: Boolean(reminder && !reminder.sentAt),
               reminded: Boolean(reminder && reminder.sentAt)
@@ -376,7 +380,13 @@ export default {
     toggleDismiss (theater, item) {
       const id = this.cardId(theater, item);
       if (item.dismissed) {
-        this.$store.dispatch('dismissListing', { theaterKey: theater.key, slug: item.slug, restore: true }).catch(() => {});
+        // Bringing a film back brings it back at every theater.
+        const film = titleKey(item.title);
+        (this.board?.theaters || []).forEach((t) => (t.listings || []).forEach((l) => {
+          if (!this.dismissedMap[t.key]?.[l.slug]) return;
+          if (!(t.key === theater.key && l.slug === item.slug) && (!film || titleKey(l.title) !== film)) return;
+          this.$store.dispatch('dismissListing', { theaterKey: t.key, slug: l.slug, restore: true }).catch(() => {});
+        }));
         return;
       }
       // Let the card slide away before it leaves the grid.

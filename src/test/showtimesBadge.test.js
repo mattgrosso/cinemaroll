@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { showtimesWaiting } from '../assets/javascript/showtimesUnread.js';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+import { showtimesWaiting, hasUnseenShowtimes, dismissedFilms, titleKey } from '../assets/javascript/showtimesUnread.js';
 import { appBadgeCount } from '../assets/javascript/appBadge.js';
 import { PUSH_PREF_DEFAULTS, pushPrefsWithDefaults } from '../assets/javascript/pushPrefs.js';
-import { showtimesWaiting as lambdaShowtimesWaiting } from '../../aws-lambda/pushCadence.js';
+import { showtimesWaiting as lambdaShowtimesWaiting, dismissedFilms as lambdaDismissedFilms, titleKey as lambdaTitleKey } from '../../aws-lambda/pushCadence.js';
 
 // Matt, 2026-10-05: films on the Showtimes screen he hasn't dismissed or
 // snoozed should count on the icon badge, behind a switch that's off by
@@ -72,5 +74,46 @@ describe('the icon badge with Showtimes', () => {
     expect(appBadgeCount(noChores, { showtimes: true }, NOW, 3)).toBe(3);
     const chores = { ...noChores, awards: { years: [2021], eligibleAt: 0 } };
     expect(appBadgeCount(chores, { showtimes: true }, NOW, 3)).toBe(4);
+  });
+});
+
+// 2026-10-06: "At the Udvar-Hazy IMAX, I keep getting notifications for the
+// same movie over and over again." He had dismissed To Fly! and Hubble at the
+// Air and Space IMAX; the Udvar-Hazy copies were separate listings, so they
+// stayed on the screen and the badge, and Hubble was pushed again from there.
+describe('a dismissal covers the film at every theater', () => {
+  const imax = {
+    theaters: [
+      { key: 'imax-udvar-hazy', listings: [{ slug: '105761', title: 'To Fly!' }, { slug: '131404', title: 'Hubble', firstSeenAt: 5 }, { slug: '9', title: 'Interstellar' }] },
+      { key: 'imax-air-and-space', listings: [{ slug: '105761', title: 'To Fly!', coveredBy: 'imax-udvar-hazy' }, { slug: '131404', title: 'Hubble', coveredBy: 'imax-udvar-hazy' }] },
+      { key: 'regal', listings: [{ slug: '7', title: 'HUBBLE (in 35mm)' }] }
+    ]
+  };
+  const atAirAndSpace = { 'imax-air-and-space': { 105761: 1, 131404: 1 } };
+
+  it('takes the same film off the badge at the better theater and any other', () => {
+    // Only Interstellar is still waiting.
+    expect(showtimesWaiting({ board: imax, dismissed: atAirAndSpace })).toBe(1);
+    expect(lambdaShowtimesWaiting(imax, atAirAndSpace, null)).toBe(1);
+  });
+
+  it('is not "new" on the Watchlist card either', () => {
+    expect(hasUnseenShowtimes({ board: imax, dismissed: atAirAndSpace, seenAt: 1 })).toBe(false);
+    expect(hasUnseenShowtimes({ board: imax, dismissed: {}, seenAt: 1 })).toBe(true);
+  });
+
+  it('knows the dismissed films by title, the same way in the app and the Lambda', () => {
+    expect([...dismissedFilms(imax.theaters, atAirAndSpace)].sort()).toEqual(['hubble', 'to fly']);
+    expect([...lambdaDismissedFilms(imax.theaters, atAirAndSpace)].sort()).toEqual(['hubble', 'to fly']);
+    expect(dismissedFilms(imax.theaters, null).size).toBe(0);
+    ['To Fly!', 'HUBBLE (in 35mm)', 'Dune: Part Three (Advance Screening)', "Pan's Labyrinth", 'Ozzy & Black Sabbath', 'WILDWOOD in 35mm', '']
+      .forEach((t) => expect(titleKey(t)).toBe(lambdaTitleKey(t)));
+  });
+
+  it('keeps the sweep from announcing a film dismissed at another theater', () => {
+    const lambda = readFileSync(resolve(__dirname, '../../aws-lambda/push-notify.js'), 'utf8');
+    const body = lambda.slice(lambda.indexOf('const notifyAccountListings'), lambda.indexOf('// --- Reminders'));
+    expect(body).toContain('`${topKey}/theaters/dismissed`');
+    expect(body).toMatch(/const keep = open\.filter\(\(l\) => !gone\.has\(titleKey\(l\.title\)\)\)/);
   });
 });

@@ -1346,6 +1346,28 @@ function remindersDue (reminders, now = Date.now()) {
   return due.sort((a, b) => a.remindAt - b.remindAt);
 }
 
+// --- A dismissal is the film's, not one theater's (2026-10-06) ---------------
+//
+// "At the Udvar-Hazy IMAX, I keep getting notifications for the same movie
+// over and over again." He'd dismissed To Fly!, Hubble and the rest at the
+// Air and Space IMAX; the same films at Udvar-Hazy were separate listings, so
+// they stayed on the screen and the badge, and Hubble was pushed as new from
+// there. Same story at the chains (Other Mommy dismissed at three theaters).
+// A dismissal now covers the film - its titleKey - at every theater on the
+// board. Mirrored in src/assets/javascript/showtimesUnread.js.
+
+/** theaters: [{ key, listings: [{ slug, title }] }] -> Set of dismissed titleKeys. */
+function dismissedFilms (theaters, dismissed) {
+  const gone = new Set();
+  if (!dismissed || typeof dismissed !== 'object') return gone;
+  (theaters || []).forEach((t) => (Array.isArray(t && t.listings) ? t.listings : []).forEach((l) => {
+    if (!l || !dismissed[t.key] || !dismissed[t.key][l.slug]) return;
+    const key = titleKey(l.title);
+    if (key) gone.add(key);
+  }));
+  return gone;
+}
+
 // --- Showtimes on the icon badge (Matt, 2026-10-05) --------------------------
 //
 // "Movies in the Showtime screen that I have not yet either dismissed or
@@ -1357,10 +1379,12 @@ function remindersDue (reminders, now = Date.now()) {
 // showtimesUnread.js; src/test/showtimesBadge.test.js pins the two together.
 function showtimesWaiting (board, dismissed, reminders) {
   const theaters = board && Array.isArray(board.theaters) ? board.theaters : [];
+  const gone = dismissedFilms(theaters, dismissed);
   let count = 0;
   theaters.forEach((t) => (Array.isArray(t.listings) ? t.listings : []).forEach((l) => {
     if (l.coveredBy) return;
     if (dismissed && dismissed[t.key] && dismissed[t.key][l.slug]) return;
+    if (gone.has(titleKey(l.title))) return;
     const r = reminders && reminders[t.key] && reminders[t.key][l.slug];
     if (r && !r.sentAt) return;
     count += 1;
@@ -1421,6 +1445,7 @@ module.exports = {
   cinemaclockListings,
   titleKey,
   uncovered,
+  dismissedFilms,
   boardForApp,
   remindersDue,
   showtimesWaiting,
