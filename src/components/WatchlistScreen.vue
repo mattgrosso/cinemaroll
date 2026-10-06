@@ -439,7 +439,10 @@ export default {
         poster: this.posterUrl(candidate.entry),
         metaLines: [
           `You ${formatScore(candidate.yours)}`,
-          candidate.communitySource === 'letterboxd' ? `Letterboxd ★ ${candidate.crowd.toFixed(2)}` : `World ${formatScore(candidate.community)}`
+          // Both sides out of 10 (report 2026-10-06): Letterboxd's stars were
+          // shown raw beside your 0–10 score, so the gap couldn't be read at a
+          // glance. `community` is already the crowd doubled, as ranked.
+          `${candidate.communitySource === 'letterboxd' ? 'Letterboxd' : 'World'} ${formatScore(candidate.community)}`
         ],
         source: candidate.entry
       }));

@@ -851,3 +851,22 @@ describe('WatchlistScreen Showtimes card', () => {
     expect(seen.wrapper.find('.showtimes-card-new').exists()).toBe(false);
   });
 });
+
+// Report 2026-10-06: "Give these another shot" put your score out of 10 next
+// to Letterboxd's 0.5–5 star average ("You 5.40" beside "Letterboxd ★ 3.85"),
+// so the gap couldn't be read at a glance. Both now speak out of 10.
+describe('Give these another shot labels', () => {
+  const anotherShotItems = WatchlistScreen.computed.anotherShotItems;
+  const ctx = (candidate) => ({ anotherShotList: [candidate], posterUrl: () => null });
+  const film = { dbKey: 'k', movie: { title: 'Cool On It' } };
+
+  it('shows the Letterboxd crowd out of 10, like your own score', () => {
+    const [item] = anotherShotItems.call(ctx({ entry: film, yours: 5.4, crowd: 3.85, community: 7.7, communitySource: 'letterboxd' }));
+    expect(item.metaLines).toEqual(['You 5.40', 'Letterboxd 7.70']);
+  });
+
+  it('keeps the TMDB fallback out of 10', () => {
+    const [item] = anotherShotItems.call(ctx({ entry: film, yours: 5.4, crowd: null, community: 7.9, communitySource: 'tmdb' }));
+    expect(item.metaLines).toEqual(['You 5.40', 'World 7.90']);
+  });
+});
