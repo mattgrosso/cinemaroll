@@ -88,6 +88,15 @@ requirement).
 ESLint 10 needed `eslint-plugin-vue` **10** and an explicit `vue-eslint-parser`
 dependency: 10 removed `context.getSourceCode()`, which older plugin versions call.
 
+**Tooling moved on 2026-10-06 (Dependabot sweep, 113 alerts to zero):** Vite **7**,
+vitest **4**, firebase **12**, axios 1.20. `package.json` `resolutions` pin what dependents'
+own ranges would otherwise hold back (`vite` so vitest doesn't pull its own vite 8,
+`source-map-js`, `@grpc/grpc-js`, `uuid`, editorconfig's exact `minimatch`). To clear a new
+alert on a transitive package: delete its blocks from `yarn.lock` and `yarn install`
+re-resolves to the newest version the dependents allow; only when their range excludes the
+fix does it need a resolution or a direct upgrade. Never run `yarn` inside `aws-lambda/` —
+that folder is npm's (`package-lock.json`), and a stray `yarn.lock` there breaks the zip.
+
 **`.yarnrc` sets `--ignore-engines`.** It was there for `@achrinza/node-ipc`, a
 transitive dependency of `@vue/cli-service`'s dev server, which capped `engines` at
 Node 19. The Vue CLI dev server went away with the Vite move (2026-09-14), so that

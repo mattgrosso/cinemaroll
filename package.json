@@ -93,7 +93,9 @@
   ],
   "resolutions": {
     "source-map-js": "^1.2.2",
-    "editorconfig/minimatch": "^9.0.9",
-    "vite": "7.3.7"
+    "vite": "7.3.7",
+    "**/editorconfig/minimatch": "^9.0.9",
+    "@grpc/grpc-js": "^1.14.5",
+    "uuid": "^11.1.1"
   }
 }
