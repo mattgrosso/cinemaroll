@@ -1,6 +1,8 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const crypto = require('crypto');
-const { DynamoDBClient, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBClient, UpdateItemCommand, GetItemCommand, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
+const critics = require('./criticReviews');
 
 const client = new Anthropic();
 
@@ -26,7 +28,13 @@ const MODELS = {
   // suggests something you don't fancy, you can see that from the title and
   // scroll on. Haiku is the right tier for that, and this is the one route a
   // person can type into, so it is also the one whose cost could run away.
-  watchlist: 'claude-haiku-4-5-20251001'
+  watchlist: 'claude-haiku-4-5-20251001',
+  // Critics' reviews: the model searches the web and judges which reviews are
+  // worth reading. A judgement call over real search results, not recall, but
+  // the judging is the feature, so Sonnet rather than Haiku. Each film is
+  // looked up ONCE for everybody and stored (see getReviews), so this is
+  // cents per film, not per view.
+  reviews: 'claude-sonnet-5-5'
 };
 
 // This endpoint spends money on every call and its URL is baked into the
@@ -476,7 +484,234 @@ calling suggest_films - never with prose, and never by asking what they meant.
   return response(200, { movies });
 };
 
-exports.handler = async (event) => {
+
+// --- Critics' reviews (/reviews) ---------------------------------------------
+//
+// Report (2026-10-06): "pull in like contemporary reviews of these movies, in
+// particular from some of the sort of big names like ... Ebert or Pauline
+// Kael ... a brief summary and then a link to the full article". What counts
+// as worth showing is decided in criticReviews.js.
+//
+// ASYNCHRONOUS, like the newsletter rebuild, and for the same reason: an HTTP
+// API integration gives up at 30 seconds, hard, and a search-then-judge call
+// takes longer than that often enough to matter. So POST /reviews answers
+// from the store when it can, and otherwise starts a job (an Event invoke of
+// this same function) and answers `pending`; the client asks again every few
+// seconds until the job has written its answer.
+//
+// The answer is stored PER FILM, shared by everyone: reviews of Vertigo are
+// the same for every reader, so the second person to open it pays nothing.
+// Only a lookup that starts a job spends any of the daily allowance.
+const REVIEWS_TABLE = process.env.REVIEWS_TABLE || 'cinemaroll-film-reviews';
+// A lookup is roughly 20 cents (four searches, and what they return read by
+// Sonnet), so the global cap bounds a bad day at about $30.
+const REVIEWS_PER_USER_PER_DAY = 25;
+const REVIEWS_EVERYONE_PER_DAY = 150;
+// A job that hasn't written anything after this long has died (the function
+// timeout is 120s); the next request may start another.
+const REVIEWS_JOB_STALE_MS = 3 * 60 * 1000;
+
+const lambda = new LambdaClient({});
+
+const reviewsKey = (tmdbId) => ({ pk: { S: `film#${tmdbId}` } });
+
+const readStoredReviews = async (tmdbId) => {
+  const { Item } = await ddb.send(new GetItemCommand({
+    TableName: REVIEWS_TABLE,
+    Key: reviewsKey(tmdbId),
+    ConsistentRead: true
+  }));
+  if (!Item) return null;
+  const expiresAt = Item.expiresAt ? Number(Item.expiresAt.N) : null;
+  // DynamoDB's TTL sweep runs up to days late; an expired row is no row.
+  if (expiresAt && expiresAt * 1000 < Date.now()) return null;
+  let reviews = [];
+  try { reviews = JSON.parse(Item.reviews?.S || '[]'); } catch { reviews = []; }
+  return {
+    status: Item.status?.S,
+    startedAt: Number(Item.startedAt?.N || 0),
+    reviews
+  };
+};
+
+const writeStoredReviews = async (tmdbId, { status, reviews = [], lifetime = null, startedAt }) => {
+  const item = {
+    ...reviewsKey(tmdbId),
+    status: { S: status },
+    reviews: { S: JSON.stringify(reviews) },
+    updatedAt: { N: String(Date.now()) }
+  };
+  if (startedAt) item.startedAt = { N: String(startedAt) };
+  if (lifetime) item.expiresAt = { N: String(Math.floor(Date.now() / 1000) + lifetime) };
+  await ddb.send(new PutItemCommand({ TableName: REVIEWS_TABLE, Item: item }));
+};
+
+/**
+ * Claims the job for one film. Conditional, so two people opening the same
+ * film at the same moment start one search between them, not two.
+ */
+const claimReviewsJob = async (tmdbId) => {
+  const now = Date.now();
+  try {
+    await ddb.send(new PutItemCommand({
+      TableName: REVIEWS_TABLE,
+      Item: {
+        ...reviewsKey(tmdbId),
+        status: { S: 'pending' },
+        startedAt: { N: String(now) },
+        reviews: { S: '[]' },
+        expiresAt: { N: String(Math.floor(now / 1000) + 3600) }
+      },
+      ConditionExpression: 'attribute_not_exists(pk) OR #s <> :pending OR startedAt < :stale',
+      ExpressionAttributeNames: { '#s': 'status' },
+      ExpressionAttributeValues: {
+        ':pending': { S: 'pending' },
+        ':stale': { N: String(now - REVIEWS_JOB_STALE_MS) }
+      }
+    }));
+    return true;
+  } catch (error) {
+    if (error?.name === 'ConditionalCheckFailedException') return false;
+    throw error;
+  }
+};
+
+const checkReviewsQuota = async (uid) => {
+  const day = today();
+  if (!(await countOne(`rv#u#${uid}#${day}`, REVIEWS_PER_USER_PER_DAY))) return 'user';
+  if (!(await countOne(`rv#all#${day}`, REVIEWS_EVERYONE_PER_DAY))) return 'global';
+  return null;
+};
+
+const filmFromBody = (body) => {
+  const tmdbId = String(body?.tmdbId || '').trim();
+  return {
+    tmdbId: /^\d{1,10}$/.test(tmdbId) ? tmdbId : null,
+    title: String(body?.title || '').trim().slice(0, 200),
+    year: Number(body?.year) || null,
+    director: String(body?.director || '').trim().slice(0, 100)
+  };
+};
+
+const getReviews = async (body, uid, functionName) => {
+  const film = filmFromBody(body);
+  if (!film.tmdbId || !film.title) {
+    return response(400, { error: 'A film id and title are required', reviews: [] });
+  }
+
+  const stored = await readStoredReviews(film.tmdbId);
+  if (stored?.status === 'ready') {
+    return response(200, { status: 'ready', reviews: stored.reviews });
+  }
+  if (stored?.status === 'failed') {
+    return response(200, { status: 'failed', reviews: [] });
+  }
+  if (stored?.status === 'pending' && Date.now() - stored.startedAt < REVIEWS_JOB_STALE_MS) {
+    return response(200, { status: 'pending', reviews: [] });
+  }
+
+  const blocked = await checkReviewsQuota(uid);
+  if (blocked) {
+    return response(429, {
+      error: blocked === 'user'
+        ? "That's all the review lookups for today - they reset tomorrow."
+        : 'Review lookups are resting for the day. Try again tomorrow.',
+      reviews: []
+    });
+  }
+
+  if (await claimReviewsJob(film.tmdbId)) {
+    await lambda.send(new InvokeCommand({
+      FunctionName: functionName,
+      InvocationType: 'Event',
+      Payload: Buffer.from(JSON.stringify({ reviewsJob: film }))
+    }));
+  }
+  return response(200, { status: 'pending', reviews: [] });
+};
+
+/**
+ * The job: search, judge, check, store. Runs in its own invocation (see
+ * getReviews), so it has the function's full timeout rather than API
+ * Gateway's 30 seconds.
+ */
+const findReviews = async (film) => {
+  const messages = [{ role: 'user', content: critics.userPrompt(film) }];
+  const tools = [
+    {
+      // The BASIC search tool, deliberately. The newer dynamic-filtering one
+      // (web_search_20260209) reads about half the tokens, but it filters
+      // results in code before the model sees them, and side by side on the
+      // same films (2026-10-06) it picked fewer reviews — none at all for
+      // Past Lives from 31 results — and took 20-90s against ~11s.
+      type: 'web_search_20250305',
+      name: 'web_search',
+      max_uses: 4,
+      blocked_domains: critics.BLOCKED_DOMAINS
+    },
+    critics.RECORD_TOOL
+  ];
+
+  const allBlocks = [];
+  let message;
+  // Server-side search can pause a long turn (`pause_turn`); hand it back
+  // and it resumes where it stopped. Bounded so a loop can't run on.
+  for (let round = 0; round < 3; round += 1) {
+    message = await client.messages.create({
+      model: MODELS.reviews,
+      max_tokens: 8000,
+      system: critics.SYSTEM_PROMPT,
+      output_config: { effort: 'medium' },
+      tools,
+      messages
+    }, { timeout: 100_000, maxRetries: 0 });
+    allBlocks.push(...(message.content || []));
+    if (message.stop_reason !== 'pause_turn') break;
+    messages.push({ role: 'assistant', content: message.content });
+  }
+
+  const call = allBlocks.find((block) => block?.type === 'tool_use' && block.name === 'record_reviews');
+  const seen = critics.searchedUrls(allBlocks);
+  const offered = Array.isArray(call?.input?.reviews) ? call.input.reviews : [];
+  const reviews = critics.acceptReviews(offered, seen);
+  console.log(`reviews ${film.tmdbId} "${film.title}": ${seen.size} results, ${offered.length} offered, ${reviews.length} kept, stop ${message?.stop_reason}`);
+  return { reviews, offered, seen, usage: message?.usage, blocks: allBlocks };
+};
+
+/**
+ * The job: search, judge, check, store. Runs in its own invocation (see
+ * getReviews), so it has the function's full timeout rather than API
+ * Gateway's 30 seconds.
+ */
+const runReviewsJob = async (film) => {
+  try {
+    const { reviews } = await findReviews(film);
+    await writeStoredReviews(film.tmdbId, {
+      status: 'ready',
+      reviews,
+      lifetime: critics.cacheLifetime({ filmYear: film.year, found: reviews.length > 0 })
+    });
+  } catch (error) {
+    console.error(`reviews ${film.tmdbId} failed:`, error?.status, error?.message);
+    await writeStoredReviews(film.tmdbId, {
+      status: 'failed',
+      lifetime: critics.cacheLifetime({ failed: true })
+    });
+  }
+};
+
+// For trying the prompt from a laptop without the HTTP and storage around it.
+exports.findReviews = findReviews;
+
+exports.handler = async (event, context) => {
+  // A reviews job, started by getReviews with an Event invoke. Only callers
+  // holding lambda:InvokeFunction can put a top-level key on the event; an
+  // HTTP request's body arrives as a string under `body`.
+  if (event && event.reviewsJob) {
+    await runReviewsJob(event.reviewsJob);
+    return { ok: true };
+  }
+
   const headers = event.headers || {};
   activeOrigin = headers.origin || headers.Origin || ALLOWED_ORIGINS[0];
 
@@ -528,6 +763,10 @@ exports.handler = async (event) => {
 
     if (route.endsWith('/trivia')) {
       return await getTrivia(body);
+    }
+
+    if (route.endsWith('/reviews')) {
+      return await getReviews(body, user.sub, context?.functionName || 'cinemaroll-ai');
     }
 
     if (route.endsWith('/watchlist')) {

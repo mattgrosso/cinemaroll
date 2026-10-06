@@ -466,6 +466,30 @@
         </div>
         </DetailSection>
           </div>
+        <!-- Critics' reviews (report, 2026-10-06: "contemporary reviews ...
+             Ebert or Pauline Kael ... a brief summary and then a link to the
+             full article"). A row, not a tile: it is reading, and its summary
+             names critics. Looked up only when opened, because the first look
+             at a film is a web search; aws-lambda/criticReviews.js decides
+             which reviews are worth showing. -->
+        <DetailSection id="critics" label="Critics" tone="film" :summary="criticsRowSummary" @toggle="onCriticsToggle">
+          <div class="critics">
+            <p v-if="critics.state === 'loading'" class="critics-note">Searching for reviews. The first look at a film takes about half a minute.</p>
+            <div v-for="review in critics.reviews" :key="review.url" class="critic-review">
+              <p class="critic-role">{{ criticRoleLabel(review.role) }}<span v-if="review.verdict" class="critic-verdict">{{ review.verdict }}</span></p>
+              <p class="critic-byline">{{ criticByline(review) }}</p>
+              <p class="critic-summary">{{ review.summary }}</p>
+              <a :href="review.url" target="_blank" rel="noopener" class="critic-link">Read the review<span v-if="review.paywalled"> (may be paywalled)</span> <i class="bi bi-box-arrow-up-right"></i></a>
+            </div>
+            <p v-if="critics.state === 'ready' && !critics.reviews.length" class="critics-note">No reviews from the critics we trust turned up for this one.</p>
+            <p v-if="critics.state === 'failed'" class="critics-note">The search didn't come back. Try again later.</p>
+            <p v-if="critics.state === 'error'" class="critics-note">
+              {{ critics.message }}
+              <button type="button" class="critics-retry" @click="loadCritics">Try again</button>
+            </p>
+            <p v-if="critics.state === 'ready' && critics.reviews.length" class="critics-credit">Found by web search and summarised by AI. Tap through for the critic's own words.</p>
+          </div>
+        </DetailSection>
         </div>
 
         <div class="detail-band">
@@ -660,6 +684,8 @@ import ToggleableRating from './ToggleableRating.vue';
 import FriendsWhoSaw from './FriendsWhoSaw.vue';
 import { friendsWhoRated } from '../assets/javascript/friendViewings.js';
 import DetailSection from './DetailSection.vue';
+import { criticRoleLabel, criticByline, criticsSummary } from '../assets/javascript/criticReviews.js';
+import { fetchCriticReviews, criticErrorMessage } from '../utils/criticReviewsRequest.js';
 import { formatMoneyShort } from '../assets/javascript/formatMoney.js';
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import ErrorLogService from "../services/ErrorLogService.js";
@@ -706,7 +732,9 @@ export default {
       keywordInput: '',
       isEditingTags: false,
       tagInputs: {},
-      expandedViewingKeys: {}
+      expandedViewingKeys: {},
+      // Critics row: idle until opened, then loading → ready | failed | error.
+      critics: { tmdbId: null, state: 'idle', reviews: [], message: '' }
     };
   },
   created () {
@@ -753,6 +781,9 @@ export default {
     },
     tagsSummary () {
       return this.listSummary(this.sortedTags, 4) || 'No tags yet';
+    },
+    criticsRowSummary () {
+      return criticsSummary(this.critics.state, this.critics.reviews);
     },
     awardsSummary () {
       const parts = [];
@@ -1154,6 +1185,32 @@ export default {
   },
   methods: {
     formatScore,
+    criticRoleLabel,
+    criticByline,
+    onCriticsToggle (open) {
+      if (open && (this.critics.state === 'idle' || this.critics.tmdbId !== this.movie?.id)) this.loadCritics();
+    },
+    async loadCritics () {
+      const movie = this.movie;
+      if (!movie?.id) return;
+      const tmdbId = movie.id;
+      this.critics = { tmdbId, state: 'loading', reviews: [], message: '' };
+      try {
+        const { status, reviews } = await fetchCriticReviews({
+          tmdbId,
+          title: movie.title,
+          year: Number(String(movie.release_date || '').slice(0, 4)) || null,
+          director: this.getCrewMember('Director', 'strict')[0] || ''
+        });
+        // MovieDetail is reused film to film; a slow answer for the last film
+        // must not land on this one.
+        if (this.movie?.id !== tmdbId) return;
+        this.critics = { tmdbId, state: status, reviews, message: '' };
+      } catch (error) {
+        if (this.movie?.id !== tmdbId) return;
+        this.critics = { tmdbId, state: 'error', reviews: [], message: criticErrorMessage(error) };
+      }
+    },
     async loadMovieData (tmdbId) {
       try {
         // Wait for database to be loaded if it isn't already
@@ -1191,6 +1248,8 @@ export default {
           this.$router.push('/film-club');
           return;
         }
+
+        this.critics = { tmdbId: null, state: 'idle', reviews: [], message: '' };
 
         // Load Letterboxd data if available
         this.loadLetterboxdExtras(tmdbId);
@@ -2641,6 +2700,77 @@ export default {
       line-height: 1.4;
       white-space: pre-line;
       color: #fff;
+    }
+  }
+
+  .critics {
+    .critic-review {
+      padding: 6px 8px;
+      margin-top: 6px;
+      border-left: 2px solid #6fd39b; /* the film band's green */
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    p { margin: 0; }
+
+    .critic-role {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+      color: #6fd39b;
+      font-size: ds(0.62rem);
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .critic-verdict {
+      color: #fff;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .critic-byline {
+      margin-top: 2px;
+      color: #ccc;
+      font-size: ds(0.75rem);
+    }
+
+    .critic-summary {
+      margin-top: 4px;
+      color: #fff;
+      font-size: ds(0.85rem);
+      line-height: 1.4;
+    }
+
+    .critic-link {
+      display: inline-block;
+      margin-top: 4px;
+      color: #8cc8ff;
+      font-size: ds(0.75rem);
+      text-decoration: none;
+
+      &:active { color: #fff; }
+    }
+
+    .critics-note, .critics-credit {
+      margin-top: 6px;
+      color: #ccc;
+      font-size: ds(0.75rem);
+    }
+
+    .critics-credit { color: #aaa; }
+
+    .critics-retry {
+      margin-left: 0.4rem;
+      padding: 2px 8px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 4px;
+      background: none;
+      color: #fff;
+      font-size: ds(0.75rem);
+
+      &:active { background: rgba(255, 255, 255, 0.12); }
     }
   }
 

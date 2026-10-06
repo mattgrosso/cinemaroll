@@ -180,6 +180,18 @@ aws lambda add-permission --function-name cinemaroll-ai --statement-id apigw-inv
   --source-arn 'arn:aws:execute-api:us-east-1:298682183644:2lyldox07e/*/*/watchlist' --profile personal
 ```
 
+**`/reviews` (critics' reviews, 2026-10-06) is asynchronous**, like the newsletter rebuild:
+a search-and-judge call can outlast API Gateway's 30s. The route answers from DynamoDB
+table **`cinemaroll-film-reviews`** (key `film#<tmdbId>`, TTL `expiresAt`, one answer per
+film for everyone), else claims the film with a conditional put and Event-invokes the same
+function with `{ reviewsJob }` (a top-level event key an HTTP caller can't set), answering
+`pending`. Only a lookup that starts a job counts against its own daily caps (25 per
+person, 150 overall, ~20 cents each). Needs, beyond the code: the table, an inline role
+policy (Get/Put on it, InvokeFunction on `cinemaroll-ai` itself), the function timeout at
+120s, and the route + permission per the THREE-things rule. Uses the BASIC
+`web_search_20250305` with `blocked_domains` — `allowed_domains` is refused outright when
+it names a crawler-blocked site, and the dynamic-filtering search picked fewer reviews.
+
 **Ask for structured data with a forced tool call, not with a JSON-shaped prompt.**
 `/watchlist` first asked for JSON in the system prompt and prefilled the reply with
 `{"movies":` to force the shape. The suggestions were good every time; reassembling the

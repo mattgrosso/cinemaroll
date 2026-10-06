@@ -91,6 +91,18 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
   stretches an odd last tile to full width (`:last-child:nth-child(odd)`), so no grid
   ends on a gap. Offered alternative if the foot of the page is too far: a row right
   under the film tiles.
+- **Critics row (2026-10-06, report: "contemporary reviews ... Ebert or Pauline Kael ...
+  a brief summary and then a link to the full article").** A plain row (`#critics`) under
+  the film tiles, looked up only when OPENED (`DetailSection` emits `toggle`), because a
+  film's first lookup is a web search. `src/utils/criticReviewsRequest.js` polls the AI
+  endpoint's `/reviews` every 5s (the per-person 20/min limit is shared with the other
+  routes); wording in `src/assets/javascript/criticReviews.js`; the choosing in
+  `aws-lambda/criticReviews.js`. Each review does one of three jobs — When it came out
+  (≤2), Looking back (≤1), Against the grain (≤1) — and every link must have been in the
+  search results AND on `TRUSTED_OUTLETS`. The NYT, New Yorker, Guardian and LA Times
+  block Anthropic's crawler, so they never appear in results: Kael and Crowther rarely
+  show up; Ebert (all free on rogerebert.com) nearly always does. An answer for a
+  previous film is dropped (MovieDetail is reused film to film).
 - **Old section order** (pre-redesign, for reading old history): Genres → Awards → Cast →
   Keywords → Box Office → Country of Origin → Set In → Filmed In → Tags. "Country of Origin" is TMDB's production countries; it was
   headed "Made In" until 2026-09-08, when Matt couldn't tell it from Filmed In. Don't

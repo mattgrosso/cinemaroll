@@ -68,4 +68,12 @@ describe('DetailSection', () => {
   it('is a plain row unless asked to be a tile', () => {
     expect(factory().classes()).not.toContain('detail-section--tile');
   });
+
+  // The Critics row looks its reviews up only when opened (2026-10-06).
+  it('tells the page when it opens and closes', async () => {
+    const wrapper = factory();
+    await wrapper.find('.detail-section-header').trigger('click');
+    await wrapper.find('.detail-section-header').trigger('click');
+    expect(wrapper.emitted('toggle')).toEqual([[true], [false]]);
+  });
 });

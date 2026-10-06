@@ -51,6 +51,9 @@ export default {
     // (report, 2026-10-04: "I'm often glancing for like the cast").
     tile: { type: Boolean, default: false }
   },
+  // `toggle` (open: boolean) lets a section fetch its contents only when
+  // someone looks — the Critics row costs a web search the first time.
+  emits: ['toggle'],
   data () {
     return { open: this.defaultOpen };
   },
@@ -65,6 +68,7 @@ export default {
   methods: {
     toggle () {
       this.open = !this.open;
+      this.$emit('toggle', this.open);
     }
   }
 };
