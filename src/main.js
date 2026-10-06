@@ -23,6 +23,7 @@ import router from './router';
 import VueClickAway from "vue3-click-away";
 import * as Sentry from "@sentry/vue";
 import { BrowserTracing } from "@sentry/tracing";
+import { scrubEvent, scrubBreadcrumb } from "./utils/scrubUrl.js";
 import VueLazyLoad from 'vue3-lazyload';
 import './registerServiceWorker'
 import axios from 'axios';
@@ -84,7 +85,13 @@ if (allowDevSentry || process.env.NODE_ENV !== "development") {
     ],
     tracesSampleRate: 1.0,
     sampleRate: 1.0,
-    maxValueLength: 8000
+    maxValueLength: 8000,
+    // No credentials leave for Sentry: Firebase and TMDB take theirs in the
+    // query string, and traced fetches and breadcrumbs carried them in full
+    // (see utils/scrubUrl.js, 2026-10-06).
+    beforeSend: scrubEvent,
+    beforeSendTransaction: scrubEvent,
+    beforeBreadcrumb: scrubBreadcrumb
   });
 }
 
