@@ -84,7 +84,13 @@ describe('MovieDetail', () => {
         academyAwardWinners: {},
         isOnline: true
       },
-      getters: { allMoviesAsArray: [], allMediaAsArray: [], databaseTopKey: 'tester' },
+      getters: {
+        allMoviesAsArray: [],
+        allMediaAsArray: [],
+        databaseTopKey: 'tester',
+        // One club friend who rated the test film, so the club panel renders.
+        filmClubFriends: [{ key: 'seth', name: 'Seth', profile: { ratings: { 42: { r: 7.2, s: 4 } } } }]
+      },
       commit: vi.fn(),
       dispatch: vi.fn()
     }
@@ -212,11 +218,18 @@ describe('MovieDetail', () => {
         expect(lines[0].classes()).toContain('collapsed')
         expect(lines[0].find('.medium-and-date').text()).toContain('Theater')
         expect(lines[0].find('.viewing-score').text()).toBe('8.12')
-        // Tapping a line still opens the criteria and Edit / Delete.
+        // The date leads, as a diary line; the medium is a chip.
+        expect(lines[0].find('.viewing-date').text()).toBe('Jan 2, 2024')
+        expect(lines[0].find('.viewing-medium').text()).toBe('Theater')
+        // Tapping a line opens the eight criteria, named in full, then Edit / Delete.
+        const labels = panel.findAll('.accordion-item')[0].findAll('.criterion-label').map(l => l.text())
+        expect(labels).toEqual(['Direction', 'Imagery', 'Story', 'Performance', 'Soundtrack', 'Stickiness', 'Love', 'Overall'])
+        expect(panel.find('table').exists()).toBe(false)
         expect(panel.text()).toContain('Edit Rating')
         expect(panel.text()).toContain('Delete Rating')
-        // The club continues the same list, under a Club label.
-        const club = panel.findComponent({ name: 'FriendsWhoSaw' })
+        // The club is a separate concept (2026-10-06): its own panel, not this one.
+        expect(panel.findComponent({ name: 'FriendsWhoSaw' }).exists()).toBe(false)
+        const club = band.find('.club-panel').findComponent({ name: 'FriendsWhoSaw' })
         expect(club.exists()).toBe(true)
         expect(club.props('label')).toBe('Club')
         // Best since is not in the panel any more.
@@ -239,7 +252,7 @@ describe('MovieDetail', () => {
       const critics = tiles.find('#critics')
       expect(critics.exists()).toBe(true)
       expect(critics.attributes('tile')).toBeDefined()
-      expect(wrapper.find('.detail-band--you .you-panel').findComponent({ name: 'FriendsWhoSaw' }).props('compact')).toBe(true)
+      expect(wrapper.find('.detail-band--you .club-panel').findComponent({ name: 'FriendsWhoSaw' }).props('compact')).toBe(true)
     })
 
     it('stretches an odd tile out to the full width, so no grid ends on a gap', () => {

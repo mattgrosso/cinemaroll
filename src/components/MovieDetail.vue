@@ -109,18 +109,21 @@
              a line per friend with their stars where your score sits (report,
              2026-10-04, second pass: no "You" heading, and the club out of
              its pills). Best since moved down to a tile of its own. -->
-        <div v-if="getAllRatings(previousEntry) || clubFriends.length" class="you-panel">
-          <div v-if="getAllRatings(previousEntry)" class="ratings-and-comparison-wrapper">
+        <!-- Your viewings and the club are separate concepts (Matt, 2026-10-06:
+             "too closely coupled"), so they are separate panels. -->
+        <div v-if="getAllRatings(previousEntry)" class="you-panel">
+          <div class="ratings-and-comparison-wrapper">
           <div class="ratings-section">
             <div class="accordion">
               <div class="accordion-item" v-for="(rating, index) in getAllRatings(previousEntry)" :key="index">
                 <h2 class="accordion-header" :id="`heading-${index}`">
                   <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" :data-bs-target="`#collapse-${index}`" aria-expanded="false" :aria-controls="`collapse-${index}`">
+                    <!-- Date first, in white — a diary line — and the medium
+                         as a quiet chip (Matt, 2026-10-06: the line "doesn't
+                         look that great"). -->
                     <span class="medium-and-date">
-                      <span>{{rating.medium}}</span>
-                      <span v-if="rating.medium && rating.date">&nbsp;on&nbsp;</span>
-                      <span v-else-if="rating.date">On&nbsp;</span>
-                      <span>{{formattedDate(rating.date)}}</span>
+                      <span class="viewing-date">{{ viewingDateLabel(rating.date) }}</span>
+                      <span v-if="rating.medium" class="viewing-medium">{{ rating.medium }}</span>
                     </span>
                     <span class="viewing-score">{{formatScore(rating.calculatedTotal)}}</span>
                     <i class="bi bi-chevron-down viewing-chevron"></i>
@@ -128,32 +131,15 @@
                 </h2>
                 <div :id="`collapse-${index}`" class="accordion-collapse collapse" :aria-labelledby="`heading-${index}`">
                   <div class="accordion-body">
-                    <table class="table mb-0 table-striped-columns">
-                      <thead>
-                        <tr>
-                          <th><span>dir</span></th>
-                          <th><span>img</span></th>
-                          <th><span>stry</span></th>
-                          <th><span>perf</span></th>
-                          <th><span>sndtk</span></th>
-                          <th><span>stick</span></th>
-                          <th><span>love</span></th>
-                          <th><span>ovral</span></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr class="table-secondary">
-                          <td>{{rating.direction}}</td>
-                          <td>{{rating.imagery}}</td>
-                          <td>{{rating.story}}</td>
-                          <td>{{rating.performance}}</td>
-                          <td>{{rating.soundtrack}}</td>
-                          <td>{{rating.stickiness && rating.stickiness !== 0 ? rating.stickiness : 1}}</td>
-                          <td>{{rating.love}}</td>
-                          <td>{{rating.overall}}</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                    <!-- The eight criteria as small tiles, four across, each
+                         with its whole name (2026-10-06: the table with
+                         rotated "stry"/"sndtk" headers "looks sort of bad"). -->
+                    <div class="criteria-grid">
+                      <div v-for="criterion in viewingCriteria(rating)" :key="criterion.key" class="criterion">
+                        <span class="criterion-value">{{ criterion.value }}</span>
+                        <span class="criterion-label">{{ criterion.label }}</span>
+                      </div>
+                    </div>
                     <div class="d-flex justify-content-end mt-2">
                       <!-- Edit sits BEFORE delete, and is the safer of the two
                            on purpose. Bug report 2026-08-25 (Natalie): "I rate
@@ -178,7 +164,8 @@
             </div>
           </div>
           </div>
-
+        </div>
+        <div v-if="clubFriends.length" class="club-panel">
           <FriendsWhoSaw :tmdbId="movie && movie.id" label="Club" compact />
         </div>
 
@@ -1510,6 +1497,25 @@ export default {
       if (!date) return '';
       return new Date(date).toLocaleDateString();
     },
+    /** "Jul 5, 2025" for a viewing line; "Undated" when the rating has none. */
+    viewingDateLabel (date) {
+      if (!date) return 'Undated';
+      return new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    },
+    /** The eight criteria of a rating, named in full, in the order they were asked. */
+    viewingCriteria (rating) {
+      const stickiness = rating.stickiness && rating.stickiness !== 0 ? rating.stickiness : 1;
+      return [
+        { key: 'direction', label: 'Direction', value: rating.direction },
+        { key: 'imagery', label: 'Imagery', value: rating.imagery },
+        { key: 'story', label: 'Story', value: rating.story },
+        { key: 'performance', label: 'Performance', value: rating.performance },
+        { key: 'soundtrack', label: 'Soundtrack', value: rating.soundtrack },
+        { key: 'stickiness', label: 'Stickiness', value: stickiness },
+        { key: 'love', label: 'Love', value: rating.love },
+        { key: 'overall', label: 'Overall', value: rating.overall }
+      ];
+    },
 
     // Same pattern as Insights.resumeAwards — jump straight into that year's
     // PersonalAwardsModal (bypassing the once-a-day gate) so tapping a personal
@@ -2550,7 +2556,7 @@ export default {
   .credits-band {
     background: rgba(255, 255, 255, 0.06);
     border-radius: 6px;
-    margin: -12px 0 18px; /* the actions grid leaves 18px; sit 6px under it */
+    margin: 0 0 18px; /* the actions grid leaves 18px above: a band's gap, not a tile's (Matt, 2026-10-06) */
     padding: ds(8px) ds(10px) ds(10px);
   }
 
@@ -2709,9 +2715,16 @@ export default {
       border-top: 1px solid rgba(255, 255, 255, 0.08);
     }
 
-    /* With no viewings of your own the club opens the panel: no divider. */
-    :deep(.friends-who-saw:first-child .friends-who-saw-label),
-    :deep(.friends-who-saw--compact:first-child) { border-top: 0; }
+  }
+
+  /* The club's own surface, under yours. */
+  .club-panel {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    overflow: hidden;
+
+    :deep(.friends-who-saw--compact) { border-top: 0; }
   }
 
   /* Inside the Best since tile: the sentence beside a poster you can tap. */
@@ -3235,9 +3248,28 @@ export default {
     }
 
     .medium-and-date {
-      color: #ccc;
+      align-items: baseline;
+      color: #fff;
+      display: flex;
       flex: 1 1 auto;
+      gap: 8px;
       min-width: 0;
+    }
+
+    .viewing-date { white-space: nowrap; }
+
+    .viewing-medium {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      color: #ddd;
+      font-size: ds(0.62rem);
+      letter-spacing: 0.04em;
+      line-height: 1.6;
+      overflow: hidden;
+      padding: 0 8px;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
     }
 
     .viewing-score {
@@ -3254,33 +3286,53 @@ export default {
     }
 
     .accordion-body {
-      padding: 4px 0.6rem 0.6rem;
+      padding: 2px 0.6rem 0.6rem;
 
-      table {
-        --bs-table-bg: transparent;
-        --bs-table-color: #fff;
-        --bs-table-striped-bg: rgba(255, 255, 255, 0.04);
-        --bs-table-striped-color: #fff;
-        --bs-table-border-color: rgba(255, 255, 255, 0.1);
+      /* Edit and Delete as quiet outlines under the tiles; Delete keeps
+         the warning tone in its text. The confirm step is unchanged. */
+      .btn-secondary, .btn-warning {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.25);
         color: #fff;
-        table-layout: fixed;
-        width: 100%;
-
-        tr.table-secondary { --bs-table-bg: transparent; --bs-table-color: #fff; }
-
-        th {
-          color: #ccc;
-          span {
-            display: inline-block;
-            font-size: ds(0.6rem);
-            transform: rotate(60deg);
-          }
-        }
-
-        td {
-          font-size: ds(0.7rem);
-        }
+        font-size: ds(0.75rem);
+        &:active { background: rgba(255, 255, 255, 0.1); }
       }
+      .btn-warning { border-color: rgba(255, 193, 7, 0.6); color: #ffc107; }
+    }
+
+    .criteria-grid {
+      display: grid;
+      gap: 4px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .criterion {
+      align-items: center;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      padding: ds(6px) 2px ds(5px);
+    }
+
+    .criterion-value {
+      color: #fff;
+      font-size: ds(1rem);
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .criterion-label {
+      color: #ccc;
+      font-size: ds(0.55rem);
+      letter-spacing: 0.05em;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
     }
   }
 
