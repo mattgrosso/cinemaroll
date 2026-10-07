@@ -199,17 +199,26 @@ export function clubAwardsByYear (members) {
         years.set(award.year, year);
         const key = categoryMatchKey(award.label || award.category);
         if (!key) return;
-        const category = year.get(key) || { label: award.label || award.category, kind: categoryKind(award.label || award.category), picks: [], seen: new Set() };
+        const category = year.get(key) || { label: award.label || award.category, kind: categoryKind(award.label || award.category), picks: [], seen: new Map() };
         year.set(key, category);
         const title = member.titles?.[movieId];
         const pick = { who: member.name, ceremony: member.ceremony || `${member.name}'s awards`, movieId: Number(movieId), title: title?.t || null, poster: title?.p || null };
         // A film category is one pick per member per film (Movie Log names
         // every producer; that is still one Best Picture). A person category
-        // keeps each person, once.
-        if (category.kind === 'person' && award.name) pick.name = award.name;
-        const identity = `${member.name}|${pick.name || ''}|${pick.movieId}`;
-        if (category.seen.has(identity)) return;
-        category.seen.add(identity);
+        // is also one pick per member per film, naming everyone honoured for
+        // it: Free Solo's three directors are one Best Director, not three
+        // (Matt, 2026-10-07).
+        const identity = `${member.name}|${pick.movieId}`;
+        const existing = category.seen.get(identity);
+        if (existing) {
+          if (category.kind === 'person' && award.name && !existing.names.includes(award.name)) {
+            existing.names.push(award.name);
+            existing.name = existing.names.join(', ');
+          }
+          return;
+        }
+        if (category.kind === 'person' && award.name) { pick.names = [award.name]; pick.name = award.name; }
+        category.seen.set(identity, pick);
         category.picks.push(pick);
       });
     });
@@ -221,11 +230,15 @@ export function clubAwardsByYear (members) {
       // the same person for a person category. Sean Penn and Benicio del Toro
       // are both in One Battle After Another; that is not the same Best
       // Supporting Actor.
-      const choice = (p) => (category.kind === 'person' ? (p.name ? `n:${p.name.trim().toLowerCase()}` : `m:${p.movieId}`) : `m:${p.movieId}`);
-      const counts = {};
-      category.picks.forEach((p) => { counts[choice(p)] = (counts[choice(p)] || 0) + 1; });
-      const films = new Set(category.picks.map((p) => p.movieId));
+      const people = (p) => (p.names || []).map((n) => n.trim().toLowerCase());
+      const choice = (p) => (category.kind === 'person' && people(p).length ? `n:${[...people(p)].sort().join('|')}` : `m:${p.movieId}`);
       const picks = [...category.picks].sort((a, b) => a.who.localeCompare(b.who));
+      // Agreed: the same film (film category) or at least one person in common
+      // (person category) between two members.
+      const agreed = picks.some((a, i) => picks.slice(i + 1).some((b) => (category.kind === 'person' && people(a).length && people(b).length)
+        ? people(a).some((n) => people(b).includes(n))
+        : a.movieId === b.movieId));
+      const films = new Set(category.picks.map((p) => p.movieId));
       // The same choice by several members is one row naming all of them
       // (Matt, 2026-10-07: the one-column-per-member cards were "really tall
       // and narrow"). Shared choices first.
@@ -242,7 +255,7 @@ export function clubAwardsByYear (members) {
         grouped.set(key, row);
       });
       const choices = [...grouped.values()].sort((a, b) => (b.who.length - a.who.length) || a.who[0].localeCompare(b.who[0]));
-      return { ...category, picks, choices, agreed: Object.values(counts).some((n) => n >= 2), filmCount: films.size };
+      return { ...category, picks: picks.map(({ names, ...p }) => p), choices, agreed, filmCount: films.size };
     }).sort((a, b) => (Number(b.agreed) - Number(a.agreed)) || (houseCategoryRank(a.label) - houseCategoryRank(b.label)) || a.label.localeCompare(b.label))
   }));
 }

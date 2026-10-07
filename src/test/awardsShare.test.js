@@ -173,6 +173,20 @@ describe('clubAwardsByYear', () => {
     expect(y2025.categories.map((c) => c.label)).toEqual(['Best Picture', 'Best Supporting Actor', 'Best Editing']);
   });
 
+  // Brian's 2018 Best Director went to Free Solo's directors as three
+  // entries; that is one pick with the names run together.
+  it('runs co-winners of a person award together as one pick', () => {
+    const won = (year, label, name) => ({ year, category: 'bd', label, result: 'won', name });
+    const brian = { name: 'Brian', ceremony: 'Goegan Globes', awards: { 515042: [won(2018, 'Best Director', 'Jimmy Chin'), won(2018, 'Best Director', 'Elizabeth Chai Vasarhelyi')] }, titles: { 515042: { t: 'Free Solo', p: '/fs.jpg' } } };
+    const matt = { name: 'Matt', ceremony: 'The Groskers', awards: { 515042: [won(2018, 'Best Director', 'Jimmy Chin')] }, titles: { 515042: { t: 'Free Solo', p: '/fs.jpg' } } };
+    const [y] = clubAwardsByYear([brian, matt]);
+    expect(y.categories[0].picks.map((p) => `${p.who}: ${p.name}`)).toEqual(['Brian: Jimmy Chin, Elizabeth Chai Vasarhelyi', 'Matt: Jimmy Chin']);
+    expect(y.categories[0].choices).toHaveLength(2);
+    expect(y.categories[0].agreed).toBe(true);
+    const alone = clubAwardsByYear([brian])[0].categories[0];
+    expect(alone.choices).toEqual([{ movieId: 515042, title: 'Free Solo', poster: '/fs.jpg', name: 'Jimmy Chin, Elizabeth Chai Vasarhelyi', who: ['Brian'], ceremonies: ['Goegan Globes'] }]);
+  });
+
   it('ignores nominations, members without awards, and empty input', () => {
     expect(clubAwardsByYear([quiet])).toEqual([]);
     expect(clubAwardsByYear([])).toEqual([]);
