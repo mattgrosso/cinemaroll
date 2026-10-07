@@ -19,6 +19,7 @@
 // profile carries composite scores only.
 
 import { logScore } from './logScore.js';
+import { validAwards } from './awardsShare.js';
 import { normalizedRatingToStars } from './starRating.js';
 
 // Fixed publishing order for the compact criteria array. Index-coupled with
@@ -82,7 +83,7 @@ export function socialSettingsWithDefaults (raw, userEmail, realName) {
 // ---------------------------------------------------------------------------
 // Publishing: shape a profile from the user's own library, respecting the
 // share toggles. Compact keys (t/p/r/at) keep ~1,400 ratings around 100KB.
-export function buildSocialProfile (entries, getRatingFn, { name, shareRatings = false, shareCriteria = false, now = Date.now() } = {}) {
+export function buildSocialProfile (entries, getRatingFn, { name, shareRatings = false, shareCriteria = false, now = Date.now(), awards = null, awardsName = null } = {}) {
   const rated = [];
   let viewings = 0;
 
@@ -163,8 +164,12 @@ export function buildSocialProfile (entries, getRatingFn, { name, shareRatings =
       if (Number.isFinite(stars)) ratings[id].s = stars;
       if (shareCriteria && c) ratings[id].c = c;
       if (v?.length) ratings[id].v = v;   // where and when, per viewing
+      // Personal awards for this film (2026-10-06), under the ratings switch.
+      const a = validAwards(awards?.[id]);
+      if (a) ratings[id].a = a;
     });
     profile.ratings = ratings;
+    if (awardsName) profile.awardsName = String(awardsName).slice(0, 80);
   }
 
   return profile;

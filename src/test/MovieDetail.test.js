@@ -264,6 +264,28 @@ describe('MovieDetail', () => {
     })
   })
 
+  // Matt, 2026-10-06: the club's awards on a movie page, from Movie Log or
+  // Cinema Roll, beside your own.
+  describe('club awards', () => {
+    it('shows each friend\'s ceremony for this film and names it in the folded summary', async () => {
+      mockStore.getters.filmClubFriends = [
+        { name: 'Brian', profile: { awardsName: 'Gogan Globes', ratings: { 42: { r: 9, a: [{ year: 2019, category: 'bestPicture', label: 'Best Picture', result: 'won' }] } } } },
+        { name: 'Seth', profile: { ratings: { 42: { r: 7 } } } }
+      ]
+      // The mock store's getters are plain data: nudge the movie so the
+      // computed re-reads them.
+      const m = makeResult().movie
+      await wrapper.setData({ result: makeResult(), movie: { ...m } })
+      const group = wrapper.find('.award-group.friend-awards')
+      expect(group.exists()).toBe(true)
+      expect(group.find('h5').text()).toContain('Gogan Globes')
+      expect(group.find('h5').text()).toContain('Brian')
+      expect(group.find('.winners .friend-award').text()).toContain('Best Picture')
+      expect(wrapper.findAll('.award-group.friend-awards')).toHaveLength(1)
+      expect(wrapper.vm.awardsSummary).toContain('Gogan Globes (Brian): Best Picture')
+    })
+  })
+
   describe('Letterboxd section', () => {
     it('renders nothing until there is something', async () => {
       await wrapper.setData({ letterboxdReviews: [], letterboxdFilmStats: null })

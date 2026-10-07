@@ -71,6 +71,8 @@ import { publishFeedV2 } from "../assets/javascript/filmClubSyncPublisher.js";
 import { hexToken } from "../assets/javascript/filmClubSync.js";
 import { refreshExternalFeed } from "../utils/filmClubSyncClient.js";
 import { reportFeedFallback } from "../utils/syncFallbackReport.js";
+import { awardsByMovie } from "../assets/javascript/awardsShare.js";
+import { awardNameWithThe } from "../assets/javascript/personalAwards.js";
 
 const sortByVoteCount = (a, b) => {
   if (a.vote_count < b.vote_count) {
@@ -2027,7 +2029,9 @@ export default createStore({
       const entries = context.getters.allMediaAsArray;
       if (!entries.length) return;
       const feed = toInterchange(entries, getRating, {
-        name: context.getters.socialSettings.displayName || 'A Cinema Roll user'
+        name: context.getters.socialSettings.displayName || 'A Cinema Roll user',
+        awards: awardsByMovie(context.state.settings?.personalAwards),
+        awardsName: awardNameWithThe(context.state.settings?.personalAwardName)
       });
       // End of day for friends on other apps (2026-10-01): the live feed is
       // parked where only I can read it, and the push Lambda publishes the
@@ -2506,7 +2510,9 @@ export default createStore({
       const profile = buildSocialProfile(entries, getRating, {
         name: social.displayName || 'A Cinema Roll user',
         shareRatings: Boolean(social.shareRatings),
-        shareCriteria: Boolean(social.shareRatings && social.shareCriteria)
+        shareCriteria: Boolean(social.shareRatings && social.shareCriteria),
+        awards: awardsByMovie(context.state.settings?.personalAwards),
+        awardsName: awardNameWithThe(context.state.settings?.personalAwardName)
       });
       await Promise.all([
         set(ref(db, `social/profiles/${me}`), profile),

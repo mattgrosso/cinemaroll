@@ -244,9 +244,9 @@
           </p>
         </div>
         </DetailSection>
-        <DetailSection v-if="academyAwardWins.length || academyAwardNominations.length || personalAwardWins.length || personalAwardNominations.length || otherAwardWins.length || otherAwardNominations.length" id="awards" tile label="Awards" tone="awards" :summary="awardsSummary">
+        <DetailSection v-if="academyAwardWins.length || academyAwardNominations.length || personalAwardWins.length || personalAwardNominations.length || friendAwards.length || otherAwardWins.length || otherAwardNominations.length" id="awards" tile label="Awards" tone="awards" :summary="awardsSummary">
         <!-- Awards -->
-        <div v-if="academyAwardWins.length || academyAwardNominations.length || personalAwardWins.length || personalAwardNominations.length || otherAwardWins.length || otherAwardNominations.length" class="awards mb-3">
+        <div v-if="academyAwardWins.length || academyAwardNominations.length || personalAwardWins.length || personalAwardNominations.length || friendAwards.length || otherAwardWins.length || otherAwardNominations.length" class="awards mb-3">
           <h4>Awards</h4>
           <div class="awards-body">
             <div v-if="personalAwardWins.length || personalAwardNominations.length" class="award-group personal-awards">
@@ -264,6 +264,26 @@
                   {{award.category}}
                   <span v-if="award.names">({{parseNamesToList(award.names)}})</span>
                 </a>
+              </div>
+            </div>
+
+            <!-- The club's awards (Matt, 2026-10-06): anyone's ceremony, from
+                 Movie Log or Cinema Roll, published beside their ratings. -->
+            <div v-for="group in friendAwards" :key="group.friend" class="award-group friend-awards">
+              <h5>{{ group.ceremony }} <span class="friend-awards-who">{{ group.friend }}</span></h5>
+              <h6 v-if="group.won.length">Won</h6>
+              <div v-if="group.won.length" class="winners">
+                <span v-for="award in group.won" :key="`${award.year}-${award.category}`" class="col-12 friend-award">
+                  {{ award.label }} <span class="friend-award-year">{{ award.year }}</span>
+                  <span v-if="award.name">({{ award.name }})</span>
+                </span>
+              </div>
+              <h6 v-if="group.nominated.length">Nominated</h6>
+              <div v-if="group.nominated.length" class="nominees">
+                <span v-for="award in group.nominated" :key="`${award.year}-${award.category}`" class="col-12 friend-award">
+                  {{ award.label }} <span class="friend-award-year">{{ award.year }}</span>
+                  <span v-if="award.name">({{ award.name }})</span>
+                </span>
               </div>
             </div>
 
@@ -698,6 +718,7 @@ import { starsFor, compactCount, watchedDateLabel } from '../assets/javascript/l
 import { computeFlatKeywords } from '../utils/keywords.js';
 import { buildTagSuggestions, canCreateNewTag } from '../utils/tags.js';
 import { awardCategoryNameMap } from '../assets/javascript/personalAwardsCategories.js';
+import { friendAwardsForMovie, friendAwardsSummary } from '../assets/javascript/awardsShare.js';
 import { findOtherAwardsForMovie } from '../assets/javascript/otherAwards.js';
 import { sortByAcademyCategoryOrder } from '../assets/javascript/academyAwards.js';
 import { awardNameWithThe } from '../assets/javascript/personalAwards.js';
@@ -819,6 +840,8 @@ export default {
       const categories = (list) => list.map((award) => award.category);
       if (this.personalAwardWins.length) parts.push(`${this.personalAwardSectionTitle}: ${categories(this.personalAwardWins).join(', ')}`);
       else if (this.personalAwardNominations.length) parts.push(`${this.personalAwardSectionTitle}: ${this.personalAwardNominations.length} nomination${this.personalAwardNominations.length === 1 ? '' : 's'}`);
+      const club = friendAwardsSummary(this.friendAwards);
+      if (club) parts.push(club);
       if (this.academyAwardWins.length) parts.push(`Oscars: ${categories(this.academyAwardWins).join(', ')}`);
       else if (this.academyAwardNominations.length) parts.push(`Oscars: ${this.academyAwardNominations.length} nomination${this.academyAwardNominations.length === 1 ? '' : 's'}`);
       if (this.otherAwardWins.length) parts.push(`${this.otherAwardWins.length} other win${this.otherAwardWins.length === 1 ? '' : 's'}`);
@@ -979,6 +1002,10 @@ export default {
     },
     personalAwardWins () {
       return this.personalAwardsByResult.wins;
+    },
+    /** Every club member's awards for this film, from their published profiles. */
+    friendAwards () {
+      return friendAwardsForMovie(this.$store.getters?.filmClubFriends || [], this.movie?.id);
     },
     personalAwardNominations () {
       return this.personalAwardsByResult.nominations;
@@ -2549,6 +2576,10 @@ export default {
 
     .award-group {
       margin-bottom: 0.75rem;
+
+      .friend-awards-who { color: #ccc; font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: 4px; }
+      .friend-award { color: #fff; display: block; font-size: ds(0.8rem); padding: 1px 0; }
+      .friend-award-year { color: #ccc; font-size: ds(0.7rem); margin-left: 2px; }
 
       h5 {
         color: #adb5bd;

@@ -14,6 +14,7 @@
 
 import { normalizedRatingToStars } from './starRating.js';
 import { contentRevision, REVISION_PATTERN } from './feedRevision.js';
+import { validAwards } from './awardsShare.js';
 
 export const INTERCHANGE_FORMAT = 'film-club/1';
 
@@ -47,7 +48,7 @@ function criteriaFrom (source, { stickinessKey = 'stickiness' } = {}) {
 
 // ---------------------------------------------------------------------------
 // PUBLISH: our library -> the interchange format.
-export function toInterchange (entries, getRatingFn, { name, source = 'cinemaroll', now = Date.now() } = {}) {
+export function toInterchange (entries, getRatingFn, { name, source = 'cinemaroll', now = Date.now(), awards = null, awardsName = null } = {}) {
   const movies = [];
 
   (entries || []).forEach((entry) => {
@@ -82,6 +83,9 @@ export function toInterchange (entries, getRatingFn, { name, source = 'cinemarol
     const criteria = criteriaFrom(latest);
     if (criteria) movie.criteria = criteria;
     if (viewings.length) movie.viewings = viewings;
+    // Personal awards (2026-10-06): [{ year, category, label, result, name? }]
+    const movieAwards = validAwards(awards?.[movie.tmdbId]);
+    if (movieAwards) movie.awards = movieAwards;
     movies.push(movie);
   });
 
@@ -89,6 +93,7 @@ export function toInterchange (entries, getRatingFn, { name, source = 'cinemarol
     format: INTERCHANGE_FORMAT,
     source,
     name: name || 'A friend',
+    ...(awardsName ? { awardsName: String(awardsName).slice(0, 80) } : {}),
     // Cheap change detection: a subscriber that has seen this marker can
     // stop without parsing the rest.
     marker: now,
@@ -116,7 +121,7 @@ export function detectFormat (payload) {
   return null;
 }
 
-function profileFromMovies (movies, { name, source, marker, revision = null }) {
+function profileFromMovies (movies, { name, source, marker, revision = null, awardsName = null }) {
   const withRatings = movies.filter((movie) => Number.isFinite(movie.rating));
   const byRating = [...withRatings].sort((a, b) => b.rating - a.rating);
   const lastWatched = (movie) => movie.viewings?.[0]?.watchedAt ?? null;
@@ -135,6 +140,8 @@ function profileFromMovies (movies, { name, source, marker, revision = null }) {
     // rather than treating it as a zero.
     if (Number.isFinite(movie.starRating)) row.s = movie.starRating;
     if (movie.criteria) row.c = CRITERIA_KEYS.map((key) => (Number.isFinite(movie.criteria[key]) ? movie.criteria[key] : -1));
+    const awards = validAwards(movie.awards);
+    if (awards) row.a = awards;
     if (movie.viewings?.length) {
       row.v = movie.viewings.map((viewing) => (viewing.medium ? { at: viewing.watchedAt, m: viewing.medium } : { at: viewing.watchedAt }));
     }
@@ -149,6 +156,7 @@ function profileFromMovies (movies, { name, source, marker, revision = null }) {
     // The feed's revision when it had one: the reader's preflight compares
     // /revision.json to this and skips the body when they match.
     revision: typeof revision === 'string' && REVISION_PATTERN.test(revision) ? revision : null,
+    awardsName: typeof awardsName === 'string' && awardsName ? awardsName.slice(0, 80) : null,
     updatedAt: marker || Date.now(),
     counts: {
       titles: withRatings.length,
@@ -179,6 +187,7 @@ export function fromInterchange (payload) {
       // library nor their curve. Only the source can assign them.
       starRating: num(movie?.starRating),
       criteria: movie?.criteria || null,
+      awards: validAwards(movie?.awards),
       viewings: Array.isArray(movie?.viewings)
         ? movie.viewings
           .map((viewing) => ({ watchedAt: timestamp(viewing?.watchedAt), medium: viewing?.medium || null }))
@@ -188,7 +197,7 @@ export function fromInterchange (payload) {
     }))
     .filter((movie) => Number.isFinite(movie.tmdbId));
 
-  return profileFromMovies(movies, { name: payload.name, source: payload.source, marker: payload.marker, revision: payload.revision });
+  return profileFromMovies(movies, { name: payload.name, source: payload.source, marker: payload.marker, revision: payload.revision, awardsName: payload.awardsName });
 }
 
 // Movie Log's own records, unmodified — so Brian only has to expose data,
