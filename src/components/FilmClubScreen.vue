@@ -264,6 +264,44 @@
         </div>
       </section>
 
+      <section v-if="awardsCompared" class="cs-section">
+        <h2 class="cs-section-title">Awards, compared</h2>
+        <p class="cs-caption">Across every year anyone has handed out awards.</p>
+
+        <div class="cs-compare-stats">
+          <div class="cs-compare-stat">
+            <span class="cs-compare-number">{{ percent(awardsCompared.agreement.rate) }}</span>
+            <span class="cs-compare-label">of contested categories agreed</span>
+            <span v-if="awardsCompared.agreement.bestYear" class="cs-compare-note">Most agreeable year: {{ awardsCompared.agreement.bestYear.year }} ({{ awardsCompared.agreement.bestYear.agreed }} of {{ awardsCompared.agreement.bestYear.categories }})</span>
+          </div>
+          <div v-for="row in awardsCompared.academy" :key="`ac-${row.who}`" class="cs-compare-stat">
+            <span class="cs-compare-number">{{ percent(row.rate) }}</span>
+            <span class="cs-compare-label">{{ row.ceremony }} Best Picture matched the Oscars</span>
+            <span class="cs-compare-note">{{ row.matches }} of {{ row.years }} years<template v-if="row.latestMiss"> · last split {{ row.latestMiss.year }}: {{ row.latestMiss.theirs.title || 'their pick' }} over {{ row.latestMiss.academy.title }}</template></span>
+          </div>
+        </div>
+
+        <h3 class="cs-compare-heading">Most decorated films</h3>
+        <div v-for="film in awardsCompared.films" :key="`df-${film.movieId}`" class="cs-award-row" @click="goToTitle({ id: film.movieId, t: film.title })">
+          <img v-if="film.poster" :src="poster(film.poster)" :alt="film.title || ''" class="cs-award-thumb">
+          <span v-else class="cs-award-thumb cs-award-thumb--blank"></span>
+          <span class="cs-award-text">
+            <span class="cs-award-title">{{ film.title || 'Untitled' }}</span>
+            <span class="cs-award-for">{{ film.by.map((b) => `${b.ceremony} ${b.wins}`).join(' · ') }}</span>
+          </span>
+          <span class="cs-compare-count">{{ film.wins }}<small>wins</small></span>
+        </div>
+
+        <h3 v-if="awardsCompared.people.length" class="cs-compare-heading">Most honoured people</h3>
+        <div v-for="person in awardsCompared.people" :key="`hp-${person.name}`" class="cs-award-row" @click="person.films[0] && goToTitle({ id: person.films[0].movieId, t: person.films[0].title })">
+          <span class="cs-award-text">
+            <span class="cs-award-title">{{ person.name }}</span>
+            <span class="cs-award-for">{{ person.films.map((f) => f.title).filter(Boolean).join(', ') }}</span>
+          </span>
+          <span class="cs-compare-count">{{ person.wins }}<small>wins</small></span>
+        </div>
+      </section>
+
       <section v-if="summary && summary.clubFavorites.length" class="cs-section">
         <h2 class="cs-section-title">Club favorites</h2>
         <p class="cs-caption">Rated by two or more of you, best average first.</p>
@@ -420,6 +458,7 @@ import { timeAgo } from '../assets/javascript/timeAgo.js';
 import { getRating } from '../assets/javascript/GetRating.js';
 import { filmClubSummary, friendSnapshot, myRatingsById } from '../assets/javascript/social.js';
 import { awardsByMovie, clubAwardsByYear, memberFromProfile } from '../assets/javascript/awardsShare.js';
+import { agreementStats, mostDecoratedFilms, mostHonouredPeople, academyAlignment } from '../assets/javascript/awardsCompare.js';
 import { awardNameWithThe } from '../assets/javascript/personalAwards.js';
 import { clubVsCrowd } from '../assets/javascript/letterboxdCompare.js';
 import { memoByIdentity } from '../utils/memoByIdentity.js';
@@ -590,7 +629,7 @@ export default {
         .map(([key, row]) => ({ key, name: row?.name || key }));
     },
     /** Everyone's winners by year: me from my awards, friends from their published rows. */
-    clubAwards () {
+    clubMembers () {
       const settings = this.$store.state.settings || {};
       const myTitles = {};
       (this.$store.getters.allMoviesAsArray || []).forEach((entry) => {
@@ -598,7 +637,24 @@ export default {
       });
       const me = { name: settings.social?.displayName || 'You', ceremony: awardNameWithThe(settings.personalAwardName), awards: awardsByMovie(settings.personalAwards), titles: myTitles };
       const friends = (this.$store.getters.filmClubFriends || []).filter((f) => f.profile).map((f) => memberFromProfile(f.name, f.profile));
-      return clubAwardsByYear([me, ...friends]);
+      return [me, ...friends];
+    },
+    clubAwards () {
+      return clubAwardsByYear(this.clubMembers);
+    },
+    // The comparisons (Matt, 2026-10-07: "some other comparison views for our
+    // personal awards... something cool"): how often the club agrees, the
+    // most decorated films and people across everyone's ceremonies, and who
+    // votes most like the Academy. Only when two or more of you have awards.
+    awardsCompared () {
+      const members = this.clubMembers.filter((m) => Object.keys(m.awards).length);
+      if (members.length < 2) return null;
+      return {
+        agreement: agreementStats(members),
+        films: mostDecoratedFilms(members, 6),
+        people: mostHonouredPeople(members, 6),
+        academy: academyAlignment(members, this.$store.state.allAcademyAwards)
+      };
     },
     awardsForYear () {
       const year = this.awardsYear ?? this.clubAwards[0]?.year;
@@ -781,6 +837,9 @@ export default {
     goToTitle (movie) {
       this.goToMovie(movie.id);
     },
+    percent (rate) {
+      return `${Math.round((rate || 0) * 100)}%`;
+    },
     // A new year starts at the top of the list (Matt, 2026-10-07), not
     // wherever the last year was scrolled to.
     selectAwardsYear (year) {
@@ -958,6 +1017,13 @@ export default {
 .cs-award-who { color: #ccc; display: flex; flex: 0 1 auto; flex-direction: column; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em; line-height: 1.3; max-width: 42%; text-align: right; text-transform: uppercase; }
 .cs-award-ceremony { white-space: nowrap; }
 .cs-award-row.shared .cs-award-who { color: #ffc107; }
+.cs-compare-stats { display: grid; gap: 0.5rem; grid-template-columns: 1fr 1fr; margin-bottom: 0.9rem; }
+.cs-compare-stat { background: rgba(255, 255, 255, 0.05); border-radius: 10px; display: flex; flex-direction: column; gap: 0.15rem; padding: 0.6rem 0.7rem; }
+.cs-compare-number { color: #ffc107; font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
+.cs-compare-label { color: #eee; font-size: 0.78rem; line-height: 1.25; }
+.cs-compare-note { color: #aaa; font-size: 0.68rem; line-height: 1.3; }
+.cs-compare-heading { color: #ccc; font-size: 0.72rem; letter-spacing: 0.06em; margin: 0.6rem 0 0.3rem; text-transform: uppercase; }
+.cs-compare-count { color: #ffc107; flex: 0 0 auto; font-size: 1.1rem; font-weight: 700; small { color: #aaa; font-size: 0.6rem; font-weight: 400; letter-spacing: 0.05em; margin-left: 0.2rem; text-transform: uppercase; } }
 
 .cs-section {
   background: #161616;

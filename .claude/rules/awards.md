@@ -260,3 +260,8 @@ Cannes and whatever else… the history of any award that we have access to."
 - Oscars: `year` is the films' year; the board caption carries the ceremony
   ("98th Academy Awards · films of 2025"). New ceremonies come in through
   `scripts/build-oscars-year.mjs` (see CLAUDE.md, "Academy Awards data").
+- Film Club "Awards, compared" (2026-10-07, Matt: "something cool"):
+  `awardsCompare.js` — agreement rate over contested categories (+ most
+  agreeable year), each ceremony's Best Picture vs the Oscars' (with the last
+  split), most decorated films and most honoured people across everyone's
+  ceremonies. Shown only when two or more members have awards.
