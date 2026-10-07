@@ -247,10 +247,11 @@
         <div class="cs-years">
           <button v-for="entry in clubAwards" :key="entry.year" type="button" class="cs-year" :class="{ on: entry.year === awardsYear }" @click="awardsYear = entry.year">{{ entry.year }}</button>
         </div>
+        <div class="cs-award-list">
         <div v-for="category in awardsForYear" :key="category.label" class="cs-award-category" :class="{ agreed: category.agreed }">
           <span class="cs-award-label">{{ category.label }}<span v-if="category.agreed" class="cs-award-agreed">agreed</span></span>
           <div class="cs-award-picks">
-            <div v-for="pick in category.picks" :key="`${pick.who}-${pick.movieId}`" class="cs-award-pick" @click="goToTitle({ id: pick.movieId, t: pick.title })">
+            <div v-for="pick in category.picks" :key="`${pick.who}-${pick.movieId}-${pick.name || ''}`" class="cs-award-pick" @click="goToTitle({ id: pick.movieId, t: pick.title })">
               <img v-if="pick.poster" :src="poster(pick.poster)" :alt="pick.title || ''" class="cs-award-poster">
               <span v-else class="cs-award-poster cs-award-poster--blank"></span>
               <span class="cs-award-who">{{ pick.who }}</span>
@@ -258,6 +259,7 @@
               <span v-if="pick.name && pick.title" class="cs-award-for">{{ pick.title }}</span>
             </div>
           </div>
+        </div>
         </div>
       </section>
 
@@ -933,6 +935,9 @@ export default {
 .cs-year { background: rgba(255, 255, 255, 0.08); border: 0; border-radius: 999px; color: #fff; font-size: 0.8rem; padding: 0.25rem 0.7rem; }
 .cs-year.on { background: #ffc107; color: #000; font-weight: 700; }
 .cs-year:active { background: rgba(255, 255, 255, 0.16); }
+/* Scrolls inside like the other boxes on this page (Matt, 2026-10-07: "it's
+   got too much height"): about two categories tall, the third peeking. */
+.cs-award-list { max-height: 24rem; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
 .cs-award-category { margin: 0 0 0.75rem; }
 .cs-award-label { color: #ccc; display: block; font-size: 0.72rem; letter-spacing: 0.06em; margin-bottom: 0.3rem; text-transform: uppercase; }
 .cs-award-category.agreed .cs-award-label { color: #ffc107; }
