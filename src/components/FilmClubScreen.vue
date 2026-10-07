@@ -15,6 +15,22 @@
     </div>
 
     <template v-else>
+      <!-- Four tabs instead of eleven cards on one scroll (Matt, 2026-10-07:
+           "feeling a bit messy... do a redesign"): what's happening, who's
+           in the club, the awards, and where tastes meet. Same control as
+           Insights; the choice rides in the URL and is remembered. -->
+      <nav class="fc-tabs">
+        <button
+          v-for="t in tabs"
+          :key="t.key"
+          type="button"
+          class="fc-tab"
+          :class="[`fc-tab-${t.key}`, { active: tab === t.key }]"
+          @click="setTab(t.key)"
+        >{{ t.label }}<span v-if="t.badge" class="fc-tab-badge">{{ t.badge }}</span></button>
+      </nav>
+
+<template v-if="tab === 'friends'">
       <!-- Requests inbox -->
       <section v-if="requestRows.length" class="cs-section">
         <h2 class="cs-section-title">Friend requests</h2>
@@ -29,6 +45,8 @@
 
       <!-- Recently watched — the bit Matt likes most, so it stays at the
            top, now with how long ago each viewing was. -->
+</template>
+<template v-if="tab === 'activity'">
       <section v-if="summary && summary.feed.length" class="cs-section">
         <h2 class="cs-section-title">Recently watched</h2>
         <div class="cs-poster-row cs-feed-row">
@@ -149,6 +167,8 @@
       <!-- Friends sit high on the page now: picking one was several screens
            down ("I have to scroll pretty far down before I can, like, select
            a friend and look at what they've got going on"). -->
+</template>
+<template v-if="tab === 'friends'">
       <section class="cs-section">
         <h2 class="cs-section-title">Friends</h2>
         <p v-if="!friendRows.length" class="cs-empty">No friends yet — open "Find people" below and send a request.</p>
@@ -222,17 +242,8 @@
         </div>
       </section>
 
-      <!-- The charts are their own screen: they're the interesting half of
-           the club once there are a few people in it, and they would double
-           the length of this page. -->
-      <button type="button" class="cs-charts-link" @click="$router.push('/club-charts')">
-        <span>
-          <strong>Club Charts</strong>
-          <em>The Venn, taste maps, blind spots, who's the contrarian</em>
-        </span>
-        <i class="bi bi-chevron-right"></i>
-      </button>
-
+</template>
+<template v-if="tab === 'awards'">
       <!-- Both of these lists run long and pushed everything else off the
            screen; they scroll in place instead ("it feels like it takes up
            too much space vertically... its own little section in a
@@ -302,6 +313,19 @@
         </div>
       </section>
 
+</template>
+<template v-if="tab === 'taste'">
+      <!-- The charts are their own screen: they're the interesting half of
+           the club once there are a few people in it, and they would double
+           the length of this page. -->
+      <button type="button" class="cs-charts-link" @click="$router.push('/club-charts')">
+        <span>
+          <strong>Club Charts</strong>
+          <em>The Venn, taste maps, blind spots, who's the contrarian</em>
+        </span>
+        <i class="bi bi-chevron-right"></i>
+      </button>
+
       <section v-if="summary && summary.clubFavorites.length" class="cs-section">
         <h2 class="cs-section-title">Club favorites</h2>
         <p class="cs-caption">Rated by two or more of you, best average first.</p>
@@ -368,6 +392,8 @@
         </div>
       </section>
 
+</template>
+<template v-if="tab === 'friends'">
       <!-- Everything to do with FINDING people is housekeeping, not the daily
            view, so it collapses ("should the sections about who my friends
            are, finding friends in other apps, and finding people be somehow
@@ -433,6 +459,7 @@
           <button type="button" class="btn btn-warning btn-sm" @click="add(person.key)">Add friend</button>
         </div>
       </SettingsSection>
+</template>
     </template>
 
     <!-- One instance for the whole screen: driven by which movie is set, so
@@ -483,11 +510,24 @@ const FRIEND_POSTERS_PAGE = 8;
 // How close to the right edge counts as "reached the end", in px.
 const FRIEND_POSTERS_TRIGGER = 120;
 
+const FILM_CLUB_TABS = ['activity', 'friends', 'awards', 'taste'];
+const FILM_CLUB_TAB_KEY = 'cinemaRoll.filmClub.tab';
+// A link can name the tab (?tab=awards); else the last one you were on; else
+// Activity.
+function initialFilmClubTab (route) {
+  const asked = route?.query?.tab;
+  if (FILM_CLUB_TABS.includes(asked)) return asked;
+  let stored = null;
+  try { stored = localStorage.getItem(FILM_CLUB_TAB_KEY); } catch { /* private mode */ }
+  return FILM_CLUB_TABS.includes(stored) ? stored : 'activity';
+}
+
 export default {
   name: 'FilmClubScreen',
   components: { SkeletonBlock, BackLink, SettingsSection, SendToHat, MoviePreview },
   data () {
     return {
+      tab: initialFilmClubTab(this.$route),
       awardsYear: null,
       painted: !SKELETON_FIRST,
       // How many recent posters each friend's strip is currently rendering,
@@ -629,6 +669,15 @@ export default {
         .map(([key, row]) => ({ key, name: row?.name || key }));
     },
     /** Everyone's winners by year: me from my awards, friends from their published rows. */
+    tabs () {
+      const requests = (this.requestRows?.length || 0) + (this.inboxRequests?.length || 0);
+      return [
+        { key: 'activity', label: 'Activity' },
+        { key: 'friends', label: 'Friends', badge: requests || null },
+        { key: 'awards', label: 'Awards' },
+        { key: 'taste', label: 'Taste' }
+      ];
+    },
     clubMembers () {
       const settings = this.$store.state.settings || {};
       const myTitles = {};
@@ -677,6 +726,11 @@ export default {
     }
   },
   watch: {
+    // A link to ?tab=awards while the screen is already open (the app stays
+    // mounted across hash changes).
+    '$route.query.tab' (value) {
+      if (FILM_CLUB_TABS.includes(value) && value !== this.tab) this.tab = value;
+    },
     // Edges arrive async from the listener; refetch profiles whenever the
     // mutual set changes (a new acceptance, a removal).
     friendKeys: {
@@ -837,6 +891,13 @@ export default {
     goToTitle (movie) {
       this.goToMovie(movie.id);
     },
+    setTab (key) {
+      if (key === this.tab) return;
+      this.tab = key;
+      try { localStorage.setItem(FILM_CLUB_TAB_KEY, key); } catch { /* private mode */ }
+      // replace, not push: flipping tabs shouldn't bury the way back.
+      this.$router?.replace?.({ path: this.$route?.path || '/film-club', query: { ...(this.$route?.query || {}), tab: key } });
+    },
     percent (rate) {
       return `${Math.round((rate || 0) * 100)}%`;
     },
@@ -991,6 +1052,16 @@ export default {
 .cs-poster-tappable { cursor: pointer; }
 .cs-poster-tappable:active { transform: scale(0.97); }
 
+.fc-tabs { display: grid; gap: 0.35rem; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0 0 0.9rem; width: 100%; }
+.fc-tab { align-items: center; background: none; border: 1px solid white; border-radius: 3px; color: white; display: inline-flex; font-size: 0.85rem; font-weight: 600; gap: 0.3rem; justify-content: center; min-height: 40px; min-width: 0; padding: 0 0.3rem; }
+.fc-tab.active { color: #000; font-weight: 700; }
+.fc-tab-activity.active { background: #24d776; }
+.fc-tab-friends.active { background: #cd7fe8; }
+.fc-tab-awards.active { background: #FFD700; }
+.fc-tab-taste.active { background: #1D8BF1; }
+.fc-tab:active { opacity: 0.7; transform: scale(0.97); }
+.fc-tab-badge { background: #ffc107; border-radius: 999px; color: #000; font-size: 0.65rem; font-weight: 700; line-height: 1; min-width: 1.1rem; padding: 0.2rem 0.35rem; text-align: center; }
+.fc-tab.active .fc-tab-badge { background: rgba(0, 0, 0, 0.75); color: #fff; }
 .cs-title { margin: 0.25rem 0 0; }
 .cs-subtitle { color: #ccc; font-size: 0.85rem; margin: 0.25rem 0 1rem; }
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { shallowMount } from '@vue/test-utils';
 import FilmClubScreen from '@/components/FilmClubScreen.vue';
 import SettingsSection from '@/components/SettingsSection.vue';
@@ -18,7 +18,11 @@ function myMovie (id, title, rating) {
   };
 }
 
-function factory ({ profiles = {}, myEntries = [], edges = {}, externals = {}, settings = {} } = {}) {
+// The chosen tab is remembered in localStorage; each test starts fresh.
+beforeEach(() => { try { localStorage.removeItem('cinemaRoll.filmClub.tab'); } catch { /* no storage */ } });
+
+// `tab` picks the Film Club tab (2026-10-07 redesign); the default is Activity.
+function factory ({ profiles = {}, myEntries = [], edges = {}, externals = {}, settings = {}, tab = null } = {}) {
   return shallowMount(FilmClubScreen, {
     global: {
       stubs: { SettingsSection: false, BackLink: true },
@@ -53,8 +57,8 @@ function factory ({ profiles = {}, myEntries = [], edges = {}, externals = {}, s
           dispatch: vi.fn(() => Promise.resolve()),
           commit: vi.fn()
         },
-        $route: { query: {} },
-        $router: { push: vi.fn() }
+        $route: { path: '/film-club', query: tab ? { tab } : {} },
+        $router: { push: vi.fn(), replace: vi.fn() }
       }
     }
   });
@@ -70,17 +74,21 @@ const PROFILES = {
 };
 
 describe('FilmClubScreen', () => {
-  // "I have to scroll pretty far down before I can, like, select a friend and
-  // look at what they've got going on." (Matt, 2026-08-16)
-  it('puts the friends list above the club-wide lists', () => {
-    const wrapper = factory({ profiles: PROFILES, myEntries: [myMovie(1, 'Heat', 8), myMovie(2, 'Cats', 9)] });
-    const titles = wrapper.findAll('.cs-section-title').map((title) => title.text());
-
-    const friends = titles.indexOf('Friends');
-    const favorites = titles.indexOf('Club favorites');
-
-    expect(friends).toBeGreaterThanOrEqual(0);
-    expect(favorites).toBeGreaterThan(friends);
+  // Four tabs instead of one long scroll (Matt, 2026-10-07: "feeling a bit
+  // messy"): Activity, Friends, Awards, Taste. Friends used to sit above the
+  // club-wide lists so he didn't "have to scroll pretty far down before I
+  // can select a friend"; now it is one tap away in its own tab.
+  it('splits the page into tabs, each holding its own sections', async () => {
+    const entries = [myMovie(1, 'Heat', 8), myMovie(2, 'Cats', 9)];
+    const titles = (w) => w.findAll('.cs-section-title').map((title) => title.text());
+    expect(factory({ profiles: PROFILES, myEntries: entries }).findAll('.fc-tab').map((b) => b.text())).toEqual(['Activity', 'Friends', 'Awards', 'Taste']);
+    expect(titles(factory({ profiles: PROFILES, myEntries: entries, tab: 'friends' }))).toContain('Friends');
+    expect(titles(factory({ profiles: PROFILES, myEntries: entries, tab: 'friends' }))).not.toContain('Club favorites');
+    expect(titles(factory({ profiles: PROFILES, myEntries: entries, tab: 'taste' }))).toContain('Club favorites');
+    const wrapper = factory({ profiles: PROFILES, myEntries: entries });
+    await wrapper.findAll('.fc-tab')[1].trigger('click');
+    expect(wrapper.vm.$router.replace).toHaveBeenCalledWith({ path: '/film-club', query: { tab: 'friends' } });
+    expect(titles(wrapper)).toContain('Friends');
   });
 
   it('keeps the recently-watched feed at the very top', () => {
@@ -161,7 +169,7 @@ describe('FilmClubScreen', () => {
   // "It feels like it takes up too much space vertically. Let's give that its
   // own little section in a independent scrolling."
   it('scrolls the club favorites and most-divisive lists in place', () => {
-    const wrapper = factory({ profiles: PROFILES, myEntries: [myMovie(1, 'Heat', 8), myMovie(2, 'Cats', 9)] });
+    const wrapper = factory({ tab: 'taste',  profiles: PROFILES, myEntries: [myMovie(1, 'Heat', 8), myMovie(2, 'Cats', 9)] });
 
     expect(wrapper.findAll('.cs-scroll-list').length).toBe(2);
   });
@@ -169,7 +177,7 @@ describe('FilmClubScreen', () => {
   // "It's getting to be too tall because of the number of people who I've
   // connected with" — every friend row lives in one box that scrolls in place.
   it('puts every friend inside the scrolling friends box', () => {
-    const wrapper = factory({ profiles: PROFILES, myEntries: [myMovie(1, 'Heat', 8)] });
+    const wrapper = factory({ tab: 'friends',  profiles: PROFILES, myEntries: [myMovie(1, 'Heat', 8)] });
     const list = wrapper.find('.cs-friend-list');
 
     expect(wrapper.vm.friendRows.length).toBeGreaterThan(0);
@@ -180,7 +188,7 @@ describe('FilmClubScreen', () => {
   // "The sections about... finding friends in other apps, and finding people
   // [should] be somehow their own, like, maybe collapsible accordion."
   it('collapses the finding-people sections, and leaves Friends open', () => {
-    const wrapper = factory({ profiles: PROFILES, myEntries: [myMovie(1, 'Heat', 8)] });
+    const wrapper = factory({ tab: 'friends',  profiles: PROFILES, myEntries: [myMovie(1, 'Heat', 8)] });
     const accordions = wrapper.findAllComponents(SettingsSection);
 
     expect(accordions.map((section) => section.props('title')))
@@ -326,7 +334,7 @@ describe("a friend's recent-poster strip", () => {
   }
 
   it('renders more than the four it used to, but not all forty at once', () => {
-    const wrapper = factory({ profiles: busyFriend(40) });
+    const wrapper = factory({ tab: 'friends',  profiles: busyFriend(40) });
 
     const posters = wrapper.findAll('.cs-friend-poster');
     expect(posters.length).toBeGreaterThan(4);
@@ -334,13 +342,13 @@ describe("a friend's recent-poster strip", () => {
   });
 
   it('keeps the whole list available to page through', () => {
-    const wrapper = factory({ profiles: busyFriend(40) });
+    const wrapper = factory({ tab: 'friends',  profiles: busyFriend(40) });
 
     expect(wrapper.vm.friendRows[0].recent).toHaveLength(40);
   });
 
   it('loads the next page only once you scroll to the end', async () => {
-    const wrapper = factory({ profiles: busyFriend(40) });
+    const wrapper = factory({ tab: 'friends',  profiles: busyFriend(40) });
     const before = wrapper.findAll('.cs-friend-poster').length;
     const friend = wrapper.vm.friendRows[0];
 
@@ -356,7 +364,7 @@ describe("a friend's recent-poster strip", () => {
   });
 
   it('stops growing at the end of what the friend published', async () => {
-    const wrapper = factory({ profiles: busyFriend(40) });
+    const wrapper = factory({ tab: 'friends',  profiles: busyFriend(40) });
     const friend = wrapper.vm.friendRows[0];
 
     for (let i = 0; i < 20; i += 1) {
@@ -368,7 +376,7 @@ describe("a friend's recent-poster strip", () => {
   });
 
   it('leaves a friend with only a couple of films alone', () => {
-    const wrapper = factory({ profiles: busyFriend(2) });
+    const wrapper = factory({ tab: 'friends',  profiles: busyFriend(2) });
 
     expect(wrapper.findAll('.cs-friend-poster')).toHaveLength(2);
   });
@@ -446,14 +454,14 @@ describe('FilmClubScreen — "Has anybody seen…"', () => {
   // watch a movie". Each friend row says when that friend finds out.
   describe('right away / end of day', () => {
     it('shows each friend\'s setting from my own edge to them', () => {
-      const wrapper = factory({ profiles: PROFILES, edges: { me: { brian: 'day' }, brian: { me: true } } });
+      const wrapper = factory({ tab: 'friends',  profiles: PROFILES, edges: { me: { brian: 'day' }, brian: { me: true } } });
       const on = wrapper.find('.cs-timing-toggle .is-on');
       expect(on.text()).toBe('End of day');
-      expect(factory({ profiles: PROFILES, edges: { me: { brian: true } } }).find('.cs-timing-toggle .is-on').text()).toBe('Right away');
+      expect(factory({ tab: 'friends',  profiles: PROFILES, edges: { me: { brian: true } } }).find('.cs-timing-toggle .is-on').text()).toBe('Right away');
     });
 
     it('switches a friend without opening their page', async () => {
-      const wrapper = factory({ profiles: PROFILES, edges: { me: { brian: true } } });
+      const wrapper = factory({ tab: 'friends',  profiles: PROFILES, edges: { me: { brian: true } } });
       const [, endOfDay] = wrapper.findAll('.cs-timing-toggle button');
       await endOfDay.trigger('click');
       expect(wrapper.vm.$store.dispatch).toHaveBeenCalledWith('setFriendTiming', { friendKey: 'brian', timing: 'day' });
@@ -468,17 +476,17 @@ describe('FilmClubScreen — "Has anybody seen…"', () => {
       const row = (wrapper) => wrapper.findAll('.cs-friend').find((friend) => friend.text().includes('Brian'));
 
       it('has the same switch, reading the shared setting', () => {
-        expect(row(factory({ externals: EXTERNAL })).find('.cs-timing-toggle .is-on').text()).toBe('Right away');
-        expect(row(factory({ externals: EXTERNAL, settings: { clubFeedTiming: 'day' } })).find('.cs-timing-toggle .is-on').text()).toBe('End of day');
+        expect(row(factory({ tab: 'friends',  externals: EXTERNAL })).find('.cs-timing-toggle .is-on').text()).toBe('Right away');
+        expect(row(factory({ tab: 'friends',  externals: EXTERNAL, settings: { clubFeedTiming: 'day' } })).find('.cs-timing-toggle .is-on').text()).toBe('End of day');
       });
 
       it('says the setting covers all of them', () => {
-        expect(row(factory({ externals: EXTERNAL })).find('.cs-friend-timing-note').text()).toBe('Same setting for all your friends on Movie Log');
-        expect(factory({ profiles: PROFILES }).find('.cs-friend-timing-note').exists()).toBe(false);
+        expect(row(factory({ tab: 'friends',  externals: EXTERNAL })).find('.cs-friend-timing-note').text()).toBe('Same setting for all your friends on Movie Log');
+        expect(factory({ tab: 'friends',  profiles: PROFILES }).find('.cs-friend-timing-note').exists()).toBe(false);
       });
 
       it('switches the shared feed, not a friend edge', async () => {
-        const wrapper = factory({ externals: EXTERNAL });
+        const wrapper = factory({ tab: 'friends',  externals: EXTERNAL });
         const [, endOfDay] = row(wrapper).findAll('.cs-timing-toggle button');
         await endOfDay.trigger('click');
         expect(wrapper.vm.$store.dispatch).toHaveBeenCalledWith('setClubFeedTiming', 'day');
@@ -488,7 +496,7 @@ describe('FilmClubScreen — "Has anybody seen…"', () => {
     });
 
     it('dates an end-of-day friend\'s films instead of timing them', () => {
-      const wrapper = factory({ profiles: PROFILES });
+      const wrapper = factory({ tab: 'friends',  profiles: PROFILES });
       // Half past midnight: yesterday's noon-UTC stamp is only hours old, so
       // an hours count would print a time-shaped "16h".
       vi.useFakeTimers({ toFake: ['Date'] });
