@@ -225,7 +225,21 @@ export function clubAwardsByYear (members) {
       const counts = {};
       category.picks.forEach((p) => { counts[choice(p)] = (counts[choice(p)] || 0) + 1; });
       const films = new Set(category.picks.map((p) => p.movieId));
-      return { ...category, picks: [...category.picks].sort((a, b) => a.who.localeCompare(b.who)), agreed: Object.values(counts).some((n) => n >= 2), filmCount: films.size };
+      const picks = [...category.picks].sort((a, b) => a.who.localeCompare(b.who));
+      // The same choice by several members is one row naming all of them
+      // (Matt, 2026-10-07: the one-column-per-member cards were "really tall
+      // and narrow"). Shared choices first.
+      const grouped = new Map();
+      picks.forEach((p) => {
+        const key = choice(p);
+        const row = grouped.get(key) || { movieId: p.movieId, title: p.title, poster: p.poster, who: [] };
+        if (p.name && !row.name) row.name = p.name;
+        if (!row.poster && p.poster) row.poster = p.poster;
+        row.who.push(p.who);
+        grouped.set(key, row);
+      });
+      const choices = [...grouped.values()].sort((a, b) => (b.who.length - a.who.length) || a.who[0].localeCompare(b.who[0]));
+      return { ...category, picks, choices, agreed: Object.values(counts).some((n) => n >= 2), filmCount: films.size };
     }).sort((a, b) => (Number(b.agreed) - Number(a.agreed)) || (houseCategoryRank(a.label) - houseCategoryRank(b.label)) || a.label.localeCompare(b.label))
   }));
 }

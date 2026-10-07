@@ -250,14 +250,14 @@
         <div class="cs-award-list">
         <div v-for="category in awardsForYear" :key="category.label" class="cs-award-category" :class="{ agreed: category.agreed }">
           <span class="cs-award-label">{{ category.label }}<span v-if="category.agreed" class="cs-award-agreed">agreed</span></span>
-          <div class="cs-award-picks">
-            <div v-for="pick in category.picks" :key="`${pick.who}-${pick.movieId}-${pick.name || ''}`" class="cs-award-pick" @click="goToTitle({ id: pick.movieId, t: pick.title })">
-              <img v-if="pick.poster" :src="poster(pick.poster)" :alt="pick.title || ''" class="cs-award-poster">
-              <span v-else class="cs-award-poster cs-award-poster--blank"></span>
-              <span class="cs-award-who">{{ pick.who }}</span>
-              <span class="cs-award-title">{{ pick.name || pick.title || 'Untitled' }}</span>
-              <span v-if="pick.name && pick.title" class="cs-award-for">{{ pick.title }}</span>
-            </div>
+          <div v-for="row in category.choices" :key="`${row.movieId}-${row.name || ''}`" class="cs-award-row" :class="{ shared: row.who.length > 1 }" @click="goToTitle({ id: row.movieId, t: row.title })">
+            <img v-if="row.poster" :src="poster(row.poster)" :alt="row.title || ''" class="cs-award-thumb">
+            <span v-else class="cs-award-thumb cs-award-thumb--blank"></span>
+            <span class="cs-award-text">
+              <span class="cs-award-title">{{ row.name || row.title || 'Untitled' }}</span>
+              <span v-if="row.name && row.title" class="cs-award-for">{{ row.title }}</span>
+            </span>
+            <span class="cs-award-who">{{ row.who.join(' · ') }}</span>
           </div>
         </div>
         </div>
@@ -938,16 +938,18 @@ export default {
 /* Scrolls inside like the other boxes on this page (Matt, 2026-10-07: "it's
    got too much height"): about two categories tall, the third peeking. */
 .cs-award-list { max-height: 24rem; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
-.cs-award-category { margin: 0 0 0.75rem; }
+.cs-award-category { margin: 0 0 0.8rem; }
 .cs-award-label { color: #ccc; display: block; font-size: 0.72rem; letter-spacing: 0.06em; margin-bottom: 0.3rem; text-transform: uppercase; }
 .cs-award-category.agreed .cs-award-label { color: #ffc107; }
 .cs-award-agreed { background: rgba(255, 193, 7, 0.18); border-radius: 999px; color: #ffc107; font-size: 0.6rem; margin-left: 0.4rem; padding: 0.1rem 0.45rem; }
-.cs-award-picks { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.25rem; }
-.cs-award-pick { display: flex; flex: 0 0 5.6rem; flex-direction: column; min-width: 0; }
-.cs-award-poster { aspect-ratio: 2 / 3; background: rgba(255, 255, 255, 0.06); border-radius: 4px; object-fit: cover; width: 100%; }
-.cs-award-who { color: #ffc107; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em; margin-top: 0.3rem; text-transform: uppercase; }
-.cs-award-title { color: #fff; font-size: 0.78rem; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+.cs-award-row { align-items: center; border-radius: 8px; display: flex; gap: 0.6rem; padding: 0.25rem 0.3rem; }
+.cs-award-row:active { background: rgba(255, 255, 255, 0.08); }
+.cs-award-thumb { aspect-ratio: 2 / 3; background: rgba(255, 255, 255, 0.06); border-radius: 4px; flex: 0 0 2.1rem; object-fit: cover; width: 2.1rem; }
+.cs-award-text { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; row-gap: 1px; }
+.cs-award-title { color: #fff; font-size: 0.84rem; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
 .cs-award-for { color: #ccc; font-size: 0.7rem; line-height: 1.2; }
+.cs-award-who { color: #ccc; flex: 0 1 auto; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em; line-height: 1.25; max-width: 40%; text-align: right; text-transform: uppercase; }
+.cs-award-row.shared .cs-award-who { color: #ffc107; }
 
 .cs-section {
   background: #161616;
