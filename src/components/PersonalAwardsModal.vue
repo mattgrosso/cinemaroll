@@ -1140,8 +1140,10 @@ export default {
         // reflects the save immediately regardless of connectivity, then
         // durably queues before attempting the network write. See
         // CLAUDE.md's Offline Support Extension section.
-        await this.$store.dispatch('writeDurably', {
-          path: `settings/personalAwards/${this.currentYear}`,
+        // The awards live at <topKey>/personalAwards (own node, stamped) since
+        // 2026-10-06; in memory they are still settings.personalAwards.
+        await this.$store.dispatch('savePersonalAwards', {
+          path: String(this.currentYear),
           value: awardsEntry
         });
 

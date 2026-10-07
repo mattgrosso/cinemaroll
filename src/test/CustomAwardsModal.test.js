@@ -65,7 +65,7 @@ function factory ({ saved = {} } = {}) {
 // The value most recently written to the year's awards record.
 const lastSaved = (store) => {
   const call = [...store.dispatch.mock.calls].reverse()
-    .find(([action, payload]) => action === 'writeDurably' && payload?.path?.includes('personalAwards/1997'))
+    .find(([action, payload]) => action === 'savePersonalAwards' && payload?.path === '1997')
   return call ? call[1].value : null
 }
 

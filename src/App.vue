@@ -345,6 +345,8 @@ export default {
         // the chores still waiting stay on the icon.
         this.$store.dispatch('refreshAppBadge');
         closeDeliveredNotifications();
+        // Awards changed on another device: a few bytes to find out.
+        this.$store.dispatch('ensurePersonalAwards');
       } else {
         // Leaving: the icon should show what's left, as of now.
         this.$store.dispatch('refreshAppBadge');

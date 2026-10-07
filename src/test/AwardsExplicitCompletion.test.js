@@ -61,7 +61,7 @@ function factory (personalAwards = {}) {
 
 const savedEntry = (store) => {
   const call = store.dispatch.mock.calls.filter(
-    (c) => c[0] === 'writeDurably' && c[1]?.path === 'settings/personalAwards/2015'
+    (c) => c[0] === 'savePersonalAwards' && c[1]?.path === '2015'
   ).pop()
   return call && call[1].value
 }

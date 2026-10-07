@@ -83,7 +83,11 @@ if (allowDevSentry || process.env.NODE_ENV !== "development") {
         tracePropagationTargets: ["localhost", "surge", /^\//],
       }),
     ],
-    tracesSampleRate: 1.0,
+    // A quarter of page loads carry a full performance trace (audit,
+    // 2026-10-06): plenty for the N+1 / large-payload detectors, a quarter
+    // of the upload from phones and of the Sentry quota. Errors are still
+    // every one.
+    tracesSampleRate: 0.25,
     sampleRate: 1.0,
     maxValueLength: 8000,
     // No credentials leave for Sentry: Firebase and TMDB take theirs in the

@@ -448,6 +448,15 @@ export default createStore({
     // shape as native friends. Held in memory; the subscription itself
     // lives in settings/externalFriends.
     externalFriendProfiles: {},
+    // Personal awards (audit, 2026-10-06): 479 KB of the 541 KB settings
+    // node, downloaded on EVERY launch by the settings listener. They now
+    // live at `<topKey>/personalAwards` with a stamp at
+    // `<topKey>/personalAwardsMeta/updatedAt`; the stamp is read first (a few
+    // bytes) and the awards only when it moved, otherwise from the offline
+    // snapshot. In memory they still appear as `state.settings.personalAwards`
+    // so every reader is unchanged; this is the authoritative copy.
+    personalAwards: null,
+    personalAwardsStamp: null,
     // When syncExternalFriends last ran to completion (ms); restored from the
     // offline snapshot with the profiles, so a cold start can stay quiet.
     externalFriendsSyncedAt: 0,
@@ -738,7 +747,19 @@ export default createStore({
       state.movieLog = Object.freeze(value);
     },
     setSettings (state, value) {
-      state.settings = value;
+      // The awards live apart (see state.personalAwards); the settings node
+      // no longer carries them once migrated, so they are re-attached here.
+      state.settings = state.personalAwards && value && !value.personalAwards
+        ? { ...value, personalAwards: state.personalAwards }
+        : value;
+    },
+    setPersonalAwards (state, { data, updatedAt }) {
+      state.personalAwards = data || {};
+      state.personalAwardsStamp = updatedAt ?? null;
+      state.settings = { ...(state.settings || {}), personalAwards: state.personalAwards };
+    },
+    setPersonalAwardsStamp (state, updatedAt) {
+      state.personalAwardsStamp = updatedAt ?? null;
     },
     setAcademyAwardWinners (state, value) {
       state.academyAwardWinners = value
@@ -951,7 +972,15 @@ export default createStore({
         state.movieLog = Object.freeze(setValueAtPath(state.movieLog, rest, value));
         return;
       }
+      if (root === 'personalAwards') {
+        state.personalAwards = setValueAtPath(state.personalAwards || {}, rest, value);
+        state.settings = { ...(state.settings || {}), personalAwards: state.personalAwards };
+        return;
+      }
       if (root === 'settings') {
+        // The migration deletes settings/personalAwards; the awards themselves
+        // live on in state.personalAwards, so that delete must not blank them.
+        if (rest[0] === 'personalAwards' && state.personalAwards) return;
         state.settings = setValueAtPath(state.settings, rest, value);
       }
     },
@@ -1466,6 +1495,7 @@ export default createStore({
           if (cached?.profiles) context.commit('restoreExternalFriends', cached);
           return null;
         }).catch(() => {});
+        context.dispatch('ensurePersonalAwards');
         // Movie Hat reads resume conditionally from the last launch's ETags.
         loadSnapshot(topKey, 'movieHatContents').then((cached) => {
           if (cached?.cache && !context.state.movieHatContentsAt) context.commit('setMovieHatContents', cached);
@@ -1500,6 +1530,7 @@ export default createStore({
             context.commit('setSettingsLoaded', true);
             saveSnapshot(topKey, 'settings', data);
             context.dispatch('replayPendingWrites', 'settings');
+            if (data.personalAwards) context.dispatch('migratePersonalAwards', data.personalAwards);
           }
         }, (error) => {
           // Same denial signal as the movieLog listener above (the rules
@@ -3125,6 +3156,66 @@ export default createStore({
       const me = context.getters.socialUserKey;
       if (!me || !friendKey) return;
       await set(ref(db, `social/friends/${me}/${friendKey}`), null);
+    },
+    /**
+     * The awards, current: the offline copy first, then the stamp (a few
+     * bytes), then the node only when the stamp moved. Safe to call on every
+     * launch and foreground. Before the migration has run the stamp is
+     * absent and the settings listener still carries the awards.
+     */
+    async ensurePersonalAwards (context) {
+      const topKey = context.state.databaseTopKey;
+      if (!topKey) return;
+      if (context.state.personalAwards == null) {
+        const cached = await loadSnapshot(topKey, 'personalAwards').catch(() => null);
+        if (cached?.data) context.commit('setPersonalAwards', cached);
+      }
+      try {
+        const stamp = (await get(ref(db, `${topKey}/personalAwardsMeta/updatedAt`))).val();
+        if (!stamp) return;
+        if (stamp === context.state.personalAwardsStamp && context.state.personalAwards) return;
+        const data = (await get(ref(db, `${topKey}/personalAwards`))).val() || {};
+        context.commit('setPersonalAwards', { data, updatedAt: stamp });
+        saveSnapshot(topKey, 'personalAwards', { data, updatedAt: stamp }).catch(() => {});
+      } catch (error) {
+        console.warn('personal awards: could not refresh', error?.message);
+      }
+    },
+    /** A durable write under personalAwards/ plus the stamp that tells other devices. */
+    async savePersonalAwards (context, { path, value }) {
+      const topKey = context.state.databaseTopKey;
+      const now = Date.now();
+      await context.dispatch('writeDurably', { path: `personalAwards/${path}`, value });
+      await context.dispatch('writeDurably', { path: 'personalAwardsMeta/updatedAt', value: now });
+      context.commit('setPersonalAwardsStamp', now);
+      if (topKey) saveSnapshot(topKey, 'personalAwards', { data: context.state.personalAwards, updatedAt: now }).catch(() => {});
+    },
+    /**
+     * One-time move of settings/personalAwards to its own node, run by the
+     * first launch that sees awards in the settings node. If another device
+     * got there first, only the settings copy is dropped.
+     */
+    async migratePersonalAwards (context, awards) {
+      const topKey = context.state.databaseTopKey;
+      if (!topKey || !awards || context.state.personalAwardsMigrating) return;
+      context.state.personalAwardsMigrating = true;
+      try {
+        const existing = (await get(ref(db, `${topKey}/personalAwardsMeta/updatedAt`))).val();
+        if (!existing) {
+          const now = Date.now();
+          await update(ref(db), { [`${topKey}/personalAwards`]: awards, [`${topKey}/personalAwardsMeta/updatedAt`]: now });
+          context.commit('setPersonalAwards', { data: awards, updatedAt: now });
+          saveSnapshot(topKey, 'personalAwards', { data: awards, updatedAt: now }).catch(() => {});
+        } else {
+          await context.dispatch('ensurePersonalAwards');
+        }
+        await context.dispatch('writeDurably', { path: 'settings/personalAwards', value: null });
+        console.info('[personal-awards] moved out of settings');
+      } catch (error) {
+        console.warn('personal awards: migration deferred', error?.message);
+      } finally {
+        context.state.personalAwardsMigrating = false;
+      }
     },
     async fetchFriendProfiles (context) {
       const keys = context.getters.socialFriendKeys;
