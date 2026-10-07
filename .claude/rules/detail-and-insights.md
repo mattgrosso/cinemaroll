@@ -497,3 +497,15 @@ column. The "to Same Date" tile (2026-10-07) opens its own "Jan 1 – <today>, Y
 Year": the same rows with the columns swapped, bars on the to-date count and the full
 year beside it. The lists come from `activityBreakdown.js` (pure, tested) fed the same
 viewings `datesWithCounts` tallies, so a row always agrees with its tile.
+
+## Film Club tabs (2026-10-07)
+
+Matt: the page was "feeling a bit messy" — eleven look-alike cards on a 4,400px
+scroll. It is now four tabs on the Insights control (`.fc-tabs`, URL `?tab=`,
+remembered in localStorage): **Activity** (Recently watched, Has anybody seen…),
+**Friends** (requests, the friends list, then the Requests sent / Friends on
+other apps / Find people accordions; a badge counts waiting requests),
+**Awards** (Club awards, Awards compared), **Taste** (Club Charts link, Club
+favorites, Most divisive, Running with the crowd, Club vs the crowd). A
+`$route.query.tab` watcher handles links while the screen is already mounted.
+Tests pass `tab:` to the factory; the remembered tab is cleared between tests.
