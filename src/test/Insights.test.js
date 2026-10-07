@@ -488,6 +488,49 @@ describe('Insights — what lives on which tab', () => {
       expect(wrapper.find('.breakdown-title').text()).toBe('Year by Year')
       expect(wrapper.find('.breakdown-list').classes()).toContain('with-todate')
     })
+
+    // Report, 2026-10-07: tapping "to Same Date" opened the same full-year
+    // list as the Total tile. It gets its own: the bars and main number are
+    // each year's count up to today's date, the full year beside it.
+    describe('the "to Same Date" tile', () => {
+      beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['Date'] })
+        vi.setSystemTime(new Date(2026, 9, 7, 12)) // Oct 7 2026
+      })
+      afterEach(() => {
+        vi.useRealTimers()
+      })
+
+      it('opens year by year counted only up to today\'s date', async () => {
+        const { wrapper } = mountInsights({
+          mediaEntries: [entry({
+            ratings: [
+              { calculatedTotal: 5, date: localDate(2025, 3, 10) },
+              { calculatedTotal: 5, date: localDate(2025, 11, 20) },
+              { calculatedTotal: 5, date: localDate(2025, 12, 5) }
+            ]
+          })]
+        })
+        await showTab(wrapper, 'activity')
+
+        const tile = wrapper.findAll('.glance-item').find((t) => t.text().includes('to Same Date'))
+        await tile.trigger('click')
+        expect(wrapper.find('.breakdown-title').text()).toBe('Jan 1 – Oct 7, Year by Year')
+
+        const row2025 = wrapper.findAll('.breakdown-row').find((r) => r.find('.breakdown-label').text() === '2025')
+        expect(row2025.find('.breakdown-count').text()).toBe('1')
+        expect(row2025.find('.breakdown-todate').text()).toBe('3')
+        expect(row2025.find('.breakdown-bar').attributes('style')).toContain('width: 100%')
+        expect(wrapper.find('.breakdown-note').text()).toMatch(/whole year/)
+
+        const totalTile = wrapper.findAll('.glance-item').find((t) => t.text().includes('Total'))
+        await totalTile.trigger('click')
+        expect(wrapper.find('.breakdown-title').text()).toBe('Year by Year')
+        const totalRow = wrapper.findAll('.breakdown-row').find((r) => r.find('.breakdown-label').text() === '2025')
+        expect(totalRow.find('.breakdown-count').text()).toBe('3')
+        expect(totalRow.find('.breakdown-todate').text()).toBe('1')
+      })
+    })
   })
 
   describe('all-time calendar coverage', () => {

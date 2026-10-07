@@ -175,7 +175,7 @@
           </div>
         </div>
         <p v-else class="breakdown-empty">Nothing watched yet.</p>
-        <p v-if="breakdown.showToDate" class="breakdown-note">Right-hand column: how many by {{ todayLabel }} that year.</p>
+        <p v-if="breakdown.note" class="breakdown-note">{{ breakdown.note }}</p>
       </div>
 
       <!-- All-time calendar coverage. The Year in Review heatmap shows one
@@ -922,26 +922,43 @@ export default {
       const today = new Date();
       return `${this.monthAbbreviations[today.getMonth()]} ${today.getDate()}`;
     },
-    // Both month tiles open the month-by-month list; the pace box and both
-    // last-year tiles open the year-by-year one.
+    // Both month tiles open the month-by-month list; the pace box and the
+    // last-year total open the year-by-year one. The "to Same Date" tile
+    // opens the same years compared up to today's date — bars and the main
+    // number are the to-date counts, the full year beside them (report,
+    // 2026-10-07: tapping it "seems to just open up the same box as the year
+    // total").
     breakdown () {
       const kind = {
         week: 'week', month: 'month', lastMonth: 'month',
-        year: 'year', yearToDate: 'year', yearTotal: 'year'
+        year: 'year', yearToDate: 'yearToDate', yearTotal: 'year'
       }[this.breakdownTile];
       if (!kind) return null;
       const now = new Date();
-      const rows = kind === 'week'
+      let rows = kind === 'week'
         ? weeklyBreakdown(this.viewingDates, now)
         : kind === 'month'
           ? monthlyBreakdown(this.viewingDates, now)
           : yearlyBreakdown(this.viewingDates, now);
-      const titles = { week: 'Week by Week', month: 'Month by Month', year: 'Year by Year' };
+      if (kind === 'yearToDate') {
+        rows = rows.map((row) => ({ ...row, count: row.toDate, toDate: row.count }));
+      }
+      const titles = {
+        week: 'Week by Week',
+        month: 'Month by Month',
+        year: 'Year by Year',
+        yearToDate: `Jan 1 – ${this.todayLabel}, Year by Year`
+      };
+      const notes = {
+        year: `Right-hand column: how many by ${this.todayLabel} that year.`,
+        yearToDate: 'Right-hand column: the whole year\'s total.'
+      };
       return {
         title: titles[kind],
         rows,
         max: Math.max(0, ...rows.map((row) => row.count)),
-        showToDate: kind === 'year'
+        showToDate: kind === 'year' || kind === 'yearToDate',
+        note: notes[kind] || null
       };
     },
     thisMonth () {
