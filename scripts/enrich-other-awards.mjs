@@ -16,7 +16,7 @@ const norm = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-
 const search = async (title, year) => {
   const url = `https://api.themoviedb.org/3/search/movie?api_key=${KEY}&query=${encodeURIComponent(title)}${year ? `&primary_release_year=${year}` : ''}`;
   const res = await fetch(url);
-  if (res.status === 429) { await new Promise((r) => setTimeout(r, 2000)); return search(title, year); }
+  if (res.status === 429) { await new Promise((resolve) => setTimeout(resolve, 2000)); return search(title, year); }
   if (!res.ok) return [];
   return (await res.json()).results || [];
 };
