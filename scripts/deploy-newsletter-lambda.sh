@@ -57,11 +57,11 @@ cp aws-lambda/newsletterCompose.js aws-lambda/newsletterSources.js aws-lambda/le
 
 rm -f "$BUNDLE/function.zip"
 (cd "$BUNDLE" && zip -q -r function.zip . -x 'function.zip')
-# A healthy bundle is ~13 MB (node_modules included). A small one means the
+# A healthy bundle is a few MB (node_modules included; 4.6 MB on 2026-10-07). A small one means the
 # bundle dir held hollow node_modules — it shipped that way once and broke a
 # Friday issue (2026-10-07: 236 KB). Refuse, and say what to do.
 ZIP_BYTES=$(stat -f%z "$BUNDLE/function.zip" 2>/dev/null || stat -c%s "$BUNDLE/function.zip")
-if [ "$ZIP_BYTES" -lt 5000000 ]; then
+if [ "$ZIP_BYTES" -lt 2000000 ]; then
   echo "✗ function.zip is only $ZIP_BYTES bytes — hollow node_modules. Run: rm -rf \"$BUNDLE\" && yarn deploy:newsletter"
   exit 1
 fi
