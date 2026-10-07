@@ -53,6 +53,8 @@ const ownsBranch = `auth != null && auth.token.email != null && $topKey === ${sa
 // so it needs its own rule. Scoped to the owner, matching the existing `isMatt`
 // check that already hardcodes this key in Home.vue.
 const OWNER_KEY = 'mattgrosso-gmail-com';
+// A feed URL's secret must be the owner's CURRENT one (settings/clubFeedKey).
+const currentFeedSecret = "root.child($userKey).child('settings').child('clubFeedKey').val() === $secret";
 const isOwner = `auth != null && auth.token.email != null && ${sanitizedAuthEmail} === '${OWNER_KEY}'`;
 
 const rules = {
@@ -191,7 +193,50 @@ const rules = {
         '.read': false,
         '.write': `auth != null && $userKey === ${sanitizedAuthEmail}`,
         $secret: {
-          '.read': true
+          // Only the CURRENT secret reads (Brian's sync guide §7, 2026-10-06):
+          // rotating the key revokes the old URL even if its body lingers.
+          '.read': currentFeedSecret
+        }
+      }
+    },
+
+    // Film Club incremental sync, v2 (Brian's Movie Log guide, 2026-10-06).
+    // Beside the legacy body: a certified snapshot of public movies keyed by
+    // TMDB id, a journal of change batches, compact meta. Public reads only
+    // at the exact current secret and only BOUNDED — meta whole, movies and
+    // changes in key order with a page limit — so no one can list a feed in
+    // one request. The retention index is the owner's alone. The owner (and
+    // the push Lambda, as admin) writes; records are validated to the
+    // guide's shapes. See src/assets/javascript/filmClubSync.js.
+    clubFeedSync: {
+      $userKey: {
+        // No blanket owner read: the owner is granted per child so the
+        // retention index stays bounded even for them.
+        '.write': `auth != null && $userKey === ${sanitizedAuthEmail}`,
+        $secret: {
+          meta: {
+            '.read': `(auth != null && $userKey === ${sanitizedAuthEmail}) || ${currentFeedSecret}`,
+            '.validate': "newData.hasChildren(['version', 'epoch', 'revision', 'bodyRevision', 'sequence', 'cursor', 'minCursor', 'movieCount', 'profile', 'marker', 'snapshotComplete', 'changeCount']) && newData.child('version').val() === 2 && newData.child('epoch').val().matches(/^[0-9a-f]{32}$/) && newData.child('revision').val().matches(/^[0-9a-f]{32}$/) && newData.child('bodyRevision').val().matches(/^[0-9a-f]{32}$/) && newData.child('sequence').isNumber() && newData.child('sequence').val() >= 0 && newData.child('cursor').isString() && newData.child('minCursor').isString() && newData.child('movieCount').isNumber() && newData.child('movieCount').val() >= 0 && newData.child('movieCount').val() <= 50000 && newData.child('snapshotComplete').val() === true && newData.child('changeCount').isNumber() && newData.child('changeCount').val() >= 0 && newData.child('changeCount').val() <= 500 && newData.child('marker').isNumber() && newData.child('profile').child('name').isString() && newData.child('profile').child('name').val().length >= 1 && newData.child('profile').child('name').val().length <= 119 && newData.child('profile').child('source').isString() && newData.child('profile').child('source').val().length >= 1 && newData.child('profile').child('source').val().length <= 40"
+          },
+          movies: {
+            '.read': `(auth != null && $userKey === ${sanitizedAuthEmail}) || (${currentFeedSecret} && query.orderByKey && query.limitToFirst <= 250)`,
+            $tmdbId: {
+              '.validate': "$tmdbId.matches(/^[1-9][0-9]*$/) && newData.hasChildren(['tmdbId', 'title', 'rating']) && newData.child('tmdbId').isNumber() && newData.child('tmdbId').val() > 0 && newData.child('title').isString() && newData.child('rating').isNumber() && newData.child('rating').val() >= 0 && newData.child('rating').val() <= 10 && (!newData.child('starRating').exists() || (newData.child('starRating').isNumber() && newData.child('starRating').val() >= 0 && newData.child('starRating').val() <= 5))"
+            }
+          },
+          changes: {
+            '.read': `(auth != null && $userKey === ${sanitizedAuthEmail}) || (${currentFeedSecret} && query.orderByKey && query.limitToFirst <= 100)`,
+            $cursor: {
+              '.validate': "newData.hasChildren(['epoch', 'revision', 'previousRevision', 'sequence']) && newData.child('epoch').val().matches(/^[0-9a-f]{32}$/) && newData.child('revision').val().matches(/^[0-9a-f]{32}$/) && newData.child('previousRevision').val().matches(/^[0-9a-f]{32}$/) && newData.child('sequence').isNumber() && newData.child('sequence').val() >= 1",
+              deleted: {
+                $tmdbId: { '.validate': "$tmdbId.matches(/^[1-9][0-9]*$/) && newData.val() === true" }
+              }
+            }
+          },
+          changeIndex: {
+            '.read': `auth != null && $userKey === ${sanitizedAuthEmail} && query.orderByKey && query.limitToFirst <= 2`,
+            $cursor: { '.validate': 'newData.val() === true' }
+          }
         }
       }
     },

@@ -25,7 +25,10 @@ vi.mock('firebase/database', () => ({
   update: vi.fn((path, value) => { calls.push(['update', path, value]); return Promise.resolve(); }),
   query: vi.fn(),
   orderByChild: vi.fn(),
+  orderByKey: vi.fn(),
+  limitToFirst: vi.fn(),
   startAt: vi.fn(),
+  push: vi.fn(() => ({ key: 'journal-key' })),
   get: vi.fn(() => Promise.resolve({ val: () => null }))
 }));
 vi.mock('firebase/app', () => ({ initializeApp: vi.fn(() => ({})) }));
@@ -128,14 +131,24 @@ describe('publishing the feed', () => {
     store.commit('setDbLoaded', true);
   });
 
-  it('right away: the public feed, and nothing parked', async () => {
+  // v2 (2026-10-06): the public body and the sync tree go out in ONE
+  // root update — with no head to extend (nothing published yet), a rebuild.
+  it('right away: the public feed and its sync snapshot in one atomic update, and nothing parked', async () => {
     store.commit('setSettings', { clubFeedKey: SECRET });
     await store.dispatch('publishClubFeed');
-    expect(calls.map(([kind, path, value]) => [kind, path, value === null ? null : 'feed'])).toEqual([
-      ['set', 'social/clubFeedLive/matt-example-com', null],
-      ['set', `clubFeed/matt-example-com/${SECRET}`, 'feed']
+    expect(calls.map(([kind, path]) => [kind, path])).toEqual([
+      ['set', 'social/clubFeedLive/matt-example-com'],
+      ['update', undefined]
     ]);
-    expect(calls[1][2].movies[0].viewings[0].watchedAt).toBe(ALIEN);
+    const updates = calls[1][2];
+    expect(Object.keys(updates)).toEqual([`clubFeed/matt-example-com/${SECRET}`, `clubFeedSync/matt-example-com/${SECRET}`]);
+    const legacy = updates[`clubFeed/matt-example-com/${SECRET}`];
+    expect(legacy.movies[0].viewings[0].watchedAt).toBe(ALIEN);
+    expect(legacy.revision).toMatch(/^[0-9a-f]{32}$/);
+    expect(legacy.syncUrl).toContain(`/clubFeedSync/matt-example-com/${SECRET}.json`);
+    const sync = updates[`clubFeedSync/matt-example-com/${SECRET}`];
+    expect(sync.meta).toMatchObject({ version: 2, sequence: 0, snapshotComplete: true, bodyRevision: legacy.revision, movieCount: legacy.movies.length });
+    expect(Object.keys(sync.movies)).toHaveLength(legacy.movies.length);
   });
 
   it('end of day: parks the live feed privately and never touches the public one', async () => {

@@ -43,6 +43,8 @@ const {
   cinemaclockListings, uncovered, dismissedFilms, dismissedAtRank, boardForApp, remindersDue, showtimesWaiting, composeReminderMessage, listingsDue, composeListingMessages,
   cinemaclockCitySlug, cinemaclockCityTheaters, followedTheaters
 } = require('./pushCadence');
+const { publishFeedV2 } = require('./filmClubSyncPublisher.js');
+const { pushId } = require('./filmClubSync.js');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
 const DATABASE_URL = 'https://movie-log-8c4d5-default-rtdb.firebaseio.com';
@@ -346,6 +348,17 @@ const dbGet = async (path, params = '') => {
   });
   if (!res.ok) throw new Error(`RTDB GET ${path} failed: ${res.status}`);
   return res.json();
+};
+
+// One atomic multi-path update at the root (Film Club v2 publishes).
+const dbPatch = async (updates) => {
+  const token = await getDbToken();
+  const res = await fetch(`${DATABASE_URL}/.json`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates)
+  });
+  if (!res.ok) throw new Error(`RTDB PATCH root failed: ${res.status}`);
 };
 
 const dbSet = async (path, value) => {
@@ -1083,9 +1096,25 @@ const releaseDayFeeds = async (now) => {
       const marker = dayFeedMarker(release, cutoff);
       const copy = dayFeedFrom(await dbGet(`social/clubFeedLive/${owner}/feed`), { cutoff, tz, marker });
       if (!copy) continue;
-      await dbSet(`clubFeed/${owner}/${secret}`, copy);
+      // v2 (Brian's sync guide): the same publish procedure as the phone,
+      // over admin REST — legacy body, snapshot changes, journal batch and
+      // metadata in one PATCH at the root. Rebuilds if the phone moved the head.
+      const result = await publishFeedV2({
+        owner,
+        secret,
+        feed: copy,
+        databaseUrl: DATABASE_URL,
+        now,
+        io: {
+          get: (path) => dbGet(path),
+          firstIndexKeys: async (path) => Object.keys(await dbGet(path, 'orderBy=%22%24key%22&limitToFirst=2') || {}),
+          update: (updates) => dbPatch(updates),
+          newKey: () => pushId(Date.now(), () => crypto.randomInt(64)),
+          randomHex: () => crypto.randomBytes(16).toString('hex')
+        }
+      });
       await dbSet(`social/clubFeedLive/${owner}/release`, { cutoff, source, marker });
-      console.log(`End-of-day feed for ${owner}: ${copy.movieCount} films`);
+      console.log(`End-of-day feed for ${owner}: ${copy.movieCount} films (${result.mode})`);
     } catch (error) {
       console.error(`End-of-day feed for ${owner} failed:`, error.message);
     }

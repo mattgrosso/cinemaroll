@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { createStore } from "vuex"
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set, update, serverTimestamp, query, orderByChild, startAt, get } from "firebase/database";
+import { getDatabase, ref, onValue, set, update, serverTimestamp, query, orderByChild, orderByKey, startAt, limitToFirst, push, get } from "firebase/database";
 import {
   getAuth,
   GoogleAuthProvider,
@@ -67,6 +67,9 @@ import { pushPrefsWithDefaults } from "../assets/javascript/pushPrefs.js";
 import { pendingUpdates, reconcilePending } from "../assets/javascript/recommendationStats.js";
 import { toInterchange, profileFromFeed, buildInvite, parseInvite, buildConnectRequest, normalizeInboxRequests, buildDirectoryEntry, normalizeDirectory, findSubscription, dedupeExternalFriends, FEDERATED_APPS } from "../assets/javascript/interchange.js";
 import { revisionUrlFor } from "../assets/javascript/feedRevision.js";
+import { publishFeedV2 } from "../assets/javascript/filmClubSyncPublisher.js";
+import { hexToken } from "../assets/javascript/filmClubSync.js";
+import { refreshExternalFeed } from "../utils/filmClubSyncClient.js";
 
 const sortByVoteCount = (a, b) => {
   if (a.vote_count < b.vote_count) {
@@ -1989,7 +1992,27 @@ export default createStore({
       }
       // Removed first, so a sweep already under way finds nothing to release.
       await set(ref(db, `social/clubFeedLive/${me}`), null);
-      await set(ref(db, `clubFeed/${me}/${secret}`), feed);
+      // v2 (Brian's sync guide, 2026-10-06): the legacy body, the snapshot's
+      // changed records, one journal batch and the metadata in ONE update.
+      // The head is read fresh and rebuilt on any mismatch — the end-of-day
+      // Lambda is the other writer. Our own last publish is kept so the
+      // snapshot usually need not be read back.
+      const lastPublished = await loadSnapshot(me, 'clubFeedPublished').catch(() => null);
+      const result = await publishFeedV2({
+        owner: me,
+        secret,
+        feed,
+        databaseUrl: DATABASE_URL,
+        lastPublished: lastPublished?.secret === secret ? lastPublished : null,
+        io: {
+          get: async (path) => (await get(ref(db, path))).val(),
+          firstIndexKeys: async (path) => Object.keys((await get(query(ref(db, path), orderByKey(), limitToFirst(2)))).val() || {}),
+          update: (updates) => update(ref(db), updates),
+          newKey: () => push(ref(db, `clubFeedSync/${me}/${secret}/changes`)).key,
+          randomHex: () => hexToken(crypto.getRandomValues(new Uint8Array(16)))
+        }
+      });
+      saveSnapshot(me, 'clubFeedPublished', { secret, meta: result.meta, movies: result.movies }).catch(() => {});
     },
     // One switch for every friend on another app: they all read the one feed.
     async setClubFeedTiming (context, timing) {
@@ -2246,11 +2269,34 @@ export default createStore({
       await Promise.all(Object.entries(friends).map(async ([id, friend]) => {
         if (!friend?.feedUrl) return;
         try {
-          // Preflight (Brian's sync guide, 2026-10-06): when the feed we hold
-          // carries a revision, ask for the feed's current one — a few bytes —
-          // and keep what we have if it hasn't moved. A feed without one, or
-          // a preflight that fails, falls through to the full body as before.
+          // v2 first (Brian's sync guide, 2026-10-06): two small head reads,
+          // then nothing, a journal delta, or a paged bootstrap; the certified
+          // snapshot is kept per friend across launches. Only when the head
+          // cannot be trusted does the legacy body get fetched.
           const cached = context.state.externalFriendProfiles?.[id];
+          const topKey = context.state.databaseTopKey;
+          const syncKind = `externalSync:${id}`;
+          const syncCache = topKey ? await loadSnapshot(topKey, syncKind).catch(() => null) : null;
+          const v2 = await refreshExternalFeed({ feedUrl: friend.feedUrl, cache: syncCache });
+          if (v2.status === 'revoked') {
+            if (topKey) saveSnapshot(topKey, syncKind, null).catch(() => {});
+            context.commit('setExternalFriendProfile', { id, profile: null });
+            throw new Error('feed access was revoked');
+          }
+          if (v2.status === 'updated') {
+            if (topKey) saveSnapshot(topKey, syncKind, v2.cache).catch(() => {});
+            const profile = profileFromFeed(v2.feed, { fallbackName: friend.name });
+            if (profile) { context.commit('setExternalFriendProfile', { id, profile }); return; }
+          }
+          if (v2.status === 'unchanged' && cached) return;
+          if (v2.status === 'unchanged' && syncCache?.meta) {
+            // The snapshot is certified but this session has no profile yet (a cold start).
+            const { feedFromSync } = await import('../assets/javascript/filmClubSync.js');
+            const profile = profileFromFeed(feedFromSync(syncCache.meta, syncCache.movies), { fallbackName: friend.name });
+            if (profile) { context.commit('setExternalFriendProfile', { id, profile }); return; }
+          }
+          if (v2.status === 'v1' && topKey && v2.cache) saveSnapshot(topKey, syncKind, v2.cache).catch(() => {});
+          // Legacy body, with its revision preflight.
           const revisionUrl = cached?.revision ? revisionUrlFor(friend.feedUrl) : null;
           if (revisionUrl) {
             let headRevision = null;
