@@ -18,6 +18,7 @@
 // and a pick is { movieId, title, poster, name? } — movieId null when the
 // source has no TMDB id and no title in the club matched.
 import { ACADEMY_CATEGORY_ORDER } from './academyAwards.js';
+import { PERSONAL_AWARD_CATEGORIES } from './personalAwardsCategories.js';
 import { validAwards, friendCeremony, stripCeremony, categoryMatchKey, houseCategoryRank } from './awardsShare.js';
 
 export { categoryMatchKey };
@@ -34,7 +35,23 @@ export function categoryRank (label, order = HOUSE) {
 }
 
 // --- the board -----------------------------------------------------------------
+// Is this a category for a person (Best Director, Best Actress, an honorary
+// award) or for a film? The house list decides where it can; otherwise the
+// label does. It matters because publishers attach people to film categories
+// too — Movie Log lists every producer on Best Picture, three editors on Best
+// Editing — and on a row that is noise (Matt, 2026-10-07: "way too much data
+// on the screen"). A film category shows the film; a person category shows
+// the people, with the film underneath.
+const HOUSE_KIND = Object.fromEntries(PERSONAL_AWARD_CATEGORIES.map((c) => [categoryMatchKey(c.name), c.type]));
+const PERSON_LABEL = /actor|actress|performance|director|directing|honorary|humanitarian|memorial|special award|breakthrough|newcomer|debut|star of/i;
+
+export function categoryKind (label) {
+  return HOUSE_KIND[categoryMatchKey(label)] || (PERSON_LABEL.test(String(label || '')) ? 'person' : 'movie');
+}
+
 // `entries` are flat: { year, label, result, movieId, title, poster, name? }.
+// Within a category, duplicate picks fold together: a film category keeps one
+// pick per film (people dropped), a person category one per person-and-film.
 export function boardFromEntries (entries, { order = HOUSE } = {}) {
   const years = new Map();
   (entries || []).forEach((entry) => {
@@ -42,15 +59,23 @@ export function boardFromEntries (entries, { order = HOUSE } = {}) {
     const year = years.get(entry.year) || new Map();
     years.set(entry.year, year);
     const key = entry.label.trim().toLowerCase();
-    const category = year.get(key) || { key, label: entry.label.trim(), winners: [], nominees: [] };
+    const category = year.get(key) || { key, label: entry.label.trim(), kind: categoryKind(entry.label), winners: [], nominees: [], seen: new Set() };
     year.set(key, category);
     const pick = { movieId: entry.movieId ?? null, title: entry.title || null, poster: entry.poster || null };
-    if (entry.name) pick.name = entry.name;
+    if (category.kind === 'person' && entry.name) pick.name = entry.name;
+    const identity = `${entry.result}|${pick.name || ''}|${pick.movieId ?? pick.title ?? ''}`;
+    if (category.seen.has(identity)) return;
+    category.seen.add(identity);
     (entry.result === 'won' ? category.winners : category.nominees).push(pick);
   });
   return [...years.entries()].sort(([a], [b]) => b - a).map(([year, categories]) => ({
     year,
-    categories: [...categories.values()].sort((a, b) => (categoryRank(a.label, order) - categoryRank(b.label, order)) || a.label.localeCompare(b.label))
+    categories: [...categories.values()].map(({ seen, ...category }) => {
+      // A win listed as a nomination as well counts once.
+      const wonIds = new Set(category.winners.map((p) => `${p.name || ''}|${p.movieId ?? p.title ?? ''}`));
+      const nominees = category.nominees.filter((p) => !wonIds.has(`${p.name || ''}|${p.movieId ?? p.title ?? ''}`));
+      return { ...category, nominees, nomineeCount: category.winners.length + nominees.length };
+    }).sort((a, b) => (categoryRank(a.label, order) - categoryRank(b.label, order)) || a.label.localeCompare(b.label))
   }));
 }
 
@@ -70,8 +95,6 @@ export function entriesFromProfile (profile) {
   return out;
 }
 
-const PERSON_CATEGORY = /director|directing|honorary|humanitarian|memorial|special award/i;
-
 /** The Academy Awards dataset (state.allAcademyAwards). */
 export function entriesFromAcademy (records) {
   return (records || []).map((record) => {
@@ -87,9 +110,9 @@ export function entriesFromAcademy (records) {
       title: record.title || null,
       poster: record.img || null
     };
-    // The person matters for acting and directing (and for an award with no
-    // film at all); for Best Picture the producers would just be noise.
-    if (names.length && (record.isActing || !record.title || PERSON_CATEGORY.test(record.category))) entry.name = names.join(', ');
+    // Names ride along for every record; the board shows them only on a
+    // person category (so Best Picture's producers stay out of the way).
+    if (names.length) entry.name = names.join(', ');
     return entry;
   }).filter(Boolean);
 }
@@ -124,6 +147,8 @@ export function titleIndex ({ library = [], profiles = [] } = {}) {
   return index;
 }
 
+// Rows carry `tmdb` and `poster` once scripts/enrich-other-awards.mjs has run;
+// the club's libraries fill in for any row it could not place.
 export function entriesFromOther (rows, ceremony, index = new Map()) {
   return (rows || []).filter((row) => row?.ceremony === ceremony).map((row) => {
     const candidates = index.get(normalizeTitle(row.title)) || [];
@@ -132,9 +157,9 @@ export function entriesFromOther (rows, ceremony, index = new Map()) {
       year: row.year,
       label: row.category,
       result: row.isWinner ? 'won' : 'nominated',
-      movieId: near?.movieId ?? null,
+      movieId: row.tmdb || near?.movieId || null,
       title: row.title,
-      poster: near?.poster ?? null
+      poster: row.poster || near?.poster || null
     };
   });
 }

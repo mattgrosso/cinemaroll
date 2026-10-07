@@ -44,7 +44,11 @@ export function categoryMatchKey (label) {
 const HOUSE_ORDER = PERSONAL_AWARD_CATEGORIES.map((c) => categoryMatchKey(c.name));
 
 export function houseCategoryRank (label) {
-  const index = HOUSE_ORDER.indexOf(categoryMatchKey(label));
+  const key = categoryMatchKey(label);
+  // Any flavour of top prize leads: the Globes' "Best Motion Picture – Drama"
+  // and "– Musical or Comedy" are not "Best Picture" but belong at the top.
+  if (/^best (picture|motion picture|film)\b/.test(key)) return -1;
+  const index = HOUSE_ORDER.indexOf(key);
   return index === -1 ? HOUSE_ORDER.length : index;
 }
 

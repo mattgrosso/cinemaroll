@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   categoryMatchKey,
+  categoryKind,
   boardFromEntries,
   entriesFromProfile,
   entriesFromAcademy,
@@ -41,19 +42,43 @@ describe('categoryMatchKey', () => {
     expect(categoryMatchKey('Best Actor in a Supporting Role')).toBe('best supporting actor');
     expect(categoryMatchKey('Best Motion Picture – Drama')).not.toBe(categoryMatchKey('Best Motion Picture – Musical or Comedy'));
     expect(categoryMatchKey('Best Needle Drop!')).toBe('best needle drop');
+    const [globes] = boardFromEntries([
+      { year: 2023, label: 'Best Director', result: 'won', movieId: 1, title: 'Oppenheimer' },
+      { year: 2023, label: 'Best Motion Picture – Drama', result: 'won', movieId: 1, title: 'Oppenheimer' }
+    ]);
+    expect(globes.categories.map((c) => c.label)).toEqual(['Best Motion Picture – Drama', 'Best Director']);
   });
 });
 
 describe('a friend\'s board', () => {
-  it('peels the ceremony prefix off, keeps every winner, and puts Best Picture first', () => {
+  // Matt, 2026-10-07: "Brian lists all of the producers for Best Picture...
+  // way too much data on the screen." A film category shows the film; a
+  // person category shows the people.
+  it('peels the ceremony prefix off, folds a film category to the film, and puts Best Picture first', () => {
     const board = boardFromEntries(entriesFromProfile(brian));
     expect(board.map((y) => y.year)).toEqual([1980, 1977]);
     const y1977 = board[1];
     expect(y1977.categories.map((c) => c.label)).toEqual(['Best Picture', 'Best Supporting Actor', 'Best Editing']);
-    expect(y1977.categories[0].winners).toEqual([{ movieId: 11, title: 'Star Wars', poster: '/sw.jpg', name: 'Gary Kurtz' }]);
-    expect(y1977.categories[2].winners.map((p) => p.name)).toEqual(['Marcia Lucas', 'Paul Hirsch']);
-    expect(y1977.categories[1].winners).toEqual([]);
+    expect(y1977.categories[0]).toMatchObject({ kind: 'movie', winners: [{ movieId: 11, title: 'Star Wars', poster: '/sw.jpg' }], nomineeCount: 1 });
+    expect(y1977.categories[0].winners[0].name).toBeUndefined();
+    expect(y1977.categories[2].winners).toEqual([{ movieId: 11, title: 'Star Wars', poster: '/sw.jpg' }]);
+    expect(y1977.categories[1]).toMatchObject({ kind: 'person', winners: [], nomineeCount: 1 });
     expect(y1977.categories[1].nominees[0]).toMatchObject({ movieId: 11, name: 'Harrison Ford' });
+  });
+
+  it('counts a film nominated and then crowned once, and tells people from films by label', () => {
+    const [y] = boardFromEntries([
+      { year: 2020, label: 'Best Picture', result: 'nominated', movieId: 1, title: 'A' },
+      { year: 2020, label: 'Best Picture', result: 'won', movieId: 1, title: 'A' },
+      { year: 2020, label: 'Best Picture', result: 'nominated', movieId: 2, title: 'B' },
+      { year: 2020, label: 'Honorary Award', result: 'won', movieId: null, title: null, name: 'Someone' },
+      { year: 2020, label: 'Best Needle Drop', result: 'won', movieId: 3, title: 'C', name: 'A Band' }
+    ]);
+    expect(y.categories[0]).toMatchObject({ label: 'Best Picture', nomineeCount: 2, winners: [{ movieId: 1 }], nominees: [{ movieId: 2 }] });
+    expect(categoryKind('Honorary Award')).toBe('person');
+    expect(y.categories.find((c) => c.label === 'Honorary Award').winners[0].name).toBe('Someone');
+    expect(categoryKind('Best Needle Drop')).toBe('movie');
+    expect(y.categories.find((c) => c.label === 'Best Needle Drop').winners[0].name).toBeUndefined();
   });
 
   it('is empty for a profile without awards', () => {
@@ -99,6 +124,9 @@ describe('the other ceremonies', () => {
     expect(board[0].categories[0].winners).toEqual([{ movieId: 680, title: 'Pulp Fiction', poster: '/pf.jpg' }]);
     expect(board[1].categories[0].winners).toEqual([{ movieId: 10997, title: 'Farewell My Concubine', poster: '/fmc.jpg' }]);
     expect(boardFromEntries(entriesFromOther(rows, 'Golden Globe Awards'))[0].categories[0].winners).toEqual([{ movieId: null, title: 'Forrest Gump', poster: null }]);
+    // Rows the enrichment script resolved carry their own id and poster.
+    const resolved = [{ ...rows[0], tmdb: 680, poster: '/pf2.jpg' }];
+    expect(boardFromEntries(entriesFromOther(resolved, 'Cannes Film Festival'))[0].categories[0].winners).toEqual([{ movieId: 680, title: 'Pulp Fiction', poster: '/pf2.jpg' }]);
   });
 });
 

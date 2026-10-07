@@ -246,3 +246,14 @@ Cannes and whatever else… the history of any award that we have access to."
   across members for the Film Club "Club awards" section — conservatively
   (Original vs Adapted Screenplay stay apart).
 - A friend's award on a movie page links to their board for that year.
+- Boards use the Groskers row (category, gold winner line, nominee count,
+  winner art behind the scrim); tap unfolds the nominees. A film category
+  shows the film only (Movie Log lists every producer on Best Picture, three
+  editors on Best Editing — "way too much data on the screen"); a person
+  category shows the people with the film underneath. `categoryKind` decides
+  from the house list, then the label.
+- `otherAwardsWinners.json` rows carry `tmdb` + `poster` from
+  `scripts/enrich-other-awards.mjs` (TMDB title search near the award year);
+  rerun it after editing the dataset. The scrape had junk — BAFTA nominee
+  rows that were director names, Globes titles with wiki markup — pruned and
+  cleaned 2026-10-07.

@@ -18,7 +18,12 @@ const normalizeTitle = (title) => {
 };
 
 const INDEX = new Map();
+const BY_TMDB = new Map();
 otherAwardsWinners.forEach((entry) => {
+  if (entry.tmdb) {
+    if (!BY_TMDB.has(entry.tmdb)) BY_TMDB.set(entry.tmdb, []);
+    BY_TMDB.get(entry.tmdb).push(entry);
+  }
   const key = normalizeTitle(entry.title);
   if (!INDEX.has(key)) {
     INDEX.set(key, []);
@@ -67,8 +72,11 @@ export function findOtherAwardsForMovie (movie) {
   if (!movie || !movie.title) return empty;
 
   const releaseYear = movie.release_date ? new Date(movie.release_date).getFullYear() : null;
-  const candidates = INDEX.get(normalizeTitle(movie.title)) || [];
-  const matches = releaseYear
+  // Rows resolved to a TMDB id (scripts/enrich-other-awards.mjs) match on it
+  // outright; the rest still go by title and year.
+  const byId = movie.id != null ? (BY_TMDB.get(Number(movie.id)) || []) : [];
+  const candidates = byId.length ? byId : (INDEX.get(normalizeTitle(movie.title)) || []);
+  const matches = releaseYear && !byId.length
     ? candidates.filter((entry) => Math.abs(entry.year - releaseYear) <= YEAR_TOLERANCE)
     : candidates;
 
