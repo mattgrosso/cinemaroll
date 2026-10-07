@@ -71,6 +71,39 @@ describe('awards travel with ratings', () => {
   });
 });
 
+import { friendCeremony, stripCeremony, categoryMatchKey } from '@/assets/javascript/awardsShare.js';
+
+// Movie Log as shipped (2026-10-07): no awardsName, labels "Goegan Globes: Best Picture".
+describe('friendCeremony', () => {
+  const movieLog = { ratings: { 11: { a: [{ year: 1977, category: 'i-1', label: 'Goegan Globes: Best Picture', result: 'won' }] }, 12: { a: [{ year: 1980, category: 'i-2', label: 'Goegan Globes: Best Director', result: 'won', name: 'Irvin Kershner' }] } } };
+  it('reads the ceremony off a shared label prefix when no name was published', () => {
+    expect(friendCeremony(movieLog, 'Brian')).toBe('Goegan Globes');
+    expect(stripCeremony('Goegan Globes: Best Picture', 'Goegan Globes')).toBe('Best Picture');
+    expect(stripCeremony('Best Picture', 'Goegan Globes')).toBe('Best Picture');
+  });
+  it('prefers a published name, and falls back to the friend when labels disagree', () => {
+    expect(friendCeremony({ awardsName: 'Gogan Globes', ...movieLog }, 'Brian')).toBe('Gogan Globes');
+    expect(friendCeremony({ ratings: { 1: { a: [{ label: 'A: X' }] }, 2: { a: [{ label: 'B: Y' }] } } }, 'Brian')).toBe("Brian's awards");
+    expect(friendCeremony({ ratings: { 1: { a: [{ label: 'Best Picture' }] } } }, 'Brian')).toBe("Brian's awards");
+    expect(friendCeremony({ ratings: {} }, 'Brian')).toBe("Brian's awards");
+  });
+  it('shows up on a film page and in the club view with the prefix gone', () => {
+    const groups = friendAwardsForMovie([{ name: 'Brian', profile: movieLog }], 11);
+    expect(groups[0]).toMatchObject({ ceremony: 'Goegan Globes', won: [{ label: 'Best Picture' }] });
+    const member = memberFromProfile('Brian', movieLog);
+    expect(member.ceremony).toBe('Goegan Globes');
+    expect(member.awards[12][0].label).toBe('Best Director');
+  });
+  it('lines up differently worded categories across members', () => {
+    const matt = { name: 'Matt', ceremony: 'The Groskers', awards: { 550: [{ year: 2015, category: 'bestScreenplay', label: 'Best Screenplay or Writing', result: 'won' }] }, titles: {} };
+    const brian = { name: 'Brian', ceremony: 'Goegan Globes', awards: { 680: [{ year: 2015, category: 'x', label: 'Best Screenplay', result: 'won' }] }, titles: {} };
+    const [y2015] = clubAwardsByYear([matt, brian]);
+    expect(y2015.categories).toHaveLength(1);
+    expect(y2015.categories[0].picks.map((p) => p.who)).toEqual(['Brian', 'Matt']);
+    expect(categoryMatchKey('Best Film Editing')).toBe('best editing');
+  });
+});
+
 describe("a film page's club awards", () => {
   const friends = [
     { name: 'Seth', profile: { awardsName: 'The Smithies', ratings: { 550: { r: 8, a: [{ year: 2015, category: 'bestPicture', label: 'Best Picture', result: 'nominated' }, { year: 2015, category: 'bestScore', label: 'Best Score', result: 'nominated' }] } } } },

@@ -928,7 +928,8 @@ export default {
 
 
 /* Club awards: a year strip, then one block per category with everyone's pick. */
-.cs-years { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0 0 0.6rem; }
+.cs-years { display: flex; gap: 0.35rem; margin: 0 0 0.6rem; overflow-x: auto; padding-bottom: 0.2rem; -webkit-overflow-scrolling: touch; }
+.cs-year { flex-shrink: 0; }
 .cs-year { background: rgba(255, 255, 255, 0.08); border: 0; border-radius: 999px; color: #fff; font-size: 0.8rem; padding: 0.25rem 0.7rem; }
 .cs-year.on { background: #ffc107; color: #000; font-weight: 700; }
 .cs-year:active { background: rgba(255, 255, 255, 0.16); }

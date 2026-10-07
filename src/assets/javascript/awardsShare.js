@@ -5,9 +5,76 @@
 // already shared: the in-app social profile and the Film Club feed. One
 // projection serves both: per movie, a short list of { year, category,
 // label, result, name? }, plus the ceremony's name at the top.
-import { awardCategoryNameMap } from './personalAwardsCategories.js';
+import { awardCategoryNameMap, PERSONAL_AWARD_CATEGORIES } from './personalAwardsCategories.js';
 
 export const AWARD_RESULTS = ['won', 'nominated'];
+
+// --- category alignment -----------------------------------------------------
+// Every app names its categories a little differently ("Best Screenplay or
+// Writing", "Best Screenplay", "Best Original Screenplay"). This folds the
+// common variants onto one key so the club view can line "Best Picture" up
+// across members and so boards can order categories the familiar way. It is
+// deliberately conservative: Original and Adapted Screenplay stay distinct,
+// the Globes' Drama and Musical/Comedy stay distinct.
+const ALIASES = [
+  [/^best (film|motion picture|feature film)$/, 'best picture'],
+  [/^best (screenplay|writing)( or (writing|screenplay))?$/, 'best screenplay'],
+  [/^best (film )?editing$/, 'best editing'],
+  [/^best (original )?(score|music)( or music)?$/, 'best score'],
+  [/^best visual effects( or production design)?$/, 'best visual effects'],
+  [/^best animated( feature| film| feature film)?$/, 'best animated feature'],
+  [/^best documentary( feature| film)?$/, 'best documentary'],
+  [/^best (foreign( language)?|international)( feature)?( film)?$/, 'best international feature'],
+  [/^best (actor|actress) in a (leading|supporting) role$/, (m, who, role) => `best ${role === 'supporting' ? 'supporting ' : ''}${who}`],
+  [/^(best )?(directing|director)$/, 'best director']
+];
+
+export function categoryMatchKey (label) {
+  const base = String(label || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
+  for (const [pattern, replacement] of ALIASES) {
+    const match = base.match(pattern);
+    if (match) return typeof replacement === 'function' ? replacement(...match) : replacement;
+  }
+  return base;
+}
+
+// The order a year's categories read in: Best Picture first, then the acting
+// and craft categories as the personal-awards list has them, then anything
+// else by name.
+const HOUSE_ORDER = PERSONAL_AWARD_CATEGORIES.map((c) => categoryMatchKey(c.name));
+
+export function houseCategoryRank (label) {
+  const index = HOUSE_ORDER.indexOf(categoryMatchKey(label));
+  return index === -1 ? HOUSE_ORDER.length : index;
+}
+
+// --- whose ceremony ---------------------------------------------------------
+// Movie Log (as shipped 2026-10-07) sends no `awardsName`; instead every label
+// reads "Goegan Globes: Best Picture". When a profile has no ceremony name and
+// every one of its labels shares the same "Name: " prefix, that prefix is the
+// ceremony and the labels lose it. Otherwise it is "<friend>'s awards".
+export function friendCeremony (profile, fallbackName) {
+  if (typeof profile?.awardsName === 'string' && profile.awardsName.trim()) return profile.awardsName.trim();
+  let prefix;
+  for (const row of Object.values(profile?.ratings || {})) {
+    for (const award of (Array.isArray(row?.a) ? row.a : [])) {
+      const label = typeof award?.label === 'string' ? award.label : '';
+      const at = label.indexOf(': ');
+      const found = at > 0 ? label.slice(0, at).trim() : null;
+      if (!found) return fallbackName ? `${fallbackName}'s awards` : null;
+      if (prefix === undefined) prefix = found;
+      else if (prefix !== found) return fallbackName ? `${fallbackName}'s awards` : null;
+    }
+  }
+  if (prefix) return prefix;
+  return fallbackName ? `${fallbackName}'s awards` : null;
+}
+
+export function stripCeremony (label, ceremony) {
+  const text = String(label || '');
+  if (ceremony && text.toLowerCase().startsWith(`${ceremony.toLowerCase()}: `)) return text.slice(ceremony.length + 2).trim() || text;
+  return text;
+}
 
 /**
  * The public projection of a personalAwards tree, keyed by TMDB id:
@@ -72,11 +139,12 @@ export function friendAwardsForMovie (friends, tmdbId) {
   if (!id) return [];
   return (friends || []).map((friend) => {
     const row = friend?.profile?.ratings?.[id];
-    const awards = validAwards(row?.a) || [];
+    const ceremony = friendCeremony(friend?.profile, friend?.name);
+    const awards = (validAwards(row?.a) || []).map((a) => ({ ...a, label: stripCeremony(a.label, ceremony) }));
     if (!awards.length) return null;
-    const ceremony = friend.profile?.awardsName || `${friend.name}'s awards`;
     return {
       friend: friend.name,
+      key: friend.key ?? null,
       ceremony,
       won: awards.filter((a) => a.result === 'won'),
       nominated: awards.filter((a) => a.result === 'nominated')
@@ -111,7 +179,7 @@ export function clubAwardsByYear (members) {
         if (award?.result !== 'won' || !Number.isInteger(award.year)) return;
         const year = years.get(award.year) || new Map();
         years.set(award.year, year);
-        const key = String(award.label || award.category || '').trim().toLowerCase();
+        const key = categoryMatchKey(award.label || award.category);
         if (!key) return;
         const category = year.get(key) || { label: award.label || award.category, picks: [] };
         year.set(key, category);
@@ -129,7 +197,7 @@ export function clubAwardsByYear (members) {
       const counts = {};
       category.picks.forEach((p) => { counts[p.movieId] = (counts[p.movieId] || 0) + 1; });
       return { ...category, picks: [...category.picks].sort((a, b) => a.who.localeCompare(b.who)), agreed: Object.values(counts).some((n) => n >= 2), filmCount: films.size };
-    }).sort((a, b) => (Number(b.agreed) - Number(a.agreed)) || (b.picks.length - a.picks.length) || a.label.localeCompare(b.label))
+    }).sort((a, b) => (Number(b.agreed) - Number(a.agreed)) || (houseCategoryRank(a.label) - houseCategoryRank(b.label)) || a.label.localeCompare(b.label))
   }));
 }
 
@@ -137,10 +205,11 @@ export function clubAwardsByYear (members) {
 export function memberFromProfile (name, profile) {
   const awards = {};
   const titles = {};
+  const ceremony = friendCeremony(profile, name);
   Object.entries(profile?.ratings || {}).forEach(([id, row]) => {
     const list = validAwards(row?.a);
-    if (list) awards[id] = list;
+    if (list) awards[id] = list.map((a) => ({ ...a, label: stripCeremony(a.label, ceremony) }));
     titles[id] = { t: row?.t || null, p: row?.p || null };
   });
-  return { name, ceremony: profile?.awardsName || null, awards, titles };
+  return { name, ceremony, awards, titles };
 }

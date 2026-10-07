@@ -273,17 +273,17 @@
               <h5>{{ group.ceremony }} <span class="friend-awards-who">{{ group.friend }}</span></h5>
               <h6 v-if="group.won.length">Won</h6>
               <div v-if="group.won.length" class="winners">
-                <span v-for="award in group.won" :key="`${award.year}-${award.category}`" class="col-12 friend-award">
+                <a v-for="award in group.won" :key="`${award.year}-${award.category}-${award.name || ''}`" class="link col-12 friend-award" @click="openFriendAwardsYear(group, award.year)">
                   {{ award.label }} <span class="friend-award-year">{{ award.year }}</span>
-                  <span v-if="award.name">({{ award.name }})</span>
-                </span>
+                  <span v-if="award.name" class="friend-award-name">({{ award.name }})</span>
+                </a>
               </div>
               <h6 v-if="group.nominated.length">Nominated</h6>
               <div v-if="group.nominated.length" class="nominees">
-                <span v-for="award in group.nominated" :key="`${award.year}-${award.category}`" class="col-12 friend-award">
+                <a v-for="award in group.nominated" :key="`${award.year}-${award.category}-${award.name || ''}`" class="link col-12 friend-award" @click="openFriendAwardsYear(group, award.year)">
                   {{ award.label }} <span class="friend-award-year">{{ award.year }}</span>
-                  <span v-if="award.name">({{ award.name }})</span>
-                </span>
+                  <span v-if="award.name" class="friend-award-name">({{ award.name }})</span>
+                </a>
               </div>
             </div>
 
@@ -1575,6 +1575,13 @@ export default {
       const id = this.topStructure(this.result)?.id;
       if (id) this.$router.push({ path: '/web', query: { movie: String(id) } });
     },
+    // A friend's award opens their ceremony's board for that year on the
+    // awards screen (Matt, 2026-10-07: see friends' awards on the movie page
+    // and flip through their history).
+    openFriendAwardsYear (group, year) {
+      if (!group?.key) return;
+      this.$router.push({ path: '/awards', query: { ceremony: `friend:${group.key}`, year: Number(year) } });
+    },
     openPersonalAwardsYear (year) {
       // Direct to the awards page — the old settings-flag handoff could
       // race the navigation and open nothing (see Insights.resumeAwards).
@@ -2580,6 +2587,7 @@ export default {
       .friend-awards-who { color: #ccc; font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: 4px; }
       .friend-award { color: #fff; display: block; font-size: ds(0.8rem); padding: 1px 0; }
       .friend-award-year { color: #ccc; font-size: ds(0.7rem); margin-left: 2px; }
+      .friend-award-name { margin-left: 4px; }
 
       h5 {
         color: #adb5bd;

@@ -143,3 +143,73 @@ describe('PersonalAwardsScreen', () => {
     expect(wrapper.find('.awards-results-panel').exists()).toBe(false);
   });
 });
+
+import AwardsBoard from '@/components/AwardsBoard.vue';
+
+// Matt, 2026-10-07: tabs across the top for every ceremony we can see —
+// yours, your friends', the Oscars and the rest.
+describe('ceremony tabs', () => {
+  const brian = {
+    key: 'ext-1',
+    name: 'Brian Goegan',
+    profile: { ratings: { 11: { r: 9, t: 'Star Wars', p: '/sw.jpg', a: [{ year: 1977, category: 'i-1', label: 'Goegan Globes: Best Picture', result: 'won' }] }, 1891: { r: 9, t: 'Empire', a: [{ year: 1980, category: 'i-1', label: 'Goegan Globes: Best Picture', result: 'won' }] } } }
+  };
+  function tabbed (query, extra = {}) {
+    const replaceSpy = vi.fn();
+    const pushSpy = vi.fn();
+    const wrapper = shallowMount(PersonalAwardsScreen, {
+      global: {
+        mocks: {
+          $store: {
+            state: { settings: { personalAwardName: 'Grosker' }, allAcademyAwards: [{ year: 1994, category: 'Best Picture', tmdb: '13', title: 'Forrest Gump', img: '/fg.jpg', isWinner: true, isActing: false, names: [] }], ...extra },
+            getters: { allMoviesAsArray: DEFAULT_LIBRARY, filmClubFriends: [brian, { key: 'quiet', name: 'Luke', profile: { ratings: {} } }] },
+            dispatch: vi.fn()
+          },
+          $router: { push: pushSpy, replace: replaceSpy, back: vi.fn() },
+          $route: { query }
+        }
+      }
+    });
+    return { wrapper, replaceSpy, pushSpy };
+  }
+
+  it('shows mine, each friend with awards, and the real ceremonies; mine by default', () => {
+    const { wrapper } = tabbed({ year: '1997' });
+    const labels = wrapper.findAll('.ceremony-tab').map((b) => b.text());
+    expect(labels).toEqual(['The Grosker', 'Goegan GlobesBrian Goegan', 'Oscars', 'Golden Globes', 'BAFTA', 'Cannes', 'Venice']);
+    expect(wrapper.find('.ceremony-tab.on').text()).toBe('The Grosker');
+    expect(wrapper.findComponent(PersonalAwardsModal).exists()).toBe(true);
+    expect(wrapper.findComponent(AwardsBoard).exists()).toBe(false);
+  });
+
+  it('switching ceremony drops the year from the URL; picking a year keeps the ceremony', async () => {
+    const { wrapper, replaceSpy } = tabbed({ year: '1997' });
+    await wrapper.findAll('.ceremony-tab')[2].trigger('click');
+    expect(replaceSpy).toHaveBeenCalledWith({ path: '/awards', query: { ceremony: 'oscars' } });
+  });
+
+  it('a friend\'s tab lands on their newest year with the board, and a pick opens the film', async () => {
+    const { wrapper, replaceSpy, pushSpy } = tabbed({ ceremony: 'friend:ext-1' });
+    expect(wrapper.findComponent(PersonalAwardsModal).exists()).toBe(false);
+    expect(replaceSpy).not.toHaveBeenCalled();
+    expect(wrapper.find('.board-header h2').text()).toBe('1980 Goegan Globes');
+    expect(wrapper.findAll('.awards-year-pill').map((b) => b.text())).toEqual(['1977', '1980']);
+    const board = wrapper.findComponent(AwardsBoard);
+    expect(board.props('categories')[0]).toMatchObject({ label: 'Best Picture', winners: [{ movieId: 1891, title: 'Empire' }] });
+    board.vm.$emit('pick', { movieId: 1891 });
+    expect(pushSpy).toHaveBeenCalledWith('/movie/1891');
+    await wrapper.findAll('.awards-year-pill')[0].trigger('click');
+    expect(replaceSpy).toHaveBeenCalledWith({ path: '/awards', query: { ceremony: 'friend:ext-1', year: 1977 } });
+  });
+
+  it('the Oscars tab reads the bundled dataset', () => {
+    const { wrapper } = tabbed({ ceremony: 'oscars', year: '1994' });
+    expect(wrapper.find('.board-header h2').text()).toBe('1994 Oscars');
+    expect(wrapper.findComponent(AwardsBoard).props('categories')[0].winners[0]).toEqual({ movieId: 13, title: 'Forrest Gump', poster: '/fg.jpg' });
+  });
+
+  it('an unknown ceremony falls back to mine', () => {
+    const { wrapper } = tabbed({ ceremony: 'friend:nobody', year: '1997' });
+    expect(wrapper.findComponent(PersonalAwardsModal).exists()).toBe(true);
+  });
+});

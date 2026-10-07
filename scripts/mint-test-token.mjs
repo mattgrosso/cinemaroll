@@ -69,6 +69,10 @@ if (seedFlag !== -1) {
   await db.ref(TESTER_KEY).set({
     movieLog: data.movieLog || null,
     settings: data.settings || null,
+    // Personal awards moved out of settings on 2026-10-06 (their own node, so
+    // settings stays small); the tester needs them to show the "mine" tab.
+    personalAwards: data.personalAwards || null,
+    personalAwardsMeta: data.personalAwardsMeta || null,
     academyAwardWinners: data.academyAwardWinners || null
   });
   console.log(`✔ seeded ${Object.keys(data.movieLog || {}).length} movieLog entries`);

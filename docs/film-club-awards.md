@@ -69,3 +69,15 @@ Groskers").
 For each movie record in the feed and in the v2 snapshot/journal: an `awards`
 list as in §2, built from that user's Gogan Globes (or whatever they call
 theirs); at the top of the legacy body, `awardsName`. That is the whole change.
+
+## 6. What Movie Log actually sends (2026-10-07)
+
+Movie Log shipped `awards` without `awardsName`, and with the ceremony folded
+into every label: `"label": "Goegan Globes: Best Picture"`, `category` an
+opaque `institution-…` key, several `won` entries per category where several
+people share an award (three editors, say). Cinema Roll reads this as is: when
+a profile has no `awardsName` and all of its labels share one `Name: ` prefix,
+that prefix becomes the ceremony and is peeled off the labels
+(`friendCeremony` / `stripCeremony` in `src/assets/javascript/awardsShare.js`).
+Sending `awardsName` is still welcome and takes precedence, but nothing on the
+Movie Log side needs to change.

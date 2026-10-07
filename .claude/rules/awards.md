@@ -220,3 +220,29 @@ contiguous run of equal scores; `createRoundRobinTournament(ids, rng)` builds ev
   blocks `needsNewTournament` until the prompt has actually closed once, so the answer
   doesn't depend on Vue's flush ordering between the parent's prop update and the child's
   watcher.
+
+## Ceremony tabs on /awards (2026-10-07)
+
+Matt: "a series of tabs at the top that would let us flip between the
+Groskers, the Golden Globes, all of my friends' awards, but also the Oscars…
+Cannes and whatever else… the history of any award that we have access to."
+
+- `PersonalAwardsScreen.vue` owns a ceremony strip above the year strip. Tab
+  ids ride in the URL (`?ceremony=friend:<clubKey>` / `oscars` /
+  `golden-globes` / `bafta` / `cannes` / `venice`); no param = your own awards,
+  so every old `/awards?year=` link still works. Switching ceremony drops the
+  year (each lands on its newest).
+- Your own tab is the existing nominate-and-pick page. Every other tab is
+  `AwardsBoard.vue` (read-only: categories in order, winners as poster cards,
+  nominees as chips; a pick with a TMDB id opens the film).
+- Boards come from `src/assets/javascript/ceremonies.js` (pure, tested):
+  friends from their published rating rows (`a` lists), Oscars from
+  `state.allAcademyAwards`, the rest from `assets/data/otherAwardsWinners.json`
+  (titles only — `titleIndex` borrows ids and posters from any library in the
+  club). Friends appear only once they publish awards.
+- Movie Log sends labels as "Goegan Globes: Best Picture" and no `awardsName`;
+  `friendCeremony`/`stripCeremony` (awardsShare.js) derive the ceremony from
+  the shared prefix. `categoryMatchKey` lines differently worded categories up
+  across members for the Film Club "Club awards" section — conservatively
+  (Original vs Adapted Screenplay stay apart).
+- A friend's award on a movie page links to their board for that year.

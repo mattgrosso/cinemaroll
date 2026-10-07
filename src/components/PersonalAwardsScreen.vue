@@ -2,22 +2,45 @@
   <div class="personal-awards-screen">
     <BackLink/>
 
+    <!-- Ceremony strip (Matt, 2026-10-07): yours, then every friend who
+         publishes awards, then the real ceremonies. Flip through "the
+         history of any award that we have access to". -->
+    <div v-if="tabs.length > 1" ref="tabScroller" class="ceremony-scroller">
+      <button
+        v-for="tab in tabs"
+        :key="tab.id"
+        type="button"
+        class="ceremony-tab"
+        :class="{ on: tab.id === ceremonyId }"
+        @click="selectCeremony(tab.id)"
+      >{{ tab.label }}<span v-if="tab.who" class="ceremony-who">{{ tab.who }}</span></button>
+    </div>
+
     <!-- Year strip: the same control the home screen uses for years, down to
          the Bootstrap button classes. Just the years — no progress marks, no
          trophies ("we don't need anything. It can just be the years and
          buttons. That's all I need", 2026-08-16). -->
-    <div v-if="awardsYears.length" ref="yearScroller" class="awards-year-scroller">
+    <div v-if="stripYears.length" ref="yearScroller" class="awards-year-scroller">
       <button
-        v-for="year in awardsYears"
+        v-for="year in stripYears"
         :key="year"
         type="button"
         class="btn btn-sm awards-year-pill"
-        :class="year === activeYear ? 'btn-primary selected' : 'btn-outline-secondary'"
+        :class="year === stripActiveYear ? 'btn-primary selected' : 'btn-outline-secondary'"
         @click="selectYear(year)"
       >{{ year }}</button>
     </div>
 
+    <template v-if="ceremonyId !== 'mine'">
+      <div class="text-center board-header">
+        <h2 class="mb-1">{{ boardYear }} {{ activeTab.label }}</h2>
+        <p class="mb-0 board-caption">{{ boardCaption }}</p>
+      </div>
+      <AwardsBoard :categories="boardCategories" @pick="openMovie"/>
+    </template>
+
     <PersonalAwardsModal
+      v-else
       :allEntriesWithFlatKeywordsAdded="allEntriesWithFlatKeywordsAdded"
       :personalAwardName="personalAwardName"
       :awardNameWithThe="awardNameWithTheLabel"
@@ -47,7 +70,19 @@
 // its dropdown ("I don't think we need that anymore. I think we've replaced
 // it with what we're looking at now", 2026-08-16).
 import PersonalAwardsModal from './PersonalAwardsModal.vue';
+import AwardsBoard from './AwardsBoard.vue';
 import BackLink from './games/BackLink.vue';
+import otherAwardsWinners from '../assets/data/otherAwardsWinners.json';
+import {
+  ceremonyTabs,
+  boardFromEntries,
+  entriesFromProfile,
+  entriesFromAcademy,
+  entriesFromOther,
+  titleIndex,
+  ACADEMY_BOARD_OPTIONS,
+  OTHER_CEREMONIES
+} from '../assets/javascript/ceremonies.js';
 import { navigationTarget, followNavigationTarget } from '../utils/navigationTarget.js';
 import {
   awardNameWithThe,
@@ -57,7 +92,7 @@ import {
 
 export default {
   name: 'PersonalAwardsScreen',
-  components: { PersonalAwardsModal, BackLink },
+  components: { PersonalAwardsModal, AwardsBoard, BackLink },
   data () {
     return {
       // Mirrors whichever year the modal is actually showing, which is not
@@ -70,6 +105,61 @@ export default {
     yearFromRoute () {
       const year = Number(this.$route.query.year);
       return Number.isFinite(year) ? year : null;
+    },
+    // --- the other ceremonies ------------------------------------------------
+    // `mine` is the default and has no query param, so every existing link to
+    // /awards?year=1997 still lands on your own awards. The friends' tabs are
+    // keyed by the club key the Film Club screen uses; the real ceremonies by
+    // short stable ids.
+    ceremonyId () {
+      const id = this.$route.query.ceremony;
+      return typeof id === 'string' && this.tabs.some((tab) => tab.id === id) ? id : 'mine';
+    },
+    friends () {
+      return (this.$store.getters.filmClubFriends || []).filter((friend) => friend.profile);
+    },
+    tabs () {
+      return ceremonyTabs({ mine: this.awardNameWithTheLabel, friends: this.friends });
+    },
+    activeTab () {
+      return this.tabs.find((tab) => tab.id === this.ceremonyId) || this.tabs[0];
+    },
+    // Built only for the tab you are looking at: the Oscars board walks ~11k
+    // records and the title index every library in the club.
+    board () {
+      const id = this.ceremonyId;
+      if (id === 'mine') return [];
+      if (id.startsWith('friend:')) {
+        const friend = this.friends.find((f) => `friend:${f.key}` === id);
+        return boardFromEntries(entriesFromProfile(friend?.profile));
+      }
+      if (id === 'oscars') return boardFromEntries(entriesFromAcademy(this.$store.state.allAcademyAwards), ACADEMY_BOARD_OPTIONS);
+      const other = OTHER_CEREMONIES.find((c) => c.id === id);
+      if (!other) return [];
+      const index = titleIndex({ library: this.$store.getters.allMoviesAsArray || [], profiles: this.friends.map((f) => f.profile) });
+      return boardFromEntries(entriesFromOther(otherAwardsWinners, other.ceremony, index));
+    },
+    boardYears () {
+      return this.board.map((entry) => entry.year).sort((a, b) => a - b);
+    },
+    boardYear () {
+      if (this.yearFromRoute != null && this.boardYears.includes(this.yearFromRoute)) return this.yearFromRoute;
+      return this.boardYears[this.boardYears.length - 1] ?? null;
+    },
+    boardCategories () {
+      return this.board.find((entry) => entry.year === this.boardYear)?.categories || [];
+    },
+    boardCaption () {
+      if (this.activeTab?.who) return `${this.activeTab.who}'s own annual awards`;
+      if (this.ceremonyId === 'oscars') return 'Every winner and nominee, from the first ceremony';
+      return this.board.some((entry) => entry.categories.some((c) => c.nominees.length)) ? 'Winners and nominees' : 'Winners';
+    },
+    // The one strip serves both views.
+    stripYears () {
+      return this.ceremonyId === 'mine' ? this.awardsYears : this.boardYears;
+    },
+    stripActiveYear () {
+      return this.ceremonyId === 'mine' ? this.activeYear : this.boardYear;
     },
     awardsYears () {
       return awardsBrowsableYears(this.allEntriesWithFlatKeywordsAdded, this.$store.state.settings);
@@ -99,6 +189,15 @@ export default {
     activeYear () {
       this.$nextTick(() => this.centerYearPill());
     },
+    stripActiveYear () {
+      this.$nextTick(() => this.centerYearPill());
+    },
+    ceremonyId: {
+      immediate: true,
+      handler () {
+        this.$nextTick(() => { this.centerYearPill(); this.centerTab(); });
+      }
+    },
     awardsYears: {
       immediate: true,
       handler (years) {
@@ -109,6 +208,12 @@ export default {
         this.$nextTick(() => this.centerYearPill());
       }
     }
+  },
+  mounted () {
+    // Friends' awards ride on their profiles; a cold load straight onto this
+    // page needs them fetched, as Home does.
+    this.$store.dispatch?.('fetchFriendProfiles');
+    this.$store.dispatch?.('syncExternalFriends');
   },
   methods: {
     // Arriving with no year at all — the Awards card on Insights does exactly
@@ -121,13 +226,34 @@ export default {
     // The picker is left alone: null is the right answer to its own question,
     // which is what the home screen's "a year is ready" prompt asks.
     defaultToMostRecentYear (years) {
-      if (this.yearFromRoute != null) return;
+      if (this.yearFromRoute != null || this.ceremonyId !== 'mine') return;
       this.$router.replace({ path: '/awards', query: { year: years[years.length - 1] } });
     },
+    query (changes) {
+      const query = { ...this.$route.query, ...changes };
+      Object.keys(query).forEach((key) => { if (query[key] == null) delete query[key]; });
+      return query;
+    },
     selectYear (year) {
-      if (year === this.activeYear) return;
+      if (year === this.stripActiveYear) return;
       // replace, not push: stepping through years shouldn't bury the way back.
-      this.$router.replace({ path: '/awards', query: { year } });
+      this.$router.replace({ path: '/awards', query: this.query({ year }) });
+    },
+    // Switching ceremony drops the year: each one lands on its newest year,
+    // and a friend's 2015 is not the Oscars' 2015 anyway.
+    selectCeremony (id) {
+      if (id === this.ceremonyId) return;
+      this.$router.replace({ path: '/awards', query: this.query({ ceremony: id === 'mine' ? null : id, year: null }) });
+    },
+    openMovie (pick) {
+      if (pick?.movieId) this.$router.push(`/movie/${pick.movieId}`);
+    },
+    centerTab () {
+      const scroller = this.$refs.tabScroller;
+      const tab = scroller?.querySelector('.ceremony-tab.on');
+      if (!scroller || !tab) return;
+      const centered = tab.offsetLeft - (scroller.clientWidth - tab.offsetWidth) / 2;
+      scroller.scrollLeft = Math.max(0, Math.min(centered, scroller.scrollWidth - scroller.clientWidth));
     },
     // Positioned by hand rather than with scrollIntoView({ inline: 'center' }),
     // which left the last year clipped by ~26px when the page defaults to it —
@@ -159,6 +285,56 @@ export default {
 </script>
 
 <style scoped>
+.ceremony-scroller {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+  overflow-x: auto;
+  padding: 0.15rem 0.1rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ceremony-tab {
+  background: rgba(255, 255, 255, 0.08);
+  border: 0;
+  border-radius: 999px;
+  color: #eee;
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.8rem;
+  white-space: nowrap;
+}
+
+.ceremony-tab.on {
+  background: #ffc107;
+  color: #000;
+  font-weight: 700;
+}
+
+.ceremony-tab:active {
+  opacity: 0.7;
+}
+
+.ceremony-who {
+  font-size: 0.68rem;
+  font-weight: 400;
+  margin-left: 0.35rem;
+  opacity: 0.75;
+}
+
+.board-header {
+  margin: 0.4rem 0 1rem;
+}
+
+.board-header h2 {
+  font-size: 1.5rem;
+}
+
+.board-caption {
+  color: #ccc;
+  font-size: 0.9rem;
+}
+
 .personal-awards-screen {
   color: #eee;
   /* Side padding only. The old 2.5rem top "BackLink safety margin" was a
