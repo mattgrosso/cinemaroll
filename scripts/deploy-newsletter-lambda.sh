@@ -49,7 +49,7 @@ JSON
 fi
 
 cp aws-lambda/newsletter.js "$BUNDLE/index.js"
-cp aws-lambda/newsletterCompose.js aws-lambda/newsletterSources.js aws-lambda/letterboxd.js aws-lambda/letterboxdSync.js "$BUNDLE/"
+cp aws-lambda/newsletterCompose.js aws-lambda/newsletterSources.js aws-lambda/letterboxd.js aws-lambda/letterboxdSync.js aws-lambda/cinemaScore.js "$BUNDLE/"
 
 # One more check, on the bundle itself: what parses in the repo is not
 # necessarily what got copied.
@@ -57,6 +57,16 @@ cp aws-lambda/newsletterCompose.js aws-lambda/newsletterSources.js aws-lambda/le
 
 rm -f "$BUNDLE/function.zip"
 (cd "$BUNDLE" && zip -q -r function.zip . -x 'function.zip')
+# A healthy bundle is ~13 MB (node_modules included). A small one means the
+# bundle dir held hollow node_modules — it shipped that way once and broke a
+# Friday issue (2026-10-07: 236 KB). Refuse, and say what to do.
+ZIP_BYTES=$(stat -f%z "$BUNDLE/function.zip" 2>/dev/null || stat -c%s "$BUNDLE/function.zip")
+if [ "$ZIP_BYTES" -lt 5000000 ]; then
+  echo "✗ function.zip is only $ZIP_BYTES bytes — hollow node_modules. Run: rm -rf \"$BUNDLE\" && yarn deploy:newsletter"
+  exit 1
+fi
+# And the modules the sources require must all be in the bundle.
+(cd "$BUNDLE" && node -e "require('./newsletterSources.js'); require('./newsletterCompose.js')") || { echo "✗ the bundled sources do not load."; exit 1; }
 
 "$AWS" lambda update-function-code \
   --function-name "$FUNCTION" \
