@@ -228,6 +228,35 @@ Lambda that died on `Cannot find module 'web-push'` — the newsletter would hav
 that Friday. A healthy zip is ~13 MB / ~4,900 files; `rm -rf` the bundle dir and rerun if
 it isn't. The script uses `~/aws-cli/aws` (the PATH `aws` is Intel on this Mac).
 
+## Film Club feed sync, v2 (Brian's Movie Log guide, 2026-10-06)
+
+Beside the legacy `clubFeed/OWNER/SECRET` body (format `film-club/1`, now carrying a
+content-derived 32-hex `revision` and a `syncUrl`) lives **`clubFeedSync/OWNER/SECRET`**:
+`meta` (version 2, epoch, revision, bodyRevision, sequence, cursor, minCursor, movieCount,
+profile, marker, snapshotComplete, changeCount), `movies/<tmdbId>` (the certified public
+snapshot), `changes/<pushKey>` (journal batches: epoch, revision, previousRevision,
+sequence, upserts, deleted) and `changeIndex/<pushKey>: true` (owner-only retention
+index, 500 kept). **Every publish is one root `update()`**: legacy body + changed records +
+one batch + index key + meta. `src/assets/javascript/filmClubSync.js` is the pure half,
+`filmClubSyncPublisher.js` the injected-I/O publish used by BOTH the phone (`publishClubFeed`,
+live mode) and the end-of-day Lambda (`releaseDayFeeds`, admin REST `PATCH /.json`); the
+head is read fresh each time and **rebuilt with a fresh epoch on any mismatch** — the two
+writers can never extend each other's stale view. The reader
+(`src/utils/filmClubSyncClient.js`, from `syncExternalFriends`) does two small head reads,
+then nothing / a journal delta / a paged bootstrap (250 movies, 100 batches), certifies the
+result against the head AFTER reading (three attempts), caches per friend in the offline
+store (`externalSync:<id>`), falls back to the legacy body when the head cannot be trusted,
+and treats an explicit 401/403/404/410 on an *established* capability as revocation (purge,
+fail — never a silent v1 downgrade). External feeds sync at most hourly
+(`EXTERNAL_FEED_MAX_AGE_MS`), because every read is billed to the friend's Firebase.
+Rules: public reads only at the **current** `settings/clubFeedKey` (legacy feed too), meta
+whole, movies/changes **bounded in key order** (an unbounded read is refused), the index
+the owner's alone (≤2). `scripts/generate-database-rules.mjs` owns the rules; emulator
+tests in `src/test/emulated/clubFeedSync.rules.test.js`; the end-to-end protocol test is
+`src/test/filmClubSyncFlow.test.js` (the guide's ten activation checks against a fake
+Firebase). `scripts/init-club-feed-sync.mjs [--write]` builds the first certified snapshot
+for every existing feed and verifies the public read-back — run 2026-10-06 for all six.
+
 ## The push Lambda (`aws-lambda/push-notify.js`, deployed as `cinemaroll-push`)
 
 Web push notifications (2026-08-27). Same auth pattern as the AI lambda — Firebase ID
@@ -535,13 +564,14 @@ committed in `.env` (`VUE_APP_VAPID_PUBLIC_KEY`, with `VUE_APP_PUSH_API_URL`). R
 ```
 # The bundle is index.js (= push-notify.js) + pushCadence.js + feedRevision.js (the
 # Film Club feed's revision token, CommonJS twin of src/assets/javascript/feedRevision.js)
-# + node_modules (web-push and its deps — NOT the aws-lambda/node_modules on disk, which
+# + filmClubSync.js + filmClubSyncPublisher.js (GENERATED twins — run
+# scripts/sync-lambda-twins.mjs after editing the ESM sources) + node_modules (web-push and its deps — NOT the aws-lambda/node_modules on disk, which
 # is the AI Lambda's). Start from the deployed bundle so the dependencies stay exactly as
 # they are:
 URL=$(aws lambda get-function --function-name cinemaroll-push --profile personal \
   --region us-east-1 --query 'Code.Location' --output text)
 curl -s -o current.zip "$URL" && mkdir -p bundle && (cd bundle && unzip -q -o ../current.zip)
-cp aws-lambda/push-notify.js bundle/index.js && cp aws-lambda/pushCadence.js aws-lambda/feedRevision.js bundle/
+cp aws-lambda/push-notify.js bundle/index.js && cp aws-lambda/pushCadence.js aws-lambda/feedRevision.js aws-lambda/filmClubSync.js aws-lambda/filmClubSyncPublisher.js bundle/
 (cd bundle && zip -q -r ../function.zip .)
 aws lambda update-function-code --function-name cinemaroll-push \
   --zip-file fileb://function.zip --profile personal --region us-east-1
