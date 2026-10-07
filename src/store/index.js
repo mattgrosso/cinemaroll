@@ -37,7 +37,7 @@ import {
   watchMovieHatAuth as observeMovieHatAuth
 } from "../assets/javascript/movieHatAuth.js";
 import { isSignInDismissal, signInFailureSummary } from "../assets/javascript/movieHatSignIn.js";
-import { buildSocialProfile, socialSettingsWithDefaults, countNewFriendUpdates, clubFetchesNeeded } from "../assets/javascript/social.js";
+import { buildSocialProfile, socialSettingsWithDefaults, countNewFriendUpdates, clubFetchesNeeded, externalSyncDue, feedBodyNeeded, EXTERNAL_FEED_MAX_AGE_MS } from "../assets/javascript/social.js";
 import { buildMirrorFeed } from "../assets/javascript/mirrorFeed.js";
 import { buildPushDigest } from "../assets/javascript/pushDigest.js";
 import { appBadgeCount } from "../assets/javascript/appBadge.js";
@@ -66,6 +66,7 @@ const THEATER_BOARD_FRESH_MS = 15 * 60 * 1000;
 import { pushPrefsWithDefaults } from "../assets/javascript/pushPrefs.js";
 import { pendingUpdates, reconcilePending } from "../assets/javascript/recommendationStats.js";
 import { toInterchange, profileFromFeed, buildInvite, parseInvite, buildConnectRequest, normalizeInboxRequests, buildDirectoryEntry, normalizeDirectory, findSubscription, dedupeExternalFriends, FEDERATED_APPS } from "../assets/javascript/interchange.js";
+import { revisionUrlFor } from "../assets/javascript/feedRevision.js";
 
 const sortByVoteCount = (a, b) => {
   if (a.vote_count < b.vote_count) {
@@ -438,6 +439,9 @@ export default createStore({
     // shape as native friends. Held in memory; the subscription itself
     // lives in settings/externalFriends.
     externalFriendProfiles: {},
+    // When syncExternalFriends last ran to completion (ms); restored from the
+    // offline snapshot with the profiles, so a cold start can stay quiet.
+    externalFriendsSyncedAt: 0,
     externalFriendErrors: {},
     // Connect requests from people on other apps (see clubInbox rules).
     clubInboxRequests: {},
@@ -782,6 +786,14 @@ export default createStore({
       const next = { ...state.externalFriendProfiles };
       if (profile) next[id] = profile; else delete next[id];
       state.externalFriendProfiles = next;
+    },
+    setExternalFriendsSyncedAt (state, at) {
+      state.externalFriendsSyncedAt = Number(at) || 0;
+    },
+    restoreExternalFriends (state, { profiles, syncedAt }) {
+      // Only fill what the session hasn't fetched already.
+      state.externalFriendProfiles = { ...(profiles || {}), ...state.externalFriendProfiles };
+      if (!state.externalFriendsSyncedAt) state.externalFriendsSyncedAt = Number(syncedAt) || 0;
     },
     setExternalFriendError (state, { id, message }) {
       state.externalFriendErrors = { ...state.externalFriendErrors, [id]: message };
@@ -1437,6 +1449,10 @@ export default createStore({
           attachFullListener();
         })();
 
+        loadSnapshot(topKey, 'externalFriends').then((cached) => {
+          if (cached?.profiles) context.commit('restoreExternalFriends', cached);
+          return null;
+        }).catch(() => {});
         loadSnapshot(topKey, 'settings').then(async (cached) => {
           // settingsLoaded (not key-counting) decides whether the snapshot
           // may apply: local write scraps can predate it. The snapshot
@@ -2221,12 +2237,31 @@ export default createStore({
     },
     // Fetch each subscribed feed and translate it. Failures are per-friend
     // and non-fatal — one unreachable feed must not blank the club.
-    async syncExternalFriends (context) {
+    async syncExternalFriends (context, { force = false, maxAgeMs = EXTERNAL_FEED_MAX_AGE_MS } = {}) {
       const friends = context.state.settings?.externalFriends || {};
+      // Someone else's download quota: once an hour unless forced (see
+      // externalSyncDue). Every screen that mounts may ask; most asks are no-ops.
+      if (!externalSyncDue({ friends, profiles: context.state.externalFriendProfiles, syncedAt: context.state.externalFriendsSyncedAt, maxAgeMs, force })) return;
       if (Object.keys(friends).length) context.commit('setSocialProfilesFetchedAt', Date.now());
       await Promise.all(Object.entries(friends).map(async ([id, friend]) => {
         if (!friend?.feedUrl) return;
         try {
+          // Preflight (Brian's sync guide, 2026-10-06): when the feed we hold
+          // carries a revision, ask for the feed's current one — a few bytes —
+          // and keep what we have if it hasn't moved. A feed without one, or
+          // a preflight that fails, falls through to the full body as before.
+          const cached = context.state.externalFriendProfiles?.[id];
+          const revisionUrl = cached?.revision ? revisionUrlFor(friend.feedUrl) : null;
+          if (revisionUrl) {
+            let headRevision = null;
+            try {
+              const head = await fetch(revisionUrl, { cache: 'no-store' });
+              if (head.ok) headRevision = await head.json();
+            } catch {
+              // Fall through to the body.
+            }
+            if (!feedBodyNeeded({ cached, headRevision })) return;
+          }
           const response = await fetch(friend.feedUrl, { cache: 'no-store' });
           if (!response.ok) throw new Error(`feed responded ${response.status}`);
           const profile = profileFromFeed(await response.json(), { fallbackName: friend.name });
@@ -2237,6 +2272,12 @@ export default createStore({
           context.commit('setExternalFriendError', { id, message: error.message });
         }
       }));
+      const syncedAt = Date.now();
+      context.commit('setExternalFriendsSyncedAt', syncedAt);
+      // Keep the result for the next launch, so a cold start shows the club
+      // at once and asks the feed only for its revision.
+      const topKey = context.state.databaseTopKey;
+      if (topKey) saveSnapshot(topKey, 'externalFriends', { profiles: context.state.externalFriendProfiles, syncedAt }).catch(() => {});
     },
 
     // ------------------------------------------------------------------

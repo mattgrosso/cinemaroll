@@ -13,6 +13,7 @@
 // consume it. Everything here is pure; fetching and storage live elsewhere.
 
 import { normalizedRatingToStars } from './starRating.js';
+import { contentRevision, REVISION_PATTERN } from './feedRevision.js';
 
 export const INTERCHANGE_FORMAT = 'film-club/1';
 
@@ -84,7 +85,7 @@ export function toInterchange (entries, getRatingFn, { name, source = 'cinemarol
     movies.push(movie);
   });
 
-  return {
+  const feed = {
     format: INTERCHANGE_FORMAT,
     source,
     name: name || 'A friend',
@@ -94,6 +95,11 @@ export function toInterchange (entries, getRatingFn, { name, source = 'cinemarol
     movieCount: movies.length,
     movies
   };
+  // Brian's sync guide (2026-10-06): a 32-hex token that moves with the body
+  // and only the body, readable on its own at /revision.json, so an
+  // unchanged refresh costs a few bytes instead of the whole feed.
+  feed.revision = contentRevision(feed);
+  return feed;
 }
 
 // ---------------------------------------------------------------------------
@@ -110,7 +116,7 @@ export function detectFormat (payload) {
   return null;
 }
 
-function profileFromMovies (movies, { name, source, marker }) {
+function profileFromMovies (movies, { name, source, marker, revision = null }) {
   const withRatings = movies.filter((movie) => Number.isFinite(movie.rating));
   const byRating = [...withRatings].sort((a, b) => b.rating - a.rating);
   const lastWatched = (movie) => movie.viewings?.[0]?.watchedAt ?? null;
@@ -140,6 +146,9 @@ function profileFromMovies (movies, { name, source, marker }) {
   return {
     name: name || 'A friend',
     source: source || 'external',
+    // The feed's revision when it had one: the reader's preflight compares
+    // /revision.json to this and skips the body when they match.
+    revision: typeof revision === 'string' && REVISION_PATTERN.test(revision) ? revision : null,
     updatedAt: marker || Date.now(),
     counts: {
       titles: withRatings.length,
@@ -179,7 +188,7 @@ export function fromInterchange (payload) {
     }))
     .filter((movie) => Number.isFinite(movie.tmdbId));
 
-  return profileFromMovies(movies, { name: payload.name, source: payload.source, marker: payload.marker });
+  return profileFromMovies(movies, { name: payload.name, source: payload.source, marker: payload.marker, revision: payload.revision });
 }
 
 // Movie Log's own records, unmodified — so Brian only has to expose data,

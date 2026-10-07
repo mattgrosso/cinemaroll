@@ -35,6 +35,8 @@
 // say so again. Otherwise ignoring one notification means never hearing
 // about that chore again.
 
+const { contentRevision } = require('./feedRevision.js');
+
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -667,7 +669,11 @@ function dayFeedFrom (feed, { cutoff, tz, marker }) {
     if (viewings.length) next.viewings = kept.map((viewing) => ({ ...viewing, watchedAt: dayStamp(tz, Number(viewing.watchedAt)) }));
     movies.push(next);
   });
-  return { ...feed, marker, movieCount: movies.length, movies, dayOnly: true };
+  const copy = { ...feed, marker, movieCount: movies.length, movies, dayOnly: true };
+  // The copy's body differs from the live feed (viewings filtered to the day
+  // boundary), so it carries its own revision — see feedRevision.js.
+  copy.revision = contentRevision(copy);
+  return copy;
 }
 
 /**

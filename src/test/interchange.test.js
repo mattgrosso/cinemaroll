@@ -116,7 +116,9 @@ describe('toInterchange', () => {
       const { starRating, ...rest } = starred.movies[0]
       expect(starRating).toBe(4.5)
       expect(rest).toEqual(plain.movies[0])
-      expect({ ...starred, movies: null }).toEqual({ ...plain, movies: null })
+      // The body changed (a star rating appeared), so the revision moved too.
+      expect(starred.revision).not.toBe(plain.revision)
+      expect({ ...starred, movies: null, revision: null }).toEqual({ ...plain, movies: null, revision: null })
     })
 
     it('round trip: a feed carrying starRating still consumes cleanly', () => {

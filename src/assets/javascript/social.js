@@ -493,6 +493,32 @@ export function myRatingsById (myEntries, getRatingFn) {
 // was the only test. So a caller that is about to SHOW club data may name a
 // `maxAgeMs`; a fetch older than that counts as missing. Profiles are ~100KB
 // each, which is why this is opt-in per surface rather than the default.
+// External feeds are someone else's Firebase bill (Brian, 2026-10-06: Movie
+// Log was "running out of Firebase download space because we're giving him
+// so much data" — every Cinema Roll refresh of his feed is a download billed
+// to his project). So: at most one sync an hour unless forced, a revision
+// preflight before any body, and the last result kept across launches.
+export const EXTERNAL_FEED_MAX_AGE_MS = 60 * 60 * 1000;
+
+/** Whether an external sync should run at all right now. */
+export function externalSyncDue ({ friends = {}, profiles = {}, syncedAt = 0, maxAgeMs = EXTERNAL_FEED_MAX_AGE_MS, now = Date.now(), force = false } = {}) {
+  const ids = Object.keys(friends || {});
+  if (!ids.length) return false;
+  if (force) return true;
+  if (ids.some((id) => !profiles?.[id])) return true;
+  return (now - (Number(syncedAt) || 0)) > maxAgeMs;
+}
+
+/**
+ * After the preflight: is the body download needed? Only when the feed we
+ * hold carries no revision, the head could not be read, or it moved.
+ */
+export function feedBodyNeeded ({ cached, headRevision } = {}) {
+  if (!cached?.revision) return true;
+  if (typeof headRevision !== 'string' || !headRevision) return true;
+  return headRevision !== cached.revision;
+}
+
 export function clubFetchesNeeded ({
   friendKeys = [], nativeProfiles = {}, externalFriends = {}, externalProfiles = {},
   fetchedAt = 0, maxAgeMs = Infinity, now = Date.now()
