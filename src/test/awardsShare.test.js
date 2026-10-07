@@ -71,7 +71,7 @@ describe('awards travel with ratings', () => {
   });
 });
 
-import { friendCeremony, stripCeremony, categoryMatchKey } from '@/assets/javascript/awardsShare.js';
+import { friendCeremony, stripCeremony, categoryMatchKey, samePerson } from '@/assets/javascript/awardsShare.js';
 
 // Movie Log as shipped (2026-10-07): no awardsName, labels "Goegan Globes: Best Picture".
 describe('friendCeremony', () => {
@@ -101,6 +101,16 @@ describe('friendCeremony', () => {
     expect(y2015.categories).toHaveLength(1);
     expect(y2015.categories[0].picks.map((p) => p.who)).toEqual(['Brian', 'Matt']);
     expect(categoryMatchKey('Best Film Editing')).toBe('best editing');
+  });
+});
+
+describe('samePerson', () => {
+  it('matches on surname or two shared parts, not on one common first name', () => {
+    expect(samePerson('Elizabeth Chai Vasarhelyi', 'Chai Vasarhelyi')).toBe(true);
+    expect(samePerson('Joel and Ethan Coen', 'Joel Coen')).toBe(true);
+    expect(samePerson('Chris Lavis', 'Chris Pine')).toBe(false);
+    expect(samePerson('Sean Penn', 'Benicio del Toro')).toBe(false);
+    expect(samePerson('', 'Sean Penn')).toBe(false);
   });
 });
 
@@ -181,8 +191,16 @@ describe('clubAwardsByYear', () => {
     const matt = { name: 'Matt', ceremony: 'The Groskers', awards: { 515042: [won(2018, 'Best Director', 'Jimmy Chin')] }, titles: { 515042: { t: 'Free Solo', p: '/fs.jpg' } } };
     const [y] = clubAwardsByYear([brian, matt]);
     expect(y.categories[0].picks.map((p) => `${p.who}: ${p.name}`)).toEqual(['Brian: Jimmy Chin, Elizabeth Chai Vasarhelyi', 'Matt: Jimmy Chin']);
-    expect(y.categories[0].choices).toHaveLength(2);
+    // Same film, a person in common: one row, agreed.
+    expect(y.categories[0].choices).toHaveLength(1);
+    expect(y.categories[0].choices[0]).toMatchObject({ name: 'Jimmy Chin, Elizabeth Chai Vasarhelyi', who: ['Brian', 'Matt'] });
     expect(y.categories[0].agreed).toBe(true);
+    // Spelled differently on each side still counts; a different person does not.
+    const spelled = { ...matt, awards: { 515042: [won(2018, 'Best Director', 'E. Chai Vasarhelyi and J. Chin')] } };
+    expect(clubAwardsByYear([brian, spelled])[0].categories[0].agreed).toBe(true);
+    const other = { ...matt, awards: { 515042: [won(2018, 'Best Director', 'Alex Honnold')] } };
+    expect(clubAwardsByYear([brian, other])[0].categories[0].agreed).toBe(false);
+    expect(clubAwardsByYear([brian, other])[0].categories[0].choices).toHaveLength(2);
     const alone = clubAwardsByYear([brian])[0].categories[0];
     expect(alone.choices).toEqual([{ movieId: 515042, title: 'Free Solo', poster: '/fs.jpg', name: 'Jimmy Chin, Elizabeth Chai Vasarhelyi', who: ['Brian'], ceremonies: ['Goegan Globes'] }]);
   });

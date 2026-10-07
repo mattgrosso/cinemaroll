@@ -66,6 +66,26 @@ export function categoryKind (label) {
   return HOUSE_KIND[categoryMatchKey(label)] || (PERSON_LABEL.test(String(label || '')) ? 'person' : 'movie');
 }
 
+// Are two spellings the same person? Members write names differently
+// ("Elizabeth Chai Vasarhelyi" / "Chai Vasarhelyi", "Joel and Ethan Coen" /
+// "Joel Coen"): a shared surname, or two shared name parts, is a match;
+// "Sean Penn" and "Benicio del Toro" share nothing. (Matt, 2026-10-07: "we
+// both put Free Solo for best director but the lists of names aren't
+// matching".)
+const nameTokens = (name) => String(name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((t) => t.length >= 3 && !['and', 'the', 'von', 'van', 'del', 'der', 'jr', 'sr'].includes(t));
+
+export function samePerson (a, b) {
+  const ta = nameTokens(a); const tb = nameTokens(b);
+  if (!ta.length || !tb.length) return false;
+  if (ta[ta.length - 1] === tb[tb.length - 1]) return true;
+  return ta.filter((t) => tb.includes(t)).length >= 2;
+}
+
+/** Any person in common between two lists of names. */
+export function samePeople (listA, listB) {
+  return (listA || []).some((a) => (listB || []).some((b) => samePerson(a, b)));
+}
+
 // --- whose ceremony ---------------------------------------------------------
 // Movie Log (as shipped 2026-10-07) sends no `awardsName`; instead every label
 // reads "Goegan Globes: Best Picture". When a profile has no ceremony name and
@@ -230,31 +250,33 @@ export function clubAwardsByYear (members) {
       // the same person for a person category. Sean Penn and Benicio del Toro
       // are both in One Battle After Another; that is not the same Best
       // Supporting Actor.
-      const people = (p) => (p.names || []).map((n) => n.trim().toLowerCase());
-      const choice = (p) => (category.kind === 'person' && people(p).length ? `n:${[...people(p)].sort().join('|')}` : `m:${p.movieId}`);
       const picks = [...category.picks].sort((a, b) => a.who.localeCompare(b.who));
-      // Agreed: the same film (film category) or at least one person in common
-      // (person category) between two members.
-      const agreed = picks.some((a, i) => picks.slice(i + 1).some((b) => (category.kind === 'person' && people(a).length && people(b).length)
-        ? people(a).some((n) => people(b).includes(n))
-        : a.movieId === b.movieId));
+      // Two picks are the same choice when they are the same film and, for a
+      // person category, the same people — or one side named nobody.
+      const same = (a, b) => a.movieId === b.movieId && (category.kind !== 'person' || !a.names?.length || !b.names?.length || samePeople(a.names, b.names));
+      const agreed = picks.some((a, i) => picks.slice(i + 1).some((b) => same(a, b)));
       const films = new Set(category.picks.map((p) => p.movieId));
       // The same choice by several members is one row naming all of them
       // (Matt, 2026-10-07: the one-column-per-member cards were "really tall
       // and narrow"). Shared choices first.
-      const grouped = new Map();
+      const rows = [];
       picks.forEach((p) => {
-        const key = choice(p);
-        const row = grouped.get(key) || { movieId: p.movieId, title: p.title, poster: p.poster, who: [], ceremonies: [] };
-        if (p.name && !row.name) row.name = p.name;
+        let row = rows.find((r) => same(r, p));
+        if (!row) {
+          row = { movieId: p.movieId, title: p.title, poster: p.poster, names: p.names || [], who: [], ceremonies: [] };
+          if (p.name) row.name = p.name;
+          rows.push(row);
+        }
+        // Keep the fuller rendering of the people ("Elizabeth Chai Vasarhelyi"
+        // over "Chai Vasarhelyi").
+        if (p.name && (!row.name || p.name.length > row.name.length)) { row.name = p.name; row.names = p.names || row.names; }
         if (!row.poster && p.poster) row.poster = p.poster;
         row.who.push(p.who);
         // Shown by the award's name, not the person's (Matt, 2026-10-07):
         // "Goegan Globes · The Groskers".
         row.ceremonies.push(p.ceremony);
-        grouped.set(key, row);
       });
-      const choices = [...grouped.values()].sort((a, b) => (b.who.length - a.who.length) || a.who[0].localeCompare(b.who[0]));
+      const choices = rows.map(({ names, ...row }) => row).sort((a, b) => (b.who.length - a.who.length) || a.who[0].localeCompare(b.who[0]));
       return { ...category, picks: picks.map(({ names, ...p }) => p), choices, agreed, filmCount: films.size };
     }).sort((a, b) => (Number(b.agreed) - Number(a.agreed)) || (houseCategoryRank(a.label) - houseCategoryRank(b.label)) || a.label.localeCompare(b.label))
   }));
