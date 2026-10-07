@@ -257,8 +257,7 @@
               <span class="cs-award-title">{{ row.name || row.title || 'Untitled' }}</span>
               <span v-if="row.name && row.title" class="cs-award-for">{{ row.title }}</span>
             </span>
-            <!-- One unbreakable chip per ceremony: a wrap falls between
-                 "Goegan Globes" and "The Groskers", never inside one. -->
+            <!-- One ceremony per line, never broken mid-name. -->
             <span class="cs-award-who"><span v-for="ceremony in row.ceremonies" :key="ceremony" class="cs-award-ceremony">{{ ceremony }}</span></span>
           </div>
         </div>
@@ -956,9 +955,8 @@ export default {
 .cs-award-text { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; row-gap: 1px; }
 .cs-award-title { color: #fff; font-size: 0.84rem; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
 .cs-award-for { color: #ccc; font-size: 0.7rem; line-height: 1.2; }
-.cs-award-who { color: #ccc; display: flex; flex: 0 1 auto; flex-wrap: wrap; font-size: 0.65rem; font-weight: 700; justify-content: flex-end; letter-spacing: 0.05em; line-height: 1.25; max-width: 42%; text-align: right; text-transform: uppercase; }
+.cs-award-who { color: #ccc; display: flex; flex: 0 1 auto; flex-direction: column; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em; line-height: 1.3; max-width: 42%; text-align: right; text-transform: uppercase; }
 .cs-award-ceremony { white-space: nowrap; }
-.cs-award-ceremony + .cs-award-ceremony::before { content: '·'; margin: 0 0.3em; }
 .cs-award-row.shared .cs-award-who { color: #ffc107; }
 
 .cs-section {
