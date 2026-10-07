@@ -55,6 +55,12 @@ import { announceFriendRequest , closeNotificationsWhere } from "../utils/push.j
 // only changes once a year, so a server was pure cost. Yearly update: see
 // "Academy Awards data" in CLAUDE.md.
 export const ACADEMY_AWARDS_URL = '/data/academy-awards.json';
+// The newest film year in that file. Part of the IndexedDB snapshot key, so a
+// device that cached last year's dataset fetches the new one once this moves
+// (scripts/build-oscars-year.mjs adds a ceremony; bump this with it).
+export const ACADEMY_AWARDS_LATEST_YEAR = 2025;
+const ACADEMY_SNAPSHOT = `allAcademyAwards-${ACADEMY_AWARDS_LATEST_YEAR}`;
+const BEST_PICTURE_SNAPSHOT = `academyAwardWinners-${ACADEMY_AWARDS_LATEST_YEAR}`;
 async function fetchAcademyAwardsDataset () {
   const response = await axios.get(ACADEMY_AWARDS_URL);
   return response.data || [];
@@ -1548,7 +1554,7 @@ export default createStore({
         // cold launch re-ran all 98 requests — the single largest source of API
         // traffic in the app. The list changes once a year, so it caches like
         // movieLog/settings do, keyed 'global' because it isn't user-specific.
-        const cached = await loadSnapshot('global', 'academyAwardWinners');
+        const cached = await loadSnapshot('global', BEST_PICTURE_SNAPSHOT);
         if (cached && Object.keys(cached).length) {
           context.commit('setAcademyAwardWinners', cached);
         }
@@ -1586,7 +1592,7 @@ export default createStore({
           // Only cache a complete-looking result; a partial fetch shouldn't be
           // baked in as the answer for the next month.
           if (bestPictureWinners.length) {
-            saveSnapshot('global', 'academyAwardWinners', winners);
+            saveSnapshot('global', BEST_PICTURE_SNAPSHOT, winners);
           }
         } catch (error) {
           console.error('Failed to get awards data:', error);
@@ -1611,7 +1617,7 @@ export default createStore({
         // fetch TOGETHER, so the snapshot only ever won a race to first paint
         // — the download happened on every launch anyway. Awaiting the cache
         // first means a device that already has it downloads nothing.
-        const cached = await loadSnapshot('global', 'allAcademyAwards');
+        const cached = await loadSnapshot('global', ACADEMY_SNAPSHOT);
         if (cached && cached.length) {
           context.commit('setAllAcademyAwards', cached);
         }
@@ -1627,7 +1633,7 @@ export default createStore({
           }));
           context.commit('setAllAcademyAwards', data);
           if (data.length) {
-            saveSnapshot('global', 'allAcademyAwards', data);
+            saveSnapshot('global', ACADEMY_SNAPSHOT, data);
           }
         } catch (error) {
           console.error('Failed to get the full Academy Awards dataset:', error);

@@ -58,6 +58,7 @@ vi.mock('@/utils/offlineStore.js', () => ({
 }))
 
 let store
+let storeModule
 
 // A single `await Promise.resolve()` only flushes one microtask tick, which
 // isn't always enough to drain a `.then()` chained onto a mocked promise
@@ -74,7 +75,7 @@ beforeEach(async () => {
   queryMock.mockClear()
   saveSnapshotMock.mockReset()
 
-  const storeModule = await import('@/store/index.js')
+  storeModule = await import('@/store/index.js')
   store = storeModule.default
 
   // Route through devModeTopKey ('testing-database') so databaseTopKey
@@ -372,7 +373,7 @@ describe('initializeDB: Best Picture enrichment is cached', () => {
 
   it('makes no TMDB calls at all when the snapshot already has the winners', async () => {
     loadSnapshotMock.mockImplementation((topKey, kind) => {
-      if (kind === 'academyAwardWinners') {
+      if (kind === `academyAwardWinners-${storeModule.ACADEMY_AWARDS_LATEST_YEAR}`) {
         return Promise.resolve({ bestPicture: [{ id: 1, title: 'Cached Winner', academyAwardsYear: 1994 }] })
       }
       return Promise.resolve(null)
@@ -406,7 +407,7 @@ describe('initializeDB: Best Picture enrichment is cached', () => {
     await flushMicrotasks()
 
     expect(store.state.academyAwardWinners.bestPicture).toHaveLength(2)
-    expect(saveSnapshotMock).toHaveBeenCalledWith('global', 'academyAwardWinners', expect.any(Object))
+    expect(saveSnapshotMock).toHaveBeenCalledWith('global', `academyAwardWinners-${storeModule.ACADEMY_AWARDS_LATEST_YEAR}`, expect.any(Object))
   })
 
   it('downloads the static awards file once for both the Best Picture list and the full list', async () => {
@@ -438,7 +439,7 @@ describe('initializeDB: Best Picture enrichment is cached', () => {
     await store.dispatch('initializeDB')
     await flushMicrotasks()
 
-    const cachedWinners = saveSnapshotMock.mock.calls.filter(([, kind]) => kind === 'academyAwardWinners')
+    const cachedWinners = saveSnapshotMock.mock.calls.filter(([, kind]) => kind === `academyAwardWinners-${storeModule.ACADEMY_AWARDS_LATEST_YEAR}`)
     expect(cachedWinners).toHaveLength(0)
   })
 })
@@ -454,7 +455,7 @@ describe('initializeDB: full Academy Awards dataset (feature: "pull it down and 
     // initializeDB unconditionally also calls loadSnapshot for movieLog and
     // settings (both empty by default in this store instance) — give every
     // kind a safe default so those unrelated calls don't blow up on a bare
-    // reset mock; individual tests below override this for 'allAcademyAwards'
+    // reset mock; individual tests below override this for `allAcademyAwards-${storeModule.ACADEMY_AWARDS_LATEST_YEAR}`
     // specifically where they need to.
     loadSnapshotMock.mockImplementation(() => Promise.resolve(null))
   })
@@ -482,7 +483,7 @@ describe('initializeDB: full Academy Awards dataset (feature: "pull it down and 
     expect(store.state.allAcademyAwards[0]).toMatchObject({ category: 'Best Picture', isWinner: true, isActing: false })
     expect(store.state.allAcademyAwards[1]).toMatchObject({ category: 'Best Actor', isWinner: true, isActing: true })
     expect(store.state.allAcademyAwards[2]).toMatchObject({ category: 'Best Actor', isWinner: false, isActing: true })
-    expect(saveSnapshotMock).toHaveBeenCalledWith('global', 'allAcademyAwards', store.state.allAcademyAwards)
+    expect(saveSnapshotMock).toHaveBeenCalledWith('global', `allAcademyAwards-${storeModule.ACADEMY_AWARDS_LATEST_YEAR}`, store.state.allAcademyAwards)
   })
 
   // Deliberately NOT a race any more. It used to kick off the cache read and
@@ -491,7 +492,7 @@ describe('initializeDB: full Academy Awards dataset (feature: "pull it down and 
   // the cache first is the whole cost fix.
   it('downloads nothing when the snapshot already has it', async () => {
     loadSnapshotMock.mockImplementation((topKey, kind) => {
-      if (kind === 'allAcademyAwards') {
+      if (kind === `allAcademyAwards-${storeModule.ACADEMY_AWARDS_LATEST_YEAR}`) {
         return Promise.resolve([{ id: 1, category: 'Cached', isWinner: true, isActing: false }])
       }
       return Promise.resolve(null)
@@ -517,7 +518,7 @@ describe('initializeDB: full Academy Awards dataset (feature: "pull it down and 
     await flushMicrotasks()
 
     expect(store.state.allAcademyAwards).toEqual([{ id: 9, category: 'Best Picture', tmdb: '900', year: 2020, isWinner: true, isActing: false }])
-    expect(saveSnapshotMock).toHaveBeenCalledWith('global', 'allAcademyAwards', expect.any(Array))
+    expect(saveSnapshotMock).toHaveBeenCalledWith('global', `allAcademyAwards-${storeModule.ACADEMY_AWARDS_LATEST_YEAR}`, expect.any(Array))
   })
 
   it('does not re-fetch once already populated (fetch-once guard, same convention as academyAwardWinners)', async () => {

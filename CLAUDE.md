@@ -277,9 +277,12 @@ that mutates data. **Never use the real account for that.**
 `public/data/academy-awards.json` is the full Oscars dataset (every category, wins and
 nominations), served as a static file from S3/CloudFront and cached in IndexedDB by
 `initializeDB`. It replaced the `film-awards-api` service on Railway (Sep 2026); the
-Best Picture list is filtered from the same file. To add a new year after the ceremony:
-in `~/code/film-awards-api`, update `AcademyAwards.json` and rebuild the database as its
-README describes, run `npm start`, then
-`curl -s localhost:3000/awards > ~/code/cinemaroll/public/data/academy-awards.json`
-(check the port in its `server.js`) and deploy Cinema Roll. Devices that already cached
-the old file keep it until their IndexedDB snapshot is cleared.
+Best Picture list is filtered from the same file. To add a new year after the ceremony
+(since 2026-10-07): `node scripts/build-oscars-year.mjs <N> --dry` to check the parse of
+Wikipedia's "<N>th Academy Awards" article, then without `--dry` to resolve films and
+people on TMDB and append the records to this file AND to
+`~/code/film-awards-api/AcademyAwards.json` (so the upstream stays the source of truth);
+bump `ACADEMY_AWARDS_LATEST_YEAR` in `src/store/index.js` — it is part of the IndexedDB
+snapshot key, which is what makes devices that cached last year's file fetch the new
+one — then deploy. The `year` field is the films' year (the 98th ceremony, March 2026,
+is `2025`).

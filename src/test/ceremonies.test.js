@@ -95,10 +95,11 @@ describe('the Oscars board', () => {
     { year: 1994, category: 'Best Director', tmdb: '13', title: 'Forrest Gump', img: '/fg.jpg', isWinner: true, isActing: false, names: [{ name: 'Robert Zemeckis' }] },
     { year: 1994, category: 'Honorary Award', tmdb: null, title: null, img: null, isWinner: true, isActing: true, names: [{ name: 'Michelangelo Antonioni' }] },
     { year: 'x', category: 'Best Picture', tmdb: '1' }
-  ];
+  ].map((r) => ({ ceremony: '67th Academy Awards', ...r }));
   it('uses the Academy\'s order, names people for acting and directing, not producers', () => {
     const [y1994] = boardFromEntries(entriesFromAcademy(records), ACADEMY_BOARD_OPTIONS);
     expect(y1994.year).toBe(1994);
+    expect(y1994.meta).toEqual({ ceremony: '67th Academy Awards' });
     expect(y1994.categories.map((c) => c.label)).toEqual(['Best Picture', 'Best Director', 'Best Actor', 'Honorary Award']);
     expect(y1994.categories[0].winners).toEqual([{ movieId: 13, title: 'Forrest Gump', poster: '/fg.jpg' }]);
     expect(y1994.categories[0].nominees).toEqual([{ movieId: 278, title: 'The Shawshank Redemption', poster: '/ssr.jpg' }]);

@@ -257,3 +257,6 @@ Cannes and whatever else… the history of any award that we have access to."
   rerun it after editing the dataset. The scrape had junk — BAFTA nominee
   rows that were director names, Globes titles with wiki markup — pruned and
   cleaned 2026-10-07.
+- Oscars: `year` is the films' year; the board caption carries the ceremony
+  ("98th Academy Awards · films of 2025"). New ceremonies come in through
+  `scripts/build-oscars-year.mjs` (see CLAUDE.md, "Academy Awards data").

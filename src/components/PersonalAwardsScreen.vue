@@ -151,7 +151,10 @@ export default {
     },
     boardCaption () {
       if (this.activeTab?.who) return `${this.activeTab.who}'s own annual awards`;
-      if (this.ceremonyId === 'oscars') return 'Every winner and nominee, from the first ceremony';
+      if (this.ceremonyId === 'oscars') {
+        const ceremony = this.board.find((entry) => entry.year === this.boardYear)?.meta?.ceremony;
+        return ceremony ? `${ceremony} · films of ${this.boardYear}` : 'Every winner and nominee, from the first ceremony';
+      }
       return this.board.some((entry) => entry.categories.some((c) => c.nominees.length)) ? 'Winners and nominees' : 'Winners';
     },
     // The one strip serves both views.

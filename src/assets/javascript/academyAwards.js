@@ -22,6 +22,7 @@ export const ACADEMY_CATEGORY_ORDER = [
   "Best Animated Feature",
   "Best Cinematography",
   "Best Costume Design",
+  "Best Casting",
   "Best Documentary Feature",
   "Best Documentary",
   "Best Documentary Short Subject",

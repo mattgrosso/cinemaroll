@@ -58,6 +58,7 @@ export function boardFromEntries (entries, { order = HOUSE } = {}) {
     if (!Number.isInteger(entry?.year) || !entry.label) return;
     const year = years.get(entry.year) || new Map();
     years.set(entry.year, year);
+    if (entry.meta && !year.meta) year.meta = entry.meta;
     const key = entry.label.trim().toLowerCase();
     const category = year.get(key) || { key, label: entry.label.trim(), kind: categoryKind(entry.label), winners: [], nominees: [], seen: new Set() };
     year.set(key, category);
@@ -70,6 +71,7 @@ export function boardFromEntries (entries, { order = HOUSE } = {}) {
   });
   return [...years.entries()].sort(([a], [b]) => b - a).map(([year, categories]) => ({
     year,
+    meta: categories.meta || null,
     categories: [...categories.values()].map(({ seen, ...category }) => {
       // A win listed as a nomination as well counts once.
       const wonIds = new Set(category.winners.map((p) => `${p.name || ''}|${p.movieId ?? p.title ?? ''}`));
@@ -108,7 +110,10 @@ export function entriesFromAcademy (records) {
       result: record.isWinner ? 'won' : 'nominated',
       movieId: Number.isInteger(tmdb) && tmdb > 0 ? tmdb : null,
       title: record.title || null,
-      poster: record.img || null
+      poster: record.img || null,
+      // "97th Academy Awards": the board's caption, since the year shown is
+      // the films' year and the ceremony was the spring after.
+      meta: record.ceremony ? { ceremony: record.ceremony } : undefined
     };
     // Names ride along for every record; the board shows them only on a
     // person category (so Best Picture's producers stay out of the way).
