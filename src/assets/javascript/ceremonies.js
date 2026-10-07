@@ -18,10 +18,9 @@
 // and a pick is { movieId, title, poster, name? } — movieId null when the
 // source has no TMDB id and no title in the club matched.
 import { ACADEMY_CATEGORY_ORDER } from './academyAwards.js';
-import { PERSONAL_AWARD_CATEGORIES } from './personalAwardsCategories.js';
-import { validAwards, friendCeremony, stripCeremony, categoryMatchKey, houseCategoryRank } from './awardsShare.js';
+import { validAwards, friendCeremony, stripCeremony, categoryMatchKey, categoryKind, houseCategoryRank } from './awardsShare.js';
 
-export { categoryMatchKey };
+export { categoryMatchKey, categoryKind };
 
 // Oscar boards read in the Academy's own order; everything else in the house
 // order (Best Picture first, then acting and craft, then the rest by name).
@@ -35,20 +34,6 @@ export function categoryRank (label, order = HOUSE) {
 }
 
 // --- the board -----------------------------------------------------------------
-// Is this a category for a person (Best Director, Best Actress, an honorary
-// award) or for a film? The house list decides where it can; otherwise the
-// label does. It matters because publishers attach people to film categories
-// too — Movie Log lists every producer on Best Picture, three editors on Best
-// Editing — and on a row that is noise (Matt, 2026-10-07: "way too much data
-// on the screen"). A film category shows the film; a person category shows
-// the people, with the film underneath.
-const HOUSE_KIND = Object.fromEntries(PERSONAL_AWARD_CATEGORIES.map((c) => [categoryMatchKey(c.name), c.type]));
-const PERSON_LABEL = /actor|actress|performance|director|directing|honorary|humanitarian|memorial|special award|breakthrough|newcomer|debut|star of/i;
-
-export function categoryKind (label) {
-  return HOUSE_KIND[categoryMatchKey(label)] || (PERSON_LABEL.test(String(label || '')) ? 'person' : 'movie');
-}
-
 // `entries` are flat: { year, label, result, movieId, title, poster, name? }.
 // Within a category, duplicate picks fold together: a film category keeps one
 // pick per film (people dropped), a person category one per person-and-film.

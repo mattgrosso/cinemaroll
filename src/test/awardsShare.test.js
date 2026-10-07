@@ -149,6 +149,27 @@ describe('clubAwardsByYear', () => {
     expect(years[1].categories[0].picks).toEqual([{ who: 'Matt', ceremony: 'The Groskers', movieId: 680, title: 'Pulp Fiction', poster: null }]);
   });
 
+  // Matt, 2026-10-07: Brian's Best Supporting Actor was Sean Penn, mine was
+  // Benicio del Toro, both in One Battle After Another — not an agreement.
+  // And Movie Log's producers and co-editors fold into one pick per film.
+  it('judges agreement by the person for person categories, and folds a member\'s co-winners', () => {
+    const won = (year, label, name) => ({ year, category: label.toLowerCase().replace(/ /g, ''), label, result: 'won', ...(name ? { name } : {}) });
+    const matt = { name: 'Matt', ceremony: 'The Groskers', awards: { 1054867: [won(2025, 'Best Supporting Actor', 'Benicio del Toro'), won(2025, 'Best Picture')] }, titles: { 1054867: { t: 'One Battle After Another', p: '/obaa.jpg' } } };
+    const brian = { name: 'Brian', ceremony: 'Goegan Globes', awards: { 1054867: [won(2025, 'Best Supporting Actor', 'Sean Penn'), won(2025, 'Best Picture', 'Adam Somner'), won(2025, 'Best Picture', 'Sara Murphy'), won(2025, 'Best Editing', 'Andy Jurgensen'), won(2025, 'Best Editing', 'Someone Else')] }, titles: { 1054867: { t: 'One Battle After Another', p: '/obaa.jpg' } } };
+    const [y2025] = clubAwardsByYear([matt, brian]);
+    const by = (label) => y2025.categories.find((c) => c.label === label);
+    expect(by('Best Supporting Actor').agreed).toBe(false);
+    expect(by('Best Supporting Actor').picks.map((p) => `${p.who}: ${p.name}`)).toEqual(['Brian: Sean Penn', 'Matt: Benicio del Toro']);
+    expect(by('Best Picture').agreed).toBe(true);
+    expect(by('Best Picture').picks).toEqual([
+      { who: 'Brian', ceremony: 'Goegan Globes', movieId: 1054867, title: 'One Battle After Another', poster: '/obaa.jpg' },
+      { who: 'Matt', ceremony: 'The Groskers', movieId: 1054867, title: 'One Battle After Another', poster: '/obaa.jpg' }
+    ]);
+    expect(by('Best Editing').picks).toHaveLength(1);
+    expect(by('Best Editing').picks[0].name).toBeUndefined();
+    expect(y2025.categories.map((c) => c.label)).toEqual(['Best Picture', 'Best Supporting Actor', 'Best Editing']);
+  });
+
   it('ignores nominations, members without awards, and empty input', () => {
     expect(clubAwardsByYear([quiet])).toEqual([]);
     expect(clubAwardsByYear([])).toEqual([]);

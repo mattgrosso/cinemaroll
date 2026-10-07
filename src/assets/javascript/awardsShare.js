@@ -52,6 +52,20 @@ export function houseCategoryRank (label) {
   return index === -1 ? HOUSE_ORDER.length : index;
 }
 
+// Is this a category for a person (Best Director, Best Actress, an honorary
+// award) or for a film? The house list decides where it can; otherwise the
+// label does. It matters because publishers attach people to film categories
+// too — Movie Log lists every producer on Best Picture, three editors on Best
+// Editing — and in a list of winners that is noise (Matt, 2026-10-07: "way too
+// much data on the screen"). A film category shows the film; a person
+// category shows the people, with the film underneath.
+const HOUSE_KIND = Object.fromEntries(PERSONAL_AWARD_CATEGORIES.map((c) => [categoryMatchKey(c.name), c.type]));
+const PERSON_LABEL = /actor|actress|performance|director|directing|honorary|humanitarian|memorial|special award|breakthrough|newcomer|debut|star of/i;
+
+export function categoryKind (label) {
+  return HOUSE_KIND[categoryMatchKey(label)] || (PERSON_LABEL.test(String(label || '')) ? 'person' : 'movie');
+}
+
 // --- whose ceremony ---------------------------------------------------------
 // Movie Log (as shipped 2026-10-07) sends no `awardsName`; instead every label
 // reads "Goegan Globes: Best Picture". When a profile has no ceremony name and
@@ -185,21 +199,32 @@ export function clubAwardsByYear (members) {
         years.set(award.year, year);
         const key = categoryMatchKey(award.label || award.category);
         if (!key) return;
-        const category = year.get(key) || { label: award.label || award.category, picks: [] };
+        const category = year.get(key) || { label: award.label || award.category, kind: categoryKind(award.label || award.category), picks: [], seen: new Set() };
         year.set(key, category);
         const title = member.titles?.[movieId];
         const pick = { who: member.name, ceremony: member.ceremony || `${member.name}'s awards`, movieId: Number(movieId), title: title?.t || null, poster: title?.p || null };
-        if (award.name) pick.name = award.name;
+        // A film category is one pick per member per film (Movie Log names
+        // every producer; that is still one Best Picture). A person category
+        // keeps each person, once.
+        if (category.kind === 'person' && award.name) pick.name = award.name;
+        const identity = `${member.name}|${pick.name || ''}|${pick.movieId}`;
+        if (category.seen.has(identity)) return;
+        category.seen.add(identity);
         category.picks.push(pick);
       });
     });
   });
   return [...years.entries()].sort(([a], [b]) => b - a).map(([year, categories]) => ({
     year,
-    categories: [...categories.values()].map((category) => {
-      const films = new Set(category.picks.map((p) => p.movieId));
+    categories: [...categories.values()].map(({ seen, ...category }) => {
+      // Agreement is on the thing awarded: the same film for a film category,
+      // the same person for a person category. Sean Penn and Benicio del Toro
+      // are both in One Battle After Another; that is not the same Best
+      // Supporting Actor.
+      const choice = (p) => (category.kind === 'person' ? (p.name ? `n:${p.name.trim().toLowerCase()}` : `m:${p.movieId}`) : `m:${p.movieId}`);
       const counts = {};
-      category.picks.forEach((p) => { counts[p.movieId] = (counts[p.movieId] || 0) + 1; });
+      category.picks.forEach((p) => { counts[choice(p)] = (counts[choice(p)] || 0) + 1; });
+      const films = new Set(category.picks.map((p) => p.movieId));
       return { ...category, picks: [...category.picks].sort((a, b) => a.who.localeCompare(b.who)), agreed: Object.values(counts).some((n) => n >= 2), filmCount: films.size };
     }).sort((a, b) => (Number(b.agreed) - Number(a.agreed)) || (houseCategoryRank(a.label) - houseCategoryRank(b.label)) || a.label.localeCompare(b.label))
   }));
