@@ -81,14 +81,16 @@ describe('FilmClubScreen', () => {
   it('splits the page into tabs, each holding its own sections', async () => {
     const entries = [myMovie(1, 'Heat', 8), myMovie(2, 'Cats', 9)];
     const titles = (w) => w.findAll('.cs-section-title').map((title) => title.text());
-    expect(factory({ profiles: PROFILES, myEntries: entries }).findAll('.fc-tab').map((b) => b.text())).toEqual(['Activity', 'Friends', 'Awards', 'Taste']);
-    expect(titles(factory({ profiles: PROFILES, myEntries: entries, tab: 'friends' }))).toContain('Friends');
+    expect(factory({ profiles: PROFILES, myEntries: entries }).findAll('.fc-tab').map((b) => b.text())).toEqual(['Activity', 'Friends', 'Awards', 'Taste', 'Charts']);
+    expect(factory({ profiles: PROFILES, myEntries: entries, tab: 'friends' }).find('.cs-friend-list').exists()).toBe(true);
+    // "Has anybody seen…" moved in above the friends (2026-10-07).
+    expect(titles(factory({ profiles: PROFILES, myEntries: entries, tab: 'friends' }))[0]).toBe('Has anybody seen…');
     expect(titles(factory({ profiles: PROFILES, myEntries: entries, tab: 'friends' }))).not.toContain('Club favorites');
     expect(titles(factory({ profiles: PROFILES, myEntries: entries, tab: 'taste' }))).toContain('Club favorites');
     const wrapper = factory({ profiles: PROFILES, myEntries: entries });
     await wrapper.findAll('.fc-tab')[1].trigger('click');
     expect(wrapper.vm.$router.replace).toHaveBeenCalledWith({ path: '/film-club', query: { tab: 'friends' } });
-    expect(titles(wrapper)).toContain('Friends');
+    expect(wrapper.find('.cs-friend-list').exists()).toBe(true);
   });
 
   it('keeps the recently-watched feed at the very top', () => {
@@ -198,8 +200,8 @@ describe('FilmClubScreen', () => {
       expect(section.props('startOpen')).toBe(false);
     });
 
-    // Friends is a plain section, not one of the accordions.
-    expect(wrapper.findAll('.cs-section-title').map((t) => t.text())).toContain('Friends');
+    // The friends list is a plain section, not one of the accordions.
+    expect(wrapper.find('.cs-friend-list').exists()).toBe(true);
   });
 });
 
@@ -403,7 +405,7 @@ describe('FilmClubScreen — "Has anybody seen…"', () => {
     }
   };
 
-  const mountWithClub = () => factory({
+  const mountWithClub = () => factory({ tab: 'friends',
     profiles: SEARCH_PROFILES,
     myEntries: [myMovie(1, 'Heat', 8), myMovie(2, 'Cats', 9)]
   });

@@ -1,8 +1,6 @@
 <template>
   <div class="film-club-screen">
     <BackLink/>
-    <h1 class="cs-title">Film Club</h1>
-    <p class="cs-subtitle">Friends on Cinema Roll — what they're watching and where your tastes meet.</p>
 
     <!-- Painted for one frame before the real content (nextFrame): the
          tap that opened this screen is acknowledged at once instead of
@@ -96,6 +94,11 @@
       </section>
 
       <!-- "Has anybody seen this?" — report -P1lQnAdARMxUpPScybv. -->
+      <!-- Friends sit high on the page now: picking one was several screens
+           down ("I have to scroll pretty far down before I can, like, select
+           a friend and look at what they've got going on"). -->
+</template>
+<template v-if="tab === 'friends'">
       <section v-if="friendRows.length" class="cs-section">
         <h2 class="cs-section-title">Has anybody seen…</h2>
         <p class="cs-caption">Anything you or a friend has logged.</p>
@@ -164,13 +167,7 @@
         </div>
       </section>
 
-      <!-- Friends sit high on the page now: picking one was several screens
-           down ("I have to scroll pretty far down before I can, like, select
-           a friend and look at what they've got going on"). -->
-</template>
-<template v-if="tab === 'friends'">
       <section class="cs-section">
-        <h2 class="cs-section-title">Friends</h2>
         <p v-if="!friendRows.length" class="cs-empty">No friends yet — open "Find people" below and send a request.</p>
         <!-- Scrolls inside its own box once there are more than two or so
              friends (2026-10-01: "it's getting to be too tall because of the
@@ -256,7 +253,7 @@
         <h2 class="cs-section-title">Club awards</h2>
         <p class="cs-caption">Everyone's winners, side by side. Gold where two or more of you agreed.</p>
         <div class="cs-years">
-          <button v-for="entry in clubAwards" :key="entry.year" type="button" class="cs-year" :class="{ on: entry.year === awardsYear }" @click="selectAwardsYear(entry.year)">{{ entry.year }}</button>
+          <button v-for="entry in clubAwards" :key="entry.year" type="button" class="cs-year" :class="{ on: entry.year === (awardsYear ?? clubAwards[0]?.year) }" @click="selectAwardsYear(entry.year)">{{ entry.year }}</button>
         </div>
         <div ref="awardList" class="cs-award-list">
         <div v-for="category in awardsForYear" :key="category.label" class="cs-award-category" :class="{ agreed: category.agreed }">
@@ -315,17 +312,6 @@
 
 </template>
 <template v-if="tab === 'taste'">
-      <!-- The charts are their own screen: they're the interesting half of
-           the club once there are a few people in it, and they would double
-           the length of this page. -->
-      <button type="button" class="cs-charts-link" @click="$router.push('/club-charts')">
-        <span>
-          <strong>Club Charts</strong>
-          <em>The Venn, taste maps, blind spots, who's the contrarian</em>
-        </span>
-        <i class="bi bi-chevron-right"></i>
-      </button>
-
       <section v-if="summary && summary.clubFavorites.length" class="cs-section">
         <h2 class="cs-section-title">Club favorites</h2>
         <p class="cs-caption">Rated by two or more of you, best average first.</p>
@@ -392,6 +378,11 @@
         </div>
       </section>
 
+</template>
+<template v-if="tab === 'charts'">
+      <!-- Club Charts, once its own screen, is the fifth tab (Matt,
+           2026-10-07: "add a fifth tab that is Charts"). -->
+      <ClubCharts embedded/>
 </template>
 <template v-if="tab === 'friends'">
       <!-- Everything to do with FINDING people is housekeeping, not the daily
@@ -486,6 +477,7 @@ import { getRating } from '../assets/javascript/GetRating.js';
 import { filmClubSummary, friendSnapshot, myRatingsById } from '../assets/javascript/social.js';
 import { awardsByMovie, clubAwardsByYear, memberFromProfile } from '../assets/javascript/awardsShare.js';
 import { agreementStats, mostDecoratedFilms, mostHonouredPeople, academyAlignment } from '../assets/javascript/awardsCompare.js';
+import ClubCharts from './ClubCharts.vue';
 import { awardNameWithThe } from '../assets/javascript/personalAwards.js';
 import { clubVsCrowd } from '../assets/javascript/letterboxdCompare.js';
 import { memoByIdentity } from '../utils/memoByIdentity.js';
@@ -510,7 +502,7 @@ const FRIEND_POSTERS_PAGE = 8;
 // How close to the right edge counts as "reached the end", in px.
 const FRIEND_POSTERS_TRIGGER = 120;
 
-const FILM_CLUB_TABS = ['activity', 'friends', 'awards', 'taste'];
+const FILM_CLUB_TABS = ['activity', 'friends', 'awards', 'taste', 'charts'];
 const FILM_CLUB_TAB_KEY = 'cinemaRoll.filmClub.tab';
 // A link can name the tab (?tab=awards); else the last one you were on; else
 // Activity.
@@ -524,7 +516,7 @@ function initialFilmClubTab (route) {
 
 export default {
   name: 'FilmClubScreen',
-  components: { SkeletonBlock, BackLink, SettingsSection, SendToHat, MoviePreview },
+  components: { SkeletonBlock, BackLink, SettingsSection, SendToHat, MoviePreview, ClubCharts },
   data () {
     return {
       tab: initialFilmClubTab(this.$route),
@@ -675,7 +667,8 @@ export default {
         { key: 'activity', label: 'Activity' },
         { key: 'friends', label: 'Friends', badge: requests || null },
         { key: 'awards', label: 'Awards' },
-        { key: 'taste', label: 'Taste' }
+        { key: 'taste', label: 'Taste' },
+        { key: 'charts', label: 'Charts' }
       ];
     },
     clubMembers () {
@@ -1034,8 +1027,10 @@ export default {
 /* The feed is the part Matt likes most and it read as a thin strip, so its
    posters run larger than the other rows' (2026-08-17: "the recent feed on
    my film club could be larger"). */
-.cs-feed-row .cs-poster-card { flex: 0 0 116px; width: 116px; }
-.cs-feed-row .cs-poster { height: 174px; width: 116px; }
+/* The feed has the Activity tab to itself, so the cards are bigger and the
+   strip reads as something to flip through (Matt, 2026-10-07). */
+.cs-feed-row .cs-poster-card { flex: 0 0 156px; width: 156px; }
+.cs-feed-row .cs-poster { height: 234px; width: 156px; }
 
 /* Feed posters carry an add-to-hat button for anything not in your library,
    so an unopenable card still has something to do. */
@@ -1052,8 +1047,12 @@ export default {
 .cs-poster-tappable { cursor: pointer; }
 .cs-poster-tappable:active { transform: scale(0.97); }
 
-.fc-tabs { display: grid; gap: 0.35rem; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0 0 0.9rem; width: 100%; }
-.fc-tab { align-items: center; background: none; border: 1px solid white; border-radius: 3px; color: white; display: inline-flex; font-size: 0.85rem; font-weight: 600; gap: 0.3rem; justify-content: center; min-height: 40px; min-width: 0; padding: 0 0.3rem; }
+/* No title or blurb above these (Matt, 2026-10-07: "the actual content
+   starts more than halfway down the page"); the banner names the app and the
+   back link names the way out. */
+.fc-tabs { display: grid; gap: 0.3rem; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0.35rem 0 0.9rem; width: 100%; }
+.fc-tab { align-items: center; background: none; border: 1px solid white; border-radius: 3px; color: white; display: inline-flex; font-size: 0.78rem; font-weight: 600; gap: 0.25rem; justify-content: center; min-height: 40px; min-width: 0; padding: 0 0.2rem; }
+.fc-tab-charts.active { background: #ff7a6b; }
 .fc-tab.active { color: #000; font-weight: 700; }
 .fc-tab-activity.active { background: #24d776; }
 .fc-tab-friends.active { background: #cd7fe8; }

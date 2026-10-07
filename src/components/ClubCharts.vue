@@ -1,9 +1,12 @@
 <template>
-  <div class="club-charts">
-    <BackLink/>
-
-    <h1 class="cc-title">Club Charts</h1>
-    <p class="cc-subtitle">Where your taste and everyone else's actually meet.</p>
+  <div class="club-charts" :class="{ embedded }">
+    <!-- Inside the Film Club's Charts tab (2026-10-07) the page chrome
+         belongs to the host. -->
+    <template v-if="!embedded">
+      <BackLink/>
+      <h1 class="cc-title">Club Charts</h1>
+      <p class="cc-subtitle">Where your taste and everyone else's actually meet.</p>
+    </template>
 
     <!-- Painted for one frame before the real content (nextFrame): the
          tap that opened this screen is acknowledged at once instead of
@@ -344,6 +347,9 @@ const joinedMemo = memoByIdentity((entries, profiles) => buildOverlaps(entries, 
 export default {
   name: 'ClubCharts',
   components: { SkeletonBlock, BackLink, SendToHat, ClubVenn },
+  props: {
+    embedded: { type: Boolean, default: false }
+  },
   data () {
     return {
       painted: !SKELETON_FIRST,
@@ -555,6 +561,7 @@ export default {
   color: #eee;
   padding: 0.75rem 1rem 3rem;
 }
+.club-charts.embedded { padding: 0; }
 
 .cc-title { margin: 0.25rem 0 0; }
 .cc-subtitle { color: #ccc; font-size: 0.85rem; margin: 0.25rem 0 1rem; }

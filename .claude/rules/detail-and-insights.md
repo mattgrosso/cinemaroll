@@ -501,11 +501,15 @@ viewings `datesWithCounts` tallies, so a row always agrees with its tile.
 ## Film Club tabs (2026-10-07)
 
 Matt: the page was "feeling a bit messy" — eleven look-alike cards on a 4,400px
-scroll. It is now four tabs on the Insights control (`.fc-tabs`, URL `?tab=`,
-remembered in localStorage): **Activity** (Recently watched, Has anybody seen…),
-**Friends** (requests, the friends list, then the Requests sent / Friends on
-other apps / Find people accordions; a badge counts waiting requests),
-**Awards** (Club awards, Awards compared), **Taste** (Club Charts link, Club
-favorites, Most divisive, Running with the crowd, Club vs the crowd). A
-`$route.query.tab` watcher handles links while the screen is already mounted.
+scroll. It is now five tabs on the Insights control (`.fc-tabs`, URL `?tab=`,
+remembered in localStorage), with no page title or blurb above them ("the
+actual content starts more than halfway down the page"): **Activity** (just
+Recently watched, with bigger cards), **Friends** (Has anybody seen…, requests,
+the friends list with no heading, then the Requests sent / Friends on other
+apps / Find people accordions; a badge counts waiting requests), **Awards**
+(Club awards with the newest year lit, Awards compared), **Taste** (Club
+favorites, Most divisive, Running with the crowd, Club vs the crowd), **Charts**
+(`<ClubCharts embedded/>` — the old /club-charts screen, whose address now
+redirects to `?tab=charts`). A `$route.query.tab` watcher handles links while
+the screen is already mounted.
 Tests pass `tab:` to the factory; the remembered tab is cleared between tests.

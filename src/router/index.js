@@ -38,7 +38,6 @@ const LibraryPoster = lazyScreen(() => import(/* webpackChunkName: "library-post
 const PersonalAwardsScreen = lazyScreen(() => import(/* webpackChunkName: "awards" */ "../components/PersonalAwardsScreen.vue"));
 const FilmClubScreen = lazyScreen(() => import(/* webpackChunkName: "film-club" */ "../components/FilmClubScreen.vue"));
 const FriendComparison = lazyScreen(() => import(/* webpackChunkName: "film-club" */ "../components/FriendComparison.vue"));
-const ClubCharts = lazyScreen(() => import(/* webpackChunkName: "film-club" */ "../components/ClubCharts.vue"));
 
 // Router
 const loggedIn = () => {
@@ -521,23 +520,10 @@ const routes = [
     }
   },
   {
+    // Club Charts was its own screen until 2026-10-07; it is the Film Club's
+    // Charts tab now. Keep the address working.
     path: '/club-charts',
-    name: 'ClubCharts',
-    component: ClubCharts,
-    meta: {
-      // Back-link identity: what this screen is called, and where back
-      // goes when there is no history to go back to.
-      title: 'Club Charts',
-      parent: '/film-club',
-      requiresLogin: true
-    },
-    beforeEnter: (to, from, next) => {
-      if (!loggedIn()) {
-        next('/login');
-      } else {
-        next();
-      }
-    }
+    redirect: { path: '/film-club', query: { tab: 'charts' } }
   },
   {
     // The Venn lived here for a few hours on 2026-08-21 before moving into
