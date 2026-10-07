@@ -156,6 +156,8 @@ function shortlistReleases ({
     if (!where) continue;                        // not actually watchable yet
 
     const scores = criticScores(extra.omdb);
+    // Opening-night audiences' grade, when the film was polled (wide releases).
+    scores.cinemaScore = extra.cinemaScore || null;
     rows.push({
       id: movie.id,
       title: movie.title,
@@ -490,6 +492,7 @@ function issueBrief ({ shortlist = [], features = [], profile = null, weekOf = n
       rottenTomatoes: r.scores.rottenTomatoes,
       metacritic: r.scores.metacritic,
       imdb: r.scores.imdb,
+      cinemaScore: r.scores.cinemaScore ?? null,
       ...crowd(r.id),
       availability: r.where.summary,
       streamingOn: r.where.stream,

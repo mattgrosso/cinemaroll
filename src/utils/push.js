@@ -202,6 +202,23 @@ export async function announceFriendRequest ({ toKey, kind }) {
  * is. iOS never does this on its own, so they piled up long after the thing
  * they announced had been seen. Best-effort; never prompts.
  */
+/**
+ * Close only the notifications about one thing — a Showtimes listing that was
+ * dismissed or given a reminder — so acting on it in the app also clears it
+ * from Notification Center (Matt, 2026-10-07). `match` sees each tag.
+ */
+export async function closeNotificationsWhere (match) {
+  try {
+    const registration = await navigator.serviceWorker?.getRegistration();
+    const notifications = await registration?.getNotifications?.();
+    for (const notification of notifications || []) {
+      if (match(notification.tag || '')) notification.close();
+    }
+  } catch {
+    // No worker yet, or the platform refused: they stay until swiped.
+  }
+}
+
 export async function closeDeliveredNotifications () {
   try {
     const registration = await navigator.serviceWorker?.getRegistration();

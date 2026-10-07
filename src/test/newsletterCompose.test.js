@@ -632,3 +632,25 @@ describe('issueBrief — Letterboxd', () => {
     expect(brief.releases[0].letterboxdRatings).toBeNull();
   });
 });
+
+// CinemaScore in the newsletter (Matt, 2026-10-06): the grade rides with the
+// critics' numbers into the shortlist and the brief; absent when unpolled.
+describe('CinemaScore in the shortlist and the brief', () => {
+  it('carries the grade from enrichment into scores, and null when there is none', () => {
+    const { shortlistReleases, issueBrief } = require('../../aws-lambda/newsletterCompose.js');
+    const candidates = [
+      { id: 1, title: 'Weapons', release_date: '2025-08-08', vote_count: 900, vote_average: 7.5 },
+      { id: 2, title: 'Small Film', release_date: '2025-08-01', vote_count: 900, vote_average: 7.1 }
+    ];
+    const providers = { results: { US: { flatrate: [{ provider_name: 'Max' }] } } };
+    const enriched = new Map([
+      [1, { providers, omdb: null, cinemaScore: 'A-' }],
+      [2, { providers, omdb: null }]
+    ]);
+    const rows = shortlistReleases({ candidates, enriched, now: Date.UTC(2025, 8, 1) });
+    expect(rows.find((r) => r.id === 1).scores.cinemaScore).toBe('A-');
+    expect(rows.find((r) => r.id === 2).scores.cinemaScore).toBeNull();
+    const brief = issueBrief({ shortlist: rows, features: [], profile: {}, weekOf: '2025-W35', letterboxd: {}, myReviews: {} });
+    expect(brief.releases.find((r) => r.id === 1).cinemaScore).toBe('A-');
+  });
+});

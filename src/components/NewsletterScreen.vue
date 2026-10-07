@@ -77,6 +77,9 @@
               <span v-if="pick.rottenTomatoes != null" class="newsletter-score">
                 {{ pick.rottenTomatoes }}% RT
               </span>
+              <span v-if="pick.cinemaScore" class="newsletter-score">
+                CinemaScore {{ pick.cinemaScore }}
+              </span>
               <span v-if="pick.metacritic != null" class="newsletter-score">
                 {{ pick.metacritic }} Metacritic
               </span>

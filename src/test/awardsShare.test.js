@@ -88,3 +88,38 @@ describe("a film page's club awards", () => {
     expect(friendAwardsForMovie(friends, null)).toEqual([]);
   });
 });
+
+import { clubAwardsByYear, memberFromProfile } from '@/assets/javascript/awardsShare.js';
+
+// Matt, 2026-10-07: the club's awards, year by year — everyone's winners
+// side by side, where the club agreed.
+describe('clubAwardsByYear', () => {
+  const won = (year, label, name) => ({ year, category: label.toLowerCase().replace(/ /g, ''), label, result: 'won', ...(name ? { name } : {}) });
+  const matt = { name: 'Matt', ceremony: 'The Groskers', awards: { 550: [won(2015, 'Best Picture'), won(2015, 'Best Director', 'David Fincher')], 680: [won(2014, 'Best Picture')] }, titles: { 550: { t: 'Fight Club', p: '/fc.jpg' }, 680: { t: 'Pulp Fiction', p: null } } };
+  const brian = memberFromProfile('Brian', { awardsName: 'Gogan Globes', ratings: { 550: { r: 9, t: 'Fight Club', p: '/fc.jpg', a: [{ year: 2015, category: 'bp', label: 'Best picture', result: 'won' }, { year: 2015, category: 'bs', label: 'Best Score', result: 'nominated' }] }, 949: { r: 8, t: 'Heat', p: '/h.jpg', a: [{ year: 2015, category: 'bd', label: 'Best Director', result: 'won', name: 'Michael Mann' }] } } });
+  const quiet = memberFromProfile('Carrie', { ratings: { 550: { r: 7, t: 'Fight Club' } } });
+
+  it('lines categories up across members by label, newest year first, and marks agreement', () => {
+    const years = clubAwardsByYear([matt, brian, quiet]);
+    expect(years.map((y) => y.year)).toEqual([2015, 2014]);
+    const [y2015] = years;
+    expect(y2015.categories.map((c) => c.label)).toEqual(['Best Picture', 'Best Director']);
+    const picture = y2015.categories[0];
+    expect(picture.agreed).toBe(true);
+    expect(picture.picks).toEqual([
+      { who: 'Brian', ceremony: 'Gogan Globes', movieId: 550, title: 'Fight Club', poster: '/fc.jpg' },
+      { who: 'Matt', ceremony: 'The Groskers', movieId: 550, title: 'Fight Club', poster: '/fc.jpg' }
+    ]);
+    const director = y2015.categories[1];
+    expect(director.agreed).toBe(false);
+    expect(director.picks.map((p) => `${p.who}: ${p.name}`)).toEqual(['Brian: Michael Mann', 'Matt: David Fincher']);
+    expect(years[1].categories[0].picks).toEqual([{ who: 'Matt', ceremony: 'The Groskers', movieId: 680, title: 'Pulp Fiction', poster: null }]);
+  });
+
+  it('ignores nominations, members without awards, and empty input', () => {
+    expect(clubAwardsByYear([quiet])).toEqual([]);
+    expect(clubAwardsByYear([])).toEqual([]);
+    expect(brian.ceremony).toBe('Gogan Globes');
+    expect(Object.keys(brian.awards)).toEqual(['550', '949']);
+  });
+});

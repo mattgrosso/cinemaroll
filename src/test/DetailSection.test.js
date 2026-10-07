@@ -86,12 +86,11 @@ describe('DetailSection', () => {
     expect(wrapper.find('.detail-section-summary').exists()).toBe(false);
   });
 
-  // Matt, 2026-10-06: an open tile used to take the full width and "pop
-  // down to the next row". Now the header keeps its cell and the body spans
-  // the line below — the stylesheet dissolves the open section into its two
-  // children. The header is a div (its summary may hold links) that still
-  // answers the keyboard.
-  it('an open tile keeps header and body as separate grid children, and the header answers Enter', async () => {
+  // An open tile takes the full width and moves down a row, leaving its old
+  // cell empty (Matt, 2026-10-06, after trying and rejecting a header-stays-
+  // put variant the same night). The header is a div (its summary may hold
+  // links) that still answers the keyboard.
+  it('an open tile spans the grid, and the header answers Enter', async () => {
     const wrapper = factory({ tile: true });
     const header = wrapper.find('.detail-section-header');
     expect(header.element.tagName).toBe('DIV');
@@ -100,9 +99,10 @@ describe('DetailSection', () => {
     expect(hidden(wrapper)).toBe(false);
     expect(wrapper.classes()).toContain('open');
     const source = readFileSync(resolve(__dirname, '../components/DetailSection.vue'), 'utf8');
-    expect(source).toMatch(/&\.open \{\s*display: contents;/);
-    expect(source).toMatch(/> \.detail-section-body \{[^}]*grid-column: 1 \/ -1;/);
-    expect(source).not.toMatch(/&\.open \{ grid-column: 1 \/ -1; \}/);
+    expect(source).toMatch(/&\.open \{ grid-column: 1 \/ -1; \}/);
+    expect(source).not.toMatch(/display: contents/);
+    const page = readFileSync(resolve(__dirname, '../components/MovieDetail.vue'), 'utf8');
+    expect(page).not.toMatch(/grid-auto-flow: dense/);
   });
 
   // Matt, 2026-10-06: "if everybody is included in the header and they're

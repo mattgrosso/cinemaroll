@@ -237,6 +237,30 @@
            screen; they scroll in place instead ("it feels like it takes up
            too much space vertically... its own little section in a
            independent scrolling"). -->
+      <!-- The club's awards (Matt, 2026-10-07): everyone's winners for a year,
+           category by category — yours from your own awards, each friend's
+           from the awards published beside their ratings (Movie Log's too,
+           once they carry them). Agreed picks lead. -->
+      <section v-if="clubAwards.length" class="cs-section">
+        <h2 class="cs-section-title">Club awards</h2>
+        <p class="cs-caption">Everyone's winners, side by side. Gold where two or more of you agreed.</p>
+        <div class="cs-years">
+          <button v-for="entry in clubAwards" :key="entry.year" type="button" class="cs-year" :class="{ on: entry.year === awardsYear }" @click="awardsYear = entry.year">{{ entry.year }}</button>
+        </div>
+        <div v-for="category in awardsForYear" :key="category.label" class="cs-award-category" :class="{ agreed: category.agreed }">
+          <span class="cs-award-label">{{ category.label }}<span v-if="category.agreed" class="cs-award-agreed">agreed</span></span>
+          <div class="cs-award-picks">
+            <div v-for="pick in category.picks" :key="`${pick.who}-${pick.movieId}`" class="cs-award-pick" @click="goToTitle({ id: pick.movieId, t: pick.title })">
+              <img v-if="pick.poster" :src="poster(pick.poster)" :alt="pick.title || ''" class="cs-award-poster">
+              <span v-else class="cs-award-poster cs-award-poster--blank"></span>
+              <span class="cs-award-who">{{ pick.who }}</span>
+              <span class="cs-award-title">{{ pick.name || pick.title || 'Untitled' }}</span>
+              <span v-if="pick.name && pick.title" class="cs-award-for">{{ pick.title }}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section v-if="summary && summary.clubFavorites.length" class="cs-section">
         <h2 class="cs-section-title">Club favorites</h2>
         <p class="cs-caption">Rated by two or more of you, best average first.</p>
@@ -392,6 +416,8 @@ import { ratedTmdbIds } from '../assets/javascript/discover.js';
 import { timeAgo } from '../assets/javascript/timeAgo.js';
 import { getRating } from '../assets/javascript/GetRating.js';
 import { filmClubSummary, friendSnapshot, myRatingsById } from '../assets/javascript/social.js';
+import { awardsByMovie, clubAwardsByYear, memberFromProfile } from '../assets/javascript/awardsShare.js';
+import { awardNameWithThe } from '../assets/javascript/personalAwards.js';
 import { clubVsCrowd } from '../assets/javascript/letterboxdCompare.js';
 import { memoByIdentity } from '../utils/memoByIdentity.js';
 
@@ -420,6 +446,7 @@ export default {
   components: { SkeletonBlock, BackLink, SettingsSection, SendToHat, MoviePreview },
   data () {
     return {
+      awardsYear: null,
       painted: !SKELETON_FIRST,
       // How many recent posters each friend's strip is currently rendering,
       // keyed by friend key. Absent = the initial page.
@@ -558,6 +585,21 @@ export default {
       return Object.entries(this.directory)
         .filter(([key]) => !excluded.has(key))
         .map(([key, row]) => ({ key, name: row?.name || key }));
+    },
+    /** Everyone's winners by year: me from my awards, friends from their published rows. */
+    clubAwards () {
+      const settings = this.$store.state.settings || {};
+      const myTitles = {};
+      (this.$store.getters.allMoviesAsArray || []).forEach((entry) => {
+        if (entry?.movie?.id != null) myTitles[entry.movie.id] = { t: entry.movie.title || null, p: entry.movie.poster_path || null };
+      });
+      const me = { name: settings.social?.displayName || 'You', ceremony: awardNameWithThe(settings.personalAwardName), awards: awardsByMovie(settings.personalAwards), titles: myTitles };
+      const friends = (this.$store.getters.filmClubFriends || []).filter((f) => f.profile).map((f) => memberFromProfile(f.name, f.profile));
+      return clubAwardsByYear([me, ...friends]);
+    },
+    awardsForYear () {
+      const year = this.awardsYear ?? this.clubAwards[0]?.year;
+      return this.clubAwards.find((entry) => entry.year === year)?.categories || [];
     },
     summary () {
       return summaryMemo(
@@ -883,6 +925,23 @@ export default {
 
 .cs-title { margin: 0.25rem 0 0; }
 .cs-subtitle { color: #ccc; font-size: 0.85rem; margin: 0.25rem 0 1rem; }
+
+
+/* Club awards: a year strip, then one block per category with everyone's pick. */
+.cs-years { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0 0 0.6rem; }
+.cs-year { background: rgba(255, 255, 255, 0.08); border: 0; border-radius: 999px; color: #fff; font-size: 0.8rem; padding: 0.25rem 0.7rem; }
+.cs-year.on { background: #ffc107; color: #000; font-weight: 700; }
+.cs-year:active { background: rgba(255, 255, 255, 0.16); }
+.cs-award-category { margin: 0 0 0.75rem; }
+.cs-award-label { color: #ccc; display: block; font-size: 0.72rem; letter-spacing: 0.06em; margin-bottom: 0.3rem; text-transform: uppercase; }
+.cs-award-category.agreed .cs-award-label { color: #ffc107; }
+.cs-award-agreed { background: rgba(255, 193, 7, 0.18); border-radius: 999px; color: #ffc107; font-size: 0.6rem; margin-left: 0.4rem; padding: 0.1rem 0.45rem; }
+.cs-award-picks { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.25rem; }
+.cs-award-pick { display: flex; flex: 0 0 5.6rem; flex-direction: column; min-width: 0; }
+.cs-award-poster { aspect-ratio: 2 / 3; background: rgba(255, 255, 255, 0.06); border-radius: 4px; object-fit: cover; width: 100%; }
+.cs-award-who { color: #ffc107; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em; margin-top: 0.3rem; text-transform: uppercase; }
+.cs-award-title { color: #fff; font-size: 0.78rem; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+.cs-award-for { color: #ccc; font-size: 0.7rem; line-height: 1.2; }
 
 .cs-section {
   background: #161616;

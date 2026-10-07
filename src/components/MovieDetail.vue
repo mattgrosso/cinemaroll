@@ -2824,13 +2824,7 @@ export default {
   .detail-tiles {
     display: grid;
     gap: 6px;
-    /* Dense, so an open tile's neighbour backfills the cell beside its
-       header while the body spans the line below (DetailSection). */
-    grid-auto-flow: dense;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-
-    /* An odd tile out that is open: its header takes the line too. */
-    > :last-child:nth-child(odd).open > :deep(.detail-section-header) { grid-column: 1 / -1; }
 
     /* An odd tile out takes the whole line, so a grid never ends on a gap. */
     > :last-child:nth-child(odd) { grid-column: 1 / -1; }

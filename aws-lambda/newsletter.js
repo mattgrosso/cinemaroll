@@ -264,6 +264,11 @@ const sendToAccount = async (topKey, subscriptions, payload) => {
 // will cheerfully invent accurately-shaped things.
 const GROUND_RULES = `
 ACCURACY RULES — these override every other instruction:
+- cinemaScore, when present, is the CinemaScore: the letter grade opening-night
+  audiences gave on the way out (A+ to F). Those crowds chose to be there, so
+  the scale runs generous — an A means they loved it, a B is lukewarm, and
+  anything at C+ or below is a flop with the people who most wanted to see it.
+  Mention it only when it says something the critics' numbers don't.
 - Every number about a NEW RELEASE (scores, availability, year) must come from
   the brief below. If a field is null, say nothing about it — "no critic score
   yet" is an acceptable and honest line. Never estimate or infer one.
@@ -518,6 +523,7 @@ const buildIssue = async ({ topKey, profile, pastIssues = null, now, alwaysOn })
         rentOn: facts.where.rent,
         rottenTomatoes: facts.scores.rottenTomatoes,
         metacritic: facts.scores.metacritic,
+        cinemaScore: facts.scores.cinemaScore ?? null,
         letterboxdRating: letterboxdStats[facts.id]?.rating ?? null,
         letterboxdCount: letterboxdStats[facts.id]?.ratingCount ?? null,
         why: String(pick.why || '').trim(),

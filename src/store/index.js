@@ -44,7 +44,7 @@ import { appBadgeCount } from "../assets/javascript/appBadge.js";
 import { showtimesWaiting } from "../assets/javascript/showtimesUnread.js";
 import { buildNewsletterProfile } from "../assets/javascript/newsletterProfile.js";
 import { postToNewsletter } from "../utils/newsletterRequest.js";
-import { announceFriendRequest } from "../utils/push.js";
+import { announceFriendRequest , closeNotificationsWhere } from "../utils/push.js";
 
 // A rebuild takes about a minute end to end (measured at ~52s against the
 // real APIs), so the poll has to outlast that with room to spare without
@@ -2962,6 +2962,8 @@ export default createStore({
     async dismissListing (context, { theaterKey, slug, restore = false }) {
       const root = context.getters.databaseTopKey;
       if (!root || !theaterKey || !slug) return;
+      // Dealt with here, so its notifications go too (the new-listing one and any reminder).
+      if (!restore) closeNotificationsWhere((tag) => tag === `listings-${slug}` || tag.startsWith(`remind-${theaterKey}-${slug}-`));
       const next = { ...context.state.theaterDismissed, [theaterKey]: { ...(context.state.theaterDismissed[theaterKey] || {}) } };
       if (restore) delete next[theaterKey][slug];
       else next[theaterKey][slug] = Date.now();

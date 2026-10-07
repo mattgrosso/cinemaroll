@@ -9,6 +9,8 @@
 // `fetch` is the only dependency. Nothing here decides anything; every
 // judgement lives in newsletterCompose.js.
 
+const { cinemaScoreSearchUrl, pickCinemaScore } = require('./cinemaScore.js');
+
 const TMDB = 'https://api.themoviedb.org/3';
 
 // --- The facts ---------------------------------------------------------------
@@ -47,6 +49,23 @@ const discoverReleases = async (key, startISO, endISO, pages = 3) => {
  * shortlistReleases already treats a missing score as unknown and a missing
  * provider as "not available", both of which are the right answers.
  */
+/**
+ * CinemaScore (Matt, 2026-10-06: "you can add cinema score to the
+ * newsletter"): the opening-night exit-poll grade, from the site's own
+ * title search — the same lookup the movie page uses (cinemaScore.js is
+ * the generated twin). Wide releases only; null for everything else, and
+ * null on any failure: a grade is a nice-to-have, never a reason to lose
+ * the issue.
+ */
+const cinemaScoreFor = async (title, year) => {
+  try {
+    const results = await json(cinemaScoreSearchUrl(title));
+    return pickCinemaScore(results, { title, year })?.grade || null;
+  } catch {
+    return null;
+  }
+};
+
 const enrichCandidate = async (key, omdbKey, movie) => {
   try {
     const [providers, details] = await Promise.all([
@@ -59,9 +78,11 @@ const enrichCandidate = async (key, omdbKey, movie) => {
       omdb = await json(`https://www.omdbapi.com/?i=${details.imdb_id}&apikey=${omdbKey}`)
         .catch(() => null);
     }
+    const cinemaScore = await cinemaScoreFor(movie.title, Number(String(details.release_date || movie.release_date || '').slice(0, 4)) || null);
     return {
       providers,
       omdb,
+      cinemaScore,
       director,
       imdbId: details.imdb_id || null,
       runtime: details.runtime || null,

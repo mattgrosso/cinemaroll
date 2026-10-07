@@ -5,7 +5,8 @@ import { readFileSync, writeFileSync } from 'fs';
 
 export const TWINS = [
   ['src/assets/javascript/filmClubSync.js', 'aws-lambda/filmClubSync.js'],
-  ['src/assets/javascript/filmClubSyncPublisher.js', 'aws-lambda/filmClubSyncPublisher.js']
+  ['src/assets/javascript/filmClubSyncPublisher.js', 'aws-lambda/filmClubSyncPublisher.js'],
+  ['src/assets/javascript/cinemaScore.js', 'aws-lambda/cinemaScore.js']
 ];
 
 export function toCommonJs (source) {

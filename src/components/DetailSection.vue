@@ -155,27 +155,13 @@ export default {
 
   &:last-child { border-bottom: 0; }
 
-  /* Open, the tile stays where it was (Matt, 2026-10-06: it used to take
-     the full width and "pop down to the next row"). The section dissolves
-     into its two children — the header keeps its cell, the body spans the
-     grid below the row (the grid flows dense, so the neighbour backfills).
-     The tone colour ties the two together. */
-  &.open {
-    display: contents;
-
-    > .detail-section-header {
-      background: rgba(255, 255, 255, 0.05);
-      box-shadow: inset 0 0 0 1px var(--sec);
-    }
-
-    > .detail-section-body {
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 8px;
-      border-top: 2px solid var(--sec);
-      grid-column: 1 / -1;
-      padding: 0.4rem 0.6rem 0.6rem;
-    }
-  }
+  /* Open, the tile takes the full width and so moves down to the next row,
+     leaving its old cell empty. A header-stays-put variant was tried on
+     2026-10-06 and rejected the same night (Matt: "that doesn't really work
+     for me ... have it moved down to the next row and leave an empty gap").
+     The grid must NOT flow dense, or the gap gets backfilled and tiles
+     reorder under the thumb. */
+  &.open { grid-column: 1 / -1; }
 
   .detail-section-header {
     align-items: center;

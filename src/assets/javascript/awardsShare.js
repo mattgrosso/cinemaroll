@@ -91,3 +91,56 @@ export function friendAwardsSummary (groups) {
     return `${g.ceremony} (${g.friend}): ${g.nominated.length} nomination${g.nominated.length === 1 ? '' : 's'}`;
   }).join(' · ');
 }
+
+/**
+ * The club's awards, year by year (Matt, 2026-10-07: "let's build a club
+ * awards" view). `members` are [{ name, ceremony, awards, titles }] — mine
+ * from my own personalAwards, each friend's from the awards on their
+ * published rating rows. Output, newest year first:
+ *   [{ year, categories: [{ label, picks: [{ who, ceremony, movieId, title, poster, name? }], agreed }] }]
+ * Categories are matched across members by label (case-insensitive), so
+ * everyone's "Best Picture" lines up whatever key each app uses; a
+ * category is `agreed` when two or more members crowned the same film.
+ * Nominations are not shown here — this view is the winners.
+ */
+export function clubAwardsByYear (members) {
+  const years = new Map();
+  (members || []).forEach((member) => {
+    Object.entries(member?.awards || {}).forEach(([movieId, list]) => {
+      (list || []).forEach((award) => {
+        if (award?.result !== 'won' || !Number.isInteger(award.year)) return;
+        const year = years.get(award.year) || new Map();
+        years.set(award.year, year);
+        const key = String(award.label || award.category || '').trim().toLowerCase();
+        if (!key) return;
+        const category = year.get(key) || { label: award.label || award.category, picks: [] };
+        year.set(key, category);
+        const title = member.titles?.[movieId];
+        const pick = { who: member.name, ceremony: member.ceremony || `${member.name}'s awards`, movieId: Number(movieId), title: title?.t || null, poster: title?.p || null };
+        if (award.name) pick.name = award.name;
+        category.picks.push(pick);
+      });
+    });
+  });
+  return [...years.entries()].sort(([a], [b]) => b - a).map(([year, categories]) => ({
+    year,
+    categories: [...categories.values()].map((category) => {
+      const films = new Set(category.picks.map((p) => p.movieId));
+      const counts = {};
+      category.picks.forEach((p) => { counts[p.movieId] = (counts[p.movieId] || 0) + 1; });
+      return { ...category, picks: [...category.picks].sort((a, b) => a.who.localeCompare(b.who)), agreed: Object.values(counts).some((n) => n >= 2), filmCount: films.size };
+    }).sort((a, b) => (Number(b.agreed) - Number(a.agreed)) || (b.picks.length - a.picks.length) || a.label.localeCompare(b.label))
+  }));
+}
+
+/** A member record for this view from a published profile (ratings rows carry `a`, and `t`/`p`). */
+export function memberFromProfile (name, profile) {
+  const awards = {};
+  const titles = {};
+  Object.entries(profile?.ratings || {}).forEach(([id, row]) => {
+    const list = validAwards(row?.a);
+    if (list) awards[id] = list;
+    titles[id] = { t: row?.t || null, p: row?.p || null };
+  });
+  return { name, ceremony: profile?.awardsName || null, awards, titles };
+}
