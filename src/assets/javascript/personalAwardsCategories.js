@@ -16,6 +16,8 @@ export const PERSONAL_AWARD_CATEGORIES = [
   { key: 'bestVisualEffects', name: 'Best Visual Effects or Production Design', type: 'movie' },
   { key: 'bestAnimatedFeature', name: 'Best Animated Feature', type: 'movie' },
   { key: 'bestDocumentaryFeature', name: 'Best Documentary Feature', type: 'movie' },
+  // Films made outside the US (2026-10-07; eligibility in awardEligibility.js).
+  { key: 'bestInternationalFeature', name: 'Best International Feature', type: 'movie' },
 ];
 
 export const PERSONAL_AWARD_CATEGORY_NAMES = PERSONAL_AWARD_CATEGORIES.reduce((acc, category) => {

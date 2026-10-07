@@ -265,3 +265,13 @@ Cannes and whatever else… the history of any award that we have access to."
   agreeable year), each ceremony's Best Picture vs the Oscars' (with the last
   split), most decorated films and most honoured people across everyone's
   ceremonies. Shown only when two or more members have awards.
+- **Best International Feature** (2026-10-07): fourteenth standard category.
+  Matt had resisted a "foreign film" award ("seems like that's the same as the
+  film category... not sure foreign film is what I want") and settled on
+  wanting to see more films not produced in the US; the Academy's own name was
+  chosen. Eligibility lives in `awardEligibility.js` (`isInternationalFilm`:
+  production countries present, none `US`), which also now holds the animated
+  and documentary genre gates the modal used to inline four times. The modal
+  backfills missing production countries for a year when it opens
+  (`backfillCountriesForYear`). Completed past years simply show the new
+  category undecided; nothing reopens them.

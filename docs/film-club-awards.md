@@ -81,3 +81,16 @@ that prefix becomes the ceremony and is peeled off the labels
 (`friendCeremony` / `stripCeremony` in `src/assets/javascript/awardsShare.js`).
 Sending `awardsName` is still welcome and takes precedence, but nothing on the
 Movie Log side needs to change.
+
+## 7. Best International Feature (2026-10-07)
+
+Cinema Roll's standard categories gained **Best International Feature**: films
+with at least one TMDB production country and none of them the US (a British
+film qualifies; a US co-production does not). Cinema Roll publishes it like any
+other category (`category: "bestInternationalFeature"`, `label: "Best
+International Feature"`). Movie Log's existing "Best Foreign Film" already
+lines up with it in the club view — readers match categories by name, and
+"Foreign Film", "Foreign Language Film", "International Feature" and
+"International Feature Film" all fold together — so nothing on the Movie Log
+side needs to change. If Movie Log ever offers default categories to new
+users, this is the one Cinema Roll would suggest including.

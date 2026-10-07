@@ -501,6 +501,8 @@ import { pickEligibleAwardsYear } from '../utils/awards.js';
 import { yearsMeetingAwardsThreshold, awardsPromptCopy, distinctNomineeCount } from '../assets/javascript/personalAwards.js';
 import { PERSONAL_AWARD_CATEGORIES, categoriesForYear, customAwardKey, isCustomAwardKey } from '../assets/javascript/personalAwardsCategories.js';
 import { isEligibleForActingCategory } from '../assets/javascript/genderEligibility.js';
+import { entriesEligibleFor, disabledReasonFor, GATED_CATEGORIES, countriesKnown } from '../assets/javascript/awardEligibility.js';
+import { backfillProductionCountries } from '../assets/javascript/backfillProductionCountries.js';
 import { expandNomineeFromMinimal as expandNomineeFromMinimalShared, actingSiblingConflict, samePersonNominee, personNomineeKey } from '../assets/javascript/personalAwards.js';
 
 // Top-billed cast offered for a person-type custom award, per film. Cast is
@@ -631,7 +633,7 @@ export default {
         return [];
       }
     },
-    // The standard thirteen plus whatever awards the user has invented for
+    // The standard fourteen plus whatever awards the user has invented for
     // THIS year (2026-08-20: "I can name an award whatever I want and then
     // assign it"). Custom ones are movie-type and carry no genre filter, so
     // every per-key helper below already answers correctly for them: not
@@ -1153,7 +1155,35 @@ export default {
         ErrorLogService.error('Error saving Personal Awards state:', error);
       }
     },
+    // Best International Feature needs each film's production countries. Films
+    // rated before AddRating kept them (a handful) are fetched the first time
+    // their year opens and written back, so the gate can judge every film.
+    async backfillCountriesForYear () {
+      try {
+        const subset = {};
+        this.getMoviesForYear().forEach((entry) => {
+          if (entry?.dbKey && !countriesKnown(entry.movie)) subset[entry.dbKey] = entry;
+        });
+        if (!Object.keys(subset).length) return;
+        await backfillProductionCountries(subset, async (batch) => {
+          const entries = [];
+          const updates = {};
+          batch.forEach((item) => {
+            const existing = this.$store.state.movieLog?.[item.dbKey];
+            if (!existing) return;
+            entries.push({ key: item.dbKey, value: { ...existing, movie: { ...existing.movie, ...item.countries } } });
+            Object.entries(item.countries).forEach(([field, value]) => { updates[`movieLog/${item.dbKey}/movie/${field}`] = value; });
+          });
+          if (entries.length) this.$store.commit('setMovieLogEntries', entries);
+          if (Object.keys(updates).length) await this.$store.dispatch('updateDatabaseEntriesNow', updates);
+        });
+        this.optionsCache = {};
+      } catch (error) {
+        console.error('Could not fill in production countries for the awards year:', error);
+      }
+    },
     initializeAwardsData () {
+      this.backfillCountriesForYear();
       try {
         const existingAwards = this.$store.state.settings.personalAwards?.[this.currentYear];
         // Read before the categories branch below: a year can have an award
@@ -1339,33 +1369,14 @@ export default {
       return (categoryData && categoryData.nominees?.length > 0 && categoryData.winner) ||
              (categoryData && categoryData.noNominees === true);
     },
+    // A gated category (animated, documentary, international) is disabled for
+    // a year with nothing eligible; every other category is never disabled.
     isCategoryDisabled (categoryKey) {
-      // Check if there are no eligible options for this category
-      if (categoryKey === 'bestAnimatedFeature') {
-        const animatedFilms = this.getMoviesForYear().filter(entry =>
-          entry.movie.genres && entry.movie.genres.some(genre => genre.name === 'Animation')
-        );
-        return animatedFilms.length === 0;
-      } else if (categoryKey === 'bestDocumentaryFeature') {
-        const documentaries = this.getMoviesForYear().filter(entry =>
-          entry.movie.genres && entry.movie.genres.some(genre => genre.name === 'Documentary')
-        );
-        return documentaries.length === 0;
-      }
-      return false; // Other categories are never disabled
+      if (!GATED_CATEGORIES.includes(categoryKey)) return false;
+      return entriesEligibleFor(categoryKey, this.getMoviesForYear()).length === 0;
     },
     getCategoryDisabledReason (categoryKey) {
-      if (!this.isCategoryDisabled(categoryKey)) {
-        return null;
-      }
-
-      if (categoryKey === 'bestAnimatedFeature') {
-        return 'No animated films rated this year';
-      } else if (categoryKey === 'bestDocumentaryFeature') {
-        return 'No documentaries rated this year';
-      }
-
-      return null;
+      return this.isCategoryDisabled(categoryKey) ? disabledReasonFor(categoryKey) : null;
     },
     getMoviesForYear () {
       try {
@@ -1405,18 +1416,8 @@ export default {
         return [];
       }
 
-      let moviesForYear = this.getMoviesForYear();
-
-      // Apply genre filtering for specific categories
-      if (this.selectedCategory === 'bestAnimatedFeature') {
-        moviesForYear = moviesForYear.filter(entry =>
-          entry.movie.genres && entry.movie.genres.some(genre => genre.name === 'Animation')
-        );
-      } else if (this.selectedCategory === 'bestDocumentaryFeature') {
-        moviesForYear = moviesForYear.filter(entry =>
-          entry.movie.genres && entry.movie.genres.some(genre => genre.name === 'Documentary')
-        );
-      }
+      // Genre and country gates (awardEligibility.js); other categories see every film.
+      const moviesForYear = entriesEligibleFor(this.selectedCategory, this.getMoviesForYear());
 
       let options;
       if (category.type === 'movie') {
@@ -1448,18 +1449,8 @@ export default {
         return {};
       }
 
-      let moviesForYear = this.getMoviesForYear();
-
-      // Apply genre filtering for specific categories
-      if (this.selectedCategory === 'bestAnimatedFeature') {
-        moviesForYear = moviesForYear.filter(entry =>
-          entry.movie.genres && entry.movie.genres.some(genre => genre.name === 'Animation')
-        );
-      } else if (this.selectedCategory === 'bestDocumentaryFeature') {
-        moviesForYear = moviesForYear.filter(entry =>
-          entry.movie.genres && entry.movie.genres.some(genre => genre.name === 'Documentary')
-        );
-      }
+      // Genre and country gates (awardEligibility.js); other categories see every film.
+      const moviesForYear = entriesEligibleFor(this.selectedCategory, this.getMoviesForYear());
 
       // A person-type CUSTOM award returns a flat list of people, not the
       // movie-grouped shape below — that grouping exists for the acting grid,
