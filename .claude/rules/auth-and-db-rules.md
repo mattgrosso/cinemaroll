@@ -228,6 +228,21 @@ Lambda that died on `Cannot find module 'web-push'` — the newsletter would hav
 that Friday. A healthy zip is ~13 MB / ~4,900 files; `rm -rf` the bundle dir and rerun if
 it isn't. The script uses `~/aws-cli/aws` (the PATH `aws` is Intel on this Mac).
 
+## Download hygiene (audit, 2026-10-06)
+
+Measured with `scripts/measure-db-payloads.mjs` (admin, read-only). The rules that came
+out of it: **re-read nothing whole that has a cheap "did it change?"** — a friend's
+`social/profiles/<key>` (up to 250 KB) is read only after its `updatedAt` child moved;
+Movie Hat reads (nine hats' `movies.json` ≈ 800 KB per open, a whole hat ≈ 950 KB) are
+conditional — Firebase REST honours `X-Firebase-ETag` / `If-None-Match` cross-origin and
+answers 304 with no body — with per-hat `{etag, ids}` / `{etag, card}` caches kept in the
+offline store (`movieHatContents`, `movieHatSummaries`); external Film Club feeds use the v2
+sync above. Known-but-left: `settings/personalAwards` is 479 KB of the 541 KB settings node
+the listener downloads on every launch (moving it to its own lazily-read node is the next
+real win); Sentry traces every page load (`tracesSampleRate: 1.0`). Deploy sets
+`Cache-Control` (hashed assets a year immutable, everything else no-cache); CloudFront
+compresses (brotli) and uses the CachingOptimized policy.
+
 ## Film Club feed sync, v2 (Brian's Movie Log guide, 2026-10-06)
 
 Beside the legacy `clubFeed/OWNER/SECRET` body (format `film-club/1`, now carrying a

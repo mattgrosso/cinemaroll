@@ -97,7 +97,7 @@ async function main () {
   // their URL: a year, immutable. Everything else — index.html, the service
   // workers, manifest, data/*.json (the 6 MB awards dataset is not hashed) —
   // must be revalidated every time; CloudFront still serves a 304 cheaply.
-  const HASHED = /\.[0-9a-f]{8}\.(js|css|woff2?|ttf|png|jpe?g|gif|svg|webp|avif|map)$/;
+  const HASHED = /\.[0-9a-f]{8}\.(js|css|woff2?|ttf|png|jpe?g|gif|svg|webp|avif)(\.map)?$/;
   run(aws, ['s3', 'sync', 'dist/', BUCKET, '--delete', '--profile', PROFILE,
     '--exclude', '*', '--include', '*.????????.*',
     '--cache-control', 'public, max-age=31536000, immutable']);
