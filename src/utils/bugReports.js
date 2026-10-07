@@ -1,5 +1,6 @@
 import { getDatabase, ref as dbRef, push, set, serverTimestamp } from 'firebase/database';
 import { getLastWorkerState, getReloadAttempt, getUpdateTiming } from './appUpdate.js';
+import { getHeaderTouches } from './headerTap.js';
 
 // Same "report a bug without breaking your flow" pattern used in the
 // thunderstone/space-base repos, adapted to Cinema Roll's Vuex store (not
@@ -54,7 +55,13 @@ function buildAppStateSummary (store, route) {
       worker: getLastWorkerState(),
       reloadAttempt: getReloadAttempt(),
       lastUpdate: getUpdateTiming()
-    }
+    },
+    // The last few taps on the header's go-home (report 2026-10-07: "I see
+    // the button press... but then nothing happens and I have to tap it a
+    // second time", never reproduced). Each says whether the finger landed
+    // and lifted as a tap, whether iOS's click came, how the trip home
+    // started, and whether it arrived, stalled, or was cancelled.
+    headerTouches: getHeaderTouches()
   };
 }
 

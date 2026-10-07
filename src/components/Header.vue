@@ -5,7 +5,7 @@
            title below - matters most when hideHeaderLogo hides that title
            (e.g. Six Degrees' custom banner), leaving the banner itself as
            the only tap-to-home affordance left in the header. -->
-      <div class="random-banner" @click="goHome">
+      <div class="random-banner" @touchstart.passive="onTouchStart" @touchmove.passive="onTouchMove" @touchend="onTouchEnd" @touchcancel="onTouchCancel" @click="onClick">
         <img v-if="bannerUrl" :src="bannerUrl">
       </div>
       <div class="top-posters">
@@ -14,7 +14,9 @@
       <div v-if="devMode" class="dev-mode-flag">
         Dev Mode!
       </div>
-      <div v-if="!$store.state.hideHeaderLogo" class="home-link tap-feedback" @click="goHome">
+      <!-- Goes home when the finger lifts, not on iOS's click, and dims
+           without shrinking: see utils/headerTap.js for why. -->
+      <div v-if="!$store.state.hideHeaderLogo" class="home-link" @touchstart.passive="onTouchStart" @touchmove.passive="onTouchMove" @touchend="onTouchEnd" @touchcancel="onTouchCancel" @click="onClick">
         <span class="app-title">Cinema Roll</span>
         <span class="version">{{version}}</span>
       </div>
@@ -23,7 +25,7 @@
            corner regardless — bug report: "the version number... doesn't
            appear with our new game headers... just the exact same spot...
            over the new banner image." -->
-      <div v-else class="version-only" @click="goHome">
+      <div v-else class="version-only" @touchstart.passive="onTouchStart" @touchmove.passive="onTouchMove" @touchend="onTouchEnd" @touchcancel="onTouchCancel" @click="onClick">
         <span class="version">{{version}}</span>
       </div>
     </div>
@@ -33,9 +35,21 @@
 <script>
 import { getRating } from "../assets/javascript/GetRating.js";
 import { versionLabel } from "../assets/javascript/buildStamp.js";
+import { TAP_SLOP_PX, isHeaderTap, recordHeaderTouch, trackTripHome } from "../utils/headerTap.js";
+
+// How long after a touch has already gone home iOS's own click for that
+// same touch may still arrive (and must not go home a second time).
+const CLICK_AFTER_TOUCH_MS = 1000;
 
 export default {
   name: "AppHeader",
+  data () {
+    return {
+      touch: null,
+      touchWentHomeAt: 0,
+      lastTouchEntry: null
+    };
+  },
   computed: {
     // Home resolves the banner on arrival (context-aware) and stores the URL.
     // Header is now a pure renderer; the old 30s random-swap timer is gone.
@@ -88,9 +102,57 @@ export default {
 
       return 0;
     },
-    async goHome () {
-      await this.$store.commit("setGoHome", true);
-      this.$router.push("/");
+    onTouchStart (event) {
+      const point = event.touches?.[0];
+      this.touch = {
+        startX: point?.clientX,
+        startY: point?.clientY,
+        startAt: Date.now(),
+        movedPx: 0,
+        entry: recordHeaderTouch({ route: this.$route?.fullPath || null })
+      };
+    },
+    onTouchMove (event) {
+      const point = event.touches?.[0];
+      if (!this.touch || !point) return;
+      const moved = Math.hypot(point.clientX - this.touch.startX, point.clientY - this.touch.startY);
+      this.touch.movedPx = Math.max(this.touch.movedPx, Math.round(moved));
+    },
+    onTouchEnd (event) {
+      const touch = this.touch;
+      this.touch = null;
+      if (!touch) return;
+      const point = event.changedTouches?.[0];
+      const endX = point?.clientX;
+      const endY = point?.clientY;
+      // A finger that wandered off and came back was dragging, not tapping.
+      const tap = touch.movedPx <= TAP_SLOP_PX && isHeaderTap({ ...touch, endX, endY, endAt: Date.now() });
+      touch.entry.lifted = tap ? 'tap' : 'drag';
+      touch.entry.movedPx = Math.max(touch.movedPx, Math.round(Math.hypot((endX ?? touch.startX) - touch.startX, (endY ?? touch.startY) - touch.startY)));
+      if (!tap) return;
+      this.touchWentHomeAt = Date.now();
+      this.goHome(touch.entry, 'touch');
+    },
+    onTouchCancel () {
+      if (this.touch) this.touch.entry.lifted = 'cancelled by iOS';
+      this.touch = null;
+    },
+    // iOS's own click for a touch that already went home just gets noted;
+    // a click with no touch (a mouse, a keyboard) goes home the usual way.
+    onClick () {
+      if (Date.now() - this.touchWentHomeAt < CLICK_AFTER_TOUCH_MS) {
+        const entry = this.lastTouchEntry;
+        if (entry) entry.click = true;
+        return;
+      }
+      const entry = recordHeaderTouch({ route: this.$route?.fullPath || null, landed: false });
+      entry.click = true;
+      this.goHome(entry, 'click');
+    },
+    goHome (entry, via) {
+      this.lastTouchEntry = entry;
+      this.$store.commit("setGoHome", true);
+      trackTripHome(entry, this.$router.push("/"), { via });
     },
     topStructure (result) {
       if (this.currentLogIsTVLog) {
@@ -145,7 +207,15 @@ export default {
         padding: 0 10px 0 16px;
         position: absolute;
         right: 0;
+        // Press feedback dims only. The app-wide .tap-feedback also shrinks
+        // 2%, and something moving under the finger is one way iOS can
+        // decide a touch wasn't a tap (bug report 2026-10-07).
+        transition: opacity 90ms ease-out;
         white-space: nowrap;
+
+        &:active {
+          opacity: 0.82;
+        }
 
         .version {
           bottom: 0;

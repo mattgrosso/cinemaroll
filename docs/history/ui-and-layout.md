@@ -720,3 +720,22 @@ capped at 70px (centre 82px; was 46/54) so a wide screen spaces them out instead
 growing the strip forever — on Matt's phone they hit the cap and overlap by ~1.5px.
 Angles, fading and the sliding transitions are unchanged; depth now scales with
 poster width.
+
+## Header tap-to-home goes on the finger lifting (2026-10-07)
+
+Bug report, on every screen: "I see the button press... but then nothing happens and
+I have to tap it a second time." Two theories were ruled out by Matt before any code
+changed: an auto-update reload eating the tap (it happens minutes into a session),
+and a tap landing on a still-gliding scroll (the top was already in view). The
+press showing means iOS felt the finger; what didn't come was iOS's click. The
+best remaining suspect: since 2026-09-23 the title carried `.tap-feedback`, which
+shrinks 2% under the finger, and movement under the finger is one way WebKit
+decides a touch wasn't a tap. So the title now dims without shrinking, and the
+header (title, banner, version corner) goes home on `touchend` when the finger
+stayed within 10px for under a second (`utils/headerTap.js`), ignoring the click
+iOS sends for that same touch; a click with no touch still works.
+
+Never reproduced, so it's instrumented: bug reports carry `headerTouches`, the
+last five header touches — landed, lifted as tap / drag / cancelled by iOS,
+whether the click came, how the trip home started, and whether it arrived,
+stalled (3s), or was cancelled. If it recurs, that field says which step broke.

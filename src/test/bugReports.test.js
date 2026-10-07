@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { set, push, ref } from 'firebase/database';
 import { submitBugReport } from '@/utils/bugReports';
+import { recordHeaderTouch, clearHeaderTouches } from '@/utils/headerTap.js';
 
 vi.mock('firebase/database', () => ({
   getDatabase: vi.fn(() => ({})),
@@ -82,5 +83,15 @@ describe('bugReports', () => {
       accessError: 'denied',
       lastFailure: { where: 'sign-in', code: 'auth/popup-blocked' }
     });
+  });
+
+  // Report 2026-10-07: header taps that showed the press and went nowhere.
+  it('carries the last few header touches', async () => {
+    clearHeaderTouches();
+    const entry = recordHeaderTouch({ route: '/awards' });
+    entry.lifted = 'tap';
+    await submitBugReport(store, 'header ignored me', route);
+    const report = set.mock.calls[0][1];
+    expect(JSON.parse(report.appState).headerTouches).toEqual([expect.objectContaining({ route: '/awards', landed: true, lifted: 'tap' })]);
   });
 });
