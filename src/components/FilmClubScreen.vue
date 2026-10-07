@@ -257,7 +257,7 @@
               <span class="cs-award-title">{{ row.name || row.title || 'Untitled' }}</span>
               <span v-if="row.name && row.title" class="cs-award-for">{{ row.title }}</span>
             </span>
-            <span class="cs-award-who">{{ row.who.join(' · ') }}</span>
+            <span class="cs-award-who">{{ row.ceremonies.join(' · ') }}</span>
           </div>
         </div>
         </div>

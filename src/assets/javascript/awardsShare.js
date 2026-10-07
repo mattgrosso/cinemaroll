@@ -232,10 +232,13 @@ export function clubAwardsByYear (members) {
       const grouped = new Map();
       picks.forEach((p) => {
         const key = choice(p);
-        const row = grouped.get(key) || { movieId: p.movieId, title: p.title, poster: p.poster, who: [] };
+        const row = grouped.get(key) || { movieId: p.movieId, title: p.title, poster: p.poster, who: [], ceremonies: [] };
         if (p.name && !row.name) row.name = p.name;
         if (!row.poster && p.poster) row.poster = p.poster;
         row.who.push(p.who);
+        // Shown by the award's name, not the person's (Matt, 2026-10-07):
+        // "Goegan Globes · The Groskers".
+        row.ceremonies.push(p.ceremony);
         grouped.set(key, row);
       });
       const choices = [...grouped.values()].sort((a, b) => (b.who.length - a.who.length) || a.who[0].localeCompare(b.who[0]));

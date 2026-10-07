@@ -166,7 +166,7 @@ describe('clubAwardsByYear', () => {
       { who: 'Matt', ceremony: 'The Groskers', movieId: 1054867, title: 'One Battle After Another', poster: '/obaa.jpg' }
     ]);
     // One row per choice, shared choices first naming everyone who made them.
-    expect(by('Best Picture').choices).toEqual([{ movieId: 1054867, title: 'One Battle After Another', poster: '/obaa.jpg', who: ['Brian', 'Matt'] }]);
+    expect(by('Best Picture').choices).toEqual([{ movieId: 1054867, title: 'One Battle After Another', poster: '/obaa.jpg', who: ['Brian', 'Matt'], ceremonies: ['Goegan Globes', 'The Groskers'] }]);
     expect(by('Best Supporting Actor').choices.map((c) => `${c.name}: ${c.who.join('+')}`)).toEqual(['Sean Penn: Brian', 'Benicio del Toro: Matt']);
     expect(by('Best Editing').picks).toHaveLength(1);
     expect(by('Best Editing').picks[0].name).toBeUndefined();
