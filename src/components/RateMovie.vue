@@ -183,7 +183,9 @@
             :aria-pressed="viewingTagChecked(tag) ? 'true' : 'false'"
             @click="toggleViewingTag(tag)"
             @keydown.enter="toggleViewingTag(tag)">
-            <i v-if="viewingTagChecked(tag)" class="bi bi-check-lg"></i>
+            <!-- Always rendered, shown only when selected, so tapping a tag
+                 never changes its width and reflows the row mid-tap. -->
+            <i class="bi bi-check-lg tag-check" :class="{ 'is-on': viewingTagChecked(tag) }" aria-hidden="true"></i>
             {{tag.title}}
             <button
               type="button"
@@ -1492,12 +1494,17 @@ export default {
 
       &:active { background: rgba(255, 255, 255, 0.12); }
 
+      .tag-check {
+        color: #6fd39b;
+        visibility: hidden;
+
+        &.is-on { visibility: visible; }
+      }
+
       &.selected {
         background: rgba(111, 211, 155, 0.18);
         border-color: #6fd39b;
         color: #fff;
-
-        .bi-check-lg { color: #6fd39b; }
       }
     }
 

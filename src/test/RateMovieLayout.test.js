@@ -205,6 +205,19 @@ describe('RateMovie tags', () => {
     expect(w.find('.tag-pill').attributes('aria-pressed')).toBe('true')
   })
 
+  // Bug report 2026-10-07: the checkmark used to be added on select, widening
+  // the pill and reflowing the row mid-tap. It is always in the pill now and
+  // only shown when selected, so the pill keeps its width.
+  it('keeps the checkmark in every pill, visible only when selected', async () => {
+    const w = mountWith(film)
+    const check = () => w.find('.tag-pill .tag-check')
+    expect(check().exists()).toBe(true)
+    expect(check().classes()).not.toContain('is-on')
+    await w.find('.tag-pill').trigger('click')
+    expect(check().exists()).toBe(true)
+    expect(check().classes()).toContain('is-on')
+  })
+
   it('the delete button asks first and does not toggle the tag', async () => {
     const w = mountWith(film)
     await w.find('.tag-delete').trigger('click')
