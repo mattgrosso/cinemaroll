@@ -24,9 +24,11 @@ const academy = [
 describe('agreementStats', () => {
   it('counts only contested categories, and finds the most agreeable year', () => {
     const stats = agreementStats([matt, brian]);
-    expect(stats.years).toEqual([{ year: 2025, categories: 4, agreed: 3 }, { year: 2024, categories: 1, agreed: 0 }]);
-    expect(stats).toMatchObject({ categories: 5, agreed: 3, rate: 0.6 });
-    expect(stats.bestYear).toEqual({ year: 2025, categories: 4, agreed: 3 });
+    // Supporting Actor split between Sean Penn and Benicio del Toro, but both
+    // in the same film, which is what agreement means here.
+    expect(stats.years).toEqual([{ year: 2025, categories: 4, agreed: 4 }, { year: 2024, categories: 1, agreed: 0 }]);
+    expect(stats).toMatchObject({ categories: 5, agreed: 4, rate: 0.8 });
+    expect(stats.bestYear).toEqual({ year: 2025, categories: 4, agreed: 4 });
     expect(agreementStats([matt]).categories).toBe(0);
   });
 });

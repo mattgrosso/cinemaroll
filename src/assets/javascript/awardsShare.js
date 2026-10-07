@@ -246,14 +246,12 @@ export function clubAwardsByYear (members) {
   return [...years.entries()].sort(([a], [b]) => b - a).map(([year, categories]) => ({
     year,
     categories: [...categories.values()].map(({ seen, ...category }) => {
-      // Agreement is on the thing awarded: the same film for a film category,
-      // the same person for a person category. Sean Penn and Benicio del Toro
-      // are both in One Battle After Another; that is not the same Best
-      // Supporting Actor.
+      // Agreement is on the film, whatever the category.
       const picks = [...category.picks].sort((a, b) => a.who.localeCompare(b.who));
-      // Two picks are the same choice when they are the same film and, for a
-      // person category, the same people — or one side named nobody.
-      const same = (a, b) => a.movieId === b.movieId && (category.kind !== 'person' || !a.names?.length || !b.names?.length || samePeople(a.names, b.names));
+      // Two picks are the same choice when they are the same film (Matt,
+      // 2026-10-07: "match based on movie"). In a person category the row
+      // then lists everyone the members named for it.
+      const same = (a, b) => a.movieId === b.movieId;
       const agreed = picks.some((a, i) => picks.slice(i + 1).some((b) => same(a, b)));
       const films = new Set(category.picks.map((p) => p.movieId));
       // The same choice by several members is one row naming all of them
@@ -267,9 +265,14 @@ export function clubAwardsByYear (members) {
           if (p.name) row.name = p.name;
           rows.push(row);
         }
-        // Keep the fuller rendering of the people ("Elizabeth Chai Vasarhelyi"
-        // over "Chai Vasarhelyi").
-        if (p.name && (!row.name || p.name.length > row.name.length)) { row.name = p.name; row.names = p.names || row.names; }
+        // People from every member, each once ("Elizabeth Chai Vasarhelyi"
+        // and "Chai Vasarhelyi" are the same person; keep the fuller one).
+        (p.names || []).forEach((name) => {
+          const twin = row.names.findIndex((n) => samePerson(n, name));
+          if (twin === -1) row.names.push(name);
+          else if (name.length > row.names[twin].length) row.names[twin] = name;
+        });
+        if (row.names.length) row.name = row.names.join(', ');
         if (!row.poster && p.poster) row.poster = p.poster;
         row.who.push(p.who);
         // Shown by the award's name, not the person's (Matt, 2026-10-07):

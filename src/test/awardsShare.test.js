@@ -159,17 +159,18 @@ describe('clubAwardsByYear', () => {
     expect(years[1].categories[0].picks).toEqual([{ who: 'Matt', ceremony: 'The Groskers', movieId: 680, title: 'Pulp Fiction', poster: null }]);
   });
 
-  // Matt, 2026-10-07: Brian's Best Supporting Actor was Sean Penn, mine was
-  // Benicio del Toro, both in One Battle After Another — not an agreement.
-  // And Movie Log's producers and co-editors fold into one pick per film.
-  it('judges agreement by the person for person categories, and folds a member\'s co-winners', () => {
+  // Matt, 2026-10-07, finally: "match based on movie" — Brian's Sean Penn and
+  // my Benicio del Toro, both in One Battle After Another, is one agreed row
+  // naming both. And Movie Log's producers and co-editors fold into one pick.
+  it('judges agreement by the film, and folds a member\'s co-winners', () => {
     const won = (year, label, name) => ({ year, category: label.toLowerCase().replace(/ /g, ''), label, result: 'won', ...(name ? { name } : {}) });
     const matt = { name: 'Matt', ceremony: 'The Groskers', awards: { 1054867: [won(2025, 'Best Supporting Actor', 'Benicio del Toro'), won(2025, 'Best Picture')] }, titles: { 1054867: { t: 'One Battle After Another', p: '/obaa.jpg' } } };
     const brian = { name: 'Brian', ceremony: 'Goegan Globes', awards: { 1054867: [won(2025, 'Best Supporting Actor', 'Sean Penn'), won(2025, 'Best Picture', 'Adam Somner'), won(2025, 'Best Picture', 'Sara Murphy'), won(2025, 'Best Editing', 'Andy Jurgensen'), won(2025, 'Best Editing', 'Someone Else')] }, titles: { 1054867: { t: 'One Battle After Another', p: '/obaa.jpg' } } };
     const [y2025] = clubAwardsByYear([matt, brian]);
     const by = (label) => y2025.categories.find((c) => c.label === label);
-    expect(by('Best Supporting Actor').agreed).toBe(false);
+    expect(by('Best Supporting Actor').agreed).toBe(true);
     expect(by('Best Supporting Actor').picks.map((p) => `${p.who}: ${p.name}`)).toEqual(['Brian: Sean Penn', 'Matt: Benicio del Toro']);
+    expect(by('Best Supporting Actor').choices).toEqual([{ movieId: 1054867, title: 'One Battle After Another', poster: '/obaa.jpg', name: 'Sean Penn, Benicio del Toro', who: ['Brian', 'Matt'], ceremonies: ['Goegan Globes', 'The Groskers'] }]);
     expect(by('Best Picture').agreed).toBe(true);
     expect(by('Best Picture').picks).toEqual([
       { who: 'Brian', ceremony: 'Goegan Globes', movieId: 1054867, title: 'One Battle After Another', poster: '/obaa.jpg' },
@@ -177,7 +178,6 @@ describe('clubAwardsByYear', () => {
     ]);
     // One row per choice, shared choices first naming everyone who made them.
     expect(by('Best Picture').choices).toEqual([{ movieId: 1054867, title: 'One Battle After Another', poster: '/obaa.jpg', who: ['Brian', 'Matt'], ceremonies: ['Goegan Globes', 'The Groskers'] }]);
-    expect(by('Best Supporting Actor').choices.map((c) => `${c.name}: ${c.who.join('+')}`)).toEqual(['Sean Penn: Brian', 'Benicio del Toro: Matt']);
     expect(by('Best Editing').picks).toHaveLength(1);
     expect(by('Best Editing').picks[0].name).toBeUndefined();
     expect(y2025.categories.map((c) => c.label)).toEqual(['Best Picture', 'Best Supporting Actor', 'Best Editing']);
@@ -195,12 +195,15 @@ describe('clubAwardsByYear', () => {
     expect(y.categories[0].choices).toHaveLength(1);
     expect(y.categories[0].choices[0]).toMatchObject({ name: 'Jimmy Chin, Elizabeth Chai Vasarhelyi', who: ['Brian', 'Matt'] });
     expect(y.categories[0].agreed).toBe(true);
-    // Spelled differently on each side still counts; a different person does not.
-    const spelled = { ...matt, awards: { 515042: [won(2018, 'Best Director', 'E. Chai Vasarhelyi and J. Chin')] } };
-    expect(clubAwardsByYear([brian, spelled])[0].categories[0].agreed).toBe(true);
+    // Spelled differently on each side, the person is listed once; a
+    // different person for the same film joins the list.
+    const spelled = { ...matt, awards: { 515042: [won(2018, 'Best Director', 'E. Chai Vasarhelyi')] } };
+    expect(clubAwardsByYear([brian, spelled])[0].categories[0].choices[0].name).toBe('Jimmy Chin, Elizabeth Chai Vasarhelyi');
     const other = { ...matt, awards: { 515042: [won(2018, 'Best Director', 'Alex Honnold')] } };
-    expect(clubAwardsByYear([brian, other])[0].categories[0].agreed).toBe(false);
-    expect(clubAwardsByYear([brian, other])[0].categories[0].choices).toHaveLength(2);
+    const row = clubAwardsByYear([brian, other])[0].categories[0];
+    expect(row.agreed).toBe(true);
+    expect(row.choices).toHaveLength(1);
+    expect(row.choices[0].name).toBe('Jimmy Chin, Elizabeth Chai Vasarhelyi, Alex Honnold');
     const alone = clubAwardsByYear([brian])[0].categories[0];
     expect(alone.choices).toEqual([{ movieId: 515042, title: 'Free Solo', poster: '/fs.jpg', name: 'Jimmy Chin, Elizabeth Chai Vasarhelyi', who: ['Brian'], ceremonies: ['Goegan Globes'] }]);
   });
