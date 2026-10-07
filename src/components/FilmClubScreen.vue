@@ -245,9 +245,9 @@
         <h2 class="cs-section-title">Club awards</h2>
         <p class="cs-caption">Everyone's winners, side by side. Gold where two or more of you agreed.</p>
         <div class="cs-years">
-          <button v-for="entry in clubAwards" :key="entry.year" type="button" class="cs-year" :class="{ on: entry.year === awardsYear }" @click="awardsYear = entry.year">{{ entry.year }}</button>
+          <button v-for="entry in clubAwards" :key="entry.year" type="button" class="cs-year" :class="{ on: entry.year === awardsYear }" @click="selectAwardsYear(entry.year)">{{ entry.year }}</button>
         </div>
-        <div class="cs-award-list">
+        <div ref="awardList" class="cs-award-list">
         <div v-for="category in awardsForYear" :key="category.label" class="cs-award-category" :class="{ agreed: category.agreed }">
           <span class="cs-award-label">{{ category.label }}<span v-if="category.agreed" class="cs-award-agreed">agreed</span></span>
           <div v-for="row in category.choices" :key="`${row.movieId}-${row.name || ''}`" class="cs-award-row" :class="{ shared: row.who.length > 1 }" @click="goToTitle({ id: row.movieId, t: row.title })">
@@ -257,7 +257,9 @@
               <span class="cs-award-title">{{ row.name || row.title || 'Untitled' }}</span>
               <span v-if="row.name && row.title" class="cs-award-for">{{ row.title }}</span>
             </span>
-            <span class="cs-award-who">{{ row.ceremonies.join(' · ') }}</span>
+            <!-- One unbreakable chip per ceremony: a wrap falls between
+                 "Goegan Globes" and "The Groskers", never inside one. -->
+            <span class="cs-award-who"><span v-for="ceremony in row.ceremonies" :key="ceremony" class="cs-award-ceremony">{{ ceremony }}</span></span>
           </div>
         </div>
         </div>
@@ -779,6 +781,12 @@ export default {
     },
     goToTitle (movie) {
       this.goToMovie(movie.id);
+    },
+    // A new year starts at the top of the list (Matt, 2026-10-07), not
+    // wherever the last year was scrolled to.
+    selectAwardsYear (year) {
+      this.awardsYear = year;
+      this.$nextTick(() => { if (this.$refs.awardList) this.$refs.awardList.scrollTop = 0; });
     }
   }
 };
@@ -948,7 +956,9 @@ export default {
 .cs-award-text { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; row-gap: 1px; }
 .cs-award-title { color: #fff; font-size: 0.84rem; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
 .cs-award-for { color: #ccc; font-size: 0.7rem; line-height: 1.2; }
-.cs-award-who { color: #ccc; flex: 0 1 auto; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em; line-height: 1.25; max-width: 40%; text-align: right; text-transform: uppercase; }
+.cs-award-who { color: #ccc; display: flex; flex: 0 1 auto; flex-wrap: wrap; font-size: 0.65rem; font-weight: 700; justify-content: flex-end; letter-spacing: 0.05em; line-height: 1.25; max-width: 42%; text-align: right; text-transform: uppercase; }
+.cs-award-ceremony { white-space: nowrap; }
+.cs-award-ceremony + .cs-award-ceremony::before { content: '·'; margin: 0 0.3em; }
 .cs-award-row.shared .cs-award-who { color: #ffc107; }
 
 .cs-section {
