@@ -70,6 +70,7 @@ import { revisionUrlFor } from "../assets/javascript/feedRevision.js";
 import { publishFeedV2 } from "../assets/javascript/filmClubSyncPublisher.js";
 import { hexToken } from "../assets/javascript/filmClubSync.js";
 import { refreshExternalFeed } from "../utils/filmClubSyncClient.js";
+import { reportFeedFallback } from "../utils/syncFallbackReport.js";
 
 const sortByVoteCount = (a, b) => {
   if (a.vote_count < b.vote_count) {
@@ -2296,6 +2297,9 @@ export default createStore({
             if (profile) { context.commit('setExternalFriendProfile', { id, profile }); return; }
           }
           if (v2.status === 'v1' && topKey && v2.cache) saveSnapshot(topKey, syncKind, v2.cache).catch(() => {});
+          // A feed that used to validate and no longer does is an alarm, not a
+          // quiet downgrade (Matt, 2026-10-06): a Sentry warning, once an hour.
+          if (v2.status === 'v1') reportFeedFallback({ friendName: friend.name, feedUrl: friend.feedUrl, reason: v2.reason, established: Boolean(v2.cache?.establishedV2) });
           // Legacy body, with its revision preflight.
           const revisionUrl = cached?.revision ? revisionUrlFor(friend.feedUrl) : null;
           if (revisionUrl) {

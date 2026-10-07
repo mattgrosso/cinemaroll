@@ -196,6 +196,7 @@ describe('Film Club v2 end to end', () => {
     db.set(`clubFeed/${OWNER}/${SECRET}`, { ...feedOf(many(4)), revision: 'd'.repeat(32) });
     const r = await refresh(cache);
     expect(r.status).toBe('v1');
+    expect(r.reason).toBe('body-mismatch');
     expect(r.cache.meta).toBeNull();
     expect(r.cache.establishedV2).toBe(true);
     const next = await publish(many(4), { lastPublished: first });
@@ -211,6 +212,7 @@ describe('Film Club v2 end to end', () => {
     db.deny = { path: `/clubFeedSync/`, status: 404 };
     const fresh = await refresh(null);
     expect(fresh.status).toBe('v1');
+    expect(fresh.reason).toBe('no-meta');
     expect(fresh.cache.establishedV2).toBe(false);
     db.deny = null;
     await publish(many(2));

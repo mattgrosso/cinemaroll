@@ -496,9 +496,11 @@ export function myRatingsById (myEntries, getRatingFn) {
 // External feeds are someone else's Firebase bill (Brian, 2026-10-06: Movie
 // Log was "running out of Firebase download space because we're giving him
 // so much data" — every Cinema Roll refresh of his feed is a download billed
-// to his project). So: at most one sync an hour unless forced, a revision
-// preflight before any body, and the last result kept across launches.
-export const EXTERNAL_FEED_MAX_AGE_MS = 60 * 60 * 1000;
+// to his project). While a refresh meant a full download this was an hour;
+// with the v2 sync an unchanged refresh is two reads of a few hundred bytes,
+// so it is five minutes again, the same as friends on this app (Matt, later
+// the same night). The last result is kept across launches either way.
+export const EXTERNAL_FEED_MAX_AGE_MS = 5 * 60 * 1000;
 
 /** Whether an external sync should run at all right now. */
 export function externalSyncDue ({ friends = {}, profiles = {}, syncedAt = 0, maxAgeMs = EXTERNAL_FEED_MAX_AGE_MS, now = Date.now(), force = false } = {}) {

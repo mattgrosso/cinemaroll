@@ -25,11 +25,14 @@ const readJson = async (fetchFn, url) => {
   return res.json();
 };
 
-async function readHead (fetchFn, syncUrl, feedUrl) {
+// A 401/403/404/410 on meta is a revocation for a capability that has
+// certified v2 before; for one that never has, it is simply a peer without
+// v2 (rules not yet upgraded) and the head is "no meta".
+async function readHead (fetchFn, syncUrl, feedUrl, established) {
   const metaUrl = childUrl(syncUrl, 'meta');
   const revisionUrl = childUrl(feedUrl, 'revision');
   const [meta, legacyRevision] = await Promise.all([
-    readJson(fetchFn, metaUrl).catch((error) => { if (REVOKED.has(error.status)) throw new RevokedError(error.message); return null; }),
+    readJson(fetchFn, metaUrl).catch((error) => { if (REVOKED.has(error.status) && established) throw new RevokedError(error.message); return null; }),
     readJson(fetchFn, revisionUrl).catch(() => null)
   ]);
   return { meta, legacyRevision };
@@ -85,19 +88,19 @@ export async function refreshExternalFeed ({ feedUrl, cache = null, fetchFn = fe
   const syncUrl = syncRootFor(feedUrl);
   const established = Boolean(cache?.establishedV2 && cache?.feedUrl === feedUrl);
   const invalidated = { feedUrl, syncUrl, meta: null, movies: null, establishedV2: established };
-  if (!syncUrl) return { status: 'v1', cache: null };
+  if (!syncUrl) return { status: 'v1', cache: null, reason: 'not-a-firebase-feed' };
   const usable = cache && cache.feedUrl === feedUrl && cache.syncUrl === syncUrl && cache.meta && cache.movies ? cache : null;
 
   let head;
   try {
-    head = await readHead(fetchFn, syncUrl, feedUrl);
+    head = await readHead(fetchFn, syncUrl, feedUrl, established);
   } catch (error) {
     if (error instanceof RevokedError && established) return { status: 'revoked' };
-    return { status: 'v1', cache: invalidated };
+    return { status: 'v1', cache: invalidated, reason: `head-unreadable:${error.status || error.message}` };
   }
 
   let plan = planRefresh({ cache: usable, meta: head.meta, legacyRevision: head.legacyRevision });
-  if (plan.mode === 'v1') return { status: 'v1', cache: invalidated };
+  if (plan.mode === 'v1') return { status: 'v1', cache: invalidated, reason: plan.reason };
   if (plan.mode === 'unchanged') return { status: 'unchanged' };
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
@@ -113,20 +116,20 @@ export async function refreshExternalFeed ({ feedUrl, cache = null, fetchFn = fe
       }
     } catch (error) {
       if (error instanceof RevokedError || (REVOKED.has(error.status) && established)) return { status: 'revoked' };
-      if (!(error instanceof SyncGapError)) return { status: 'v1', cache: invalidated };
+      if (!(error instanceof SyncGapError)) return { status: 'v1', cache: invalidated, reason: `read-failed:${error.status || error.message}` };
       plan = { mode: 'bootstrap', reason: 'gap' };
       continue;
     }
     // Certify against the head as it is NOW: a publication mid-read must never
     // produce a mixed snapshot.
     try {
-      head = await readHead(fetchFn, syncUrl, feedUrl);
+      head = await readHead(fetchFn, syncUrl, feedUrl, established);
     } catch (error) {
       if (error instanceof RevokedError && established) return { status: 'revoked' };
-      return { status: 'v1', cache: invalidated };
+      return { status: 'v1', cache: invalidated, reason: `head-unreadable:${error.status || error.message}` };
     }
     const check = planRefresh({ cache: usable, meta: head.meta, legacyRevision: head.legacyRevision });
-    if (check.mode === 'v1') return { status: 'v1', cache: invalidated };
+    if (check.mode === 'v1') return { status: 'v1', cache: invalidated, reason: check.reason };
     if (head.meta.revision === target.revision && head.meta.cursor === target.cursor && certifies(head.meta, result)) {
       const next = { feedUrl, syncUrl, meta: head.meta, movies: result.movies, establishedV2: true };
       return { status: 'updated', cache: next, feed: feedFromSync(head.meta, result.movies) };
@@ -135,5 +138,5 @@ export async function refreshExternalFeed ({ feedUrl, cache = null, fetchFn = fe
     if (head.meta.revision === target.revision && head.meta.cursor === target.cursor) break;
     plan = check.mode === 'unchanged' ? { mode: 'bootstrap', reason: 'recheck' } : check;
   }
-  return { status: 'v1', cache: invalidated };
+  return { status: 'v1', cache: invalidated, reason: 'could-not-certify' };
 }

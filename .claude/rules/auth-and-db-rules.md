@@ -247,8 +247,13 @@ then nothing / a journal delta / a paged bootstrap (250 movies, 100 batches), ce
 result against the head AFTER reading (three attempts), caches per friend in the offline
 store (`externalSync:<id>`), falls back to the legacy body when the head cannot be trusted,
 and treats an explicit 401/403/404/410 on an *established* capability as revocation (purge,
-fail — never a silent v1 downgrade). External feeds sync at most hourly
-(`EXTERNAL_FEED_MAX_AGE_MS`), because every read is billed to the friend's Firebase.
+fail — never a silent v1 downgrade). External feeds sync every five minutes
+(`EXTERNAL_FEED_MAX_AGE_MS`, like in-app friends — an unchanged v2 refresh is two reads of a
+few hundred bytes; it was an hour while a refresh still meant a full download, because every
+read is billed to the friend's Firebase). **A feed that used to certify v2 and falls back to
+v1 is reported** (`src/utils/syncFallbackReport.js`: a Sentry warning, fingerprinted per
+feed, at most hourly; the new-issue email is the alarm). A peer that never supported v2 is
+not a fallback and is never reported.
 Rules: public reads only at the **current** `settings/clubFeedKey` (legacy feed too), meta
 whole, movies/changes **bounded in key order** (an unbounded read is refused), the index
 the owner's alone (≤2). `scripts/generate-database-rules.mjs` owns the rules; emulator
