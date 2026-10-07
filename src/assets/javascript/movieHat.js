@@ -161,7 +161,7 @@ export function drawnRecord (movie, now = Date.now()) {
 // Network. Thin on purpose: the shapes above are where the thinking lives.
 // ---------------------------------------------------------------------------
 
-async function hatRequest (path, options = {}) {
+async function hatFetch (path, options = {}, { allowNotModified = false } = {}) {
   // Movie Hat is a different Firebase project, so this is ITS token, from
   // the second sign-in — a Cinema Roll token means nothing there.
   const { token, email, reason } = await movieHatSession();
@@ -175,6 +175,7 @@ async function hatRequest (path, options = {}) {
   const url = `${HAT_DATABASE_URL}/${path}${separator}auth=${encodeURIComponent(token)}`;
 
   const response = await fetch(url, options);
+  if (allowNotModified && response.status === 304) return response;
   if (!response.ok) {
     // Keep what the database actually said. Firebase answers a rules refusal
     // with 401 and `{"error": "Permission denied"}` — the body is the only
@@ -193,8 +194,30 @@ async function hatRequest (path, options = {}) {
     error.status = response.status;
     throw error;
   }
+  return response;
+}
+
+async function hatRequest (path, options = {}) {
+  const response = await hatFetch(path, options);
   const text = await response.text();
   return text ? JSON.parse(text) : null;
+}
+
+/**
+ * A conditional read (audit, 2026-10-06). Firebase's REST API honours
+ * X-Firebase-ETag / If-None-Match — and allows both cross-origin — answering
+ * 304 with no body when the node is unchanged. The hat reads below were the
+ * app's largest downloads (nine hats' movies ≈ 800 KB per open, one whole
+ * hat ≈ 950 KB) and a hat changes rarely, so with the last ETag in hand an
+ * unchanged read costs nothing to download.
+ */
+export async function hatRead (path, { etag = null } = {}) {
+  const headers = { 'X-Firebase-ETag': 'true' };
+  if (etag) headers['If-None-Match'] = etag;
+  const response = await hatFetch(path, { headers }, { allowNotModified: true });
+  if (response.status === 304) return { value: undefined, etag, notModified: true };
+  const text = await response.text();
+  return { value: text ? JSON.parse(text) : null, etag: response.headers?.get?.('ETag') || null, notModified: false };
 }
 
 /**
@@ -248,20 +271,26 @@ export async function fetchHatKey (title) {
   }
 }
 
+const shapeHat = (title, key, data) => (data ? {
+  title,
+  dbKey: key,
+  movies: asArray(data.movies),
+  history: asArray(data.history),
+  members: Object.values(data.members || {})
+} : null);
+
 export async function fetchHat (title, dbKey = null) {
   const key = dbKey || await fetchHatKey(title);
   if (!key) return null;
-
   const data = await hatRequest(`hats/${encodeURIComponent(title)}/${key}.json`);
-  if (!data) return null;
+  return shapeHat(title, key, data);
+}
 
-  return {
-    title,
-    dbKey: key,
-    movies: asArray(data.movies),
-    history: asArray(data.history),
-    members: Object.values(data.members || {})
-  };
+/** The whole hat, unless the ETag says it is the one already in hand. */
+export async function fetchHatConditional (title, dbKey, etag = null) {
+  if (!dbKey) return { hat: null, etag: null, notModified: false };
+  const read = await hatRead(`hats/${encodeURIComponent(title)}/${dbKey}.json`, { etag });
+  return { hat: read.notModified ? undefined : shapeHat(title, dbKey, read.value), etag: read.etag, notModified: read.notModified };
 }
 
 /**
@@ -281,6 +310,13 @@ export async function fetchHatMovies (title, dbKey) {
   if (!dbKey) return [];
   const data = await hatRequest(`hats/${encodeURIComponent(title)}/${dbKey}/movies.json`);
   return asArray(data);
+}
+
+/** The movies waiting, unless the ETag says they are the ones already in hand. */
+export async function fetchHatMoviesConditional (title, dbKey, etag = null) {
+  if (!dbKey) return { movies: [], etag: null, notModified: false };
+  const read = await hatRead(`hats/${encodeURIComponent(title)}/${dbKey}/movies.json`, { etag });
+  return { movies: read.notModified ? undefined : asArray(read.value), etag: read.etag, notModified: read.notModified };
 }
 
 export function addMovieToHat (title, dbKey, payload) {
@@ -354,7 +390,12 @@ export function hatsToCheck (linked = [], indexed = []) {
  * are kept on an incomplete read: a film you knew was in a hat a minute ago
  * is a better guess than forgetting it because one request failed.
  */
-export async function readHatContents ({ linked = [], email = null, previousIds = {} } = {}) {
+/**
+ * `previous` is the per-hat cache from the last read — `{ [dbKey]: { etag,
+ * ids } }` — so each hat is a conditional request; a 304 contributes the
+ * ids already known. The updated cache comes back as `cache`.
+ */
+export async function readHatContents ({ linked = [], email = null, previousIds = {}, previous = {} } = {}) {
   let complete = true;
   let accessError = null;
   const noteError = (error) => {
@@ -375,16 +416,20 @@ export async function readHatContents ({ linked = [], email = null, previousIds 
   }
 
   const ids = {};
+  const cache = {};
   await Promise.all(hatsToCheck(linked, indexed).map(async (hat) => {
     // Keyless means the index doesn't list it either: a hat you've left, or
     // one that's gone. If the index itself failed, complete is already false.
     if (!hat.dbKey) return;
     try {
       // Only the movies: the whole hat, history included, is ~2MB for six.
-      const movies = await fetchHatMovies(hat.title, hat.dbKey);
-      movies.forEach((movie) => {
-        if (movie?.id != null) ids[movie.id] = true;
-      });
+      const held = previous?.[hat.dbKey];
+      const read = await fetchHatMoviesConditional(hat.title, hat.dbKey, held?.etag || null);
+      const hatIds = read.notModified
+        ? (held?.ids || [])
+        : read.movies.map((movie) => movie?.id).filter((id) => id != null);
+      hatIds.forEach((id) => { ids[id] = true; });
+      cache[hat.dbKey] = { etag: read.etag, ids: hatIds };
     } catch (error) {
       noteError(error);
       console.warn('[movie-hat] could not read hat contents', hat.title, error.message);
@@ -394,6 +439,7 @@ export async function readHatContents ({ linked = [], email = null, previousIds 
   return {
     ids: complete ? ids : { ...(previousIds || {}), ...ids },
     complete,
-    accessError
+    accessError,
+    cache: complete ? cache : { ...(previous || {}), ...cache }
   };
 }

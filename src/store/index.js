@@ -29,7 +29,7 @@ import { enqueueWrite, listPendingWrites, removePendingWrite, updatePendingWrite
 import { setValueAtPath } from "../utils/statePath.js";
 import { stampPlanForWrite, stampUpdatesForBatch } from "../assets/javascript/syncStamp.js";
 import { emailToDatabaseKey, isQaAccountKey } from "../assets/javascript/databaseKey.js";
-import { fetchAllHats, fetchMyHats, hatsForMember, fetchHat, readHatContents, toHatMovie, alreadyInHat, addMovieToHat, pickFromHat, commitDraw, isMovieHatAccessError } from "../assets/javascript/movieHat.js";
+import { fetchAllHats, fetchMyHats, hatsForMember, fetchHat, fetchHatConditional, readHatContents, toHatMovie, alreadyInHat, addMovieToHat, pickFromHat, commitDraw, isMovieHatAccessError } from "../assets/javascript/movieHat.js";
 import {
   connectMovieHat as signIntoMovieHat,
   connectMovieHatWithToken as signIntoMovieHatWithToken,
@@ -423,6 +423,11 @@ export default createStore({
     // to put back in.
     movieHatMovieIds: {},
     movieHatContentsAt: 0,
+    // Per hat, the ETag of the last movies read and the ids it held, so the
+    // next read is conditional (audit, 2026-10-06). Kept across launches.
+    movieHatContentsCache: {},
+    // Per hat, the ETag and card of the last whole-hat read for the summaries.
+    movieHatSummaryCache: {},
     // False when the last read missed a hat, so the ids above may be short.
     movieHatContentsComplete: true,
     // Per-hat cards for the watchlist's draw section.
@@ -747,10 +752,14 @@ export default createStore({
     setAvailableMovieHats (state, value) {
       state.availableMovieHats = value || [];
     },
-    setMovieHatContents (state, { ids, at, complete = true } = {}) {
+    setMovieHatContents (state, { ids, at, complete = true, cache } = {}) {
       state.movieHatMovieIds = ids || {};
       state.movieHatContentsAt = at || 0;
       state.movieHatContentsComplete = complete !== false;
+      if (cache) state.movieHatContentsCache = cache;
+    },
+    setMovieHatSummaryCache (state, value) {
+      state.movieHatSummaryCache = value || {};
     },
     // Sent successfully: hide those buttons now rather than after the next
     // refresh of the cache.
@@ -1455,6 +1464,15 @@ export default createStore({
 
         loadSnapshot(topKey, 'externalFriends').then((cached) => {
           if (cached?.profiles) context.commit('restoreExternalFriends', cached);
+          return null;
+        }).catch(() => {});
+        // Movie Hat reads resume conditionally from the last launch's ETags.
+        loadSnapshot(topKey, 'movieHatContents').then((cached) => {
+          if (cached?.cache && !context.state.movieHatContentsAt) context.commit('setMovieHatContents', cached);
+          return null;
+        }).catch(() => {});
+        loadSnapshot(topKey, 'movieHatSummaries').then((cached) => {
+          if (cached && !Object.keys(context.state.movieHatSummaryCache || {}).length) context.commit('setMovieHatSummaryCache', cached);
           return null;
         }).catch(() => {});
         loadSnapshot(topKey, 'settings').then(async (cached) => {
@@ -2644,13 +2662,17 @@ export default createStore({
       if (movieHatContentsInFlight && !force) return movieHatContentsInFlight;
 
       const read = (async () => {
-        const { ids, complete: allRead, accessError } = await readHatContents({
+        const { ids, complete: allRead, accessError, cache } = await readHatContents({
           linked: hats,
           email: context.state.movieHatEmail || context.state.userEmail,
-          previousIds: context.state.movieHatMovieIds
+          previousIds: context.state.movieHatMovieIds,
+          previous: context.state.movieHatContentsCache
         });
         context.commit('setMovieHatAccessError', accessError);
-        context.commit('setMovieHatContents', { ids, at: Date.now(), complete: allRead });
+        const at = Date.now();
+        context.commit('setMovieHatContents', { ids, at, complete: allRead, cache });
+        const topKey = context.state.databaseTopKey;
+        if (topKey) saveSnapshot(topKey, 'movieHatContents', { ids, at, complete: allRead, cache }).catch(() => {});
       })().finally(() => {
         if (movieHatContentsInFlight === read) movieHatContentsInFlight = null;
       });
@@ -2666,10 +2688,16 @@ export default createStore({
     async loadMovieHatSummaries (context) {
       const hats = context.getters.linkedMovieHats;
       let accessError = null;
+      const summaryCache = { ...(context.state.movieHatSummaryCache || {}) };
       const summaries = await Promise.all(hats.map(async (hat) => {
         try {
-          const loaded = await fetchHat(hat.title, hat.dbKey);
+          // Conditional: a 304 means the card in hand is still right.
+          const held = summaryCache[hat.dbKey];
+          const read = await fetchHatConditional(hat.title, hat.dbKey, held?.etag || null);
+          if (read.notModified && held?.summary) return held.summary;
+          const loaded = read.hat;
           if (!loaded) return { ...hat, error: true };
+          const remember = (summary) => { if (read.etag) summaryCache[hat.dbKey] = { etag: read.etag, summary }; return summary; };
 
           // History is stored oldest-first; the newest draw is the one with
           // the latest dateDrawn rather than simply the last key.
@@ -2683,13 +2711,13 @@ export default createStore({
             .filter(Boolean)
             .sort((a, b) => (b?.dateDrawn || 0) - (a?.dateDrawn || 0));
 
-          return {
+          return remember({
             title: loaded.title,
             dbKey: loaded.dbKey,
             waiting: loaded.movies.length,
             lastDrawn,
             history
-          };
+          });
         } catch (error) {
           if (isMovieHatAccessError(error)) {
             accessError = accessError || { reason: error.reason, email: error.email };
@@ -2700,6 +2728,9 @@ export default createStore({
 
       context.commit('setMovieHatAccessError', accessError);
       context.commit('setMovieHatSummaries', summaries);
+      context.commit('setMovieHatSummaryCache', summaryCache);
+      const topKey = context.state.databaseTopKey;
+      if (topKey) saveSnapshot(topKey, 'movieHatSummaries', summaryCache).catch(() => {});
       return summaries;
     },
 
@@ -3107,6 +3138,14 @@ export default createStore({
           // A friend who shares with me at the end of the day only lets me
           // read their end-of-day copy; the rules deny the live one.
           const branch = context.state.socialEdges?.[key]?.[me] === 'day' ? 'dayProfiles' : 'profiles';
+          // Preflight (audit, 2026-10-06): a profile is up to 250 KB and was
+          // re-read whole every refresh. Its `updatedAt` is a few bytes; when
+          // it matches the copy in hand, the copy is current.
+          const held = context.state.socialFriendProfiles?.[key];
+          if (held?.updatedAt) {
+            const stamp = (await get(ref(db, `social/${branch}/${key}/updatedAt`))).val();
+            if (stamp && stamp === held.updatedAt) return;
+          }
           const snapshot = await get(ref(db, `social/${branch}/${key}`));
           context.commit('setSocialFriendProfile', { key, profile: snapshot.val() });
         } catch (error) {

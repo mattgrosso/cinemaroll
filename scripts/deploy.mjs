@@ -72,7 +72,7 @@ function shipWorktreeToMain ({ worktreeRoot, mainRoot }) {
   if (push.status !== 0) console.warn('\n! Pushing main to origin failed; deploying anyway. Push it by hand afterwards.');
 }
 
-function main () {
+async function main () {
   const roots = ensureWorktreeSetup();
   if (!existsSync(join(roots.worktreeRoot, '.env'))) fail('No .env here or in the main checkout.');
 
@@ -92,7 +92,24 @@ function main () {
   run('node', ['scripts/bump-and-build.mjs']);
 
   const aws = awsBinary();
-  run(aws, ['s3', 'sync', 'dist/', BUCKET, '--delete', '--profile', PROFILE]);
+  // Cache headers (audit, 2026-10-06 — S3 objects carried none, so browsers
+  // and CloudFront fell back to heuristics). Hashed assets never change at
+  // their URL: a year, immutable. Everything else — index.html, the service
+  // workers, manifest, data/*.json (the 6 MB awards dataset is not hashed) —
+  // must be revalidated every time; CloudFront still serves a 304 cheaply.
+  const HASHED = /\.[0-9a-f]{8}\.(js|css|woff2?|ttf|png|jpe?g|gif|svg|webp|avif|map)$/;
+  run(aws, ['s3', 'sync', 'dist/', BUCKET, '--delete', '--profile', PROFILE,
+    '--exclude', '*', '--include', '*.????????.*',
+    '--cache-control', 'public, max-age=31536000, immutable']);
+  run(aws, ['s3', 'sync', 'dist/', BUCKET, '--profile', PROFILE,
+    '--exclude', '*.????????.*',
+    '--cache-control', 'no-cache']);
+  // The first pass's --include glob is a coarse "has a hash segment" filter; a
+  // file it matched that is NOT hashed would be a bug worth failing loudly on.
+  const { readdirSync, statSync } = await import('fs');
+  const walk = (dir) => readdirSync(dir).flatMap((name) => { const full = join(dir, name); return statSync(full).isDirectory() ? walk(full) : [full]; });
+  const misfiled = walk('dist').filter((file) => /\.[^./]{8}\./.test(file.split('/').pop()) && !HASHED.test(file));
+  if (misfiled.length) fail(`These files look hashed to the sync but are not: ${misfiled.join(', ')}`);
   const invalidation = spawnSync(aws, ['cloudfront', 'create-invalidation', '--distribution-id', DISTRIBUTION, '--paths', '/*', '--profile', PROFILE], { encoding: 'utf8' });
   if (invalidation.status !== 0) {
     process.stderr.write(invalidation.stderr || '');
