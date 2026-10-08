@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { handledErrorFilter, normalizeMessage, isConsoleCapture, CONSOLE_BUDGET_PER_LOAD } from '@/utils/sentryHandled.js';
+import { handledErrorFilter, normalizeMessage, isConsoleCapture, CONSOLE_BUDGET_PER_LOAD, EVENTS_PER_LOAD } from '@/utils/sentryHandled.js';
 
 // House module (2026-10-08): console.error reaches Sentry, but budgeted and
 // grouped so it cannot spend the shared error quota.
@@ -56,5 +56,14 @@ describe('handledErrorFilter', () => {
     expect(sent).toBe(event);
     expect(sent.fingerprint).toBeUndefined();
     expect(sent.tags).toBeUndefined();
+  });
+
+  it('caps everything a page load can send, crashes included — a crash loop costs at most the cap', () => {
+    const filter = handledErrorFilter(undefined, { cap: 3 });
+    expect(filter(crash(), {})).not.toBeNull();
+    expect(filter(crash(), {})).not.toBeNull();
+    expect(filter(console1(), {})).not.toBeNull();
+    expect(filter(crash(), {})).toBeNull();
+    expect(EVENTS_PER_LOAD).toBeGreaterThan(CONSOLE_BUDGET_PER_LOAD);
   });
 });

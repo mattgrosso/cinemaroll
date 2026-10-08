@@ -14,6 +14,10 @@
 // repo, copy to the rest.
 
 export const CONSOLE_BUDGET_PER_LOAD = 20;
+// A crash loop (a render error on every tick, say) could send thousands of
+// events from one tab. Sentry's own rate limits are a paid feature, so the
+// cap lives here: past this many events in one page load, nothing more goes.
+export const EVENTS_PER_LOAD = 60;
 
 /** The shape of a message with its particulars removed, for grouping. */
 export function normalizeMessage (message) {
@@ -42,12 +46,15 @@ function describe (event, hint) {
 
 /**
  * A beforeSend. `next` is the scrubber that ran alone before (scrubEvent),
- * so this wraps it rather than replacing it. Returns null to drop.
+ * so this wraps it rather than replacing it. Returns null to drop. The cap
+ * counts everything, crashes included; the budget is console captures only.
  */
-export function handledErrorFilter (next = (event) => event, { budget = CONSOLE_BUDGET_PER_LOAD } = {}) {
+export function handledErrorFilter (next = (event) => event, { budget = CONSOLE_BUDGET_PER_LOAD, cap = EVENTS_PER_LOAD } = {}) {
   const seen = new Set();
   let spent = 0;
+  let sent = 0;
   return (event, hint) => {
+    if (sent >= cap) return null;
     if (isConsoleCapture(event)) {
       const key = normalizeMessage(describe(event, hint));
       if (seen.has(key) || spent >= budget) return null;
@@ -56,6 +63,7 @@ export function handledErrorFilter (next = (event) => event, { budget = CONSOLE_
       event.fingerprint = ['console', key];
       event.tags = { ...(event.tags || {}), handled: 'console' };
     }
+    sent += 1;
     return next(event, hint);
   };
 }
