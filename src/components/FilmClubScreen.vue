@@ -1029,8 +1029,23 @@ export default {
    my film club could be larger"). */
 /* The feed has the Activity tab to itself, so the cards are bigger and the
    strip reads as something to flip through (Matt, 2026-10-07). */
-.cs-feed-row .cs-poster-card { flex: 0 0 156px; width: 156px; }
-.cs-feed-row .cs-poster { height: 234px; width: 156px; }
+/* Second pass (Matt, 2026-10-08: "could still be larger. There's a good
+   amount of dead space below the posters"): the poster height comes from the
+   screen's, so the strip runs down to the footer. 462px is everything else
+   on the tab at phone width (banner, tabs, heading, the two text lines,
+   paddings, footer), measured at 402×695. Floor: the old 234. Cap: 360, so a
+   tall phone still shows about one and a half cards and the strip stays
+   clear of the bug button. Width follows at 2:3. */
+.cs-feed-row {
+  --feed-poster-h: clamp(234px, calc(100vh - 462px), 360px);
+  --feed-poster-h: clamp(234px, calc(100dvh - 462px), 360px);
+  --feed-poster-w: calc(var(--feed-poster-h) * 2 / 3);
+}
+.cs-feed-row .cs-poster-card { flex: 0 0 var(--feed-poster-w); width: var(--feed-poster-w); }
+.cs-feed-row .cs-poster { height: var(--feed-poster-h); width: var(--feed-poster-w); }
+.cs-feed-row .cs-poster-note { font-size: 0.74rem; }
+.cs-feed-row .cs-poster-stars { font-size: 0.68rem; }
+.cs-feed-row .cs-poster-when { font-size: 0.7rem; }
 
 /* Feed posters carry an add-to-hat button for anything not in your library,
    so an unopenable card still has something to do. */

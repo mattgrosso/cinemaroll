@@ -504,7 +504,10 @@ Matt: the page was "feeling a bit messy" — eleven look-alike cards on a 4,400p
 scroll. It is now five tabs on the Insights control (`.fc-tabs`, URL `?tab=`,
 remembered in localStorage), with no page title or blurb above them ("the
 actual content starts more than halfway down the page"): **Activity** (just
-Recently watched, with bigger cards), **Friends** (Has anybody seen…, requests,
+Recently watched, with bigger cards — since 2026-10-08 the poster height is
+`clamp(234px, 100dvh - 462px, 360px)`, so the strip runs down to the footer on a tall
+phone; the 462px is the rest of the tab at phone width, re-measure it if anything is
+added above or below the strip; `filmClubFeedSize.test.js`), **Friends** (Has anybody seen…, requests,
 the friends list with no heading, then the Requests sent / Friends on other
 apps / Find people accordions; a badge counts waiting requests), **Awards**
 (Club awards with the newest year lit, Awards compared), **Taste** (Club
