@@ -505,9 +505,12 @@ scroll. It is now five tabs on the Insights control (`.fc-tabs`, URL `?tab=`,
 remembered in localStorage), with no page title or blurb above them ("the
 actual content starts more than halfway down the page"): **Activity** (just
 Recently watched, with bigger cards — since 2026-10-08 the poster height is
-`clamp(234px, 100dvh - 462px, 360px)`, so the strip runs down to the footer on a tall
-phone; the 462px is the rest of the tab at phone width, re-measure it if anything is
-added above or below the strip; `filmClubFeedSize.test.js`), **Friends** (Has anybody seen…, requests,
+`clamp(190px, 100dvh - 504px - safe-area-inset-bottom, 360px)`, so the strip runs down
+to just above the fixed bug button — NOT to the footer: the button's top is 60px plus the
+home-bar inset up, higher than the footer, and running to the footer put the first card
+under it (report, same day). 504 = the 462px rest of the tab at phone width + 42px for the
+button; re-measure if anything is added above or below the strip;
+`filmClubFeedSize.test.js`), **Friends** (Has anybody seen…, requests,
 the friends list with no heading, then the Requests sent / Friends on other
 apps / Find people accordions; a badge counts waiting requests), **Awards**
 (Club awards with the newest year lit, Awards compared), **Taste** (Club

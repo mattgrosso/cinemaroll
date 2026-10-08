@@ -1034,11 +1034,17 @@ export default {
    screen's, so the strip runs down to the footer. 462px is everything else
    on the tab at phone width (banner, tabs, heading, the two text lines,
    paddings, footer), measured at 402×695. Floor: the old 234. Cap: 360, so a
-   tall phone still shows about one and a half cards and the strip stays
-   clear of the bug button. Width follows at 2:3. */
+   tall phone still shows about one and a half cards. Width follows at 2:3.
+   Third pass (Matt, 2026-10-08: "now they overlap with the bug button a
+   little bit in the bottom left corner"): the strip can't run all the way to
+   the footer, because the fixed bug button's top edge is 60px plus the
+   home-bar inset above the screen's bottom, higher than the ~26px footer.
+   So 42px more comes off (button minus footer, plus a small gap) and the
+   home-bar inset too, and the floor drops from 234 to 190 so a 695px-tall
+   Safari window clears the button as well (695 - 504 = 191). */
 .cs-feed-row {
-  --feed-poster-h: clamp(234px, calc(100vh - 462px), 360px);
-  --feed-poster-h: clamp(234px, calc(100dvh - 462px), 360px);
+  --feed-poster-h: clamp(190px, calc(100vh - 504px - env(safe-area-inset-bottom, 0px)), 360px);
+  --feed-poster-h: clamp(190px, calc(100dvh - 504px - env(safe-area-inset-bottom, 0px)), 360px);
   --feed-poster-w: calc(var(--feed-poster-h) * 2 / 3);
 }
 .cs-feed-row .cs-poster-card { flex: 0 0 var(--feed-poster-w); width: var(--feed-poster-w); }

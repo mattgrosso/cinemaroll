@@ -18,14 +18,29 @@ function rule (selector) {
 }
 
 describe('Film Club Activity feed poster size', () => {
-  it('sizes the poster from the screen height, floored at 234px and capped', () => {
-    const row = rule('.cs-feed-row');
-    expect(row).toMatch(/--feed-poster-h:\s*clamp\(234px,\s*calc\(100dvh - \d+px\),\s*\d+px\)/);
+  // Follow-up report (2026-10-08): "now they overlap with the bug button a
+  // little bit in the bottom left corner". The strip must stop above the fixed
+  // bug button (bottom 1rem + home-bar inset, 2.75rem tall), not at the footer.
+  const SHAPE = /--feed-poster-h:\s*clamp\((\d+)px,\s*calc\(100(d?vh) - (\d+)px - env\(safe-area-inset-bottom, 0px\)\),\s*(\d+)px\)/g;
+
+  it('sizes the poster from the screen height, minus the home-bar inset, floored and capped', () => {
+    const lines = [...rule('.cs-feed-row').matchAll(SHAPE)];
     // A browser without dvh keeps the vh line before it.
-    expect(row).toMatch(/--feed-poster-h:\s*clamp\(234px,\s*calc\(100vh - \d+px\),\s*\d+px\)/);
-    const cap = Number(row.match(/100dvh - \d+px\),\s*(\d+)px\)/)[1]);
-    expect(cap).toBeGreaterThan(234);
-    expect(cap).toBeLessThanOrEqual(400);
+    expect(lines.map((m) => m[2])).toEqual(['vh', 'dvh']);
+    for (const [, floor, , , cap] of lines) {
+      expect(Number(cap)).toBeGreaterThan(Number(floor));
+      expect(Number(cap)).toBeLessThanOrEqual(400);
+    }
+  });
+
+  it('leaves the strip clear of the bug button on a 695px-tall phone', () => {
+    // 462px was the rest of the tab down to the footer's bottom; the bug
+    // button's top sits 60px up, the footer is ~26px, plus a small gap.
+    for (const [, floor, , rest] of rule('.cs-feed-row').matchAll(SHAPE)) {
+      expect(Number(rest)).toBeGreaterThanOrEqual(462 + 60 - 26);
+      // The floor must not push the strip back under the button there.
+      expect(Number(floor)).toBeLessThanOrEqual(695 - Number(rest));
+    }
   });
 
   it('keeps the 2:3 poster shape: width follows the height', () => {
