@@ -376,6 +376,15 @@ const PERFORMER_POOL_CAP = 50;
 // The rows built on people rather than films or genres — the ones that need
 // MIN_PEOPLE_PER_SECTION names before they're worth showing.
 const PEOPLE_SECTION_KEYS = new Set(['directors', 'actresses', 'actors', 'underrated']);
+// How many films a row shows at once (dailyPick's cap).
+const SHOWN_PER_ROW = 12;
+// The directors row is walked down the ranked list the same way, five names
+// at a time, until it can fill a row. Bug report 2026-10-08: "I'm still only
+// seeing two movies listed under the watch list for directors you love." A
+// big library has usually seen nearly everything its top five directors
+// made, so their filmographies leave two films to suggest; the next names
+// down the list are still directors you love.
+const DIRECTOR_POOL_CAP = 20;
 
 export default {
   name: 'WatchlistScreen',
@@ -435,6 +444,9 @@ export default {
       actorMovies: [],
       actressMovies: [],
       underratedMovies: [],
+      // The directors the row was actually built from — the top five, plus
+      // however many more it walked down to fill itself.
+      directorNames: [],
       actorNames: [],
       actressNames: [],
       underratedNames: [],
@@ -653,6 +665,9 @@ export default {
     favoriteDirectors () {
       return favoritePeople(this.library, getRating, { role: 'director' });
     },
+    favoriteDirectorPool () {
+      return favoritePeople(this.library, getRating, { role: 'director', cap: DIRECTOR_POOL_CAP });
+    },
     favoriteActors () {
       return favoritePeople(this.library, getRating, { role: 'actor' });
     },
@@ -697,7 +712,7 @@ export default {
         {
           key: 'directors',
           title: 'From directors you love',
-          names: this.favoriteDirectors.map((p) => p.name),
+          names: (this.directorNames.length ? this.directorNames : this.favoriteDirectors).map((p) => p.name),
           movies: this.showing(this.directorMovies),
           loading: this.directorsLoading
         },
@@ -1121,8 +1136,8 @@ export default {
       this.actorNames = performers.filter((p) => p.gender === 2).slice(0, PEOPLE_PER_SECTION);
       this.underratedNames = await this.resolvePerformers(this.underratedPerformers);
 
-      const [directorMovies, actressMovies, actorMovies, underratedMovies, similarMovies, gemMovies] = await Promise.all([
-        this.moviesFromPeople(this.favoriteDirectors, 'crew', rated),
+      const [directorRow, actressMovies, actorMovies, underratedMovies, similarMovies, gemMovies] = await Promise.all([
+        this.moviesFromPeopleUntilFull(this.favoriteDirectorPool, 'crew', rated),
         this.moviesFromPeople(this.actressNames, 'cast', rated),
         this.moviesFromPeople(this.actorNames, 'cast', rated),
         this.moviesFromPeople(this.underratedNames, 'cast', rated),
@@ -1135,6 +1150,8 @@ export default {
       await yearLoaded;
       this.gemMovies = gemMovies;
       this.gemsLoading = false;
+      const directorMovies = directorRow.movies;
+      this.directorNames = directorRow.people;
       this.directorMovies = directorMovies;
       this.directorsLoading = false;
       this.actressMovies = actressMovies;
@@ -1267,6 +1284,26 @@ export default {
     // credits kind: 'crew' keeps only their Director credits; 'cast' keeps
     // reasonably-billed roles (order < 10) so cameos don't flood the list.
     async moviesFromPeople (people, kind, rated) {
+      return this.rankFeatures(await this.creditsFromPeople(people, kind), rated);
+    },
+    /**
+     * moviesFromPeople, PEOPLE_PER_SECTION names at a time down a ranked
+     * pool, until the row has enough films to show a full row or the pool
+     * runs out. Returns the row and the people it drew on, for the caption.
+     */
+    async moviesFromPeopleUntilFull (pool, kind, rated) {
+      const credits = [];
+      let movies = [];
+      let used = 0;
+      while (used < pool.length) {
+        credits.push(...await this.creditsFromPeople(pool.slice(used, used + PEOPLE_PER_SECTION), kind));
+        used = Math.min(pool.length, used + PEOPLE_PER_SECTION);
+        movies = await this.rankFeatures(credits, rated);
+        if (movies.length >= SHOWN_PER_ROW) break;
+      }
+      return { movies, people: pool.slice(0, used) };
+    },
+    async creditsFromPeople (people, kind) {
       const apiKey = process.env.VUE_APP_TMDB_API_KEY;
       const allCredits = [];
 
@@ -1300,7 +1337,7 @@ export default {
         }
       }));
 
-      return this.rankFeatures(allCredits, rated);
+      return allCredits;
     },
     /**
      * Resolve gender (and id) for the top cast names, so the performer list

@@ -299,6 +299,55 @@ describe('WatchlistScreen learning loop', () => {
   });
 });
 
+// Bug report 2026-10-08: "I'm still only seeing two movies listed under the
+// watch list for directors you love." A big library has seen nearly all of
+// its top five directors' films, so the row walks on down the list.
+describe('the directors row fills itself from further down the list', () => {
+  const ranked = Array.from({ length: 12 }, (_, i) => `Director ${i}`);
+  function directorLibrary () {
+    return ranked.flatMap((name, i) => [0, 1].map((n) =>
+      entry(1000 + i * 2 + n, `${name} film ${n}`, { rating: 9 - i * 0.2, crew: [{ job: 'Director', name }] })));
+  }
+  const idFor = (url) => 500 + ranked.findIndex((name) => url.endsWith(`query=${encodeURIComponent(name)}`));
+
+  beforeEach(() => {
+    axios.get.mockReset();
+    axios.get.mockImplementation((url) => {
+      if (url.includes('/search/person')) return Promise.resolve({ data: { results: [{ id: idFor(url), gender: 2 }] } });
+      const credit = url.match(/\/person\/(\d+)\/movie_credits/);
+      if (credit) {
+        const i = Number(credit[1]) - 500;
+        // The top five: only the films already rated. The sixth: plenty unseen.
+        const crew = i === 5
+          ? Array.from({ length: 14 }, (_, n) => ({ id: 3000 + n, title: `Unseen ${n}`, job: 'Director', release_date: '2015-06-15', vote_count: 5000, vote_average: 7.5 }))
+          : [{ id: 1000 + i * 2, title: 'Seen', job: 'Director', release_date: '2010-06-15', vote_count: 5000, vote_average: 8 }];
+        return Promise.resolve({ data: { crew, cast: [] } });
+      }
+      return tmdbImpl(url);
+    });
+  });
+
+  it('adds the next director when the top five have nothing left to suggest', async () => {
+    const { wrapper } = factory({ movies: directorLibrary() });
+    await flushPromises();
+
+    expect(wrapper.vm.showing(wrapper.vm.directorMovies)).toHaveLength(12);
+    expect(wrapper.vm.directorNames.map((p) => p.name)).toEqual(ranked.slice(0, 10));
+    expect(wrapper.text()).toContain('Director 5');
+  });
+
+  it('stops walking once the row is full', async () => {
+    const { wrapper } = factory({ movies: directorLibrary() });
+    await flushPromises();
+
+    // Twelve in the pool; the second step of five filled the row, so the
+    // last two were never looked up.
+    const looked = axios.get.mock.calls.map(([url]) => url).filter((url) => url.includes('/search/person'));
+    expect(looked).toHaveLength(10);
+    expect(wrapper.vm.directorNames).toHaveLength(10);
+  });
+});
+
 // "There should be a separate one for actors and actresses, and a third one
 // for actors and actresses combined who I like more than most people."
 // (2026-08-17) The library doesn't store gender — storedEntry.js trims it —
