@@ -29,7 +29,7 @@ import { enqueueWrite, listPendingWrites, removePendingWrite, updatePendingWrite
 import { setValueAtPath } from "../utils/statePath.js";
 import { stampPlanForWrite, stampUpdatesForBatch } from "../assets/javascript/syncStamp.js";
 import { emailToDatabaseKey, isQaAccountKey } from "../assets/javascript/databaseKey.js";
-import { fetchAllHats, fetchMyHats, hatsForMember, fetchHat, fetchHatConditional, readHatContents, toHatMovie, alreadyInHat, addMovieToHat, pickFromHat, commitDraw, isMovieHatAccessError } from "../assets/javascript/movieHat.js";
+import { fetchAllHats, fetchMyHats, hatsForMember, fetchHat, fetchHatCard, readHatContents, toHatMovie, alreadyInHat, addMovieToHat, pickFromHat, commitDraw, isMovieHatAccessError } from "../assets/javascript/movieHat.js";
 import {
   connectMovieHat as signIntoMovieHat,
   connectMovieHatWithToken as signIntoMovieHatWithToken,
@@ -2725,8 +2725,9 @@ export default createStore({
 
     /**
      * A card's worth of each linked hat: how many are waiting and what came
-     * out last. One request per hat, so it is called when the section
-     * renders rather than on every page load.
+     * out last. Two small requests per hat (three when there are new draws),
+     * so it is called when the section renders rather than on every page
+     * load. The per-hat `records` cache is what keeps them small.
      */
     async loadMovieHatSummaries (context) {
       const hats = context.getters.linkedMovieHats;
@@ -2734,33 +2735,29 @@ export default createStore({
       const summaryCache = { ...(context.state.movieHatSummaryCache || {}) };
       const summaries = await Promise.all(hats.map(async (hat) => {
         try {
-          // Conditional: a 304 means the card in hand is still right.
+          // Incremental: a repeat read brings down only the draws made since
+          // (Sentry "Large HTTP payload", 2026-10-08 — see fetchHatCard).
           const held = summaryCache[hat.dbKey];
-          const read = await fetchHatConditional(hat.title, hat.dbKey, held?.etag || null);
-          if (read.notModified && held?.summary) return held.summary;
-          const loaded = read.hat;
-          if (!loaded) return { ...hat, error: true };
-          const remember = (summary) => { if (read.etag) summaryCache[hat.dbKey] = { etag: read.etag, summary }; return summary; };
-
-          // History is stored oldest-first; the newest draw is the one with
-          // the latest dateDrawn rather than simply the last key.
-          const lastDrawn = [...loaded.history]
-            .sort((a, b) => (b?.dateDrawn || 0) - (a?.dateDrawn || 0))[0] || null;
+          const card = await fetchHatCard(hat.title, hat.dbKey, held?.records || null);
+          if (!card) return { ...hat, error: true };
+          summaryCache[hat.dbKey] = { records: card.records };
 
           // The whole history, not just the newest: "I'd rather just see the
           // whole history from that hat because that's all available"
-          // (2026-08-17). Newest first, since that's the reading order.
-          const history = [...loaded.history]
+          // (2026-08-17). Newest first, since that's the reading order —
+          // history is stored oldest-first, and the newest draw is the one
+          // with the latest dateDrawn rather than simply the last key.
+          const history = card.history
             .filter(Boolean)
             .sort((a, b) => (b?.dateDrawn || 0) - (a?.dateDrawn || 0));
 
-          return remember({
-            title: loaded.title,
-            dbKey: loaded.dbKey,
-            waiting: loaded.movies.length,
-            lastDrawn,
+          return {
+            title: card.title,
+            dbKey: card.dbKey,
+            waiting: card.waiting,
+            lastDrawn: history[0] || null,
             history
-          });
+          };
         } catch (error) {
           if (isMovieHatAccessError(error)) {
             accessError = accessError || { reason: error.reason, email: error.email };

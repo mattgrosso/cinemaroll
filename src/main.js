@@ -24,6 +24,7 @@ import VueClickAway from "vue3-click-away";
 import * as Sentry from "@sentry/vue";
 import { BrowserTracing } from "@sentry/tracing";
 import { scrubEvent, scrubBreadcrumb } from "./utils/scrubUrl.js";
+import { beforeSendError } from "./utils/sentryBeforeSend.js";
 import VueLazyLoad from 'vue3-lazyload';
 import './registerServiceWorker'
 import axios from 'axios';
@@ -69,10 +70,19 @@ app.use(router);
 
 const allowDevSentry = false;
 
-if (allowDevSentry || process.env.NODE_ENV !== "development") {
+// A production build served from this machine — scripts/perf-tour.mjs on
+// :8089, `vite preview`, a screenshot run — is a test, not a user. Its
+// errors reached Sentry (and Bug Desk) as if from the live site (2026-10-08:
+// a stale-chunk error from HeadlessChrome at localhost).
+const servedLocally = typeof window !== "undefined" && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname);
+
+if (allowDevSentry || (process.env.NODE_ENV !== "development" && !servedLocally)) {
   Sentry.init({
     app,
     dsn: "https://25a3dc0387f04fd5923f226394a41e7d@o4504483013525504.ingest.sentry.io/4504642713944064",
+    // The build stamp's version, so an issue says which build threw it and
+    // Sentry can tell a regression from a straggler on an old tab.
+    release: process.env.VUE_APP_VERSION ? `cinemaroll@${process.env.VUE_APP_VERSION}` : undefined,
     integrations: [
       new BrowserTracing({
         // Hash routing means window.location.pathname is always "/", so
@@ -93,7 +103,7 @@ if (allowDevSentry || process.env.NODE_ENV !== "development") {
     // No credentials leave for Sentry: Firebase and TMDB take theirs in the
     // query string, and traced fetches and breadcrumbs carried them in full
     // (see utils/scrubUrl.js, 2026-10-06).
-    beforeSend: scrubEvent,
+    beforeSend: beforeSendError,
     beforeSendTransaction: scrubEvent,
     beforeBreadcrumb: scrubBreadcrumb
   });

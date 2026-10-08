@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { isStaleChunkError, handleRouterChunkError, lazyScreen } from '@/utils/staleChunkReload.js'
+import { isStaleChunkError, handleRouterChunkError, lazyScreen, staleChunkReloadTriggered, resetStaleChunkReload } from '@/utils/staleChunkReload.js'
 
 function memoryStorage () {
   const map = new Map()
@@ -120,5 +120,18 @@ describe('lazyScreen', () => {
     await vi.advanceTimersByTimeAsync(60000)
     expect(settled).toBe(false)
     vi.useRealTimers()
+  })
+})
+
+
+describe('staleChunkReloadTriggered', () => {
+  it('is set the moment a reload is ordered, so the error that caused it can be kept out of Sentry', () => {
+    resetStaleChunkReload()
+    const reload = vi.fn()
+    const error = new Error('Unable to preload CSS for /css/Login.0caee1b3.css')
+    expect(staleChunkReloadTriggered()).toBe(false)
+    expect(handleRouterChunkError(error, { fullPath: '/login' }, memoryStorage(), reload)).toBe(true)
+    expect(reload).toHaveBeenCalled()
+    expect(staleChunkReloadTriggered()).toBe(true)
   })
 })

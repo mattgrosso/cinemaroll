@@ -11,6 +11,9 @@ import {
   fetchHatMovies,
   hatsToCheck,
   readHatContents,
+  readHatChildIncrementally,
+  fetchHatCard,
+  drawnSummary,
   addMovieToHat,
   commitDraw,
   isMovieHatAccessError
@@ -488,56 +491,128 @@ describe('readHatContents', () => {
   });
 });
 
-// Audit, 2026-10-06: Firebase's REST API honours If-None-Match, so a hat that
-// has not changed costs nothing to re-read. Nine hats' movies were ~800 KB per
-// open, one whole hat ~950 KB.
-describe('conditional hat reads', () => {
-  const { fetchHatMoviesConditional, fetchHatConditional, readHatContents: read } = movieHatApi;
+describe('readHatContents cache', () => {
+  const { readHatContents: read } = movieHatApi;
   const body = { a: { id: 550, title: 'Fight Club' }, b: { id: 680, title: 'Pulp Fiction' } };
   let requests;
-  const headersOf = (opts) => Object.fromEntries(Object.entries(opts?.headers || {}).map(([k, v]) => [k.toLowerCase(), v]));
 
   beforeEach(() => {
     connectedAs('matt@example.com');
     requests = [];
-    global.fetch = vi.fn(async (url, opts = {}) => {
-      requests.push({ url: String(url).replace(/\?.*$/, ''), headers: headersOf(opts) });
-      const h = headersOf(opts);
-      const etag = 'W/"hat-v7"';
-      if (h['if-none-match'] === etag) return { ok: false, status: 304, headers: { get: (k) => (k === 'ETag' ? etag : null) }, text: async () => '' };
-      if (String(url).includes('/userHats/')) return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ 'hat-key': { title: 'Just Matt', dbKey: 'hat-key' } }) };
-      return { ok: true, status: 200, headers: { get: (k) => (k === 'ETag' ? etag : null) }, text: async () => JSON.stringify(String(url).includes('/movies.json') ? body : { movies: body, history: {}, members: {} }) };
+    global.fetch = vi.fn(async (url) => {
+      requests.push(String(url));
+      if (String(url).includes('/userHats/')) return { ok: true, status: 200, text: async () => JSON.stringify({ 'hat-key': { title: 'Just Matt', dbKey: 'hat-key' } }) };
+      if (String(url).includes('shallow=true')) return { ok: true, status: 200, text: async () => JSON.stringify({ a: true, b: true }) };
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
     });
   });
   afterEach(() => { delete global.fetch; });
 
-  it('asks for an ETag, and with the same ETag in hand downloads nothing', async () => {
-    const first = await fetchHatMoviesConditional('Just Matt', 'hat-key', null);
-    expect(first.notModified).toBe(false);
-    expect(first.movies.map((m) => m.id)).toEqual([550, 680]);
-    expect(first.etag).toBe('W/"hat-v7"');
-    expect(requests[0].headers['x-firebase-etag']).toBe('true');
-    const second = await fetchHatMoviesConditional('Just Matt', 'hat-key', first.etag);
-    expect(second.notModified).toBe(true);
-    expect(second.movies).toBeUndefined();
-    expect(requests[1].headers['if-none-match']).toBe('W/"hat-v7"');
-    const whole = await fetchHatConditional('Just Matt', 'hat-key', 'W/"hat-v7"');
-    expect(whole.notModified).toBe(true);
-    const fresh = await fetchHatConditional('Just Matt', 'hat-key', 'W/"older"');
-    expect(fresh.hat.movies).toHaveLength(2);
-  });
-
-  it('readHatContents carries a per-hat cache: a 304 contributes the ids already known', async () => {
+  it('carries a per-hat cache of storage key → id, so a repeat read is a key listing only', async () => {
     const linked = [{ title: 'Just Matt', dbKey: 'hat-key' }];
     const first = await read({ linked, email: 'matt@example.com' });
     expect(Object.keys(first.ids)).toEqual(['550', '680']);
-    expect(first.cache['hat-key']).toEqual({ etag: 'W/"hat-v7"', ids: [550, 680] });
+    expect(first.cache['hat-key']).toEqual({ byKey: { a: 550, b: 680 } });
     requests.length = 0;
     const second = await read({ linked, email: 'matt@example.com', previous: first.cache });
     expect(Object.keys(second.ids)).toEqual(['550', '680']);
     expect(second.complete).toBe(true);
-    const movieReads = requests.filter((r) => r.url.includes('/movies.json'));
+    const movieReads = requests.filter((r) => r.includes('/movies.json'));
     expect(movieReads).toHaveLength(1);
-    expect(movieReads[0].headers['if-none-match']).toBe('W/"hat-v7"');
+    expect(movieReads[0]).toContain('shallow=true');
+  });
+});
+
+// Sentry "Large HTTP payload" (2026-10-08): the Watchlist's hat card re-read
+// a whole 620 KB hat whenever anything in it changed. Now a shallow key
+// listing says what is new, and only that comes down.
+describe('reading a hat child incrementally', () => {
+  let calls;
+  let node;
+
+  beforeEach(() => {
+    connectedAs();
+    calls = [];
+    node = {
+      h1: { id: 1, title: 'Heat', dateDrawn: 1, overview: 'long', backdrop_path: '/b.jpg' },
+      h2: { id: 2, title: 'Cats', dateDrawn: 2, overview: 'long' }
+    };
+    global.fetch = vi.fn((url) => {
+      calls.push(url);
+      const answer = (value) => Promise.resolve({ ok: true, text: () => Promise.resolve(JSON.stringify(value)) });
+      if (url.includes('shallow=true')) return answer(Object.fromEntries(Object.keys(node).map((k) => [k, true])));
+      const from = /startAt=%22([^%]+)%22/.exec(url)?.[1];
+      if (from) return answer(Object.fromEntries(Object.entries(node).filter(([k]) => k >= from)));
+      return answer(node);
+    });
+  });
+
+  afterEach(() => {
+    delete global.fetch;
+  });
+
+  it('reads the whole node the first time, trimmed', async () => {
+    const records = await readHatChildIncrementally('Just Matt', 'hat-key', 'history', {}, { trim: drawnSummary });
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toContain('/hats/Just%20Matt/hat-key/history.json?shallow=true');
+    expect(calls[1]).toMatch(/\/history\.json\?auth=/);
+    expect(records).toEqual({
+      h1: { id: 1, title: 'Heat', poster_path: null, dateDrawn: 1 },
+      h2: { id: 2, title: 'Cats', poster_path: null, dateDrawn: 2 }
+    });
+  });
+
+  it('costs one shallow read when nothing changed', async () => {
+    const known = await readHatChildIncrementally('Just Matt', 'hat-key', 'history', {}, { trim: drawnSummary });
+    calls.length = 0;
+    const again = await readHatChildIncrementally('Just Matt', 'hat-key', 'history', known, { trim: drawnSummary });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('shallow=true');
+    expect(again).toEqual(known);
+  });
+
+  it('brings down only the new records, from the lowest missing key', async () => {
+    const known = await readHatChildIncrementally('Just Matt', 'hat-key', 'history', {}, { trim: drawnSummary });
+    node['drawn-1700000000000'] = { id: 3, title: 'Ronin', dateDrawn: 3, poster_path: '/r.jpg' };
+    node['drawn-1700000000001'] = { id: 4, title: 'Thief', dateDrawn: 4 };
+    calls.length = 0;
+    const records = await readHatChildIncrementally('Just Matt', 'hat-key', 'history', known, { trim: drawnSummary });
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toContain('orderBy=%22%24key%22&startAt=%22drawn-1700000000000%22');
+    expect(Object.keys(records)).toEqual(['h1', 'h2', 'drawn-1700000000000', 'drawn-1700000000001']);
+    expect(records['drawn-1700000000000']).toEqual({ id: 3, title: 'Ronin', poster_path: '/r.jpg', dateDrawn: 3 });
+  });
+
+  it('drops what the hat no longer lists', async () => {
+    const known = await readHatChildIncrementally('Just Matt', 'hat-key', 'movies', {}, { trim: (m) => m.id });
+    delete node.h1;
+    const records = await readHatChildIncrementally('Just Matt', 'hat-key', 'movies', known, { trim: (m) => m.id });
+    expect(records).toEqual({ h2: 2 });
+  });
+
+  it('is empty, without a second request, for a hat with no history', async () => {
+    node = {};
+    const records = await readHatChildIncrementally('Just Matt', 'hat-key', 'history', {});
+    expect(records).toEqual({});
+    expect(calls).toHaveLength(1);
+  });
+
+  it('builds the card from a shallow movies count and the trimmed history', async () => {
+    const card = await fetchHatCard('Just Matt', 'hat-key', null);
+    expect(card.waiting).toBe(2);
+    expect(card.history.map((d) => d.title)).toEqual(['Heat', 'Cats']);
+    expect(card.records.h1).toEqual({ id: 1, title: 'Heat', poster_path: null, dateDrawn: 1 });
+    expect(calls.filter((u) => u.includes('/movies.json?shallow=true'))).toHaveLength(1);
+    expect(calls.some((u) => /\/hat-key\.json/.test(u))).toBe(false);
+  });
+
+  it('reads hat contents as storage key → TMDB id, incrementally', async () => {
+    const first = await readHatContents({ linked: [{ title: 'Just Matt', dbKey: 'hat-key' }] });
+    expect(first.ids).toEqual({ 1: true, 2: true });
+    expect(first.cache['hat-key']).toEqual({ byKey: { h1: 1, h2: 2 } });
+    calls.length = 0;
+    const second = await readHatContents({ linked: [{ title: 'Just Matt', dbKey: 'hat-key' }], previous: first.cache });
+    expect(second.ids).toEqual({ 1: true, 2: true });
+    expect(calls.filter((u) => u.includes('/movies.json'))).toEqual([expect.stringContaining('shallow=true')]);
   });
 });

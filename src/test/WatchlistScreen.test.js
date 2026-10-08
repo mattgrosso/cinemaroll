@@ -3,8 +3,11 @@ import { mount, flushPromises } from '@vue/test-utils';
 import WatchlistScreen from '@/components/WatchlistScreen.vue';
 import axios from 'axios';
 import { clearRuntimeCache } from '@/assets/javascript/suggestionFilters.js';
+import { forgetPeople } from '@/utils/personIdCache.js';
 
 vi.mock('axios', () => ({ default: { get: vi.fn() } }));
+// Names resolve into a per-device cache now; each case starts with it empty.
+beforeEach(() => forgetPeople());
 const postToAi = vi.hoisted(() => vi.fn());
 vi.mock('@/utils/aiRequest.js', () => ({ postToAi }));
 vi.mock('@/assets/javascript/GetRating.js', () => ({
@@ -99,6 +102,22 @@ describe('WatchlistScreen (request: watchlists from my ratings + movies to consi
   beforeEach(() => {
     axios.get.mockReset();
     axios.get.mockImplementation(tmdbImpl);
+  });
+
+  // Sentry N+1 (2026-10-08): the same favourite names were searched on
+  // every open. A name resolved once is remembered across visits.
+  it('asks TMDB who a person is once per device, not once per visit', async () => {
+    factory();
+    await flushPromises();
+    const searches = () => axios.get.mock.calls.filter(([url]) => url.includes('/search/person')).length;
+    expect(searches()).toBeGreaterThan(0);
+
+    axios.get.mockClear();
+    const { wrapper } = factory();
+    await flushPromises();
+    expect(searches()).toBe(0);
+    // And the rows are still built — from the remembered id's credits.
+    expect(wrapper.text()).toContain('Based on Fave Director');
   });
 
   it('shows loved-but-long-unwatched movies in the rewatch row, and not recent ones', async () => {

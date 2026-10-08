@@ -343,6 +343,7 @@ import { loadRuntimes, knownRuntime, isSuggestedShort, isVideoExtra, asksForShor
 import { buildCatalog, typeaheadEntries } from '../assets/javascript/catalog.js';
 import { rankTypeahead, describeSuggestion } from '../assets/javascript/searchSuggestions.js';
 import { postToAi } from '../utils/aiRequest.js';
+import { rememberedPerson, rememberPerson } from '../utils/personIdCache.js';
 import { hasUnseenShowtimes, SHOWTIMES_SEEN_KEY } from '../assets/javascript/showtimesUnread.js';
 
 // The X on the suggestion rows (bug report 2026-10-08): gone for good, where
@@ -1273,11 +1274,14 @@ export default {
       await Promise.all(people.map(async (person) => {
         try {
           // The gender pass has usually already resolved this id — reuse it
-          // rather than searching for the same name twice.
-          let personId = person.id;
+          // rather than searching for the same name twice. Failing that, a
+          // name looked up on an earlier visit is still that person.
+          let personId = person.id ?? rememberedPerson(person.name)?.id;
           if (personId == null) {
             const search = await axios.get(`https://api.themoviedb.org/3/search/person?api_key=${apiKey}&query=${encodeURIComponent(person.name)}`);
-            personId = search.data?.results?.[0]?.id;
+            const match = search.data?.results?.[0];
+            personId = match?.id;
+            rememberPerson(person.name, match);
           }
           if (personId == null) return;
           const credits = await axios.get(`https://api.themoviedb.org/3/person/${personId}/movie_credits?api_key=${apiKey}`);
@@ -1325,9 +1329,14 @@ export default {
 
       return (await Promise.all(people.map(async (person) => {
         try {
+          // Eight names, the same eight every open: TMDB is asked once per
+          // name per device, not once per visit (Sentry N+1, 2026-10-08).
+          const known = rememberedPerson(person.name);
+          if (known) return { ...person, id: known.id, gender: known.gender };
           const search = await axios.get(`https://api.themoviedb.org/3/search/person?api_key=${apiKey}&query=${encodeURIComponent(person.name)}`);
           const match = search.data?.results?.[0];
           if (!match) return null;
+          rememberPerson(person.name, match);
           return { ...person, id: match.id, gender: match.gender };
         } catch (error) {
           console.error('Performer lookup failed for', person.name, error);

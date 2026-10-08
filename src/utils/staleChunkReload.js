@@ -41,8 +41,23 @@ export function handleRouterChunkError (
   }
   if (alreadyTried) return false;
 
+  reloadTriggered = true;
   reload();
   return true;
+}
+
+// Whether this page is on its way to a reload because of a stale chunk. A
+// reload is the recovery, so the error that caused it is handled, not a bug:
+// Sentry drops it (sentryBeforeSend.js) rather than opening a fresh issue —
+// and a fresh Bug Desk card — for every stylesheet hash of every deploy.
+let reloadTriggered = false;
+export function staleChunkReloadTriggered () {
+  return reloadTriggered;
+}
+
+/** Tests only: the flag is module state and would otherwise leak between cases. */
+export function resetStaleChunkReload () {
+  reloadTriggered = false;
 }
 
 // A screen file that never arrives. Bug report (Matt, 2026-09-30, one bar

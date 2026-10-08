@@ -204,23 +204,6 @@ async function hatRequest (path, options = {}) {
 }
 
 /**
- * A conditional read (audit, 2026-10-06). Firebase's REST API honours
- * X-Firebase-ETag / If-None-Match — and allows both cross-origin — answering
- * 304 with no body when the node is unchanged. The hat reads below were the
- * app's largest downloads (nine hats' movies ≈ 800 KB per open, one whole
- * hat ≈ 950 KB) and a hat changes rarely, so with the last ETag in hand an
- * unchanged read costs nothing to download.
- */
-export async function hatRead (path, { etag = null } = {}) {
-  const headers = { 'X-Firebase-ETag': 'true' };
-  if (etag) headers['If-None-Match'] = etag;
-  const response = await hatFetch(path, { headers }, { allowNotModified: true });
-  if (response.status === 304) return { value: undefined, etag, notModified: true };
-  const text = await response.text();
-  return { value: text ? JSON.parse(text) : null, etag: response.headers?.get?.('ETag') || null, notModified: false };
-}
-
-/**
  * The hats this address belongs to, from Movie Hat's own index.
  *
  * Was: download every hat in the database and filter client-side. That is
@@ -286,37 +269,83 @@ export async function fetchHat (title, dbKey = null) {
   return shapeHat(title, key, data);
 }
 
-/** The whole hat, unless the ETag says it is the one already in hand. */
-export async function fetchHatConditional (title, dbKey, etag = null) {
-  if (!dbKey) return { hat: null, etag: null, notModified: false };
-  const read = await hatRead(`hats/${encodeURIComponent(title)}/${dbKey}.json`, { etag });
-  return { hat: read.notModified ? undefined : shapeHat(title, dbKey, read.value), etag: read.etag, notModified: read.notModified };
-}
-
 /**
  * Just the movies waiting in a hat — no history, no members.
  *
- * `ensureMovieHatContents` only wants TMDB ids, and was calling `fetchHat`,
- * which downloads the WHOLE hat node. Matt's six linked hats come to roughly
- * 1.9MB that way, most of it history (one hat is 882KB on its own), re-read
- * every ten minutes and billed as egress on Movie Hat's database. The read
- * rule sits at the hat level, so asking for one child needs no rule change.
+ * The read rule sits at the hat level, so asking for one child needs no
+ * rule change. No key means no readable hat: the title level is unreadable
+ * under the rules, so the fetchHat/fetchHatKey route would spend a request
+ * only to be refused and return null anyway.
  */
 export async function fetchHatMovies (title, dbKey) {
-  // No key means no readable hat: the title level is unreadable under the
-  // rules, so the fetchHat/fetchHatKey route would spend a request only to
-  // be refused and return null anyway. Contributing nothing is what the
-  // caller already does with a hat it can't read.
   if (!dbKey) return [];
   const data = await hatRequest(`hats/${encodeURIComponent(title)}/${dbKey}/movies.json`);
   return asArray(data);
 }
 
-/** The movies waiting, unless the ETag says they are the ones already in hand. */
-export async function fetchHatMoviesConditional (title, dbKey, etag = null) {
-  if (!dbKey) return { movies: [], etag: null, notModified: false };
-  const read = await hatRead(`hats/${encodeURIComponent(title)}/${dbKey}/movies.json`, { etag });
-  return { movies: read.notModified ? undefined : asArray(read.value), etag: read.etag, notModified: read.notModified };
+/**
+ * A hat child (`movies` or `history`) read incrementally, so a hat that is
+ * mostly what it was last time costs a few kilobytes rather than the node.
+ *
+ * Sentry "Large HTTP payload" (2026-10-08): the hat card on the Watchlist
+ * re-read a whole hat whenever anything in it changed — The Movie Hat is
+ * 620 KB, half of it draw history that only ever grows by one record. A
+ * shallow read lists the keys (~25 bytes each); anything not already in
+ * `known` is fetched in ONE range query from the lowest missing key up
+ * (history keys sort oldest-first and new draws land at the end, so that is
+ * normally just the new records), or as the whole node when nothing is
+ * known yet. Keys the shallow read no longer lists are dropped, so a draw
+ * leaving `movies` is seen too. `trim` keeps only what the caller displays,
+ * which is what makes `known` cheap to carry between visits.
+ */
+export async function readHatChildIncrementally (title, dbKey, child, known = {}, { trim = (record) => record } = {}) {
+  const base = `hats/${encodeURIComponent(title)}/${dbKey}/${child}`;
+  const keys = Object.keys(await hatRequest(`${base}.json?shallow=true`) || {});
+  const held = known && typeof known === 'object' ? known : {};
+  const missing = keys.filter((key) => !(key in held));
+
+  let fetched = {};
+  if (missing.length && missing.length === keys.length) {
+    fetched = await hatRequest(`${base}.json`) || {};
+  } else if (missing.length) {
+    const from = [...missing].sort()[0];
+    fetched = await hatRequest(`${base}.json?orderBy=${encodeURIComponent('"$key"')}&startAt=${encodeURIComponent(JSON.stringify(from))}`) || {};
+  }
+
+  const records = {};
+  keys.forEach((key) => {
+    if (key in fetched) records[key] = trim(fetched[key], key);
+    else if (key in held) records[key] = held[key];
+    // Listed a moment ago, gone by the range read: it left the hat mid-read.
+  });
+  return records;
+}
+
+/** What the hat card shows of a draw — not the overview, backdrop or streamers. */
+export function drawnSummary (record) {
+  if (!record || typeof record !== 'object') return null;
+  const { id, title, poster_path: posterPath, dateDrawn } = record;
+  return { id: id ?? null, title: title ?? '', poster_path: posterPath ?? null, dateDrawn: dateDrawn ?? null };
+}
+
+/**
+ * A card's worth of a hat: how many films are waiting (a shallow read of
+ * `movies`, keys only) and every draw it has made, trimmed. `held` is the
+ * previous card's `records`, so a repeat read brings down only new draws.
+ */
+export async function fetchHatCard (title, dbKey, held = null) {
+  if (!dbKey) return null;
+  const [waiting, records] = await Promise.all([
+    hatRequest(`hats/${encodeURIComponent(title)}/${dbKey}/movies.json?shallow=true`),
+    readHatChildIncrementally(title, dbKey, 'history', held || {}, { trim: drawnSummary })
+  ]);
+  return {
+    title,
+    dbKey,
+    waiting: Object.keys(waiting || {}).length,
+    history: Object.values(records).filter(Boolean),
+    records
+  };
 }
 
 export function addMovieToHat (title, dbKey, payload) {
@@ -391,9 +420,9 @@ export function hatsToCheck (linked = [], indexed = []) {
  * is a better guess than forgetting it because one request failed.
  */
 /**
- * `previous` is the per-hat cache from the last read — `{ [dbKey]: { etag,
- * ids } }` — so each hat is a conditional request; a 304 contributes the
- * ids already known. The updated cache comes back as `cache`.
+ * `previous` is the per-hat cache from the last read — `{ [dbKey]: { byKey }
+ * }`, storage key → TMDB id — so each hat costs a shallow key listing plus
+ * whatever is new. The updated cache comes back as `cache`.
  */
 export async function readHatContents ({ linked = [], email = null, previousIds = {}, previous = {} } = {}) {
   let complete = true;
@@ -422,14 +451,14 @@ export async function readHatContents ({ linked = [], email = null, previousIds 
     // one that's gone. If the index itself failed, complete is already false.
     if (!hat.dbKey) return;
     try {
-      // Only the movies: the whole hat, history included, is ~2MB for six.
+      // Only the movies, and only the ones not read before: the whole hat,
+      // history included, is ~2MB for six, and even the movies node of a
+      // big hat is ~300 KB. `byKey` maps the hat's storage keys to TMDB ids.
       const held = previous?.[hat.dbKey];
-      const read = await fetchHatMoviesConditional(hat.title, hat.dbKey, held?.etag || null);
-      const hatIds = read.notModified
-        ? (held?.ids || [])
-        : read.movies.map((movie) => movie?.id).filter((id) => id != null);
+      const byKey = await readHatChildIncrementally(hat.title, hat.dbKey, 'movies', held?.byKey || {}, { trim: (movie) => movie?.id ?? null });
+      const hatIds = Object.values(byKey).filter((id) => id != null);
       hatIds.forEach((id) => { ids[id] = true; });
-      cache[hat.dbKey] = { etag: read.etag, ids: hatIds };
+      cache[hat.dbKey] = { byKey };
     } catch (error) {
       noteError(error);
       console.warn('[movie-hat] could not read hat contents', hat.title, error.message);
