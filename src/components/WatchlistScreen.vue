@@ -168,7 +168,7 @@
         </div>
       </template>
 
-      <template v-else-if="personFilms.length">
+      <template v-else-if="personVisibleFilms.length">
         <p class="section-caption">
           {{ personName }} — {{ personProgress.total }} films,
           {{ personProgress.seen }} of them already rated.
@@ -182,6 +182,19 @@
           :hat-note="`From ${personName}'s filmography`"
           @select="previewMedia"
         />
+        <!-- Appearances as themselves and video extras sit behind this
+             (2026-10-08: "I get a bunch of like making of docs and things like
+             that in there"). Hidden, not dropped — still one tap away. -->
+        <button
+          v-if="personExtraCount && personMainFilms.length"
+          type="button"
+          class="person-extras-toggle"
+          @click="personShowExtras = !personShowExtras"
+        >
+          {{ personShowExtras
+            ? 'Hide appearances and extras'
+            : `Show ${personExtraCount} appearance${personExtraCount === 1 ? '' : 's'} and extras` }}
+        </button>
       </template>
 
       <p v-else-if="personSearched && !personError" class="section-loading">
@@ -380,6 +393,8 @@ export default {
       personChoices: [],
       personName: '',
       personFilms: [],
+      // Appearances as themselves and video extras are hidden until asked for.
+      personShowExtras: false,
       personLoading: false,
       personError: '',
       // The person typeahead is only open while its input has focus, and
@@ -481,13 +496,26 @@ export default {
     // How much of the person's filmography is already in the library — the
     // useful number when you're deciding what's left to hat.
     personProgress () {
-      return filmographyProgress(this.personFilms);
+      return filmographyProgress(this.personVisibleFilms);
+    },
+    personMainFilms () {
+      return this.personFilms.filter((film) => !film.extra);
+    },
+    personExtraCount () {
+      return this.personFilms.length - this.personMainFilms.length;
+    },
+    // Someone known only from appearances (a critic, a festival head) would
+    // otherwise get "No films found", so with no real films the extras show.
+    personVisibleFilms () {
+      return this.personShowExtras || !this.personMainFilms.length
+        ? this.personFilms
+        : this.personMainFilms;
     },
     // Same shape mediaItems produces, minus the punt filter. See the note in
     // the template: an "entire filmography" that silently drops films punted
     // from some other list on this page isn't the entire filmography.
     personItems () {
-      return this.personFilms.map((film) => ({
+      return this.personVisibleFilms.map((film) => ({
         key: film.id,
         title: film.title,
         poster: film.poster_path ? `https://image.tmdb.org/t/p/w342${film.poster_path}` : null,
@@ -783,6 +811,7 @@ export default {
       this.personChoices = [];
       this.personFilms = [];
       this.personName = '';
+      this.personShowExtras = false;
 
       try {
         const apiKey = process.env.VUE_APP_TMDB_API_KEY;
@@ -841,6 +870,7 @@ export default {
         });
         this.personName = person.name;
         this.personSearched = person.name;
+        this.personShowExtras = false;
       } catch (error) {
         console.error('Filmography lookup failed for', person.name, error);
         this.personError = "Couldn't load that filmography just now. Try again in a moment.";
@@ -1482,6 +1512,22 @@ export default {
 
 /* Disambiguating a name. A sideways row like every other list on this page,
    so it takes one row's height however many people share the name. */
+/* A quiet text link under the row, not a chip: it reveals more of the same
+   list rather than doing anything. #ccc on the page's dark ground. */
+.person-extras-toggle {
+  background: none;
+  border: 0;
+  color: #ccc;
+  font-size: 0.8rem;
+  min-height: 40px;
+  padding: 0.25rem 0;
+  text-decoration: underline;
+}
+
+.person-extras-toggle:active {
+  color: #fff;
+}
+
 .person-choices {
   display: flex;
   gap: 0.5rem;

@@ -20,6 +20,28 @@
 // they're actually known for. These four are what "a film by" means.
 const AUTHOR_JOBS = ['Director', 'Writer', 'Screenplay', 'Story'];
 
+// TMDB's genre id for Documentary.
+const DOCUMENTARY = 99;
+
+/**
+ * Is this cast credit the person turning up as themselves rather than acting?
+ *
+ * Bug report, 2026-10-08, searching Ruben Östlund: "I get a bunch of like
+ * making of docs and things like that in there." Every one of his twelve cast
+ * credits was a documentary — festival films, tributes to other directors,
+ * a making-of — with the character "Self", "Self - Filmmaker", or blank.
+ * TMDB marks none of them any other way (`video` was false on all twelve), so
+ * the character is the signal. A blank character only counts on a
+ * documentary: actors' small fiction parts are often blank too, and those
+ * are real films.
+ */
+export function isAppearance (credit) {
+  const character = String(credit?.character ?? '').trim();
+  if (/^(self|him ?self|her ?self|them ?sel(f|ves))\b/i.test(character)) return true;
+  if (/archive footage/i.test(character)) return true;
+  return character === '' && (credit?.genre_ids || []).includes(DOCUMENTARY);
+}
+
 /**
  * TMDB /search/person results, trimmed to what a chooser needs.
  *
@@ -59,7 +81,7 @@ function yearOf (credit) {
 /**
  * One person's filmography from TMDB's /person/{id}/movie_credits.
  *
- * Returns `[{ id, title, poster_path, release_date, year, roles, note }]`,
+ * Returns `[{ id, title, poster_path, release_date, year, roles, extra, note }]`,
  * newest first. `roles` merges the cast and crew sides — someone who directed
  * and starred in the same film gets one card saying so, not two cards.
  *
@@ -74,7 +96,11 @@ function yearOf (credit) {
 export function filmographyFrom (credits, { ratedIds = new Set(), scoreFor = null } = {}) {
   const byId = new Map();
 
-  const add = (credit, role) => {
+  // `extra` marks a credit that isn't really one of their films: an
+  // appearance as themselves, or anything TMDB flags as a video (music
+  // videos, featurettes). A film is an extra only if every credit on it is —
+  // a documentary they directed AND appear in is still their film.
+  const add = (credit, role, extra) => {
     if (!credit || credit.id == null || !role) return;
     const year = yearOf(credit);
     if (year === null) return;
@@ -83,6 +109,7 @@ export function filmographyFrom (credits, { ratedIds = new Set(), scoreFor = nul
     if (existing) {
       // Same film, second credit: keep the roles, not a duplicate card.
       if (!existing.roles.includes(role)) existing.roles.push(role);
+      if (!extra) existing.extra = false;
       return;
     }
     byId.set(credit.id, {
@@ -92,15 +119,19 @@ export function filmographyFrom (credits, { ratedIds = new Set(), scoreFor = nul
       release_date: credit.release_date,
       year,
       roles: [role],
-      rated: ratedIds.has(credit.id)
+      rated: ratedIds.has(credit.id),
+      extra
     });
   };
 
   // Cast first, so an actor-director's card leads with the acting role when
   // both apply — matching how the credit is usually spoken.
-  (credits?.cast || []).forEach((credit) => add(credit, 'Actor'));
+  (credits?.cast || []).forEach((credit) => {
+    if (isAppearance(credit)) add(credit, 'Appearance', true);
+    else add(credit, 'Actor', Boolean(credit?.video));
+  });
   (credits?.crew || []).forEach((credit) => {
-    if (AUTHOR_JOBS.includes(credit?.job)) add(credit, credit.job);
+    if (AUTHOR_JOBS.includes(credit?.job)) add(credit, credit.job, Boolean(credit.video));
   });
 
   return [...byId.values()]

@@ -631,11 +631,14 @@ describe('WatchlistScreen — someone\'s filmography', () => {
       // Already in the library below — kept and marked, not dropped.
       { id: 1, title: 'Old Favorite A', release_date: '2005-01-01' },
       // No release date: an announced film that can't be watched.
-      { id: 801, title: 'Untitled Next Project' }
+      { id: 801, title: 'Untitled Next Project' },
+      { id: 805, title: 'Festival Doc', release_date: '2024-05-20', character: 'Self', genre_ids: [99] }
     ],
     crew: [
       { id: 802, title: 'Barbie', release_date: '2023-07-21', job: 'Director', poster_path: '/b.jpg' },
-      { id: 803, title: 'Money Job', release_date: '2020-01-01', job: 'Executive Producer' }
+      { id: 803, title: 'Money Job', release_date: '2020-01-01', job: 'Executive Producer' },
+      // An appearance as herself in a making-of: hidden behind a link.
+      { id: 804, title: 'Making Barbie', release_date: '2023-08-01', job: 'Director', video: true }
     ]
   };
 
@@ -673,6 +676,23 @@ describe('WatchlistScreen — someone\'s filmography', () => {
       .map((c) => c.attributes('aria-label').split(' — ')[0]);
 
     expect(names).toEqual(['Barbie', 'Frances Ha', 'Old Favorite A']);
+  });
+
+  // 2026-10-08: "I get a bunch of like making of docs and things like that
+  // in there." Hidden behind a link, not dropped.
+  it('hides appearances and extras until the link under the row is tapped', async () => {
+    const wrapper = await search([GRETA]);
+    const titles = () => wrapper.findAll('.person-section .watchlist-card')
+      .map((c) => c.attributes('aria-label').split(' — ')[0]);
+    const toggle = wrapper.find('.person-section .person-extras-toggle');
+
+    expect(titles()).not.toContain('Festival Doc');
+    expect(titles()).not.toContain('Making Barbie');
+    expect(toggle.text()).toBe('Show 2 appearances and extras');
+
+    await toggle.trigger('click');
+    expect(titles()).toEqual(['Festival Doc', 'Barbie', 'Making Barbie', 'Frances Ha', 'Old Favorite A']);
+    expect(wrapper.find('.person-section .person-extras-toggle').text()).toBe('Hide appearances and extras');
   });
 
   // The whole point of the request — this is a filmography, not a

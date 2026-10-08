@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { personCandidates, filmographyFrom, filmographyProgress } from '@/assets/javascript/personFilmography.js';
+import { personCandidates, filmographyFrom, filmographyProgress, isAppearance } from '@/assets/javascript/personFilmography.js';
 
 // Bug report, 2026-09-01: "type into the input a person like a director or an
 // actor and get the full list their entire filmography... then I could go
@@ -94,6 +94,58 @@ describe('filmographyFrom', () => {
   it('survives an empty or malformed payload', () => {
     expect(filmographyFrom(null)).toEqual([]);
     expect(filmographyFrom({ cast: null, crew: undefined })).toEqual([]);
+  });
+});
+
+// Bug report, 2026-10-08, searching Ruben Östlund: "I get a bunch of like
+// making of docs and things like that in there." Shapes below are from his
+// live TMDB credits that day: every cast credit was a documentary with the
+// character "Self", "Self - Filmmaker" or blank, and none was marked `video`.
+describe('filmographyFrom — appearances and extras', () => {
+  const ostlund = {
+    cast: [
+      { id: 20, title: 'The Legend of the Palme d\u2019Or Continues', release_date: '2025-05-17', character: 'Self', genre_ids: [99], video: false },
+      { id: 21, title: 'Searching for Ingmar Bergman', release_date: '2018-07-12', character: 'Self - Filmmaker', genre_ids: [99], video: false },
+      { id: 22, title: 'Room 1112', release_date: '2012-02-01', character: '', genre_ids: [99], video: false },
+      { id: 23, title: 'A Tribute', release_date: '2019-01-01', character: 'Himself (archive footage)', genre_ids: [99] },
+      // Blank character on fiction is a real small part, not an appearance.
+      { id: 24, title: 'Small Part', release_date: '2016-01-01', character: '', genre_ids: [18] }
+    ],
+    crew: [
+      { id: 30, title: 'Triangle of Sadness', release_date: '2022-09-18', job: 'Director', genre_ids: [35, 18], video: false },
+      // A documentary he directed is his film.
+      { id: 31, title: 'Free Radicals', release_date: '1997-10-31', job: 'Director', genre_ids: [99], video: false },
+      { id: 32, title: 'Mustasch: Down in Black', release_date: '2002-04-01', job: 'Director', genre_ids: [], video: true },
+      // Directed it and turns up in it as himself: still his film.
+      { id: 22, title: 'Room 1112', release_date: '2012-02-01', job: 'Director', genre_ids: [99] }
+    ]
+  };
+
+  const realFilms = (credits) => filmographyFrom(credits).filter((f) => !f.extra).map((f) => f.title);
+
+  it('marks appearances as themselves and video extras, keeping real films', () => {
+    expect(realFilms(ostlund)).toEqual(['Triangle of Sadness', 'Small Part', 'Room 1112', 'Free Radicals']);
+  });
+
+  it('hides nothing outright — the extras are still in the list, flagged', () => {
+    const extras = filmographyFrom(ostlund).filter((f) => f.extra).map((f) => f.title);
+    expect(extras).toEqual([
+      'The Legend of the Palme d\u2019Or Continues', 'A Tribute', 'Searching for Ingmar Bergman', 'Mustasch: Down in Black'
+    ]);
+  });
+
+  it('labels an appearance as one, not as acting', () => {
+    const legend = filmographyFrom(ostlund).find((f) => f.id === 20);
+    expect(legend.note).toBe('2025 · Appearance');
+  });
+
+  it('knows a self credit from a character', () => {
+    expect(isAppearance({ character: 'Herself' })).toBe(true);
+    expect(isAppearance({ character: 'Self - Host' })).toBe(true);
+    expect(isAppearance({ character: 'Selfridge' })).toBe(false);
+    expect(isAppearance({ character: 'Frances' })).toBe(false);
+    expect(isAppearance({ character: '', genre_ids: [18] })).toBe(false);
+    expect(isAppearance(null)).toBe(false);
   });
 });
 
