@@ -268,7 +268,10 @@ few hundred bytes; it was an hour while a refresh still meant a full download, b
 read is billed to the friend's Firebase). **A feed that used to certify v2 and falls back to
 v1 is reported** (`src/utils/syncFallbackReport.js`: a Sentry warning, fingerprinted per
 feed, at most hourly; the new-issue email is the alarm). A peer that never supported v2 is
-not a fallback and is never reported.
+not a fallback and is never reported. **No answer is not "no meta" (2026-10-08):** a
+dropped connection, a timeout or a 5xx on any v2 read is `status: 'unreachable'` — the
+store keeps the shown profile and the saved snapshot, reports nothing, and skips the
+legacy body. Only a real answer (empty, or a refusal from a never-v2 peer) is `no-meta`.
 Rules: public reads only at the **current** `settings/clubFeedKey` (legacy feed too), meta
 whole, movies/changes **bounded in key order** (an unbounded read is refused), the index
 the owner's alone (≤2). `scripts/generate-database-rules.mjs` owns the rules; emulator

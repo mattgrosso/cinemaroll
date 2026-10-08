@@ -8,12 +8,20 @@ import {
   syncRootFor, childUrl, moviesPageParams, changesPageParams, planRefresh, mergeMoviesPage, applyBatches,
   certifies, feedFromSync, firebaseKeyCompare, SyncGapError, MOVIES_PAGE, CHANGES_PAGE
 } from '../assets/javascript/filmClubSync.js';
+import { fetchWithTimeout } from './networkHealth.js';
 
 const REVOKED = new Set([401, 403, 404, 410]);
 const MAX_ATTEMPTS = 3;
 const MAX_PAGES = 400; // 50,000 movies / 250 per page
 
 class RevokedError extends Error {}
+class UnreachableError extends Error {}
+
+// No answer at all (a dropped connection, a timeout) or a server error says
+// nothing about the feed. Only a real answer may count as "no meta"
+// (Sentry, 2026-10-08: a phone on bad signal reported Brian's feed as
+// downgraded and threw away its certified copy).
+const isUnreachable = (error) => !error?.status || error.status >= 500;
 
 const readJson = async (fetchFn, url) => {
   const res = await fetchFn(url, { cache: 'no-store' });
@@ -32,8 +40,12 @@ async function readHead (fetchFn, syncUrl, feedUrl, established) {
   const metaUrl = childUrl(syncUrl, 'meta');
   const revisionUrl = childUrl(feedUrl, 'revision');
   const [meta, legacyRevision] = await Promise.all([
-    readJson(fetchFn, metaUrl).catch((error) => { if (REVOKED.has(error.status) && established) throw new RevokedError(error.message); return null; }),
-    readJson(fetchFn, revisionUrl).catch(() => null)
+    readJson(fetchFn, metaUrl).catch((error) => {
+      if (isUnreachable(error)) throw new UnreachableError(error.message);
+      if (REVOKED.has(error.status) && established) throw new RevokedError(error.message);
+      return null;
+    }),
+    readJson(fetchFn, revisionUrl).catch((error) => { if (isUnreachable(error)) throw new UnreachableError(error.message); return null; })
   ]);
   return { meta, legacyRevision };
 }
@@ -82,9 +94,10 @@ async function readJournal (fetchFn, syncUrl, fromKey, toKey) {
  *   { status: 'updated', cache, feed }           a new certified snapshot
  *   { status: 'v1', cache }                      use the legacy body (cache's cursor invalidated)
  *   { status: 'revoked' }                        an established capability was explicitly denied
+ *   { status: 'unreachable', reason }            no answer; keep whatever is cached, fetch nothing else
  * `cache` is `{ feedUrl, syncUrl, meta, movies, establishedV2 }` or null.
  */
-export async function refreshExternalFeed ({ feedUrl, cache = null, fetchFn = fetch }) {
+export async function refreshExternalFeed ({ feedUrl, cache = null, fetchFn = fetchWithTimeout }) {
   const syncUrl = syncRootFor(feedUrl);
   const established = Boolean(cache?.establishedV2 && cache?.feedUrl === feedUrl);
   const invalidated = { feedUrl, syncUrl, meta: null, movies: null, establishedV2: established };
@@ -96,6 +109,7 @@ export async function refreshExternalFeed ({ feedUrl, cache = null, fetchFn = fe
     head = await readHead(fetchFn, syncUrl, feedUrl, established);
   } catch (error) {
     if (error instanceof RevokedError && established) return { status: 'revoked' };
+    if (error instanceof UnreachableError) return { status: 'unreachable', reason: error.message };
     return { status: 'v1', cache: invalidated, reason: `head-unreadable:${error.status || error.message}` };
   }
 
@@ -116,6 +130,7 @@ export async function refreshExternalFeed ({ feedUrl, cache = null, fetchFn = fe
       }
     } catch (error) {
       if (error instanceof RevokedError || (REVOKED.has(error.status) && established)) return { status: 'revoked' };
+      if (!(error instanceof SyncGapError) && isUnreachable(error)) return { status: 'unreachable', reason: error.message };
       if (!(error instanceof SyncGapError)) return { status: 'v1', cache: invalidated, reason: `read-failed:${error.status || error.message}` };
       plan = { mode: 'bootstrap', reason: 'gap' };
       continue;
@@ -126,6 +141,7 @@ export async function refreshExternalFeed ({ feedUrl, cache = null, fetchFn = fe
       head = await readHead(fetchFn, syncUrl, feedUrl, established);
     } catch (error) {
       if (error instanceof RevokedError && established) return { status: 'revoked' };
+      if (error instanceof UnreachableError) return { status: 'unreachable', reason: error.message };
       return { status: 'v1', cache: invalidated, reason: `head-unreadable:${error.status || error.message}` };
     }
     const check = planRefresh({ cache: usable, meta: head.meta, legacyRevision: head.legacyRevision });

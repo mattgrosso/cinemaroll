@@ -41,6 +41,7 @@ class FakeDb {
       self.log.push({ fetch: url.replace(DB, '') });
       const u = new URL(url);
       const path = u.pathname.replace(/\.json$/, '');
+      if (self.drop && path.startsWith(self.drop)) throw new TypeError('Load failed');
       if (self.deny && path.startsWith(self.deny.path)) return { ok: false, status: self.deny.status, json: async () => null };
       let value = self.get(path);
       if (u.searchParams.get('orderBy') === '"$key"' && value && typeof value === 'object') {
@@ -220,9 +221,26 @@ describe('Film Club v2 end to end', () => {
     expect(established.establishedV2).toBe(true);
     db.deny = { path: `/clubFeedSync/`, status: 403 };
     expect((await refresh(established)).status).toBe('revoked');
-    // Without a denial, a transient failure is just a v1 refresh.
+    // A server error is no answer about the feed: not a downgrade.
     db.deny = { path: `/clubFeedSync/`, status: 500 };
-    expect((await refresh(established)).status).toBe('v1');
+    expect((await refresh(established)).status).toBe('unreachable');
+  });
+
+  it('11. a dropped connection is "unreachable", never a fallback that throws the certified copy away (Sentry: no-meta on bad signal)', async () => {
+    await publish(many(3));
+    const established = (await refresh(null)).cache;
+    expect(established.establishedV2).toBe(true);
+    for (const drop of [`/clubFeedSync/`, `/clubFeed/${OWNER}/${SECRET}/revision`]) {
+      db.drop = drop;
+      const r = await refresh(established);
+      expect(r.status).toBe('unreachable');
+      expect(r.cache).toBeUndefined();
+    }
+    // Mid-bootstrap too.
+    db.drop = `/clubFeedSync/${OWNER}/${SECRET}/movies`;
+    expect((await refresh(null)).status).toBe('unreachable');
+    db.drop = null;
+    expect((await refresh(established)).status).toBe('unchanged');
   });
 
   it('10. the publisher never extends a head whose snapshot count disagrees — it rebuilds', async () => {

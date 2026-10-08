@@ -19,7 +19,7 @@ import * as Sentry from "@sentry/vue";
 import { getRating, rawScore } from "../assets/javascript/GetRating";
 import { pushRoute } from '@/router/appRouter.js';
 import ErrorLogService from "../services/ErrorLogService.js";
-import { markStalled } from '../utils/networkHealth.js';
+import { markStalled, fetchWithTimeout } from '../utils/networkHealth.js';
 import { placeholdersReadyToFinish, finalizePlaceholder } from '../assets/javascript/reconcilePlaceholder.js';
 
 let autoReconcileRunning = false;
@@ -2348,8 +2348,11 @@ export default createStore({
             const profile = profileFromFeed(v2.feed, { fallbackName: friend.name });
             if (profile) { context.commit('setExternalFriendProfile', { id, profile }); return; }
           }
-          if (v2.status === 'unchanged' && cached) return;
-          if (v2.status === 'unchanged' && syncCache?.meta) {
+          // No answer from the feed (bad signal, a timeout): keep what is
+          // shown and what is saved, report nothing, and skip the legacy body.
+          const keepCached = v2.status === 'unchanged' || v2.status === 'unreachable';
+          if (keepCached && cached) return;
+          if (keepCached && syncCache?.meta) {
             // The snapshot is certified but this session has no profile yet (a cold start).
             const { feedFromSync } = await import('../assets/javascript/filmClubSync.js');
             const profile = profileFromFeed(feedFromSync(syncCache.meta, syncCache.movies), { fallbackName: friend.name });
@@ -2364,14 +2367,14 @@ export default createStore({
           if (revisionUrl) {
             let headRevision = null;
             try {
-              const head = await fetch(revisionUrl, { cache: 'no-store' });
+              const head = await fetchWithTimeout(revisionUrl, { cache: 'no-store' });
               if (head.ok) headRevision = await head.json();
             } catch {
               // Fall through to the body.
             }
             if (!feedBodyNeeded({ cached, headRevision })) return;
           }
-          const response = await fetch(friend.feedUrl, { cache: 'no-store' });
+          const response = await fetchWithTimeout(friend.feedUrl, { cache: 'no-store' });
           if (!response.ok) throw new Error(`feed responded ${response.status}`);
           const profile = profileFromFeed(await response.json(), { fallbackName: friend.name });
           if (!profile) throw new Error('unrecognised feed format');
