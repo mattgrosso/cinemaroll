@@ -189,7 +189,12 @@ const reapplyInFlightWrites = (state, rootKey, data) => {
 // Firebase
 const firebaseConfig = {
   apiKey: process.env.VUE_APP_GOOGLE_API_KEY,
-  authDomain: "movie-log-8c4d5.firebaseapp.com",
+    // cinemaroll.org, not movie-log-8c4d5.firebaseapp.com (2026-10-08): the sign-in popup lands on
+  // /__/auth/handler, and served from another site iOS Safari's storage
+  // partitioning could strip it of its session state ("missing initial
+  // state"). CloudFront proxies /__/auth/* to the Firebase handler, so the
+  // flow is first-party; the OAuth client lists this domain's handler.
+  authDomain: "cinemaroll.org",
   databaseURL: "https://movie-log-8c4d5-default-rtdb.firebaseio.com",
   projectId: "movie-log-8c4d5",
   storageBucket: "movie-log-8c4d5.appspot.com",
