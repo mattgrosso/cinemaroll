@@ -344,6 +344,7 @@ import { buildCatalog, typeaheadEntries } from '../assets/javascript/catalog.js'
 import { rankTypeahead, describeSuggestion } from '../assets/javascript/searchSuggestions.js';
 import { postToAi } from '../utils/aiRequest.js';
 import { rememberedPerson, rememberPerson } from '../utils/personIdCache.js';
+import { peopleCredits, filmRecommendations, trimForWatchlist } from '../assets/javascript/watchlistLookups.js';
 import { hasUnseenShowtimes, SHOWTIMES_SEEN_KEY } from '../assets/javascript/showtimesUnread.js';
 
 // The X on the suggestion rows (bug report 2026-10-08): gone for good, where
@@ -1284,11 +1285,16 @@ export default {
             rememberPerson(person.name, match);
           }
           if (personId == null) return;
-          const credits = await axios.get(`https://api.themoviedb.org/3/person/${personId}/movie_credits?api_key=${apiKey}`);
-          const list = kind === 'crew'
-            ? (credits.data?.crew || []).filter((credit) => credit.job === 'Director')
-            // Turning up as themselves isn't a performance to recommend.
-            : (credits.data?.cast || []).filter((credit) => (credit.order ?? 99) < 10 && !isAppearance(credit));
+          const cacheKey = `${kind}:${personId}`;
+          let list = peopleCredits.get(cacheKey);
+          if (!list) {
+            const credits = await axios.get(`https://api.themoviedb.org/3/person/${personId}/movie_credits?api_key=${apiKey}`);
+            list = trimForWatchlist(kind === 'crew'
+              ? (credits.data?.crew || []).filter((credit) => credit.job === 'Director')
+              // Turning up as themselves isn't a performance to recommend.
+              : (credits.data?.cast || []).filter((credit) => (credit.order ?? 99) < 10 && !isAppearance(credit)));
+            peopleCredits.set(cacheKey, list);
+          }
           allCredits.push(...list);
         } catch (error) {
           // Best-effort per person — one failed lookup shouldn't empty the list.
@@ -1356,8 +1362,13 @@ export default {
 
       await Promise.all(seeds.map(async (seed) => {
         try {
-          const response = await axios.get(`https://api.themoviedb.org/3/movie/${seed.movie.id}/recommendations?api_key=${apiKey}`);
-          pooled.push(...(response.data?.results || []));
+          let list = filmRecommendations.get(seed.movie.id);
+          if (!list) {
+            const response = await axios.get(`https://api.themoviedb.org/3/movie/${seed.movie.id}/recommendations?api_key=${apiKey}`);
+            list = trimForWatchlist(response.data?.results);
+            filmRecommendations.set(seed.movie.id, list);
+          }
+          pooled.push(...list);
         } catch (error) {
           console.error('Recommendations lookup failed for', seed.movie.title, error);
         }

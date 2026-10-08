@@ -14,6 +14,15 @@ describe('suggestionFilters', () => {
     expect(fetchOne.mock.calls.map(([id]) => id)).toEqual([1, 2, 2]);
   });
 
+  // Sentry N+1 (2026-10-08): a relaunch asked TMDB for the same runtimes again.
+  it('keeps looked-up runtimes on the device, but not a missing one', async () => {
+    await loadRuntimes([1, 2], (id) => Promise.resolve(id === 1 ? 95 : undefined));
+    const stored = JSON.parse(localStorage.getItem('cinemaRoll.runtimes'));
+    expect(stored['1'].value).toBe(95);
+    // Stored as null it would read as a short (null <= 40); retried instead.
+    expect('2' in stored).toBe(false);
+  });
+
   it('judges a short by the one rule, from either shape', async () => {
     await loadRuntimes([5, 6], (id) => Promise.resolve(id === 5 ? 40 : 41));
     expect(isSuggestedShort({ id: 5 })).toBe(true);

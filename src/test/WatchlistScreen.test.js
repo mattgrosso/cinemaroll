@@ -4,10 +4,13 @@ import WatchlistScreen from '@/components/WatchlistScreen.vue';
 import axios from 'axios';
 import { clearRuntimeCache } from '@/assets/javascript/suggestionFilters.js';
 import { forgetPeople } from '@/utils/personIdCache.js';
+import { forgetWatchlistLookups } from '@/assets/javascript/watchlistLookups.js';
 
 vi.mock('axios', () => ({ default: { get: vi.fn() } }));
 // Names resolve into a per-device cache now; each case starts with it empty.
 beforeEach(() => forgetPeople());
+// So do filmographies and recommendations (watchlistLookups.js).
+beforeEach(() => forgetWatchlistLookups());
 const postToAi = vi.hoisted(() => vi.fn());
 vi.mock('@/utils/aiRequest.js', () => ({ postToAi }));
 vi.mock('@/assets/javascript/GetRating.js', () => ({
@@ -1060,6 +1063,28 @@ describe('every suggestion row leaves out shorts and extras', () => {
     expect(names(wrapper)).toContain('Short Pick');
     expect(names(wrapper)).not.toContain('Featurette');
     expect(axios.get.mock.calls.some(([url]) => /\/movie\/\d+\?/.test(url))).toBe(false);
+  });
+
+  // Sentry N+1, reopened 2026-10-08: with the name searches cached, every
+  // open still asked TMDB for each favourite's filmography and each top
+  // film's recommendations. A second open within the week asks for none.
+  it('a return visit asks TMDB for no person, filmography, recommendations or runtime', async () => {
+    factory();
+    await flushPromises();
+    const repeats = () => axios.get.mock.calls.map(([url]) => url)
+      .filter((url) => /\/search\/person|\/movie_credits|\/recommendations|\/movie\/\d+\?/.test(url));
+    expect(repeats().some((url) => url.includes('/movie_credits'))).toBe(true);
+    expect(repeats().some((url) => url.includes('/recommendations'))).toBe(true);
+
+    axios.get.mockClear();
+    const { wrapper } = factory();
+    await flushPromises();
+    expect(repeats()).toEqual([]);
+    // Still built, still filtered — from what the device kept.
+    expect(names(wrapper)).toContain('Unseen Gem');
+    expect(names(wrapper)).toContain('Feature Pick');
+    expect(names(wrapper)).not.toContain('Short Pick');
+    expect(names(wrapper)).not.toContain('Festival Doc');
   });
 
   it('a return visit looks up no runtime twice', async () => {

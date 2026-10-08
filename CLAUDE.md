@@ -173,6 +173,9 @@ derived from the whole library (counts, search fields, scores, joins) goes throu
 rebuilt per mount; never sort a getter's array in place; never key an identity memo on an
 object that is mutated in place (settings sub-objects, personalAwards — key those by JSON);
 big static data (the world map, catalogs) is `markRaw`. `scripts/perf-tour.mjs` is the ruler.
+TMDB answers a screen re-asks on every open (names, filmographies, recommendations,
+runtimes) are kept on the device via `src/utils/deviceCache.js` — Sentry reports the
+per-open fan-out as an "N+1 API Call" (Watchlist, 2026-10-08).
 
 **Shorts (2026-09-29): one rule, one filter.** "Include short films" off means off on
 every screen that summarises the library — `src/assets/javascript/shorts.js` is the rule

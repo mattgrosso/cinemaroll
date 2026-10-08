@@ -8,22 +8,33 @@
 //
 // Shorts follow the app's one rule (shorts.js) and the "include short films"
 // setting. TMDB's list endpoints (credits, recommendations) carry no runtime,
-// so runtimes are looked up once per film and kept here for the session —
-// coming back to the Watchlist costs no second lookup.
+// so runtimes are looked up once per film and kept — for the session in
+// memory, and on the device (deviceCache.js) so a relaunch doesn't ask TMDB
+// for the same hundred runtimes again (Sentry N+1, 2026-10-08). A film's
+// runtime doesn't change; the age limit only keeps the store from growing.
 
 import { isShort } from './shorts.js';
 import { fetchRuntimes } from './personFilmography.js';
+import { deviceCache } from '../../utils/deviceCache.js';
 
 const runtimes = new Map();
+const storedRuntimes = deviceCache('cinemaRoll.runtimes', {
+  maxAgeMs: 180 * 24 * 60 * 60 * 1000,
+  maxEntries: 3000
+});
 
 /** A film's looked-up runtime, or undefined if it hasn't been. */
 export function knownRuntime (id) {
-  return runtimes.get(id);
+  if (runtimes.has(id)) return runtimes.get(id);
+  const stored = storedRuntimes.get(id);
+  if (stored !== undefined) runtimes.set(id, stored);
+  return stored;
 }
 
 /** For tests: forget every runtime looked up so far. */
 export function clearRuntimeCache () {
   runtimes.clear();
+  storedRuntimes.clear();
 }
 
 /**
@@ -31,10 +42,14 @@ export function clearRuntimeCache () {
  * so the next visit tries again; until then the film counts as not a short.
  */
 export async function loadRuntimes (ids, fetchOne, { concurrency = 8 } = {}) {
-  const missing = [...new Set(ids || [])].filter((id) => id != null && !runtimes.has(id));
+  const missing = [...new Set(ids || [])].filter((id) => id != null && !runtimes.has(id) && knownRuntime(id) === undefined);
   if (!missing.length) return;
   const fetched = await fetchRuntimes(missing, fetchOne, { concurrency });
   fetched.forEach((runtime, id) => runtimes.set(id, runtime));
+  // Only real numbers go to the device: a missing runtime is retried next
+  // launch rather than stored as null, which the shorts rule would read as
+  // short (null <= 40).
+  storedRuntimes.setMany([...fetched].filter(([, runtime]) => Number.isFinite(runtime)));
 }
 
 /**
