@@ -21,6 +21,8 @@ describe('isStaleChunkError', () => {
     expect(isStaleChunkError(new Error('Loading CSS chunk games failed'))).toBe(true)
     expect(isStaleChunkError(new Error('error loading dynamically imported module'))).toBe(true)
     expect(isStaleChunkError(new Error('Importing a module script failed.'))).toBe(true)
+    expect(isStaleChunkError(new Error('Unable to preload CSS for /css/Login.0caee1b3.css'))).toBe(true)
+    expect(isStaleChunkError(new Error('Failed to fetch dynamically imported module: https://x/js/Login.abc.js'))).toBe(true)
   })
 
   it('ignores ordinary errors and absent errors', () => {

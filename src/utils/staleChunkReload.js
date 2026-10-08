@@ -14,7 +14,11 @@ export function isStaleChunkError (error) {
   if (error.name === 'ChunkLoadError') return true;
   // Webpack: "Loading chunk N failed" / "Loading CSS chunk N failed".
   // Safari/Firefox dynamic-import wording differs, hence the alternates.
-  return /Loading (CSS )?chunk .* failed|error loading dynamically imported module|Importing a module script failed/i
+  // Vite (since the 2026-09-14 move) fails a screen whose stylesheet is gone
+  // with "Unable to preload CSS for /css/X.css" (Sentry, 2026-10-08: Login,
+  // Chrome on Windows), and Chrome words a missing module "Failed to fetch
+  // dynamically imported module".
+  return /Loading (CSS )?chunk .* failed|(error loading|failed to fetch) dynamically imported module|Importing a module script failed|Unable to preload CSS/i
     .test(error.message || '');
 }
 
