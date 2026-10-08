@@ -23,8 +23,10 @@ import router from './router';
 import VueClickAway from "vue3-click-away";
 import * as Sentry from "@sentry/vue";
 import { BrowserTracing } from "@sentry/tracing";
+import { CaptureConsole } from "@sentry/integrations";
 import { scrubEvent, scrubBreadcrumb } from "./utils/scrubUrl.js";
 import { beforeSendError } from "./utils/sentryBeforeSend.js";
+import { handledErrorFilter } from "./utils/sentryHandled.js";
 import VueLazyLoad from 'vue3-lazyload';
 import './registerServiceWorker'
 import axios from 'axios';
@@ -84,6 +86,10 @@ if (allowDevSentry || (process.env.NODE_ENV !== "development" && !servedLocally)
     // Sentry can tell a regression from a straggler on an old tab.
     release: process.env.VUE_APP_VERSION ? `cinemaroll@${process.env.VUE_APP_VERSION}` : undefined,
     integrations: [
+      // Every console.error becomes an event (2026-10-08): the caught failures
+      // that used to die in a console nobody reads. utils/sentryHandled.js
+      // budgets and groups them so they can't spend the error quota.
+      new CaptureConsole({ levels: ["error"] }),
       new BrowserTracing({
         // Hash routing means window.location.pathname is always "/", so
         // without the router every transaction was named "/" and a Sentry
@@ -99,11 +105,12 @@ if (allowDevSentry || (process.env.NODE_ENV !== "development" && !servedLocally)
     // every one.
     tracesSampleRate: 0.25,
     sampleRate: 1.0,
+    attachStacktrace: true,
     maxValueLength: 8000,
     // No credentials leave for Sentry: Firebase and TMDB take theirs in the
     // query string, and traced fetches and breadcrumbs carried them in full
     // (see utils/scrubUrl.js, 2026-10-06).
-    beforeSend: beforeSendError,
+    beforeSend: handledErrorFilter(beforeSendError),
     beforeSendTransaction: scrubEvent,
     beforeBreadcrumb: scrubBreadcrumb
   });

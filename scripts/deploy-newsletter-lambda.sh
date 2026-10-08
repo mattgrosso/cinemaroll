@@ -23,10 +23,10 @@ AWS="${AWS_BIN:-$HOME/aws-cli/aws}"
 [ -x "$AWS" ] || AWS=aws
 BUNDLE="${TMPDIR:-/tmp}/cinemaroll-newsletter-bundle"
 
-for file in aws-lambda/newsletter.js aws-lambda/newsletterCompose.js aws-lambda/newsletterSources.js aws-lambda/letterboxd.js aws-lambda/letterboxdSync.js; do
+for file in aws-lambda/newsletter.js aws-lambda/newsletterCompose.js aws-lambda/newsletterSources.js aws-lambda/letterboxd.js aws-lambda/letterboxdSync.js aws-lambda/sentryLambda.js; do
   node --check "$file" || { echo "✗ $file does not parse — nothing deployed."; exit 1; }
 done
-echo "✓ all five sources parse"
+echo "✓ all six sources parse"
 
 # The dependency tree is expensive to rebuild and never changes between code
 # edits, so it is installed once and reused.
@@ -49,7 +49,7 @@ JSON
 fi
 
 cp aws-lambda/newsletter.js "$BUNDLE/index.js"
-cp aws-lambda/newsletterCompose.js aws-lambda/newsletterSources.js aws-lambda/letterboxd.js aws-lambda/letterboxdSync.js aws-lambda/cinemaScore.js "$BUNDLE/"
+cp aws-lambda/newsletterCompose.js aws-lambda/newsletterSources.js aws-lambda/letterboxd.js aws-lambda/letterboxdSync.js aws-lambda/cinemaScore.js aws-lambda/sentryLambda.js "$BUNDLE/"
 
 # One more check, on the bundle itself: what parses in the repo is not
 # necessarily what got copied.

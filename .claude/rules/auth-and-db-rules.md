@@ -585,13 +585,14 @@ committed in `.env` (`VUE_APP_VAPID_PUBLIC_KEY`, with `VUE_APP_PUSH_API_URL`). R
 # The bundle is index.js (= push-notify.js) + pushCadence.js + feedRevision.js (the
 # Film Club feed's revision token, CommonJS twin of src/assets/javascript/feedRevision.js)
 # + filmClubSync.js + filmClubSyncPublisher.js (GENERATED twins — run
-# scripts/sync-lambda-twins.mjs after editing the ESM sources) + node_modules (web-push and its deps — NOT the aws-lambda/node_modules on disk, which
+# scripts/sync-lambda-twins.mjs after editing the ESM sources) + sentryLambda.js (the
+# house Sentry reporter, 2026-10-08) + node_modules (web-push and its deps — NOT the aws-lambda/node_modules on disk, which
 # is the AI Lambda's). Start from the deployed bundle so the dependencies stay exactly as
 # they are:
 URL=$(aws lambda get-function --function-name cinemaroll-push --profile personal \
   --region us-east-1 --query 'Code.Location' --output text)
 curl -s -o current.zip "$URL" && mkdir -p bundle && (cd bundle && unzip -q -o ../current.zip)
-cp aws-lambda/push-notify.js bundle/index.js && cp aws-lambda/pushCadence.js aws-lambda/feedRevision.js aws-lambda/filmClubSync.js aws-lambda/filmClubSyncPublisher.js bundle/
+cp aws-lambda/push-notify.js bundle/index.js && cp aws-lambda/pushCadence.js aws-lambda/feedRevision.js aws-lambda/filmClubSync.js aws-lambda/filmClubSyncPublisher.js aws-lambda/sentryLambda.js bundle/
 (cd bundle && zip -q -r ../function.zip .)
 aws lambda update-function-code --function-name cinemaroll-push \
   --zip-file fileb://function.zip --profile personal --region us-east-1
