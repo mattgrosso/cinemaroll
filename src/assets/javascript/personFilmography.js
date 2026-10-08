@@ -189,7 +189,7 @@ export async function fetchRuntimes (ids, fetchOne, { concurrency = 6 } = {}) {
       const id = queue.shift();
       try {
         runtimes.set(id, await fetchOne(id));
-      } catch (error) {
+      } catch {
         // Unknown runtime: the film stays in the main row.
       }
     }
