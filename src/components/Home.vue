@@ -1898,7 +1898,11 @@ export default {
       pushTestSent: false,
       activeFilters: [], // New multi-filter system
       activeQuickLinkList: "title",
-      debouncedSetSearchValue: debounce(function (value) {
+      // Arrow functions, so `this` is Home however they're called. A plain
+      // `function` here only worked while Home itself called it; handed to
+      // window.addEventListener it ran with `this` as the window and threw
+      // "this.updateDidYouMeanFitCount is not a function" on every resize.
+      debouncedSetSearchValue: debounce((value) => {
         this.searchValue = value;
       }, 300),
       // How many ranked "Did you mean?" suggestions currently fit on one line
@@ -1906,7 +1910,7 @@ export default {
       // updateDidYouMeanFitCount. Starts conservative; recalculated once the
       // input is actually mounted/measurable.
       didYouMeanFitCount: 1,
-      debouncedUpdateDidYouMeanFitCount: debounce(function () {
+      debouncedUpdateDidYouMeanFitCount: debounce(() => {
         this.updateDidYouMeanFitCount();
       }, 200),
       // The typeahead panel is only ever open while the input has focus — a
@@ -2439,6 +2443,10 @@ export default {
     document.removeEventListener('visibilitychange', this.saveHomePaintIfHidden);
     window.removeEventListener('pagehide', this.saveHomePaintNow);
     window.removeEventListener('resize', this.debouncedUpdateDidYouMeanFitCount);
+    // A resize or keystroke in the last few hundred ms would otherwise land
+    // after Home is gone. (`?.` because tests mock debounce as a bare passthrough.)
+    this.debouncedUpdateDidYouMeanFitCount.cancel?.();
+    this.debouncedSetSearchValue.cancel?.();
     document.removeEventListener('visibilitychange', this.refreshPromptClockIfVisible);
     clearTimeout(this.libraryLoadTimer);
 

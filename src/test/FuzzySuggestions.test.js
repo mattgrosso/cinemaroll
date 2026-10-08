@@ -250,6 +250,27 @@ describe('Fuzzy "Did you mean?" suggestions', () => {
       expect(wrapper.vm.didYouMeanFitCount).toBe(1)
     })
 
+    it('re-measures on a real window resize (the listener runs with `this` as the window, not Home)', async () => {
+      // Sentry, 2026-10-08: "this.updateDidYouMeanFitCount is not a function"
+      // from the resize listener on an iPhone. Firing the event through the
+      // window is the point - calling the method off wrapper.vm hides the bug.
+      const errors = []
+      const onError = (event) => { errors.push(event.error?.message || event.message); event.preventDefault() }
+      window.addEventListener('error', onError)
+      wrapper.vm.searchValue = 'villenueve'
+      await wrapper.vm.$nextTick()
+      try {
+        wrapper.vm.didYouMeanFitCount = 99
+        window.dispatchEvent(new Event('resize'))
+        await wrapper.vm.$nextTick()
+      } finally {
+        window.removeEventListener('error', onError)
+      }
+
+      expect(errors).toEqual([])
+      expect(wrapper.vm.didYouMeanFitCount).toBe(1)
+    })
+
     it('applying a suggestion still commits the correct chip (tap-to-commit unaffected by the multi-term UI)', async () => {
       wrapper.vm.searchValue = 'villenueve'
       await wrapper.vm.$nextTick()
