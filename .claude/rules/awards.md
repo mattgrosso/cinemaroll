@@ -230,8 +230,11 @@ Cannes and whatever else… the history of any award that we have access to."
 - `PersonalAwardsScreen.vue` owns a ceremony strip above the year strip. Tab
   ids ride in the URL (`?ceremony=friend:<clubKey>` / `oscars` /
   `golden-globes` / `bafta` / `cannes` / `venice`); no param = your own awards,
-  so every old `/awards?year=` link still works. Switching ceremony drops the
-  year (each lands on its newest).
+  so every old `/awards?year=` link still works. Switching ceremony KEEPS
+  the year (2026-10-08, Matt: "I want to maintain the year"; it used to drop
+  it). A board without that year shows its newest, but the URL keeps the
+  picked year so the next tab that has it lands on it. Back on your own tab,
+  a year that isn't one of your award years becomes your newest.
 - Your own tab is the existing nominate-and-pick page. Every other tab is
   `AwardsBoard.vue` (read-only: categories in order, winners as poster cards,
   nominees as chips; a pick with a TMDB id opens the film).

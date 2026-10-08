@@ -242,11 +242,19 @@ export default {
       // replace, not push: stepping through years shouldn't bury the way back.
       this.$router.replace({ path: '/awards', query: this.query({ year }) });
     },
-    // Switching ceremony drops the year: each one lands on its newest year,
-    // and a friend's 2015 is not the Oscars' 2015 anyway.
+    // Switching ceremony keeps the year (Matt, 2026-10-08: "if I select a
+    // year, and then I switch to a different award... I want to maintain the
+    // year"). A board without it shows its newest, but the URL keeps the one
+    // you picked, so the next tab that has it lands on it. Your own awards
+    // are the exception: an off-list year there would leave the page empty,
+    // so it lands on your newest instead.
     selectCeremony (id) {
       if (id === this.ceremonyId) return;
-      this.$router.replace({ path: '/awards', query: this.query({ ceremony: id === 'mine' ? null : id, year: null }) });
+      let year = this.yearFromRoute ?? this.stripActiveYear ?? null;
+      if (id === 'mine' && year != null && !this.awardsYears.includes(year)) {
+        year = this.awardsYears[this.awardsYears.length - 1] ?? null;
+      }
+      this.$router.replace({ path: '/awards', query: this.query({ ceremony: id === 'mine' ? null : id, year }) });
     },
     openMovie (pick) {
       if (pick?.movieId) this.$router.push(`/movie/${pick.movieId}`);

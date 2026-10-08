@@ -154,7 +154,7 @@ describe('ceremony tabs', () => {
     name: 'Brian Goegan',
     profile: { ratings: { 11: { r: 9, t: 'Star Wars', p: '/sw.jpg', a: [{ year: 1977, category: 'i-1', label: 'Goegan Globes: Best Picture', result: 'won' }] }, 1891: { r: 9, t: 'Empire', a: [{ year: 1980, category: 'i-1', label: 'Goegan Globes: Best Picture', result: 'won' }] } } }
   };
-  function tabbed (query, extra = {}) {
+  function tabbed (query, extra = {}, library = DEFAULT_LIBRARY) {
     const replaceSpy = vi.fn();
     const pushSpy = vi.fn();
     const wrapper = shallowMount(PersonalAwardsScreen, {
@@ -162,7 +162,7 @@ describe('ceremony tabs', () => {
         mocks: {
           $store: {
             state: { settings: { personalAwardName: 'Grosker' }, allAcademyAwards: [{ year: 1994, category: 'Best Picture', tmdb: '13', title: 'Forrest Gump', img: '/fg.jpg', isWinner: true, isActing: false, names: [] }], ...extra },
-            getters: { allMoviesAsArray: DEFAULT_LIBRARY, filmClubFriends: [brian, { key: 'quiet', name: 'Luke', profile: { ratings: {} } }] },
+            getters: { allMoviesAsArray: library, filmClubFriends: [brian, { key: 'quiet', name: 'Luke', profile: { ratings: {} } }] },
             dispatch: vi.fn()
           },
           $router: { push: pushSpy, replace: replaceSpy, back: vi.fn() },
@@ -182,10 +182,30 @@ describe('ceremony tabs', () => {
     expect(wrapper.findComponent(AwardsBoard).exists()).toBe(false);
   });
 
-  it('switching ceremony drops the year from the URL; picking a year keeps the ceremony', async () => {
+  // Matt, 2026-10-08: "if I select a year, and then I switch to a different
+  // award... I want to maintain the year".
+  it('switching ceremony keeps the year in the URL', async () => {
     const { wrapper, replaceSpy } = tabbed({ year: '1997' });
     await wrapper.findAll('.ceremony-tab')[2].trigger('click');
-    expect(replaceSpy).toHaveBeenCalledWith({ path: '/awards', query: { ceremony: 'oscars' } });
+    expect(replaceSpy).toHaveBeenCalledWith({ path: '/awards', query: { ceremony: 'oscars', year: 1997 } });
+  });
+
+  it('a board without the year shows its newest, but the year stays for the next tab', async () => {
+    const { wrapper, replaceSpy } = tabbed({ ceremony: 'friend:ext-1', year: '1994' });
+    expect(wrapper.find('.board-header h2').text()).toBe('1980 Goegan Globes');
+    await wrapper.findAll('.ceremony-tab')[2].trigger('click');
+    expect(replaceSpy).toHaveBeenCalledWith({ path: '/awards', query: { ceremony: 'oscars', year: 1994 } });
+  });
+
+  it('back to your own awards keeps the year when it is one of yours, else lands on your newest', async () => {
+    const library = libraryForYears({ 1994: 10, 2001: 10 });
+    const kept = tabbed({ ceremony: 'oscars', year: '1994' }, {}, library);
+    await kept.wrapper.findAll('.ceremony-tab')[0].trigger('click');
+    expect(kept.replaceSpy).toHaveBeenCalledWith({ path: '/awards', query: { year: 1994 } });
+
+    const moved = tabbed({ ceremony: 'oscars', year: '1977' }, {}, library);
+    await moved.wrapper.findAll('.ceremony-tab')[0].trigger('click');
+    expect(moved.replaceSpy).toHaveBeenCalledWith({ path: '/awards', query: { year: 2001 } });
   });
 
   it('a friend\'s tab lands on their newest year with the board, and a pick opens the film', async () => {
