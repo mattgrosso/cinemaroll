@@ -44,7 +44,13 @@ const showAll = process.argv.includes('--all');
 const serviceAccount = JSON.parse(readFileSync(keyPath, 'utf8'));
 initializeApp({ credential: cert(serviceAccount), databaseURL });
 
-const snapshot = await getDatabase().ref('bugReports').once('value');
+// Only the unresolved ones come down (audit, 2026-10-08): Bug Desk runs this
+// every five minutes, and the whole node — every resolved report ever, half
+// a megabyte — was 140 MB a day of download. A report has no `resolved`
+// until it is resolved, and Firebase orders absent before false before
+// true, so endAt(false) is "absent or false". Indexed in database.rules.json.
+const query = showAll ? getDatabase().ref('bugReports') : getDatabase().ref('bugReports').orderByChild('resolved').endAt(false);
+const snapshot = await query.once('value');
 const reports = snapshot.val() || {};
 const allEntries = Object.entries(reports).sort(
   ([, a], [, b]) => (b.createdAt || 0) - (a.createdAt || 0),
@@ -53,7 +59,7 @@ const entries = showAll ? allEntries : allEntries.filter(([, report]) => !report
 const resolvedCount = allEntries.length - allEntries.filter(([, report]) => !report.resolved).length;
 
 if (!allEntries.length) {
-  console.log('No bug reports yet.');
+  console.log(showAll ? 'No bug reports yet.' : 'No unresolved bug reports.');
   process.exit(0);
 }
 if (!entries.length) {

@@ -73,6 +73,8 @@ const rules = {
     // clients, and its two big strings are capped. Still no session needed.
     bugReports: {
       '.read': false,
+      // fetch-bug-reports asks for unresolved only (orderByChild('resolved').endAt(false)) — 2026-10-08.
+      '.indexOn': ['resolved'],
       $reportId: {
         '.write': '!data.exists() && newData.exists()',
         '.validate': "newData.hasChildren(['transcript']) && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000 && (!newData.hasChild('appState') || (newData.child('appState').isString() && newData.child('appState').val().length <= 50000))"
