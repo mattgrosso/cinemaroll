@@ -73,8 +73,8 @@
             v-if="puntable"
             type="button"
             class="punt-btn"
-            title="Not yet — back in a couple of months"
-            aria-label="Not yet — back in a couple of months"
+            :title="puntLabel"
+            :aria-label="puntLabel"
             @click.stop="$emit('punt', item.source)"
           >
             <i class="bi bi-x"></i>
@@ -125,6 +125,9 @@ export default {
     // every other list here being unseen-only by construction.
     items: { type: Array, required: true },
     puntable: { type: Boolean, default: false },
+    // What the X means on this row: a snooze on the rewatch rows, "not
+    // interested" on the suggestion rows (2026-10-08).
+    puntLabel: { type: String, default: 'Not yet — back in a couple of months' },
     // Plain-language provenance for the hat: "use plain language to label why
     // that movie went into the hat" (2026-08-17). Every list on this screen
     // supplies its own, so a draw can say it came from the rewatch pile or

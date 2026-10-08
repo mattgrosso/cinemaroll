@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rewatchCandidates, rewatchCycleYears, anotherShotCandidates, nearThresholdYears, favoritePeople, rankWatchlistCandidates, dailyPick, ratedTmdbIds, tasteProfile, tasteBonus, nextPunt, isPunted, puntKeyFor , peopleYouRateHigher } from '@/assets/javascript/discover.js';
+import { rewatchCandidates, rewatchCycleYears, anotherShotCandidates, nearThresholdYears, favoritePeople, rankWatchlistCandidates, dailyPick, ratedTmdbIds, tasteProfile, tasteBonus, nextPunt, dismissPunt, isPunted, puntKeyFor , peopleYouRateHigher } from '@/assets/javascript/discover.js';
 
 const NOW = new Date('2026-08-15T00:00:00Z').getTime();
 const yearsAgo = (years) => NOW - years * 365.25 * 24 * 3600 * 1000;
@@ -423,6 +423,34 @@ describe('watchlist punts', () => {
     expect(isPunted({ dbKey: 'abc' }, punts, NOW3)).toBe(true)
     expect(isPunted({ dbKey: 'abc' }, punts, NOW3 + 2000)).toBe(false)
     expect(isPunted({ dbKey: 'other' }, punts, NOW3)).toBe(false)
+  })
+
+  // Bug report 2026-10-08: "a little X that I can clear it away if I'm not
+  // interested in it and it won't get suggested again."
+  it('a "not interested" dismissal never expires', () => {
+    const punts = { 'tmdb-42': dismissPunt(undefined, NOW3) }
+    expect(isPunted({ id: 42 }, punts, NOW3)).toBe(true)
+    expect(isPunted({ id: 42 }, punts, NOW3 + 50 * 365.25 * 24 * 60 * 60 * 1000)).toBe(true)
+  })
+
+  it('a dismissal keeps the punt count, and stores nothing Firebase cannot', () => {
+    const dismissed = dismissPunt({ count: 2, until: NOW3 + 1000 }, NOW3)
+    expect(dismissed).toEqual({ count: 3, at: NOW3, until: null, forever: true })
+  })
+
+  it('a later snooze (hatting it, say) does not undo a dismissal', () => {
+    const snoozed = nextPunt(dismissPunt(undefined, NOW3), NOW3)
+    expect(isPunted({ id: 42 }, { 'tmdb-42': snoozed }, NOW3 + 10 * 365.25 * 24 * 60 * 60 * 1000)).toBe(true)
+  })
+
+  it('a dismissed film refills the row from the pool instead of leaving a gap', () => {
+    const pool = Array.from({ length: 36 }, (_, i) => ({ id: i + 1, title: `Film ${i + 1}`, score: 100 - i }))
+    const before = dailyPick(pool, NOW3)
+    const gone = before[0].id
+    const punts = { [`tmdb-${gone}`]: dismissPunt(undefined, NOW3) }
+    const after = dailyPick(pool, NOW3, { exclude: (movie) => isPunted(movie, punts, NOW3) })
+    expect(after).toHaveLength(before.length)
+    expect(after.map((movie) => movie.id)).not.toContain(gone)
   })
 })
 

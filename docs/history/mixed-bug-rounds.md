@@ -772,3 +772,15 @@ through `backOrFallback` (`navigationTarget.js`): if the route hasn't changed
 MovieDetail also clears its spinner on a route change and on `pageshow` /
 `visibilitychange`. Not reproduced on a phone; the fallback covers any
 dead-end pop, whatever caused it.
+
+## Watchlist "not interested" X (2026-10-08)
+
+"On every one of these watchlist suggestion pages, I should have a little X that I can
+clear it away if I'm not interested in it and it won't get suggested again." Every row
+of unseen films (Ask, year picker, Film Club, the people rows, more-like, hidden gems)
+now carries the X the two rewatch rows had, but there it dismisses for good: the same
+`settings/watchlistPunts/<key>` record, flagged `forever: true` (`dismissPunt`; Firebase
+can't store Infinity). `nextPunt` preserves the flag so a later hat-punt can't turn a
+dismissal back into a snooze. The rewatch rows keep the doubling snooze. The filmography
+row stays without one — an entire filmography that drops films isn't one. No undo yet,
+and the year row's single TMDB page (~20 films) can run thin after many dismissals.

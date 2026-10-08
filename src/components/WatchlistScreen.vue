@@ -70,7 +70,10 @@
         <WatchlistRow
           :items="mediaItems(promptResults)"
           :hat-note="`Asked for: ${promptAsked}`"
+          puntable
+          :punt-label="dismissLabel"
           @select="previewMedia"
+          @punt="dismiss"
           @hatted="puntAll"
         />
       </template>
@@ -261,7 +264,10 @@
         v-else-if="selectedYearMovies.length"
         :items="mediaItems(selectedYearMovies)"
         :hat-note="sectionHatNote({ year: selectedYear })"
+        puntable
+        :punt-label="dismissLabel"
         @select="previewMedia"
+        @punt="dismiss"
         @hatted="puntAll"
       />
       <p v-else class="section-loading">Nothing well-regarded found that you haven't already rated.</p>
@@ -276,7 +282,7 @@
     <section v-if="friendPickMedia.length" class="watchlist-section">
       <h2 class="section-title">Your Film Club loves these</h2>
       <p class="section-caption">Rated 8 or better by friends, never rated by you. Agreement sorts first.</p>
-      <WatchlistRow :items="mediaItems(friendPickMedia)" hat-note="Loved by the film club" @select="previewMedia" @hatted="puntAll"/>
+      <WatchlistRow :items="mediaItems(friendPickMedia)" hat-note="Loved by the film club" puntable :punt-label="dismissLabel" @punt="dismiss" @select="previewMedia" @hatted="puntAll"/>
     </section>
 
     <section v-for="section in rankedSections" :key="section.key" class="watchlist-section">
@@ -286,7 +292,7 @@
         <span v-if="section.record" class="section-record">{{ section.record.hits }} of {{ section.record.suggested }} watched</span>
       </p>
       <p v-if="section.loading" class="section-loading">Looking up filmographies&hellip;</p>
-      <WatchlistRow v-else-if="section.movies.length" :items="mediaItems(section.movies)" :hat-note="sectionHatNote(section)" @select="previewMedia" @hatted="puntAll"/>
+      <WatchlistRow v-else-if="section.movies.length" :items="mediaItems(section.movies)" :hat-note="sectionHatNote(section)" puntable :punt-label="dismissLabel" @punt="dismiss" @select="previewMedia" @hatted="puntAll"/>
       <p v-else class="section-loading">Nothing new found — you've seen the good ones.</p>
     </section>
 
@@ -327,7 +333,7 @@ import { memoByIdentity } from '../utils/memoByIdentity.js';
 const friendPicksMemo = memoByIdentity((library, profiles) => friendsLoveUnseen(library, getRating, profiles));
 import { rankSections, sourceSummary } from '../assets/javascript/recommendationStats.js';
 import { crowdRating } from '../assets/javascript/letterboxdCompare.js';
-import { rewatchCandidates, anotherShotCandidates, nearThresholdYears, favoritePeople, peopleYouRateHigher, rankWatchlistCandidates, dailyPick, ratedTmdbIds, topRatedSeeds, tasteProfile, puntKeyFor, nextPunt, isPunted, PEOPLE_PER_SECTION, MIN_PEOPLE_PER_SECTION } from '../assets/javascript/discover.js';
+import { rewatchCandidates, anotherShotCandidates, nearThresholdYears, favoritePeople, peopleYouRateHigher, rankWatchlistCandidates, dailyPick, ratedTmdbIds, topRatedSeeds, tasteProfile, puntKeyFor, nextPunt, dismissPunt, isPunted, PEOPLE_PER_SECTION, MIN_PEOPLE_PER_SECTION } from '../assets/javascript/discover.js';
 import { awardsYearThreshold } from '../assets/javascript/personalAwards.js';
 import { formatScore } from '../assets/javascript/formatScore.js';
 import { includeShortsSetting } from '../assets/javascript/shorts.js';
@@ -337,6 +343,11 @@ import { buildCatalog, typeaheadEntries } from '../assets/javascript/catalog.js'
 import { rankTypeahead, describeSuggestion } from '../assets/javascript/searchSuggestions.js';
 import { postToAi } from '../utils/aiRequest.js';
 import { hasUnseenShowtimes, SHOWTIMES_SEEN_KEY } from '../assets/javascript/showtimesUnread.js';
+
+// The X on the suggestion rows (bug report 2026-10-08): gone for good, where
+// the rewatch rows' X is a snooze. Every row of unseen films gets it; the
+// filmography doesn't, because a filmography that drops films isn't one.
+const DISMISS_LABEL = 'Not interested — don\'t suggest this again';
 
 // Long enough to read the "added to <hat>" confirmation before the card that
 // owns it leaves the list.
@@ -375,6 +386,7 @@ export default {
   data () {
     return {
       painted: !SKELETON_FIRST,
+      dismissLabel: DISMISS_LABEL,
       // Pending hat-punts, cleared on unmount — see puntAll.
       puntTimers: [],
       // The "ask for something" box. `promptAsked` is the request the results
@@ -989,6 +1001,16 @@ export default {
       this.$store.dispatch('writeDurably', {
         path: `settings/watchlistPunts/${key}`,
         value: nextPunt(this.punts[key])
+      });
+    },
+    // "Not interested": hidden from every row for good. The pools are
+    // ranked deeper than a row shows (RANK_POOL), so the next film steps in.
+    dismiss (item) {
+      const key = puntKeyFor(item);
+      if (!key) return;
+      this.$store.dispatch('writeDurably', {
+        path: `settings/watchlistPunts/${key}`,
+        value: dismissPunt(this.punts[key])
       });
     },
     // A TMDB id, from either shape this screen handles: a library entry

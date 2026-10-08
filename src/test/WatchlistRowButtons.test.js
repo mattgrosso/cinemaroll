@@ -77,6 +77,14 @@ describe('watchlist poster controls', () => {
     expect(wrapper.find('.watchlist-card-actions .punt-btn').exists()).toBe(false);
   });
 
+  // 2026-10-08: the suggestion rows' X dismisses for good, so it must not
+  // still claim to be a two-month snooze.
+  it('labels the X with what it does on that row', () => {
+    expect(factory({ puntable: true }).find('.punt-btn').attributes('aria-label')).toMatch(/Not yet/);
+    const dismissing = factory({ puntable: true, puntLabel: "Not interested — don't suggest this again" });
+    expect(dismissing.find('.punt-btn').attributes('aria-label')).toBe("Not interested — don't suggest this again");
+  });
+
   it('shows no X at all on a row that cannot be punted', () => {
     const wrapper = factory({ puntable: false });
 

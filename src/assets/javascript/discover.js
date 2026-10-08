@@ -439,11 +439,22 @@ export function puntKeyFor (item) {
 export function nextPunt (existing, now = Date.now()) {
   const count = (existing?.count || 0) + 1;
   const duration = Math.min(PUNT_BASE_MS * Math.pow(2, count - 1), PUNT_MAX_MS);
-  return { count, at: now, until: now + duration };
+  // A snooze never undoes a dismissal (hatting a film punts it too).
+  return { count, at: now, until: now + duration, ...(existing?.forever ? { forever: true } : {}) };
+}
+
+// "Not interested" (bug report 2026-10-08: "a little X that I can clear it
+// away if I'm not interested in it and it won't get suggested again"). The
+// suggestion rows' X — films you haven't seen, where "not yet" isn't the
+// question. Same record as a punt, flagged `forever`: Firebase can't store
+// Infinity, and keeping count/at keeps the learning signal in one place.
+export function dismissPunt (existing, now = Date.now()) {
+  return { count: (existing?.count || 0) + 1, at: now, until: null, forever: true };
 }
 
 export function isPunted (item, punts, now = Date.now()) {
   const key = puntKeyFor(item);
   if (!key || !punts?.[key]) return false;
+  if (punts[key].forever) return true;
   return Number.isFinite(punts[key].until) && punts[key].until > now;
 }
