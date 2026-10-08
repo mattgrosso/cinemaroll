@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { personCandidates, filmographyFrom, filmographyProgress, isAppearance } from '@/assets/javascript/personFilmography.js';
+import { personCandidates, filmographyFrom, filmographyProgress, isAppearance, markShorts, fetchRuntimes, hiddenFilmsLabel } from '@/assets/javascript/personFilmography.js';
 
 // Bug report, 2026-09-01: "type into the input a person like a director or an
 // actor and get the full list their entire filmography... then I could go
@@ -154,5 +154,54 @@ describe('filmographyProgress', () => {
     const films = [{ rated: true }, { rated: false }, { rated: false }];
     expect(filmographyProgress(films)).toEqual({ total: 3, seen: 1, unseen: 2 });
     expect(filmographyProgress([])).toEqual({ total: 0, seen: 0, unseen: 0 });
+  });
+});
+
+// 2026-10-08: shorts join the appearances behind the link, on the app's one
+// rule — 40 minutes or under, unknown runtime is not a short.
+describe('markShorts', () => {
+  const films = [
+    { id: 1, note: '2020 · Director' },
+    { id: 2, note: '2019 · Director' },
+    { id: 3, note: '2018 · Director' },
+    { id: 4, note: '2017 · Director' }
+  ];
+  const runtimes = { 1: 40, 2: 41, 3: 0 };
+
+  it('flags 40 minutes and under, and leaves unknown runtimes alone', () => {
+    const marked = markShorts(films, (id) => runtimes[id]);
+    expect(marked.map((film) => Boolean(film.short))).toEqual([true, false, false, false]);
+    expect(marked[0].note).toBe('2020 · Director · Short');
+  });
+});
+
+describe('fetchRuntimes', () => {
+  it('collects runtimes a few at a time and skips failures', async () => {
+    let running = 0;
+    let peak = 0;
+    const fetchOne = async (id) => {
+      running += 1;
+      peak = Math.max(peak, running);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      running -= 1;
+      if (id === 3) throw new Error('nope');
+      return id * 10;
+    };
+    const result = await fetchRuntimes([1, 2, 3, 4, 5], fetchOne, { concurrency: 2 });
+    expect([...result.entries()].sort()).toEqual([[1, 10], [2, 20], [4, 40], [5, 50]]);
+    expect(peak).toBe(2);
+  });
+
+  it('does nothing for an empty list', async () => {
+    expect((await fetchRuntimes([], () => 1)).size).toBe(0);
+  });
+});
+
+describe('hiddenFilmsLabel', () => {
+  it('names only the kinds that are hidden', () => {
+    expect(hiddenFilmsLabel([{ short: true }, { short: true }, {}], false)).toBe('Show 2 shorts');
+    expect(hiddenFilmsLabel([{ extra: true }], false)).toBe('Show 1 appearance and extras');
+    expect(hiddenFilmsLabel([{ short: true }], false)).toBe('Show 1 short');
+    expect(hiddenFilmsLabel([{ extra: true }, { short: true }], true)).toBe('Hide shorts, appearances and extras');
   });
 });

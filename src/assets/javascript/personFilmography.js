@@ -14,6 +14,8 @@
 // are marked rather than removed, because knowing you've seen nine of the
 // twelve is the useful part when you're deciding what to hat.
 
+import { isShort } from './shorts.js';
+
 // Crew jobs that count as authorship. A person's full crew credit list also
 // carries producer, executive producer, thanks, and second-unit work, which
 // for anyone established runs to hundreds of entries and buries the films
@@ -157,4 +159,57 @@ export function filmographyProgress (films) {
   const total = (films || []).length;
   const seen = (films || []).filter((film) => film.rated).length;
   return { total, seen, unseen: total - seen };
+}
+
+/**
+ * Flag the shorts in a filmography (2026-10-08: "now let's get rid of
+ * shorts... whatever the line is for shorts, I think it's 40 minutes").
+ *
+ * TMDB's movie_credits carries no runtime, so the caller supplies one per
+ * film id — the library's where the film is rated, a /movie/{id} lookup
+ * otherwise. The rule is the app's one rule (shorts.js): 40 minutes or
+ * under, and an unknown runtime is NOT a short. A short is hidden like an
+ * extra, and says so once shown.
+ */
+export function markShorts (films, runtimeFor) {
+  return (films || []).map((film) => (isShort({ runtime: runtimeFor(film.id) })
+    ? { ...film, short: true, note: `${film.note} · Short` }
+    : film));
+}
+
+/**
+ * Runtimes for a list of TMDB ids, `concurrency` lookups at a time. A failed
+ * lookup is simply left out — unknown runtime, so not a short.
+ */
+export async function fetchRuntimes (ids, fetchOne, { concurrency = 6 } = {}) {
+  const runtimes = new Map();
+  const queue = [...ids];
+  const worker = async () => {
+    while (queue.length) {
+      const id = queue.shift();
+      try {
+        runtimes.set(id, await fetchOne(id));
+      } catch (error) {
+        // Unknown runtime: the film stays in the main row.
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, worker));
+  return runtimes;
+}
+
+/** Is this film kept off the main row until asked for? */
+export function isHiddenFilm (film) {
+  return Boolean(film?.extra || film?.short);
+}
+
+/** The link under the row: names only the kinds actually hidden. */
+export function hiddenFilmsLabel (films, showing) {
+  const hidden = (films || []).filter(isHiddenFilm);
+  const one = hidden.length === 1;
+  const kinds = [
+    hidden.some((film) => film.short) ? (one ? 'short' : 'shorts') : null,
+    hidden.some((film) => film.extra) ? (one ? 'appearance and extras' : 'appearances and extras') : null
+  ].filter(Boolean).join(', ');
+  return showing ? `Hide ${kinds}` : `Show ${hidden.length} ${kinds}`;
 }

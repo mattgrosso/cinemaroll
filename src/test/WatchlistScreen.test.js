@@ -695,6 +695,64 @@ describe('WatchlistScreen — someone\'s filmography', () => {
     expect(wrapper.find('.person-section .person-extras-toggle').text()).toBe('Hide appearances and extras');
   });
 
+  // 2026-10-08, the follow-up: "now let's get rid of shorts... I think it's
+  // 40 minutes". Credits have no runtime, so each unrated film is looked up.
+  describe('shorts', () => {
+    const RUNTIMES = { 800: 86, 802: 114, 806: 15 };
+    const WITH_SHORT = {
+      ...CREDITS,
+      crew: [...CREDITS.crew, { id: 806, title: 'Student Short', release_date: '2006-06-15', job: 'Director' }]
+    };
+
+    async function searchWithShort ({ state = {}, movies } = {}) {
+      axios.get.mockReset();
+      axios.get.mockImplementation((url) => {
+        if (url.includes('/person/500/movie_credits')) return Promise.resolve({ data: WITH_SHORT });
+        const movie = url.match(/\/movie\/(\d+)\?/);
+        if (movie) return Promise.resolve({ data: { runtime: RUNTIMES[movie[1]] } });
+        return personImpl([GRETA])(url);
+      });
+      const { wrapper } = factory({ state, ...(movies ? { movies } : {}) });
+      await flushPromises();
+      await wrapper.find('.person-section .prompt-input').setValue('Greta');
+      await wrapper.find('.person-section form').trigger('submit');
+      await flushPromises();
+      return wrapper;
+    }
+    const titlesIn = (wrapper) => wrapper.findAll('.person-section .watchlist-card')
+      .map((c) => c.attributes('aria-label').split(' — ')[0]);
+
+    it('hides films of 40 minutes or under behind the link, and leaves them out of the count', async () => {
+      const wrapper = await searchWithShort();
+
+      expect(titlesIn(wrapper)).toEqual(['Barbie', 'Frances Ha', 'Old Favorite A']);
+      expect(wrapper.find('.person-section').text()).toContain('3 films, 1 of them already rated');
+      const toggle = wrapper.find('.person-section .person-extras-toggle');
+      expect(toggle.text()).toBe('Show 3 shorts, appearances and extras');
+
+      await toggle.trigger('click');
+      expect(titlesIn(wrapper)).toContain('Student Short');
+      expect(wrapper.find('.person-section').text()).toContain('2006 · Director · Short');
+      expect(wrapper.find('.person-section').text()).toContain('3 films, 1 of them already rated');
+    });
+
+    it('uses the library runtime for a rated film instead of looking it up', async () => {
+      const movies = library();
+      movies[0].movie.runtime = 20;
+      const wrapper = await searchWithShort({ movies });
+
+      expect(titlesIn(wrapper)).not.toContain('Old Favorite A');
+      expect(axios.get.mock.calls.some(([url]) => /\/movie\/1\?/.test(url))).toBe(false);
+    });
+
+    it('keeps shorts in the row when "include short films" is on', async () => {
+      const wrapper = await searchWithShort({ state: { settings: { includeShorts: true } } });
+
+      expect(titlesIn(wrapper)).toContain('Student Short');
+      expect(axios.get.mock.calls.some(([url]) => /\/movie\/\d+\?/.test(url))).toBe(false);
+    });
+  });
+
   // The whole point of the request — this is a filmography, not a
   // recommendation list, so seen films stay put and say so.
   it('keeps films already rated, marked with your score', async () => {

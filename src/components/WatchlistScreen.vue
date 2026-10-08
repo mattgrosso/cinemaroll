@@ -184,16 +184,15 @@
         />
         <!-- Appearances as themselves and video extras sit behind this
              (2026-10-08: "I get a bunch of like making of docs and things like
-             that in there"). Hidden, not dropped — still one tap away. -->
+             that in there"), and shorts the same day. Hidden, not dropped —
+             still one tap away. -->
         <button
           v-if="personExtraCount && personMainFilms.length"
           type="button"
           class="person-extras-toggle"
           @click="personShowExtras = !personShowExtras"
         >
-          {{ personShowExtras
-            ? 'Hide appearances and extras'
-            : `Show ${personExtraCount} appearance${personExtraCount === 1 ? '' : 's'} and extras` }}
+          {{ personExtrasLabel }}
         </button>
       </template>
 
@@ -331,8 +330,9 @@ import { crowdRating } from '../assets/javascript/letterboxdCompare.js';
 import { rewatchCandidates, anotherShotCandidates, nearThresholdYears, favoritePeople, peopleYouRateHigher, rankWatchlistCandidates, dailyPick, ratedTmdbIds, topRatedSeeds, tasteProfile, puntKeyFor, nextPunt, isPunted, PEOPLE_PER_SECTION, MIN_PEOPLE_PER_SECTION } from '../assets/javascript/discover.js';
 import { awardsYearThreshold } from '../assets/javascript/personalAwards.js';
 import { formatScore } from '../assets/javascript/formatScore.js';
+import { includeShortsSetting } from '../assets/javascript/shorts.js';
 import { tasteSummary, pickTmdbMatch, buildPromptedList } from '../assets/javascript/promptedWatchlist.js';
-import { personCandidates, filmographyFrom, filmographyProgress } from '../assets/javascript/personFilmography.js';
+import { personCandidates, filmographyFrom, filmographyProgress, markShorts, fetchRuntimes, isHiddenFilm, hiddenFilmsLabel } from '../assets/javascript/personFilmography.js';
 import { buildCatalog, typeaheadEntries } from '../assets/javascript/catalog.js';
 import { rankTypeahead, describeSuggestion } from '../assets/javascript/searchSuggestions.js';
 import { postToAi } from '../utils/aiRequest.js';
@@ -496,10 +496,15 @@ export default {
     // How much of the person's filmography is already in the library — the
     // useful number when you're deciding what's left to hat.
     personProgress () {
-      return filmographyProgress(this.personVisibleFilms);
+      // Their films, not the shorts and extras behind the link, even when
+      // that link is open.
+      return filmographyProgress(this.personMainFilms.length ? this.personMainFilms : this.personFilms);
     },
     personMainFilms () {
-      return this.personFilms.filter((film) => !film.extra);
+      return this.personFilms.filter((film) => !isHiddenFilm(film));
+    },
+    personExtrasLabel () {
+      return hiddenFilmsLabel(this.personFilms, this.personShowExtras);
     },
     personExtraCount () {
       return this.personFilms.length - this.personMainFilms.length;
@@ -861,13 +866,33 @@ export default {
           if (entry?.movie?.id != null) byTmdbId.set(entry.movie.id, entry);
         });
 
-        this.personFilms = filmographyFrom(data, {
+        const films = filmographyFrom(data, {
           ratedIds: new Set(byTmdbId.keys()),
           scoreFor: (id) => {
             const rating = getRating(byTmdbId.get(id))?.calculatedTotal;
             return Number.isFinite(rating) ? formatScore(rating) : null;
           }
         });
+
+        // Shorts go behind the link too, unless the "include short films"
+        // setting is on. Credits carry no runtime: rated films use the
+        // library's, the rest are looked up here — while the loading state
+        // is still up, so the row doesn't reshuffle after it appears.
+        // Extras are hidden already and skip the lookup.
+        if (includeShortsSetting(this.$store.state)) {
+          this.personFilms = films;
+        } else {
+          const toFetch = films
+            .filter((film) => !film.extra && !byTmdbId.has(film.id))
+            .map((film) => film.id);
+          const fetched = await fetchRuntimes(toFetch, async (id) => {
+            const { data: movie } = await axios.get(`https://api.themoviedb.org/3/movie/${id}?api_key=${apiKey}`);
+            return movie?.runtime;
+          });
+          this.personFilms = markShorts(films, (id) => (
+            byTmdbId.has(id) ? byTmdbId.get(id).movie?.runtime : fetched.get(id)
+          ));
+        }
         this.personName = person.name;
         this.personSearched = person.name;
         this.personShowExtras = false;
