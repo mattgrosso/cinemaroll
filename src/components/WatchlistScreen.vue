@@ -1129,11 +1129,9 @@ export default {
         this.moviesLikeFavorites(this.recommendationSeeds, rated),
         this.hiddenGems(this.topTasteGenres, rated)
       ]);
-      // Runtimes before the rows appear, so a short doesn't flash up and
-      // then vanish. Hidden Gems and the year picker ask TMDB for feature
-      // lengths directly and need none.
-      await this.loadSuggestionRuntimes([directorMovies, actressMovies, actorMovies, underratedMovies, similarMovies]
-        .flat().map((movie) => movie.id));
+      // Each row's runtimes were looked up while it was ranked (rankFeatures),
+      // so no short flashes up and then vanishes. Hidden Gems and the year
+      // picker ask TMDB for feature lengths directly and need none.
       await yearLoaded;
       this.gemMovies = gemMovies;
       this.gemsLoading = false;
@@ -1302,7 +1300,7 @@ export default {
         }
       }));
 
-      return rankWatchlistCandidates(allCredits, rated, Date.now(), { cap: RANK_POOL, profile: this.taste, exclude: this.skipFromSuggestions });
+      return this.rankFeatures(allCredits, rated);
     },
     /**
      * Resolve gender (and id) for the top cast names, so the performer list
@@ -1374,7 +1372,32 @@ export default {
         }
       }));
 
-      return rankWatchlistCandidates(pooled, rated, Date.now(), { cap: RANK_POOL, profile: this.taste, exclude: this.skipFromSuggestions });
+      return this.rankFeatures(pooled, rated);
+    },
+    /**
+     * Rank a row built from credits or recommendations — lists TMDB sends
+     * without runtimes — and fill it with features.
+     *
+     * Bug report, 2026-10-08: "we are filtering out shorts and other things,
+     * but we're not replacing them with something new... now we're just
+     * showing one or two items on some lists." The pool used to be cut to
+     * RANK_POOL first and its shorts found afterwards, so every short left a
+     * hole. Now the full ranking is walked a batch at a time, looking up
+     * runtimes (remembered for the session) until RANK_POOL features are
+     * known, and only then is the pool cut — the shorts already excluded.
+     */
+    async rankFeatures (candidates, rated) {
+      const rank = (cap) => rankWatchlistCandidates(candidates, rated, Date.now(), { cap, profile: this.taste, exclude: this.skipFromSuggestions });
+      if (this.hideShorts) {
+        const ranked = rank(Infinity);
+        let features = 0;
+        for (let start = 0; start < ranked.length && features < RANK_POOL; start += RANK_POOL) {
+          const batch = ranked.slice(start, start + RANK_POOL);
+          await loadRuntimes(batch.map((movie) => movie.id), this.fetchRuntime);
+          features += batch.filter((movie) => !isSuggestedShort(movie)).length;
+        }
+      }
+      return rank(RANK_POOL);
     }
   }
 };

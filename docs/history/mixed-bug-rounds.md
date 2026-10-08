@@ -801,3 +801,12 @@ the rows appear; Film Club picks re-filter as their lookups land. "Ask for somet
 keeps shorts if the request asks for them ("animated shorts"). Appearances are filtered
 only on cast credits — `isAppearance` would wrongly flag any documentary result that has
 no `character` field.
+
+**Follow-up, same day: rows came out with one or two films.** "We're not replacing
+them with something new." The note above was wrong about one thing: the drop went
+through the exclude, but the runtimes behind it were looked up AFTER each pool had been
+cut to `RANK_POOL`, so at ranking time no short was known yet and every one found later
+left a hole. `rankFeatures` (people rows, More Like Your Favorites) now ranks uncapped,
+walks the ranking a `RANK_POOL`-sized batch at a time looking up runtimes until that many
+features are known, then ranks again with the cap. Guarded by "fills a row with features
+when shorts rank above them" — 40 shorts outranking 15 features; the old code showed 0.

@@ -1048,6 +1048,30 @@ describe('every suggestion row leaves out shorts and extras', () => {
     expect(names(wrapper)).not.toContain('Featurette');
   });
 
+  // Bug report 2026-10-08, the follow-up: "we're not replacing them with
+  // something new... now we're just showing one or two items on some
+  // lists." The pool was cut before its shorts were known, so a row whose
+  // best-ranked films were shorts came out nearly empty.
+  it('fills a row with features when shorts rank above them', async () => {
+    const shorts = Array.from({ length: 40 }, (_, i) => ({
+      id: 1000 + i, title: `Short ${i}`, release_date: '2021-06-15', vote_count: 9000, vote_average: 8.5
+    }));
+    const features = Array.from({ length: 15 }, (_, i) => ({
+      id: 2000 + i, title: `Feature ${i}`, release_date: '2021-06-15', vote_count: 3000, vote_average: 7.0
+    }));
+    axios.get.mockImplementation((url) => {
+      const movie = url.match(/\/movie\/(\d+)\?/);
+      if (movie) return Promise.resolve({ data: { runtime: Number(movie[1]) < 2000 ? 15 : 100 } });
+      if (url.includes('/recommendations')) return Promise.resolve({ data: { results: [...shorts, ...features] } });
+      return fullImpl(url);
+    });
+    const { wrapper } = factory();
+    await flushPromises();
+
+    expect(names(wrapper).filter((name) => name.startsWith('Short '))).toEqual([]);
+    expect(names(wrapper).filter((name) => name.startsWith('Feature '))).toHaveLength(12);
+  });
+
   it('drops appearances as themselves from the people rows', async () => {
     const { wrapper } = factory();
     await flushPromises();
