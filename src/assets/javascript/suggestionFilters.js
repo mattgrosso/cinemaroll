@@ -1,0 +1,64 @@
+// What every suggestion row on the Watchlist leaves out.
+//
+// Bug report, 2026-10-08: "The same rules about shorts and... extra features,
+// and the other stuff that we may apply to the filmography search bar, we
+// should apply to all suggestions on the watchlist page." The filmography box
+// HIDES those behind a link, because a filmography is meant to be complete.
+// A suggestion row is a recommendation, so here they're simply dropped.
+//
+// Shorts follow the app's one rule (shorts.js) and the "include short films"
+// setting. TMDB's list endpoints (credits, recommendations) carry no runtime,
+// so runtimes are looked up once per film and kept here for the session —
+// coming back to the Watchlist costs no second lookup.
+
+import { isShort } from './shorts.js';
+import { fetchRuntimes } from './personFilmography.js';
+
+const runtimes = new Map();
+
+/** A film's looked-up runtime, or undefined if it hasn't been. */
+export function knownRuntime (id) {
+  return runtimes.get(id);
+}
+
+/** For tests: forget every runtime looked up so far. */
+export function clearRuntimeCache () {
+  runtimes.clear();
+}
+
+/**
+ * Look up the runtimes not already known. A failed lookup isn't remembered,
+ * so the next visit tries again; until then the film counts as not a short.
+ */
+export async function loadRuntimes (ids, fetchOne, { concurrency = 8 } = {}) {
+  const missing = [...new Set(ids || [])].filter((id) => id != null && !runtimes.has(id));
+  if (!missing.length) return;
+  const fetched = await fetchRuntimes(missing, fetchOne, { concurrency });
+  fetched.forEach((runtime, id) => runtimes.set(id, runtime));
+}
+
+/**
+ * Is this suggestion a short? Takes either shape the screen handles: a
+ * library entry ({ movie: { runtime } }) or a TMDB result ({ id, runtime? }).
+ */
+export function isSuggestedShort (media) {
+  if (media?.movie) return isShort(media.movie);
+  return isShort({ runtime: media?.runtime ?? knownRuntime(media?.id) });
+}
+
+/**
+ * Anything TMDB flags as a video — music videos, featurettes, making-ofs.
+ * (Appearances as "Self" are a cast-credit question, so they're filtered
+ * where the credits are read: personFilmography's isAppearance.)
+ */
+export function isVideoExtra (media) {
+  return Boolean(media?.video);
+}
+
+/**
+ * Did the request ask for shorts? Then "Ask for something" keeps them even
+ * with the setting off — asking for shorts and getting none would be silly.
+ */
+export function asksForShorts (text) {
+  return /\bshorts\b|\bshort (film|movie)s?\b/i.test(String(text || ''));
+}

@@ -2,11 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import WatchlistScreen from '@/components/WatchlistScreen.vue';
 import axios from 'axios';
+import { clearRuntimeCache } from '@/assets/javascript/suggestionFilters.js';
 
 vi.mock('axios', () => ({ default: { get: vi.fn() } }));
+const postToAi = vi.hoisted(() => vi.fn());
+vi.mock('@/utils/aiRequest.js', () => ({ postToAi }));
 vi.mock('@/assets/javascript/GetRating.js', () => ({
   getRating: vi.fn((entry) => ({ calculatedTotal: entry.ratings[0]?.calculatedTotal }))
 }));
+
+// Looked-up runtimes are kept for the session; no test should inherit another's.
+beforeEach(() => clearRuntimeCache());
 
 const YEARS = 365.25 * 24 * 3600 * 1000;
 const yearsAgo = (y) => Date.now() - y * YEARS;
@@ -964,5 +970,158 @@ describe('Give these another shot labels', () => {
   it('keeps the TMDB fallback out of 10', () => {
     const [item] = anotherShotItems.call(ctx({ entry: film, yours: 5.4, crowd: null, community: 7.9, communitySource: 'tmdb' }));
     expect(item.metaLines).toEqual(['You 5.40', 'World\u00a07.90']);
+  });
+});
+
+// Bug report 2026-10-08: "The same rules about shorts and... extra features...
+// that we may apply to the filmography search bar, we should apply to all
+// suggestions on the watchlist page." Suggestions drop them outright.
+describe('every suggestion row leaves out shorts and extras', () => {
+  // 95 is a short, 96 a TMDB video extra; everything else feature length.
+  const RUNTIMES = { 90: 100, 91: 110, 95: 22, 96: 12, 97: 95, 300: 18, 301: 120, 400: 30, 401: 105 };
+  const fullImpl = (url) => {
+    const movie = url.match(/\/movie\/(\d+)\?/);
+    if (movie) return Promise.resolve({ data: { runtime: RUNTIMES[movie[1]] } });
+    if (url.includes('/recommendations')) {
+      return Promise.resolve({
+        data: {
+          results: [
+            { id: 95, title: 'Short Pick', release_date: '2021-06-15', vote_count: 8000, vote_average: 8.0 },
+            { id: 96, title: 'Featurette', video: true, release_date: '2021-06-15', vote_count: 8000, vote_average: 8.0 },
+            { id: 97, title: 'Feature Pick', release_date: '2021-06-15', vote_count: 8000, vote_average: 8.0 }
+          ]
+        }
+      });
+    }
+    if (url.includes('/person/777/movie_credits')) {
+      return Promise.resolve({
+        data: {
+          crew: [{ id: 90, title: 'Unseen Gem', job: 'Director', release_date: '2018-06-15', vote_count: 5000, vote_average: 8.1 }],
+          cast: [
+            { id: 91, title: 'Unseen Performance', character: 'Joan', order: 1, release_date: '2019-06-15', vote_count: 4000, vote_average: 7.9 },
+            { id: 98, title: 'Festival Doc', character: 'Self', order: 2, release_date: '2019-06-15', vote_count: 4000, vote_average: 7.9 }
+          ]
+        }
+      });
+    }
+    if (url.includes('/discover/movie')) return Promise.resolve({ data: { results: [] } });
+    return tmdbImpl(url);
+  };
+  const names = (wrapper) => wrapper.findAll('.watchlist-card').map((card) => card.attributes('aria-label'));
+
+  beforeEach(() => {
+    clearRuntimeCache();
+    axios.get.mockReset();
+    axios.get.mockImplementation(fullImpl);
+    postToAi.mockReset();
+  });
+
+  it('drops shorts and video extras from the TMDB rows, keeping the features', async () => {
+    const { wrapper } = factory();
+    await flushPromises();
+
+    expect(names(wrapper)).toContain('Feature Pick');
+    expect(names(wrapper)).toContain('Unseen Gem');
+    expect(names(wrapper)).not.toContain('Short Pick');
+    expect(names(wrapper)).not.toContain('Featurette');
+  });
+
+  it('drops appearances as themselves from the people rows', async () => {
+    const { wrapper } = factory();
+    await flushPromises();
+
+    expect(names(wrapper)).toContain('Unseen Performance');
+    expect(names(wrapper)).not.toContain('Festival Doc');
+  });
+
+  it('keeps shorts when "include short films" is on, and looks nothing up', async () => {
+    const { wrapper } = factory({ state: { settings: { includeShorts: true } } });
+    await flushPromises();
+
+    expect(names(wrapper)).toContain('Short Pick');
+    expect(names(wrapper)).not.toContain('Featurette');
+    expect(axios.get.mock.calls.some(([url]) => /\/movie\/\d+\?/.test(url))).toBe(false);
+  });
+
+  it('a return visit looks up no runtime twice', async () => {
+    factory();
+    await flushPromises();
+    const lookups = () => axios.get.mock.calls.filter(([url]) => /\/movie\/\d+\?/.test(url)).length;
+    const first = lookups();
+    expect(first).toBeGreaterThan(0);
+
+    factory();
+    await flushPromises();
+    expect(lookups()).toBe(first);
+  });
+
+  it('asks the discover-built rows (Hidden Gems, the year picker) for feature lengths only', async () => {
+    factory();
+    await flushPromises();
+    const discover = axios.get.mock.calls.map(([url]) => url).filter((url) => url.includes('/discover/movie'));
+    expect(discover.length).toBeGreaterThan(0);
+    discover.forEach((url) => expect(url).toContain('with_runtime.gte=41'));
+  });
+
+  it('leaves your own shorts out of the rewatch row', async () => {
+    const movies = library();
+    movies[0].movie.runtime = 25;
+    const { wrapper } = factory({ movies });
+    await flushPromises();
+
+    expect(names(wrapper)).not.toContain('Old Favorite A');
+    expect(names(wrapper)).toContain('Old Favorite B');
+  });
+
+  it('drops shorts from the Film Club picks', async () => {
+    const profiles = {
+      pal: { name: 'Pal', ratings: { 300: { r: 9, t: 'Club Short', p: '/s.jpg' }, 301: { r: 9, t: 'Club Feature', p: '/f.jpg' } } }
+    };
+    const movies = library();
+    const wrapper = mount(WatchlistScreen, {
+      global: {
+        mocks: {
+          $store: {
+            state: { isOnline: true, movieHatMovieIds: {}, movieHatContentsComplete: true },
+            getters: { allMoviesAsArray: movies, linkedMovieHats: [], showtimesBadgeCount: 0, filmClubProfiles: profiles },
+            commit: vi.fn(),
+            dispatch: vi.fn()
+          },
+          $router: { push: vi.fn() }
+        }
+      }
+    });
+    await flushPromises();
+
+    expect(names(wrapper)).toContain('Club Feature');
+    expect(names(wrapper)).not.toContain('Club Short');
+  });
+
+  describe('Ask for something', () => {
+    const ask = async (text) => {
+      postToAi.mockResolvedValue({ data: { movies: [{ title: 'Asked Short', year: 2020 }, { title: 'Asked Feature', year: 2020 }] } });
+      axios.get.mockImplementation((url) => {
+        if (url.includes('/search/movie')) {
+          const title = decodeURIComponent(url.match(/query=([^&]+)/)[1]);
+          const id = title === 'Asked Short' ? 400 : 401;
+          return Promise.resolve({ data: { results: [{ id, title, release_date: '2020-06-15', poster_path: '/a.jpg' }] } });
+        }
+        return fullImpl(url);
+      });
+      const { wrapper } = factory();
+      await flushPromises();
+      await wrapper.find('.prompt-section .prompt-input').setValue(text);
+      await wrapper.find('.prompt-section form').trigger('submit');
+      await flushPromises();
+      return wrapper.findAll('.prompt-section .watchlist-card').map((card) => card.attributes('aria-label'));
+    };
+
+    it('drops shorts from what comes back', async () => {
+      expect(await ask('something funny')).toEqual(['Asked Feature']);
+    });
+
+    it('keeps them when shorts are what you asked for', async () => {
+      expect(await ask('animated shorts')).toEqual(['Asked Short', 'Asked Feature']);
+    });
   });
 });

@@ -784,3 +784,20 @@ can't store Infinity). `nextPunt` preserves the flag so a later hat-punt can't t
 dismissal back into a snooze. The rewatch rows keep the doubling snooze. The filmography
 row stays without one — an entire filmography that drops films isn't one. No undo yet,
 and the year row's single TMDB page (~20 films) can run thin after many dismissals.
+
+## Watchlist suggestions follow the filmography's rules (2026-10-08)
+
+"The same rules about shorts and... extra features... that we may apply to the
+filmography search bar, we should apply to all suggestions on the watchlist page."
+The filmography box HIDES shorts, "Self" appearances and TMDB videos behind a link
+(a filmography is meant to be complete); every suggestion row now DROPS them, through
+`skipFromSuggestions` so the drop happens before each pool's cap. Shorts obey the
+"include short films" setting. `suggestionFilters.js` holds the rules and a session-long
+runtime cache (TMDB credits/recommendations carry no runtime, so each film is looked up
+once; the filmography box shares the cache). Rewatch/Another Shot use the library's
+runtime; Hidden Gems and the year picker ask discover for `with_runtime.gte=41` and
+need no lookups; the people rows and More Like Your Favorites look up their pools before
+the rows appear; Film Club picks re-filter as their lookups land. "Ask for something"
+keeps shorts if the request asks for them ("animated shorts"). Appearances are filtered
+only on cast credits — `isAppearance` would wrongly flag any documentary result that has
+no `character` field.

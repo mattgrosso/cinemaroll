@@ -336,9 +336,10 @@ import { crowdRating } from '../assets/javascript/letterboxdCompare.js';
 import { rewatchCandidates, anotherShotCandidates, nearThresholdYears, favoritePeople, peopleYouRateHigher, rankWatchlistCandidates, dailyPick, ratedTmdbIds, topRatedSeeds, tasteProfile, puntKeyFor, nextPunt, dismissPunt, isPunted, PEOPLE_PER_SECTION, MIN_PEOPLE_PER_SECTION } from '../assets/javascript/discover.js';
 import { awardsYearThreshold } from '../assets/javascript/personalAwards.js';
 import { formatScore } from '../assets/javascript/formatScore.js';
-import { includeShortsSetting } from '../assets/javascript/shorts.js';
+import { includeShortsSetting, SHORT_RUNTIME } from '../assets/javascript/shorts.js';
 import { tasteSummary, pickTmdbMatch, buildPromptedList } from '../assets/javascript/promptedWatchlist.js';
-import { personCandidates, filmographyFrom, filmographyProgress, markShorts, fetchRuntimes, isHiddenFilm, hiddenFilmsLabel } from '../assets/javascript/personFilmography.js';
+import { personCandidates, filmographyFrom, filmographyProgress, markShorts, isAppearance, isHiddenFilm, hiddenFilmsLabel } from '../assets/javascript/personFilmography.js';
+import { loadRuntimes, knownRuntime, isSuggestedShort, isVideoExtra, asksForShorts } from '../assets/javascript/suggestionFilters.js';
 import { buildCatalog, typeaheadEntries } from '../assets/javascript/catalog.js';
 import { rankTypeahead, describeSuggestion } from '../assets/javascript/searchSuggestions.js';
 import { postToAi } from '../utils/aiRequest.js';
@@ -387,6 +388,9 @@ export default {
     return {
       painted: !SKELETON_FIRST,
       dismissLabel: DISMISS_LABEL,
+      // Bumped whenever runtimes land (suggestionFilters.js keeps them), so
+      // the rows re-filter their shorts.
+      runtimeTick: 0,
       // Pending hat-punts, cleared on unmount — see puntAll.
       puntTimers: [],
       // The "ask for something" box. `promptAsked` is the request the results
@@ -573,8 +577,21 @@ export default {
      * made — the same reasoning that already punts a film when you hat it
      * from one of these rows, applied to hats filled anywhere else too.
      */
+    //
+    // Shorts and video extras join them, 2026-10-08: "The same rules about
+    // shorts and... extra features... that we may apply to the filmography
+    // search bar, we should apply to all suggestions on the watchlist page."
+    // See suggestionFilters.js. Appearances as "Self" are dropped where the
+    // cast credits are read (moviesFromPeople).
     skipFromSuggestions () {
-      return (entry) => isPunted(entry, this.punts) || this.isHatted(entry);
+      const hideShorts = this.hideShorts;
+      // Read so the rows re-filter when runtimes arrive.
+      this.runtimeTick; // re-filter when runtimes land
+      return (entry) => isPunted(entry, this.punts) || this.isHatted(entry) ||
+        isVideoExtra(entry) || (hideShorts && isSuggestedShort(entry));
+    },
+    hideShorts () {
+      return !includeShortsSetting(this.$store.state);
     },
     /**
      * A ranked pool's showing for today. Reads punts and hat contents, so
@@ -660,14 +677,17 @@ export default {
       return friendPicksMemo(this.library, this.$store.getters.filmClubProfiles || {});
     },
     friendPickMedia () {
-      return this.friendPicks.map((pick) => ({
-        id: pick.id,
-        title: pick.title,
-        poster_path: pick.poster_path,
-        note: pick.fanCount > 1
-          ? `${pick.fanCount} friends · ${formatScore(pick.average)} avg`
-          : `${pick.fans[0].name} · ${formatScore(pick.fans[0].rating)}`
-      }));
+      this.runtimeTick; // re-filter when runtimes land
+      return this.friendPicks
+        .filter((pick) => !(this.hideShorts && isSuggestedShort(pick)))
+        .map((pick) => ({
+          id: pick.id,
+          title: pick.title,
+          poster_path: pick.poster_path,
+          note: pick.fanCount > 1
+            ? `${pick.fanCount} friends · ${formatScore(pick.average)} avg`
+            : `${pick.fans[0].name} · ${formatScore(pick.fans[0].rating)}`
+        }));
     },
     peopleSections () {
       if (!this.$store.state.isOnline) return [];
@@ -767,6 +787,14 @@ export default {
     socialFriendKeys: {
       handler (keys) {
         if (keys?.length) this.$store.dispatch('fetchFriendProfiles');
+      }
+    },
+    // Friends' ratings carry no runtime, so the shorts among them are found
+    // by looking each one up (once — suggestionFilters.js remembers).
+    friendPicks: {
+      immediate: true,
+      handler (picks) {
+        if (picks?.length && this.$store.state.isOnline) this.loadSuggestionRuntimes(picks.map((pick) => pick.id));
       }
     },
     // Same wait-for-the-library pattern as the games: a deep link mounts
@@ -897,12 +925,9 @@ export default {
           const toFetch = films
             .filter((film) => !film.extra && !byTmdbId.has(film.id))
             .map((film) => film.id);
-          const fetched = await fetchRuntimes(toFetch, async (id) => {
-            const { data: movie } = await axios.get(`https://api.themoviedb.org/3/movie/${id}?api_key=${apiKey}`);
-            return movie?.runtime;
-          });
+          await loadRuntimes(toFetch, this.fetchRuntime);
           this.personFilms = markShorts(films, (id) => (
-            byTmdbId.has(id) ? byTmdbId.get(id).movie?.runtime : fetched.get(id)
+            byTmdbId.has(id) ? byTmdbId.get(id).movie?.runtime : knownRuntime(id)
           ));
         }
         this.personName = person.name;
@@ -949,7 +974,13 @@ export default {
           }
         }));
 
-        this.promptResults = buildPromptedList(suggestions, matches, ratedTmdbIds(entries));
+        // The suggestion rows' rules apply here too — unless shorts are
+        // what was asked for.
+        const listed = buildPromptedList(suggestions, matches, ratedTmdbIds(entries))
+          .filter((movie) => !isVideoExtra(movie));
+        const dropShorts = this.hideShorts && !asksForShorts(ask);
+        if (dropShorts) await this.loadSuggestionRuntimes(listed.map((movie) => movie.id));
+        this.promptResults = dropShorts ? listed.filter((movie) => !isSuggestedShort(movie)) : listed;
         this.promptAsked = ask;
       } catch (error) {
         // The endpoint says when a quota resets, so its own wording is better
@@ -1096,6 +1127,11 @@ export default {
         this.moviesLikeFavorites(this.recommendationSeeds, rated),
         this.hiddenGems(this.topTasteGenres, rated)
       ]);
+      // Runtimes before the rows appear, so a short doesn't flash up and
+      // then vanish. Hidden Gems and the year picker ask TMDB for feature
+      // lengths directly and need none.
+      await this.loadSuggestionRuntimes([directorMovies, actressMovies, actorMovies, underratedMovies, similarMovies]
+        .flat().map((movie) => movie.id));
       await yearLoaded;
       this.gemMovies = gemMovies;
       this.gemsLoading = false;
@@ -1142,12 +1178,26 @@ export default {
     // Hidden Gems (Brian-survey D2): well-loved but little-seen — high
     // TMDB score, LOW vote count (the inverse of every popularity filter),
     // pulled from your two strongest taste genres.
+    // TMDB's discover can filter on runtime itself, so the rows built on it
+    // ask for features only and need no lookups.
+    featureLengthParam () {
+      return this.hideShorts ? `&with_runtime.gte=${SHORT_RUNTIME + 1}` : '';
+    },
+    fetchRuntime (id) {
+      const apiKey = process.env.VUE_APP_TMDB_API_KEY;
+      return axios.get(`https://api.themoviedb.org/3/movie/${id}?api_key=${apiKey}`).then(({ data }) => data?.runtime);
+    },
+    async loadSuggestionRuntimes (ids) {
+      if (!this.hideShorts || !ids?.length) return;
+      await loadRuntimes(ids, this.fetchRuntime);
+      this.runtimeTick += 1;
+    },
     async hiddenGems (genres, rated) {
       const apiKey = process.env.VUE_APP_TMDB_API_KEY;
       const pools = await Promise.all((genres.length ? genres : [{ id: null }]).map(async ({ id }) => {
         try {
           const genreParam = id != null ? `&with_genres=${id}` : '';
-          const response = await axios.get(`https://api.themoviedb.org/3/discover/movie?api_key=${apiKey}${genreParam}&vote_average.gte=7.2&vote_count.gte=60&vote_count.lte=1200&sort_by=vote_average.desc&page=1`);
+          const response = await axios.get(`https://api.themoviedb.org/3/discover/movie?api_key=${apiKey}${genreParam}&vote_average.gte=7.2&vote_count.gte=60&vote_count.lte=1200&sort_by=vote_average.desc&page=1${this.featureLengthParam()}`);
           return response.data?.results || [];
         } catch {
           return [];
@@ -1173,7 +1223,7 @@ export default {
     async moviesForYear (year, rated) {
       const apiKey = process.env.VUE_APP_TMDB_API_KEY;
       try {
-        const response = await axios.get(`https://api.themoviedb.org/3/discover/movie?api_key=${apiKey}&primary_release_year=${year}&sort_by=vote_count.desc&vote_count.gte=200&page=1`);
+        const response = await axios.get(`https://api.themoviedb.org/3/discover/movie?api_key=${apiKey}&primary_release_year=${year}&sort_by=vote_count.desc&vote_count.gte=200&page=1${this.featureLengthParam()}`);
         const candidates = (response.data?.results || []).map((movie) => ({
           id: movie.id,
           title: movie.title,
@@ -1233,7 +1283,8 @@ export default {
           const credits = await axios.get(`https://api.themoviedb.org/3/person/${personId}/movie_credits?api_key=${apiKey}`);
           const list = kind === 'crew'
             ? (credits.data?.crew || []).filter((credit) => credit.job === 'Director')
-            : (credits.data?.cast || []).filter((credit) => (credit.order ?? 99) < 10);
+            // Turning up as themselves isn't a performance to recommend.
+            : (credits.data?.cast || []).filter((credit) => (credit.order ?? 99) < 10 && !isAppearance(credit));
           allCredits.push(...list);
         } catch (error) {
           // Best-effort per person — one failed lookup shouldn't empty the list.
