@@ -36,7 +36,7 @@ export function mostDecoratedFilms (members, limit = 6) {
       const seen = new Set();
       (list || []).forEach((award) => {
         if (award?.result !== 'won') return;
-        const k = `${award.year}|${categoryMatchKey(award.label || award.category)}`;
+        const k = `${award.year}|${award.ceremony || ''}|${categoryMatchKey(award.label || award.category)}`;
         if (seen.has(k)) return;
         seen.add(k);
         const id = Number(movieId);
@@ -44,7 +44,7 @@ export function mostDecoratedFilms (members, limit = 6) {
         if (!film.title && member.titles?.[movieId]?.t) film.title = member.titles[movieId].t;
         if (!film.poster && member.titles?.[movieId]?.p) film.poster = member.titles[movieId].p;
         film.wins++;
-        const ceremony = member.ceremony || `${member.name}'s awards`;
+        const ceremony = award.ceremony || member.ceremony || `${member.name}'s awards`;
         film.by.set(ceremony, (film.by.get(ceremony) || 0) + 1);
         films.set(id, film);
       });
@@ -70,7 +70,7 @@ export function mostHonouredPeople (members, limit = 6) {
         person.seen.add(k);
         person.wins++;
         person.films.set(Number(movieId), member.titles?.[movieId]?.t || null);
-        const ceremony = member.ceremony || `${member.name}'s awards`;
+        const ceremony = award.ceremony || member.ceremony || `${member.name}'s awards`;
         person.by.set(ceremony, (person.by.get(ceremony) || 0) + 1);
         people.set(key(award.name), person);
       });

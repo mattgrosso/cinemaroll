@@ -18,7 +18,7 @@
 // and a pick is { movieId, title, poster, name? } — movieId null when the
 // source has no TMDB id and no title in the club matched.
 import { ACADEMY_CATEGORY_ORDER } from './academyAwards.js';
-import { validAwards, friendCeremony, stripCeremony, categoryMatchKey, categoryKind, houseCategoryRank } from './awardsShare.js';
+import { validAwards, friendCeremony, friendCeremonies, friendCeremonyTabId, awardCeremony, awardLabel, categoryMatchKey, categoryKind, houseCategoryRank } from './awardsShare.js';
 
 export { categoryMatchKey, categoryKind };
 
@@ -44,7 +44,9 @@ export function boardFromEntries (entries, { order = HOUSE } = {}) {
     const year = years.get(entry.year) || new Map();
     years.set(entry.year, year);
     if (entry.meta && !year.meta) year.meta = entry.meta;
-    const key = entry.label.trim().toLowerCase();
+    // A friend's entries carry their `category` key: two keys are two
+    // categories even when their labels match (§4.2).
+    const key = entry.category ? `key:${entry.category}` : entry.label.trim().toLowerCase();
     const category = year.get(key) || { key, label: entry.label.trim(), kind: categoryKind(entry.label), winners: [], nominees: [], seen: new Set() };
     year.set(key, category);
     const pick = { movieId: entry.movieId ?? null, title: entry.title || null, poster: entry.poster || null };
@@ -68,13 +70,18 @@ export function boardFromEntries (entries, { order = HOUSE } = {}) {
 
 // --- sources ------------------------------------------------------------------
 
-/** A friend's published profile: every award on every rating row, with the ceremony prefix peeled off. */
-export function entriesFromProfile (profile) {
-  const ceremony = friendCeremony(profile);
+/**
+ * A friend's published profile: every award on every rating row, with the
+ * ceremony prefix peeled off. With `ceremony`, only that institution's
+ * (a heading from friendCeremonies(profile, fallbackName)).
+ */
+export function entriesFromProfile (profile, { ceremony = null, fallbackName } = {}) {
+  const feed = friendCeremony(profile, fallbackName);
   const out = [];
   Object.entries(profile?.ratings || {}).forEach(([id, row]) => {
     (validAwards(row?.a) || []).forEach((award) => {
-      const entry = { year: award.year, label: stripCeremony(award.label, ceremony), result: award.result, movieId: Number(id), title: row?.t || null, poster: row?.p || null };
+      if (ceremony && awardCeremony(award, feed) !== ceremony) return;
+      const entry = { year: award.year, category: award.category, label: awardLabel(award, feed), result: award.result, movieId: Number(id), title: row?.t || null, poster: row?.p || null };
       if (award.name) entry.name = award.name;
       out.push(entry);
     });
@@ -173,7 +180,11 @@ export function ceremonyTabs ({ mine, friends = [] } = {}) {
   friends.forEach((friend) => {
     const hasAwards = Object.values(friend?.profile?.ratings || {}).some((row) => Array.isArray(row?.a) && row.a.length);
     if (!hasAwards) return;
-    tabs.push({ id: `friend:${friend.key}`, label: friendCeremony(friend.profile, friend.name), who: friend.name });
+    // One tab per institution (a Movie Log user may keep several, §4.3).
+    const feed = friendCeremony(friend.profile, friend.name);
+    friendCeremonies(friend.profile, friend.name).forEach((ceremony) => {
+      tabs.push({ id: friendCeremonyTabId(friend.key, ceremony, feed), label: ceremony, who: friend.name, friendKey: friend.key, ceremony });
+    });
   });
   tabs.push({ id: 'oscars', label: 'Oscars' });
   OTHER_CEREMONIES.forEach((c) => tabs.push({ id: c.id, label: c.label }));

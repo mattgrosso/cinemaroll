@@ -130,8 +130,9 @@ export default {
       const id = this.ceremonyId;
       if (id === 'mine') return [];
       if (id.startsWith('friend:')) {
-        const friend = this.friends.find((f) => `friend:${f.key}` === id);
-        return boardFromEntries(entriesFromProfile(friend?.profile));
+        const tab = this.activeTab;
+        const friend = this.friends.find((f) => f.key === tab?.friendKey);
+        return boardFromEntries(entriesFromProfile(friend?.profile, { ceremony: tab?.ceremony, fallbackName: friend?.name }));
       }
       if (id === 'oscars') return boardFromEntries(entriesFromAcademy(this.$store.state.allAcademyAwards), ACADEMY_BOARD_OPTIONS);
       const other = OTHER_CEREMONIES.find((c) => c.id === id);

@@ -104,6 +104,9 @@ export function friendCeremony (profile, fallbackName) {
   let total = 0;
   for (const row of Object.values(profile?.ratings || {})) {
     for (const award of (Array.isArray(row?.a) ? row.a : [])) {
+      // An entry naming its own institution (proposal 0002) is not evidence
+      // for the feed's: its prefix, if any, is its own.
+      if (ownCeremony(award)) continue;
       const label = typeof award?.label === 'string' ? award.label : '';
       const at = label.indexOf(': ');
       const found = at > 0 ? label.slice(0, at).trim() : null;
@@ -120,6 +123,44 @@ export function stripCeremony (label, ceremony) {
   const text = String(label || '');
   if (ceremony && text.toLowerCase().startsWith(`${ceremony.toLowerCase()}: `)) return text.slice(ceremony.length + 2).trim() || text;
   return text;
+}
+
+// --- several institutions in one feed (Film Club Protocol 1.2.0, §4.3) -------
+// Movie Log lets one person keep several public awards institutions, so an
+// entry may name its own: `ceremony`, the institution's display title. An
+// entry that does is headed by it, and its label loses only a prefix that is
+// exactly "<ceremony>: " (publishers may keep it for older readers). An entry
+// that doesn't falls back to the feed's heading, as before.
+const ownCeremony = (award) => (typeof award?.ceremony === 'string' && award.ceremony) || null;
+
+/** The heading an entry belongs under: its own institution, else the feed's. */
+export function awardCeremony (award, feedCeremony) {
+  return ownCeremony(award) || feedCeremony || null;
+}
+
+/** The label to show for an entry under awardCeremony(). */
+export function awardLabel (award, feedCeremony) {
+  const label = String(award?.label || '');
+  const own = ownCeremony(award);
+  if (!own) return stripCeremony(label, feedCeremony);
+  return (label.startsWith(`${own}: `) && label.slice(own.length + 2).trim()) || label;
+}
+
+/** Every heading a friend's awards fall under, the feed's own first. */
+export function friendCeremonies (profile, fallbackName) {
+  const feed = friendCeremony(profile, fallbackName);
+  const headings = new Set();
+  for (const row of Object.values(profile?.ratings || {})) {
+    for (const award of (Array.isArray(row?.a) ? row.a : [])) headings.add(awardCeremony(award, feed));
+  }
+  headings.delete(null);
+  const rest = [...headings].filter((h) => h !== feed).sort((a, b) => a.localeCompare(b));
+  return headings.has(feed) ? [feed, ...rest] : rest;
+}
+
+/** The /awards tab for one of a friend's headings: the feed's keeps the plain id older links use. */
+export function friendCeremonyTabId (friendKey, ceremony, feedCeremony) {
+  return ceremony === feedCeremony ? `friend:${friendKey}` : `friend:${friendKey}:${ceremony}`;
 }
 
 /**
@@ -170,6 +211,9 @@ export function validAwards (list) {
     .map((a) => {
       const award = { year: a.year, category: a.category.slice(0, 60), label: a.label.slice(0, 120), result: a.result };
       if (typeof a.name === 'string' && a.name) award.name = a.name.slice(0, 120);
+      // Kept exactly as sent, so caches and snapshots carry it unchanged (§4.3).
+      const ceremony = typeof a.ceremony === 'string' ? a.ceremony.trim() : '';
+      if (ceremony && ceremony.length <= 80 && !PLACEHOLDER_CEREMONY.test(ceremony)) award.ceremony = ceremony;
       return award;
     });
   return clean.length ? clean : null;
@@ -183,19 +227,26 @@ export function validAwards (list) {
 export function friendAwardsForMovie (friends, tmdbId) {
   const id = tmdbId == null ? null : String(tmdbId);
   if (!id) return [];
-  return (friends || []).map((friend) => {
+  // One group per friend per institution (a Movie Log user may keep several).
+  return (friends || []).flatMap((friend) => {
     const row = friend?.profile?.ratings?.[id];
-    const ceremony = friendCeremony(friend?.profile, friend?.name);
-    const awards = (validAwards(row?.a) || []).map((a) => ({ ...a, label: stripCeremony(a.label, ceremony) }));
-    if (!awards.length) return null;
-    return {
+    const feed = friendCeremony(friend?.profile, friend?.name);
+    const groups = new Map();
+    (validAwards(row?.a) || []).forEach((a) => {
+      const ceremony = awardCeremony(a, feed);
+      const list = groups.get(ceremony) || [];
+      list.push({ ...a, label: awardLabel(a, feed) });
+      groups.set(ceremony, list);
+    });
+    return [...groups].map(([ceremony, awards]) => ({
       friend: friend.name,
       key: friend.key ?? null,
+      tabId: friend.key == null ? null : friendCeremonyTabId(friend.key, ceremony, feed),
       ceremony,
       won: awards.filter((a) => a.result === 'won'),
       nominated: awards.filter((a) => a.result === 'nominated')
-    };
-  }).filter(Boolean).sort((a, b) => a.friend.localeCompare(b.friend));
+    }));
+  }).sort((a, b) => a.friend.localeCompare(b.friend) || (a.tabId === `friend:${a.key}` ? -1 : b.tabId === `friend:${b.key}` ? 1 : a.ceremony.localeCompare(b.ceremony)));
 }
 
 /** One line for the folded tile: "Gogan Globes (Brian): Best Picture · Smithies (Seth): 2 nominations". */
@@ -230,13 +281,14 @@ export function clubAwardsByYear (members) {
         const category = year.get(key) || { label: award.label || award.category, kind: categoryKind(award.label || award.category), picks: [], seen: new Map() };
         year.set(key, category);
         const title = member.titles?.[movieId];
-        const pick = { who: member.name, ceremony: member.ceremony || `${member.name}'s awards`, movieId: Number(movieId), title: title?.t || null, poster: title?.p || null };
+        const pick = { who: member.name, ceremony: award.ceremony || member.ceremony || `${member.name}'s awards`, movieId: Number(movieId), title: title?.t || null, poster: title?.p || null };
         // A film category is one pick per member per film (Movie Log names
         // every producer; that is still one Best Picture). A person category
         // is also one pick per member per film, naming everyone honoured for
         // it: Free Solo's three directors are one Best Director, not three
         // (Matt, 2026-10-07).
-        const identity = `${member.name}|${pick.movieId}`;
+        // Two of one friend's institutions are two picks, never one (§4.2).
+        const identity = `${member.name}|${pick.ceremony}|${pick.movieId}`;
         const existing = category.seen.get(identity);
         if (existing) {
           if (category.kind === 'person' && award.name && !existing.names.includes(award.name)) {
@@ -260,7 +312,7 @@ export function clubAwardsByYear (members) {
       // 2026-10-07: "match based on movie"). In a person category the row
       // then lists everyone the members named for it.
       const same = (a, b) => a.movieId === b.movieId;
-      const agreed = picks.some((a, i) => picks.slice(i + 1).some((b) => same(a, b)));
+      const agreed = picks.some((a, i) => picks.slice(i + 1).some((b) => a.who !== b.who && same(a, b)));
       const films = new Set(category.picks.map((p) => p.movieId));
       // The same choice by several members is one row naming all of them
       // (Matt, 2026-10-07: the one-column-per-member cards were "really tall
@@ -282,7 +334,7 @@ export function clubAwardsByYear (members) {
         });
         if (row.names.length) row.name = row.names.join(', ');
         if (!row.poster && p.poster) row.poster = p.poster;
-        row.who.push(p.who);
+        if (!row.who.includes(p.who)) row.who.push(p.who);
         // Shown by the award's name, not the person's (Matt, 2026-10-07):
         // "Goegan Globes · The Groskers".
         row.ceremonies.push(p.ceremony);
@@ -300,7 +352,7 @@ export function memberFromProfile (name, profile) {
   const ceremony = friendCeremony(profile, name);
   Object.entries(profile?.ratings || {}).forEach(([id, row]) => {
     const list = validAwards(row?.a);
-    if (list) awards[id] = list.map((a) => ({ ...a, label: stripCeremony(a.label, ceremony) }));
+    if (list) awards[id] = list.map((a) => ({ ...a, label: awardLabel(a, ceremony) }));
     titles[id] = { t: row?.t || null, p: row?.p || null };
   });
   return { name, ceremony, awards, titles };

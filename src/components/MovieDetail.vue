@@ -269,7 +269,7 @@
 
             <!-- The club's awards (Matt, 2026-10-06): anyone's ceremony, from
                  Movie Log or Cinema Roll, published beside their ratings. -->
-            <div v-for="group in friendAwards" :key="group.friend" class="award-group friend-awards">
+            <div v-for="group in friendAwards" :key="`${group.friend}|${group.ceremony}`" class="award-group friend-awards">
               <h5>{{ group.ceremony }} <span class="friend-awards-who">{{ group.friend }}</span></h5>
               <h6 v-if="group.won.length">Won</h6>
               <div v-if="group.won.length" class="winners">
@@ -1583,8 +1583,8 @@ export default {
     // awards screen (Matt, 2026-10-07: see friends' awards on the movie page
     // and flip through their history).
     openFriendAwardsYear (group, year) {
-      if (!group?.key) return;
-      this.$router.push({ path: '/awards', query: { ceremony: `friend:${group.key}`, year: Number(year) } });
+      if (!group?.tabId) return;
+      this.$router.push({ path: '/awards', query: { ceremony: group.tabId, year: Number(year) } });
     },
     openPersonalAwardsYear (year) {
       // Direct to the awards page — the old settings-flag handoff could

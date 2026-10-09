@@ -140,7 +140,7 @@ describe('ceremonyTabs', () => {
     ] });
     expect(tabs.map((t) => t.id)).toEqual(['mine', 'friend:ext-1', 'friend:seth', 'oscars', 'golden-globes', 'bafta', 'cannes', 'venice']);
     expect(tabs[0].label).toBe('The Groskers');
-    expect(tabs[1]).toEqual({ id: 'friend:ext-1', label: 'Goegan Globes', who: 'Brian Goegan' });
+    expect(tabs[1]).toMatchObject({ id: 'friend:ext-1', label: 'Goegan Globes', who: 'Brian Goegan' });
     expect(tabs[2].label).toBe('The Smithies');
   });
 });
