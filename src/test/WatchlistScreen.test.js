@@ -1257,14 +1257,14 @@ describe('the Watchlist tabs', () => {
   });
 
   const shown = (wrapper, panel) => wrapper.find(`.wl-panel-${panel}`).element.style.display !== 'none';
-  const shownPanels = (wrapper) => ['foryou', 'club', 'revisit', 'years', 'search'].filter((panel) => shown(wrapper, panel));
+  const shownPanels = (wrapper) => ['foryou', 'tonight', 'club', 'revisit', 'years', 'search'].filter((panel) => shown(wrapper, panel));
   const panelTitles = (wrapper, panel) => wrapper.findAll(`.wl-panel-${panel} .section-title`).map((h) => h.text());
 
-  it('has five tabs, no title or blurb above them, and opens on For You', async () => {
+  it('has six tabs, no title or blurb above them, and opens on For You', async () => {
     const { wrapper } = factory();
     await flushPromises();
 
-    expect(wrapper.findAll('.wl-tab').map((t) => t.text())).toEqual(['For You', 'Club', 'Revisit', 'Years', 'Search']);
+    expect(wrapper.findAll('.wl-tab').map((t) => t.text())).toEqual(['For You', 'Tonight', 'Club', 'Revisit', 'Years', 'Search']);
     expect(wrapper.find('h1').exists()).toBe(false);
     expect(wrapper.text()).not.toContain('Built from your own ratings');
     expect(shownPanels(wrapper)).toEqual(['foryou']);
@@ -1319,13 +1319,22 @@ describe('the Watchlist tabs', () => {
     expect(shownPanels(linked.wrapper)).toEqual(['years']);
   });
 
-  it('keeps the Showtimes bar above the tabs, with its count', async () => {
+  // Matt, 2026-10-09: Showtimes "does not need to remain so prominent", and
+  // the hats under every tab "feels like it's not supposed to be on those".
+  it('puts Showtimes and the hats on the Tonight tab only, with a dot on the tab when showtimes wait', async () => {
     const { wrapper } = factory({ showtimesBadgeCount: 3 });
     await flushPromises();
 
     const html = wrapper.html();
-    expect(html.indexOf('showtimes-card')).toBeLessThan(html.indexOf('wl-tabs'));
-    expect(wrapper.find('.showtimes-card').text()).toContain('3 waiting');
+    expect(html.indexOf('showtimes-card')).toBeGreaterThan(html.indexOf('wl-tabs'));
+    expect(wrapper.find('.wl-panel-tonight .showtimes-card').text()).toContain('3 waiting');
+    expect(wrapper.findAll('.showtimes-card')).toHaveLength(1);
+    expect(wrapper.find('.wl-panel-tonight').findComponent({ name: 'DrawFromHat' }).exists()).toBe(true);
+    expect(wrapper.find('.wl-tab-tonight .wl-tab-dot').exists()).toBe(true);
+
+    await wrapper.find('.wl-tab-tonight').trigger('click');
+    expect(shownPanels(wrapper)).toEqual(['tonight']);
+    expect(wrapper.find('.wl-tab-tonight .wl-tab-dot').exists()).toBe(false);
   });
 });
 

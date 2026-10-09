@@ -2,23 +2,6 @@
   <div class="watchlist-screen">
     <BackLink/>
 
-    <!-- Showtimes lived in the Insights directory until 2026-09-29, where
-         it was the odd one out: everything else there is about your
-         library, and this is about what to go and see — this screen's
-         question. Above the skeleton, so it's there on the first frame.
-         A slim one-line bar above the tabs since 2026-10-08: it's a door to
-         another screen, not one of this screen's lists. -->
-    <button type="button" class="showtimes-card" @click="$router.push('/showtimes')">
-      <i class="bi bi-ticket-perforated"></i>
-      <span class="showtimes-card-label">Showtimes</span>
-      <!-- The icon badge's Showtimes number when it's counting them (the
-           same getter), so the card says how many are left to clear; the
-           "new" tag only lasts until the screen is opened once. -->
-      <span v-if="showtimesBadgeCount" class="showtimes-card-new">{{ showtimesBadgeCount }} waiting</span>
-      <span v-else-if="showtimesUnread" class="showtimes-card-new">new</span>
-      <i class="bi bi-chevron-right showtimes-card-chevron"></i>
-    </button>
-
     <!-- Painted for one frame before the real content (nextFrame): the
          tap that opened this screen is acknowledged at once instead of
          after the ~0.5-1s the sections below take to build. -->
@@ -35,7 +18,7 @@
         class="wl-tab"
         :class="[`wl-tab-${t.key}`, { active: tab === t.key }]"
         @click="setTab(t.key)"
-      >{{ t.label }}</button>
+      >{{ t.label }}<span v-if="t.key === 'tonight' && tab !== 'tonight' && (showtimesBadgeCount || showtimesUnread)" class="wl-tab-dot" aria-label="new showtimes"></span></button>
     </nav>
 
     <SkeletonBlock v-if="!painted" :rows="7"/>
@@ -339,7 +322,24 @@
     </section>
     </div>
 
+    <!-- Tonight (Matt, 2026-10-09): Showtimes and Your hats used to sit
+         outside the tabs — Showtimes as a bar above them with a gap that
+         "just looks broken", the hats under every tab where they felt "not
+         supposed to be on those". Both answer "what do we watch tonight",
+         so they share one tab. Showtimes is still a door to its own screen. -->
+    <div v-show="tab === 'tonight'" class="wl-panel wl-panel-tonight">
+    <button type="button" class="showtimes-card" @click="$router.push('/showtimes')">
+      <i class="bi bi-ticket-perforated"></i>
+      <span class="showtimes-card-label">Showtimes</span>
+      <!-- The icon badge's Showtimes number when it's counting them (the
+           same getter), so the card says how many are left to clear; the
+           "new" tag only lasts until the screen is opened once. -->
+      <span v-if="showtimesBadgeCount" class="showtimes-card-new">{{ showtimesBadgeCount }} waiting</span>
+      <span v-else-if="showtimesUnread" class="showtimes-card-new">new</span>
+      <i class="bi bi-chevron-right showtimes-card-chevron"></i>
+    </button>
     <DrawFromHat/>
+    </div>
 
     <!-- One instance for every poster in every row: driven by which movie is
          set, so tapping along a row re-targets it rather than mounting and
@@ -429,7 +429,7 @@ const SHOWN_PER_ROW = 12;
 // down the list are still directors you love.
 const DIRECTOR_POOL_CAP = 20;
 
-const WATCHLIST_TABS = ['foryou', 'club', 'revisit', 'years', 'search'];
+const WATCHLIST_TABS = ['foryou', 'tonight', 'club', 'revisit', 'years', 'search'];
 const WATCHLIST_TAB_KEY = 'cinemaRoll.watchlist.tab';
 // A link can name the tab (?tab=years); else the last one you were on; else
 // For You. Film Club's rule (FilmClubScreen.vue), same shape.
@@ -455,6 +455,7 @@ export default {
       tab: initialWatchlistTab(this.$route),
       tabs: [
         { key: 'foryou', label: 'For You' },
+        { key: 'tonight', label: 'Tonight' },
         { key: 'club', label: 'Club' },
         { key: 'revisit', label: 'Revisit' },
         { key: 'years', label: 'Years' },
@@ -1530,8 +1531,8 @@ export default {
   color: #eee;
   display: flex;
   gap: 0.6rem;
-  margin: 0.35rem 0 0.5rem;
-  min-height: 40px;
+  margin: 0 0 0.75rem;
+  min-height: 44px;
   padding: 0.3rem 0.75rem;
   text-align: left;
   width: 100%;
@@ -1559,7 +1560,7 @@ export default {
 
 /* Film Club's tab control (.fc-tabs), same sizes and the same five colours,
    each with black text on the lit tab (all well past 4.5:1). */
-.wl-tabs { display: grid; gap: 0.3rem; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0 0 0.9rem; width: 100%; }
+.wl-tabs { display: grid; gap: 0.3rem; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 0.35rem 0 0.9rem; width: 100%; }
 .wl-tab { align-items: center; background: none; border: 1px solid white; border-radius: 3px; color: white; display: inline-flex; font-size: 0.78rem; font-weight: 600; justify-content: center; min-height: 40px; min-width: 0; padding: 0 0.2rem; white-space: nowrap; }
 .wl-tab.active { color: #000; font-weight: 700; }
 .wl-tab-foryou.active { background: #24d776; }
@@ -1567,6 +1568,10 @@ export default {
 .wl-tab-revisit.active { background: #FFD700; }
 .wl-tab-years.active { background: #1D8BF1; }
 .wl-tab-search.active { background: #ff7a6b; }
+.wl-tab-tonight.active { background: #22d3ee; }
+.wl-tab { position: relative; }
+/* Showtimes waiting, while you're on another tab. */
+.wl-tab-dot { background: #ffc107; border-radius: 50%; height: 7px; position: absolute; right: 4px; top: 4px; width: 7px; }
 .wl-tab:active { opacity: 0.7; transform: scale(0.97); }
 
 /* #ccc on the page's dark background, ~10:1. */

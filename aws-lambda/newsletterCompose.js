@@ -584,6 +584,66 @@ function previouslyIssued (issues = {}, currentWeekKey = null, now = Date.now())
   return { pickIds, featureIds };
 }
 
+// --- The model's reply ----------------------------------------------------------
+
+// The issue comes back as a forced tool call, not as JSON in prose. The
+// prose version failed live on 2026-10-09 ("Expected ',' or ']' after array
+// element ... position 2530"): the reply was hand-cut at the first "{" and
+// the last "}", so an answer that ran out of room inside the feature article
+// was sliced back to a picks array that never closed, and Matt's Friday issue
+// never went out. With a schema the API hands back an object - nothing to
+// parse - and the one remaining failure, running out of tokens, is visible
+// as stop_reason rather than as a syntax error.
+const ISSUE_TOOL = {
+  name: 'publish_issue',
+  description: "Publish this week's issue: the intro, the picks and the feature.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      intro: { type: 'string', description: 'One or two sentences opening the issue. Warm, dry, not breathless.' },
+      picks: {
+        type: 'array',
+        description: '4-6 picks, best first. Fewer if fewer are worth recommending.',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer', description: "The film's id from the brief." },
+            why: { type: 'string', description: '2-3 sentences on why THIS reader specifically might want it.' }
+          },
+          required: ['id', 'why']
+        }
+      },
+      feature: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer', description: "The chosen feature film's id from the brief." },
+          headline: { type: 'string', description: 'A title for the piece.' },
+          hook: { type: 'string', description: 'One sentence on why this film, this week.' },
+          article: { type: 'string', description: '500-700 words. Paragraphs separated by blank lines.' }
+        },
+        required: ['id', 'headline', 'hook', 'article']
+      }
+    },
+    required: ['intro', 'picks', 'feature']
+  }
+};
+
+/**
+ * The issue from a Messages API reply, or why there isn't one.
+ *
+ * `{ issue }` on success; `{ problem: 'truncated' }` when the reply ran out of
+ * tokens (worth one retry with more room - a cut-off tool call carries a
+ * partial input that must not be published); `{ problem: 'no-call' }`
+ * otherwise.
+ */
+const issueFromReply = (message) => {
+  if (message?.stop_reason === 'max_tokens') return { problem: 'truncated' };
+  const call = (message?.content || []).find((block) => block?.type === 'tool_use' && block.name === ISSUE_TOOL.name);
+  const input = call?.input;
+  if (!input || typeof input !== 'object' || !Array.isArray(input.picks)) return { problem: 'no-call' };
+  return { issue: input };
+};
+
 module.exports = {
   VOTE_FLOOR,
   MAX_AGE_YEARS,
@@ -605,5 +665,7 @@ module.exports = {
   issueBrief,
   weekKey,
   issueDue,
-  previouslyIssued
+  previouslyIssued,
+  ISSUE_TOOL,
+  issueFromReply
 };

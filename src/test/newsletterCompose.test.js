@@ -12,7 +12,9 @@ import {
   weekKey,
   issueDue,
   previouslyIssued,
-  VOTE_FLOOR
+  VOTE_FLOOR,
+  ISSUE_TOOL,
+  issueFromReply
 } from '../../aws-lambda/newsletterCompose.js';
 
 const providers = (us) => ({ results: { US: us } });
@@ -652,5 +654,47 @@ describe('CinemaScore in the shortlist and the brief', () => {
     expect(rows.find((r) => r.id === 2).scores.cinemaScore).toBeNull();
     const brief = issueBrief({ shortlist: rows, features: [], profile: {}, weekOf: '2025-W35', letterboxd: {}, myReviews: {} });
     expect(brief.releases.find((r) => r.id === 1).cinemaScore).toBe('A-');
+  });
+});
+
+// 2026-10-09: the issue used to come back as JSON in prose, cut at the first
+// "{" and the last "}". A reply that ran out of tokens inside the feature
+// article was sliced back to an unclosed picks array, JSON.parse threw, and
+// the Friday issue never went out. Now it is a forced tool call, and a reply
+// that runs out of room is named as such rather than published in part.
+describe('issueFromReply', () => {
+  const call = (input) => ({ type: 'tool_use', name: ISSUE_TOOL.name, id: 't1', input });
+  const issue = {
+    intro: 'Hello.',
+    picks: [{ id: 1, why: 'Because.' }],
+    feature: { id: 2, headline: 'H', hook: 'Hook.', article: 'Words.' }
+  };
+
+  it('returns the tool call input as the issue', () => {
+    expect(issueFromReply({ stop_reason: 'tool_use', content: [call(issue)] })).toEqual({ issue });
+  });
+
+  it('treats a reply that ran out of tokens as truncated, even with a partial call', () => {
+    const partial = { intro: 'Hello.', picks: [{ id: 1, why: 'Because.' }] };
+    expect(issueFromReply({ stop_reason: 'max_tokens', content: [call(partial)] })).toEqual({ problem: 'truncated' });
+  });
+
+  it('is no-call when the model answered in prose or with the wrong shape', () => {
+    expect(issueFromReply({ stop_reason: 'end_turn', content: [{ type: 'text', text: '{"intro":' }] })).toEqual({ problem: 'no-call' });
+    expect(issueFromReply({ stop_reason: 'tool_use', content: [call({ intro: 'x' })] })).toEqual({ problem: 'no-call' });
+    expect(issueFromReply(null)).toEqual({ problem: 'no-call' });
+  });
+
+  it('schema requires every section the issue is built from', () => {
+    expect(ISSUE_TOOL.input_schema.required).toEqual(['intro', 'picks', 'feature']);
+    expect(ISSUE_TOOL.input_schema.properties.feature.required).toEqual(['id', 'headline', 'hook', 'article']);
+  });
+});
+
+describe('writeIssue asks for a tool call', () => {
+  it('forces the issue tool and never hand-parses the reply', () => {
+    const source = readFileSync(`${process.cwd()}/aws-lambda/newsletter.js`, 'utf8');
+    expect(source).toMatch(/tool_choice: \{ type: 'tool', name: ISSUE_TOOL\.name \}/);
+    expect(source).not.toMatch(/JSON\.parse\(text\.slice/);
   });
 });

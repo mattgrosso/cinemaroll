@@ -55,7 +55,9 @@ const {
   issueBrief,
   weekKey,
   issueDue,
-  previouslyIssued
+  previouslyIssued,
+  ISSUE_TOOL,
+  issueFromReply
 } = require('./newsletterCompose.js');
 const letterboxd = require('./letterboxd.js');
 const {
@@ -305,7 +307,7 @@ const personaFor = (profile) => {
 };
 
 /**
- * One model call produces the whole issue — both sections, as JSON.
+ * One model call produces the whole issue — both sections, as one tool call.
  *
  * One call rather than two because the sections should read as one voice, and
  * because at weekly cadence the saving is irrelevant next to the coherence.
@@ -356,40 +358,34 @@ the ONE quotation you are permitted: quote a line of it verbatim, in
 quotation marks, attributed to the reader ("you wrote at the time..."), and
 let the article answer or build on it. Never paraphrase it as a critic's view.
 
-Return ONLY valid JSON, no markdown fence, in exactly this shape:
+Answer by calling ${ISSUE_TOOL.name} — never with prose.
 
-{
-  "intro": "One or two sentences opening the issue. Warm, dry, not breathless.",
-  "picks": [
-    {
-      "id": <the film's id from the brief>,
-      "why": "2-3 sentences on why THIS reader specifically might want it. Name the concrete reason — a director they rate, a genre they reach for, a resemblance to something they recently loved. If the honest answer is that it is simply very well reviewed, say that instead of inventing a personal connection."
+- "intro": one or two sentences opening the issue. Warm, dry, not breathless.
+- "picks": 4-6, best first, each { "id": the film's id from the brief, "why": 2-3 sentences on why THIS reader specifically might want it. Name the concrete reason — a director they rate, a genre they reach for, a resemblance to something they recently loved. If the honest answer is that it is simply very well reviewed, say that instead of inventing a personal connection. }
+  If fewer than four releases are worth recommending, return fewer — a short honest issue beats a padded one.
+- "feature": { "id": the chosen film's id, "headline": a title for the piece, "hook": one sentence on why this film, this week — name the actual occasion (the anniversary, or that it is back in circulation), "article": 500-700 words. Its making, how it landed at the time, what it influenced, why it still matters. Paragraphs separated by blank lines. }`;
+
+  // A forced tool call, not JSON in prose — see ISSUE_TOOL in
+  // newsletterCompose.js for the Friday it cost. 700 words of article plus
+  // six blurbs is ~2,500 tokens of answer, so 4,000 left little margin;
+  // a reply that still runs out of room gets one retry with twice the room
+  // rather than publishing half an issue.
+  for (const maxTokens of [8000, 16000]) {
+    const message = await client.messages.create({
+      model: MODEL,
+      max_tokens: maxTokens,
+      tools: [ISSUE_TOOL],
+      tool_choice: { type: 'tool', name: ISSUE_TOOL.name },
+      messages: [{ role: 'user', content: prompt }]
+    });
+    const result = issueFromReply(message);
+    if (result.issue) return result.issue;
+    if (result.problem !== 'truncated') {
+      throw new Error(`Model did not return an issue (stop_reason ${message.stop_reason})`);
     }
-  ],
-  "feature": {
-    "id": <the chosen anniversary film's id>,
-    "headline": "A title for the piece.",
-    "hook": "One sentence on why this film, this week — name the actual occasion (the anniversary, or that it is back in circulation).",
-    "article": "500-700 words. Its making, how it landed at the time, what it influenced, why it still matters. Paragraphs separated by \\n\\n."
+    console.warn(`Newsletter reply ran out of room at max_tokens ${maxTokens}`);
   }
-}
-
-Choose 4-6 picks, best first. If fewer than four releases are worth recommending, return fewer — a short honest issue beats a padded one.`;
-
-  const message = await client.messages.create({
-    model: MODEL,
-    max_tokens: 4000,
-    messages: [{ role: 'user', content: prompt }]
-  });
-
-  const text = (message.content || []).map((block) => block.text || '').join('');
-  // Opus is well-behaved about the no-fence instruction, but a stray fence
-  // has cost this app a feature before (see claude-ai.js's trivia route), so
-  // the extraction is defensive rather than trusting.
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start === -1 || end === -1) throw new Error('Model returned no JSON object');
-  return JSON.parse(text.slice(start, end + 1));
+  throw new Error('Model ran out of room writing the issue, twice');
 };
 
 // --- Building one account's issue --------------------------------------------

@@ -867,6 +867,14 @@ inside `newsletter.js` is a template literal, and prose written about a
 script runs `node --check` on all three sources and again on the bundled
 `index.js` before anything leaves the machine.
 
+**The issue comes back as a forced tool call (2026-10-09).** It used to be JSON in
+prose, cut at the first `{` and last `}` and handed to `JSON.parse`; a Friday reply that
+ran out of room inside the feature article (max_tokens was 4000) was sliced to an
+unclosed picks array and the issue never went out. Now `ISSUE_TOOL` + `issueFromReply`
+(newsletterCompose.js, tested) — nothing is parsed, `stop_reason: max_tokens` is named as
+truncation, and `writeIssue` retries once with twice the room (8000, then 16000). Same
+lesson as `/watchlist`'s.
+
 Model is **Opus** here, alone among the routes — one call a week, so the choice
 is not a cost decision (Matt: "This is only going to happen once a week. It's
 like one call. I think we should use the most advanced model").
