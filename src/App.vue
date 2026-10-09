@@ -132,6 +132,14 @@ export default {
     },
     '$store.state.theaterReminders' () {
       this.$store.dispatch('refreshAppBadge');
+    },
+    // Friend requests count on the icon too: recount when one arrives or is
+    // answered (accepting changes the edges, not just the requests).
+    '$store.state.socialRequests' () {
+      this.$store.dispatch('refreshAppBadge');
+    },
+    '$store.state.socialEdges' () {
+      this.$store.dispatch('refreshAppBadge');
     }
   },
   methods: {

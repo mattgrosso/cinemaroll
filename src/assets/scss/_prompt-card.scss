@@ -138,3 +138,58 @@
 .home-notices {
   width: 100%;
 }
+
+// Friend requests answer on the card itself (2026-10-09). Real buttons, 40px
+// tall, because a link-sized target reads as "the button doesn't work".
+// Accept: dark text on the friends purple (~8:1). Not now: #ccc on the
+// #161616 card (~11:1) — never .text-muted, which fails on these panels.
+.friend-request-explainer {
+  color: #ccc;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  margin: 0.15rem 0 0;
+}
+
+.friend-request-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.friend-request-name {
+  color: #eee;
+  flex: 1 1 100%;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.friend-request-accept,
+.friend-request-later {
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  min-height: 40px;
+  padding: 0 1.1rem;
+}
+
+.friend-request-accept {
+  background: #cd7fe8;
+  border: 1px solid #cd7fe8;
+  color: #101010;
+
+  &:active {
+    background: #b866d4;
+  }
+}
+
+.friend-request-later {
+  background: transparent;
+  border: 1px solid #444;
+  color: #ccc;
+
+  &:active {
+    background: #262626;
+  }
+}

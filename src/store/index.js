@@ -41,6 +41,7 @@ import { buildSocialProfile, socialSettingsWithDefaults, countNewFriendUpdates, 
 import { buildMirrorFeed } from "../assets/javascript/mirrorFeed.js";
 import { buildPushDigest } from "../assets/javascript/pushDigest.js";
 import { appBadgeCount } from "../assets/javascript/appBadge.js";
+import { pendingFriendRequests } from "../assets/javascript/friendRequests.js";
 import { showtimesWaiting } from "../assets/javascript/showtimesUnread.js";
 import { buildNewsletterProfile } from "../assets/javascript/newsletterProfile.js";
 import { postToNewsletter } from "../utils/newsletterRequest.js";
@@ -815,6 +816,11 @@ export default createStore({
     // (refreshAppBadge), Home's Showtimes card and the Watchlist's - bug
     // report 2026-10-06: "there's nothing on the home screen that guides me
     // to where I need to go" to clear the badge.
+    // Friend requests waiting for an answer — the icon badge counts these
+    // (refreshAppBadge); Home's card applies the same rule.
+    pendingFriendRequests (state, getters) {
+      return pendingFriendRequests(state.socialRequests, state.socialEdges, getters.socialUserKey);
+    },
     showtimesBadgeCount (state) {
       if (state.pushPrefs?.showtimes !== true) return 0;
       return showtimesWaiting({
@@ -3386,7 +3392,7 @@ export default createStore({
         }
         films = context.getters.showtimesBadgeCount;
       }
-      const count = appBadgeCount(digest, prefs, Date.now(), films);
+      const count = appBadgeCount(digest, prefs, Date.now(), films, context.getters.pendingFriendRequests.length);
       try {
         if (count > 0) await navigator.setAppBadge(count);
         else await navigator.clearAppBadge?.();

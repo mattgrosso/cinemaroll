@@ -17,10 +17,15 @@
 // default, so only `prefs.showtimes === true` counts - every film still
 // waiting on the Showtimes screen adds one (showtimesUnread.js).
 //
-// Film Club activity is deliberately not counted here. A friend-log push adds
+// Friend requests (2026-10-09): each one waiting for an answer adds one,
+// always — a person waiting isn't a chore with a switch. Friends who had
+// just joined never answered Matt's requests; nothing outside the app said
+// one was there. (iOS only shows the badge once notifications are allowed.)
+//
+// Film Club activity is otherwise deliberately not counted here. A friend-log push adds
 // one to the badge; the app setting the chore count on open is what drops it.
 
-export function appBadgeCount (digest, prefs = {}, now = Date.now(), showtimes = 0) {
+export function appBadgeCount (digest, prefs = {}, now = Date.now(), showtimes = 0, friendRequests = 0) {
   const open = (section) => {
     const at = Number(section?.eligibleAt);
     return !Number.isFinite(at) || at <= now;
@@ -41,5 +46,5 @@ export function appBadgeCount (digest, prefs = {}, now = Date.now(), showtimes =
 
   const films = prefs?.showtimes === true ? (Number(showtimes) || 0) : 0;
 
-  return stickiness + tiebreak + awards + films;
+  return stickiness + tiebreak + awards + films + (Number(friendRequests) || 0);
 }

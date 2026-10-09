@@ -60,4 +60,12 @@ describe('appBadgeCount', () => {
       expect(appBadgeCount(d, prefs, NOW)).toBe(lambdaBadge(d, prefs));
     });
   });
+
+  // 2026-10-09: friends who had just joined never answered Matt's requests;
+  // nothing outside the app said one was waiting.
+  it('adds one for each friend request waiting, whatever the switches say', () => {
+    const empty = { stickiness: { count: 0, dueTimes: [] }, tiebreak: {}, awards: { years: [] } };
+    expect(appBadgeCount(empty, {}, NOW, 0, 2)).toBe(2);
+    expect(appBadgeCount(digest(), { stickiness: false, tiebreak: false, awards: false }, NOW, 0, 1)).toBe(1);
+  });
 });

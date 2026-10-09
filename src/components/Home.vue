@@ -332,22 +332,6 @@
       </div>
     </div>
 
-    <!-- Brand new (0-rated) user: a short welcome, then suggestions shown
-         immediately - see shouldShowStartSuggestions for why no tap is
-         required here specifically. -->
-    <div v-if="$store.state.dbLoaded && isBrandNewUser && !dismissedWelcomeSuggestions && !value && !resultsAreFiltered" class="welcome-new-user text-center mt-3 mb-1">
-      <p class="welcome-new-user-text">Welcome to Cinema Roll! This app is built entirely around movies you rate yourself.</p>
-      <!-- The wrong-account case: the read SUCCEEDED but this account's
-           library is genuinely empty — which is exactly what an established
-           user sees if they signed in with a different Google account or a
-           typo'd email. Naming the signed-in account is the diagnostic. -->
-      <p v-if="$store.state.userEmail" class="welcome-account-note">
-        You're signed in as <strong>{{ $store.state.userEmail }}</strong>.
-        Already have rated movies? They live under the account you first
-        used — sign in with that one to see them.
-      </p>
-    </div>
-
     <!-- Suggestions button below search bar if user has rated 1-9 movies -->
     <div v-if="$store.state.dbLoaded && !showSuggestionsOnly && userRatedMovieCount > 0 && userRatedMovieCount < 10 && !value && !resultsAreFiltered" class="text-center mt-2 mb-1">
       <button class="btn btn-success" @click="showSuggestionsOnly = true">{{ suggestionsButtonLabel }}</button>
@@ -571,17 +555,29 @@
     <section class="home-notices">
       <!-- Friend requests: prominent ON PURPOSE. Bug report, 2026-08-19:
            "unless I think to look there I won't ever know that they're
-           pending." -->
+           pending." And 2026-10-09: friends who had just joined never
+           answered, so the card now answers the request itself — Accept, or
+           Not now (hides it here for a few days; the Film Club inbox keeps
+           it) — instead of only linking to Film Club. -->
       <div
-        v-if="incomingFriendRequests.length"
-        class="prompt-card"
+        v-if="friendRequestsOnCard.length"
+        class="prompt-card friend-request-prompt"
         @click="$router.push('/film-club')"
       >
         <span class="prompt-badge prompt-badge-friends"><i class="bi bi-people-fill"></i></span>
         <span class="prompt-body">
           <span class="prompt-label">Film Club</span>
           <p class="prompt-text">{{ friendRequestBannerText }}</p>
-          <a class="prompt-action prompt-action-friends" @click.stop="$router.push('/film-club')">Review the request</a>
+          <p class="friend-request-explainer">Friends see each other's ratings in Film Club.</p>
+          <span
+            v-for="request in friendRequestsOnCard"
+            :key="request.key"
+            class="friend-request-row"
+          >
+            <span v-if="friendRequestsOnCard.length > 1" class="friend-request-name">{{ request.name }}</span>
+            <button type="button" class="friend-request-accept" @click.stop="acceptFriendRequestFromCard(request.key)">Accept</button>
+            <button type="button" class="friend-request-later" @click.stop="snoozeFriendRequestFromCard(request.key)">Not now</button>
+          </span>
         </span>
       </div>
 
@@ -639,6 +635,25 @@
         :navigateOnOpen="true"
       />
     </section>
+
+    <!-- Brand new (0-rated) user: a short welcome, then suggestions shown
+         immediately - see shouldShowStartSuggestions for why no tap is
+         required here specifically. BELOW the notices on purpose
+         (2026-10-09): a friend's request is the first thing a new account
+         should see, and two paragraphs of welcome pushed it down the
+         screen. -->
+    <div v-if="$store.state.dbLoaded && isBrandNewUser && !dismissedWelcomeSuggestions && !value && !resultsAreFiltered" class="welcome-new-user text-center mt-3 mb-1">
+      <p class="welcome-new-user-text">Welcome to Cinema Roll! This app is built entirely around movies you rate yourself.</p>
+      <!-- The wrong-account case: the read SUCCEEDED but this account's
+           library is genuinely empty — which is exactly what an established
+           user sees if they signed in with a different Google account or a
+           typo'd email. Naming the signed-in account is the diagnostic. -->
+      <p v-if="$store.state.userEmail" class="welcome-account-note">
+        You're signed in as <strong>{{ $store.state.userEmail }}</strong>.
+        Already have rated movies? They live under the account you first
+        used — sign in with that one to see them.
+      </p>
+    </div>
 
     <NoResults
       v-if="shouldShowStartSuggestions"
@@ -1735,7 +1750,7 @@ const homeEntriesMemo = memoByIdentity((entries, _anchors, _tweak, films, review
 import InsetBrowserModal from './InsetBrowserModal.vue';
 import ThreeStateToggle from './ThreeStateToggle.vue';
 import SendToHat from './SendToHat.vue';
-import { isQaAccountKey } from '../assets/javascript/databaseKey.js';
+import { pendingFriendRequests, unsnoozedFriendRequests, readFriendRequestSnoozes, snoozeFriendRequest } from '../assets/javascript/friendRequests.js';
 import { rankMoreFrom, genreAffinity } from "../assets/javascript/moreFromRanking.js";
 import { genreIdFor } from "../assets/javascript/tmdbGenres.js";
 import { createCache } from "../assets/javascript/moreFromCache.js";
@@ -1949,6 +1964,7 @@ export default {
       // Refreshed by refreshPromptClock() — on the re-eval interval, when the
       // app comes back to the foreground, and on a chore-notification tap.
       promptNow: Date.now(),
+      friendRequestSnoozes: readFriendRequestSnoozes(),
       letterboxdOverrides: {},
       letterboxdUserData: null,
       loadMoreObserver: null, // IntersectionObserver for infinite-scroll result loading
@@ -2668,23 +2684,22 @@ export default {
       return Boolean(this.$store.state.dbLoaded && this.$store.state.settingsLoaded);
     },
     incomingFriendRequests () {
-      const requests = this.$store.state.socialRequests || {};
-      const me = this.$store.getters?.socialUserKey;
-      const edges = this.$store.state.socialEdges || {};
-      // A request from someone already befriended is stale noise, same
-      // filter the Circle inbox applies — as is hiding the QA tester, which
-      // this banner was missing, so it could have announced a request the
-      // Film Club screen then refused to show.
-      return Object.entries(requests)
-        .filter(([key]) => !(edges[me]?.[key] && edges[key]?.[me]))
-        .filter(([key]) => !isQaAccountKey(key))
-        .map(([key, request]) => ({ key, name: request?.name || key }));
+      return pendingFriendRequests(
+        this.$store.state.socialRequests,
+        this.$store.state.socialEdges,
+        this.$store.getters?.socialUserKey
+      );
+    },
+    friendRequestsOnCard () {
+      return unsnoozedFriendRequests(this.incomingFriendRequests, this.friendRequestSnoozes, this.promptNow);
     },
     socialFriendKeys () {
       return this.$store.getters?.socialFriendKeys || [];
     },
+    // New friend ratings plus anyone waiting on an answer (2026-10-09) —
+    // a request is the most Film Club thing there is to look at.
     filmClubNewUpdateCount () {
-      return this.$store.getters?.filmClubNewUpdateCount || 0;
+      return (this.$store.getters?.filmClubNewUpdateCount || 0) + this.incomingFriendRequests.length;
     },
     showtimesBadgeCount () {
       return this.$store.getters?.showtimesBadgeCount || 0;
@@ -2696,7 +2711,7 @@ export default {
         : `${n} films at your theaters are waiting for you to dismiss them or set reminders.`;
     },
     friendRequestBannerText () {
-      const requests = this.incomingFriendRequests;
+      const requests = this.friendRequestsOnCard;
       if (requests.length === 1) return `${requests[0].name} sent you a friend request.`;
       return `You have ${requests.length} friend requests.`;
     },
@@ -4346,6 +4361,12 @@ export default {
     },
   },
   methods: {
+    acceptFriendRequestFromCard (key) {
+      this.$store.dispatch('acceptFriendRequest', key);
+    },
+    snoozeFriendRequestFromCard (key) {
+      this.friendRequestSnoozes = snoozeFriendRequest(key);
+    },
     /**
      * Opened from a chore notification (`?open=<chore>`, set by the push
      * Lambda): expand the prompt rather than just showing its card, and put

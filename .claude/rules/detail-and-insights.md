@@ -527,6 +527,17 @@ redirects to `?tab=charts`). A `$route.query.tab` watcher handles links while
 the screen is already mounted.
 Tests pass `tab:` to the factory; the remembered tab is cleared between tests.
 
+## Friend requests outside Film Club (2026-10-09)
+
+`friendRequests.js` is the one rule for "waiting for an answer" (not already
+mutual, not the QA tester). Three places count it: Home's card, which answers
+in place (Accept, or Not now = hide on this device for 3 days, never a
+decline), the rainbow bar's Film Club badge, and the home-screen icon badge
+(`appBadgeCount`'s fifth argument, always counted). On a brand-new account the
+welcome text renders BELOW `.home-notices` so a request is the first thing seen.
+Report: friends who'd just joined never answered Matt's requests.
+`FriendRequestBanner.test.js`, `friendRequests.test.js`.
+
 ## Watchlist tabs (2026-10-08)
 
 Same principles as Film Club's tabs, asked for once those landed ("have similar

@@ -1,5 +1,5 @@
 import {
-  describe, it, expect, vi
+  describe, it, expect, vi, beforeEach
 } from 'vitest';
 import { mount } from '@vue/test-utils';
 import Home from '@/components/Home.vue';
@@ -38,11 +38,12 @@ const movie = (id, title) => ({
   ratings: [{ calculatedTotal: 8, date: '2023-01-01' }]
 });
 
-function mountHome ({ library = [movie(1, 'A Film')], socialRequests = {}, socialEdges = {} } = {}) {
+function mountHome ({ library = [movie(1, 'A Film')], socialRequests = {}, socialEdges = {}, userEmail = null } = {}) {
   const store = {
     state: {
       dbLoaded: true,
       databaseTopKey: ME,
+      userEmail,
       currentLog: 'movieLog',
       DBSearchValue: '',
       DBSortValue: 'rating',
@@ -87,6 +88,8 @@ function mountHome ({ library = [movie(1, 'A Film')], socialRequests = {}, socia
 }
 
 const banner = (wrapper) => wrapper.find('.prompt-badge-friends');
+
+beforeEach(() => localStorage.clear());
 
 describe('the friend request banner', () => {
   it('shows when someone has asked to be a friend', () => {
@@ -136,5 +139,58 @@ describe('the friend request banner', () => {
     const wrapper = mountHome({ socialRequests: { [QA_ACCOUNT_KEYS[0]]: { name: 'QA' } } });
 
     expect(banner(wrapper).exists()).toBe(false);
+  });
+});
+
+// Bug report, 2026-10-09: "I have a few friends on Cinema Roll that have
+// joined recently, and I have requested the friendship... and they haven't
+// reacted to that." The card only linked to Film Club, and on a brand-new
+// account it sat under two paragraphs of welcome.
+describe('answering a friend request from Home', () => {
+  const brian = { 'brian-gmail-com': { name: 'Brian' } };
+
+  it('accepts right on the card, without a trip to Film Club', async () => {
+    const wrapper = mountHome({ socialRequests: brian });
+
+    await wrapper.find('.friend-request-accept').trigger('click');
+
+    expect(wrapper.vm.$store.dispatch).toHaveBeenCalledWith('acceptFriendRequest', 'brian-gmail-com');
+    expect(wrapper.vm.$router.push).not.toHaveBeenCalled();
+  });
+
+  it('"Not now" hides the card on this device without declining', async () => {
+    const wrapper = mountHome({ socialRequests: brian });
+
+    await wrapper.find('.friend-request-later').trigger('click');
+
+    expect(banner(wrapper).exists()).toBe(false);
+    expect(wrapper.vm.$store.dispatch).not.toHaveBeenCalledWith('declineFriendRequest', expect.anything());
+    // Remembered across launches.
+    expect(banner(mountHome({ socialRequests: brian })).exists()).toBe(false);
+  });
+
+  it('gives each of several requests its own name and buttons', () => {
+    const wrapper = mountHome({
+      socialRequests: { ...brian, 'carrie-gmail-com': { name: 'Carrie' } }
+    });
+
+    const rows = wrapper.findAll('.friend-request-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[1].text()).toContain('Carrie');
+    expect(rows[1].find('.friend-request-accept').exists()).toBe(true);
+  });
+
+  it('comes before the welcome text on a brand-new account', () => {
+    const wrapper = mountHome({ library: [], socialRequests: brian, userEmail: 'new@example.com' });
+    const html = wrapper.html();
+
+    expect(html).toContain('welcome-new-user');
+    expect(html.indexOf('prompt-badge-friends')).toBeLessThan(html.indexOf('welcome-new-user'));
+  });
+
+  it('counts on the Film Club button in the rainbow bar', () => {
+    const wrapper = mountHome({ socialRequests: brian });
+
+    expect(wrapper.find('.film-club-badge-count').text()).toBe('1');
   });
 });
