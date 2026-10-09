@@ -48,7 +48,9 @@ export default {
       const feature = this.issue?.feature;
       const parts = [];
       if (picks) parts.push(`${picks} new ${picks === 1 ? 'film' : 'films'} worth your time`);
-      if (feature?.title) parts.push(`${feature.title} at ${feature.turning}`);
+      // Only an anniversary piece has an age; the trending, person and
+      // original pieces read "at undefined" (Matt, 2026-10-09).
+      if (feature?.title) parts.push(feature.turning ? `${feature.title} at ${feature.turning}` : `a piece on ${feature.title}`);
       return parts.length ? `${parts.join(', plus ')}.` : 'This week’s issue is ready.';
     }
   },

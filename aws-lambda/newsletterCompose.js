@@ -551,6 +551,19 @@ function weekKey (now = Date.now()) {
  * look at. It never bypasses the OPT-IN — an account that said no stays off
  * even in testing.
  */
+/**
+ * The push body. Only an anniversary piece has an age: the trending, person
+ * and original pieces came out "plus The Cable Guy at null" (Matt, 2026-10-09).
+ */
+function pushHeadline (issue = {}) {
+  const count = issue.picks?.length || 0;
+  const feature = issue.feature;
+  if (!feature?.title) return `${count} new films worth your time`;
+  return feature.turning
+    ? `${count} new, plus ${feature.title} at ${feature.turning}`
+    : `${count} new, plus a piece on ${feature.title}`;
+}
+
 function issueDue ({ prefs = {}, lastIssue = null, now = Date.now(), alwaysOn = false } = {}) {
   if (!prefs.newsletter) return { due: false, reason: 'not opted in' };
   const key = weekKey(now);
@@ -665,6 +678,7 @@ module.exports = {
   issueBrief,
   weekKey,
   issueDue,
+  pushHeadline,
   previouslyIssued,
   ISSUE_TOOL,
   issueFromReply

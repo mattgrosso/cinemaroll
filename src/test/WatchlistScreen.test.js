@@ -1328,13 +1328,20 @@ describe('the Watchlist tabs', () => {
     const html = wrapper.html();
     expect(html.indexOf('showtimes-card')).toBeGreaterThan(html.indexOf('wl-tabs'));
     expect(wrapper.find('.wl-panel-tonight .showtimes-card').text()).toContain('3 waiting');
-    expect(wrapper.findAll('.showtimes-card')).toHaveLength(1);
+    expect(wrapper.findAll('.showtimes-card .bi-ticket-perforated')).toHaveLength(1);
     expect(wrapper.find('.wl-panel-tonight').findComponent({ name: 'DrawFromHat' }).exists()).toBe(true);
     expect(wrapper.find('.wl-tab-tonight .wl-tab-dot').exists()).toBe(true);
 
     await wrapper.find('.wl-tab-tonight').trigger('click');
     expect(shownPanels(wrapper)).toEqual(['tonight']);
     expect(wrapper.find('.wl-tab-tonight .wl-tab-dot').exists()).toBe(false);
+  });
+
+  it('links to the newsletter from the Tonight tab', async () => {
+    const { wrapper, pushSpy } = factory();
+    await flushPromises();
+    await wrapper.find('.wl-panel-tonight .newsletter-card').trigger('click');
+    expect(pushSpy).toHaveBeenCalledWith('/newsletter');
   });
 });
 

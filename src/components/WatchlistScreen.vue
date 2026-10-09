@@ -338,6 +338,14 @@
       <span v-else-if="showtimesUnread" class="showtimes-card-new">new</span>
       <i class="bi bi-chevron-right showtimes-card-chevron"></i>
     </button>
+    <!-- The newsletter's everyday way in (Matt, 2026-10-09: "I need a link
+         somewhere in the app"). Home's card goes once an issue is read, and
+         the Settings row is out of sight; this is the same weekly question. -->
+    <button type="button" class="showtimes-card newsletter-card" @click="$router.push('/newsletter')">
+      <i class="bi bi-envelope-paper-fill"></i>
+      <span class="showtimes-card-label">This week in film</span>
+      <i class="bi bi-chevron-right showtimes-card-chevron"></i>
+    </button>
     <DrawFromHat/>
     </div>
 
@@ -1538,6 +1546,7 @@ export default {
   width: 100%;
 
   .bi-ticket-perforated { color: #ffc107; font-size: 1.15rem; }
+  .bi-envelope-paper-fill { color: #22d3ee; font-size: 1.15rem; }
   .showtimes-card-label { flex: 1 1 auto; font-size: 0.88rem; font-weight: 600; }
   /* #9aa0a6 on #161616 is ~7:1. */
   .showtimes-card-chevron { color: #9aa0a6; font-size: 0.9rem; }

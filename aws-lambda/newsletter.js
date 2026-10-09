@@ -52,6 +52,7 @@ const {
   shortlistReleases,
   anniversariesThisWeek,
   featureCandidates,
+  pushHeadline,
   issueBrief,
   weekKey,
   issueDue,
@@ -600,9 +601,7 @@ const publishIssue = async ({ topKey, issue, push }) => {
   await dbSet(`${topKey}/newsletter/lastIssue`, issue.weekKey);
 
   if (!push?.subscriptions) return 0;
-  const headline = issue.feature?.title
-    ? `${issue.picks.length} new, plus ${issue.feature.title} at ${issue.feature.turning}`
-    : `${issue.picks.length} new films worth your time`;
+  const headline = pushHeadline(issue);
   return sendToAccount(topKey, push.subscriptions, buildPayload({
     title: 'This week in film',
     body: headline,

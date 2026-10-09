@@ -36,6 +36,16 @@ describe('NewsletterNotice', () => {
     expect(wrapper.text()).toContain('Down by Law at 40');
   });
 
+  // Matt, 2026-10-09: "plus The Cable Guy at undefined". Only an anniversary
+  // piece has an age.
+  it('names a feature that is not an anniversary without an age', () => {
+    const { wrapper } = mountNotice({
+      state: { newsletterIssue: issue({ feature: { title: 'The Cable Guy' } }), newsletterPrefs: { newsletter: true } }
+    });
+    expect(wrapper.text()).toContain('a piece on The Cable Guy');
+    expect(wrapper.text()).not.toMatch(/undefined|null/);
+  });
+
   it('stays out of the way for anyone who has not opted in', () => {
     const { wrapper } = mountNotice({
       state: { newsletterIssue: issue(), newsletterPrefs: { newsletter: false } }

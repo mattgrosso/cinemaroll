@@ -11,6 +11,7 @@ import {
   issueBrief,
   weekKey,
   issueDue,
+  pushHeadline,
   previouslyIssued,
   VOTE_FLOOR,
   ISSUE_TOOL,
@@ -696,5 +697,20 @@ describe('writeIssue asks for a tool call', () => {
     const source = readFileSync(`${process.cwd()}/aws-lambda/newsletter.js`, 'utf8');
     expect(source).toMatch(/tool_choice: \{ type: 'tool', name: ISSUE_TOOL\.name \}/);
     expect(source).not.toMatch(/JSON\.parse\(text\.slice/);
+  });
+});
+
+// Matt, 2026-10-09: the push read "plus The Cable Guy at null" for a feature
+// that wasn't an anniversary.
+describe('pushHeadline', () => {
+  const picks = [{ id: 1 }, { id: 2 }];
+  it('gives an anniversary its age', () => {
+    expect(pushHeadline({ picks, feature: { title: 'Down by Law', turning: 40 } })).toBe('2 new, plus Down by Law at 40');
+  });
+  it('names any other feature without one', () => {
+    expect(pushHeadline({ picks, feature: { title: 'The Cable Guy', turning: null } })).toBe('2 new, plus a piece on The Cable Guy');
+  });
+  it('falls back to the count with no feature', () => {
+    expect(pushHeadline({ picks, feature: null })).toBe('2 new films worth your time');
   });
 });
