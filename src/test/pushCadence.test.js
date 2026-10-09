@@ -19,6 +19,7 @@ import {
   externalWatches,
   externalLogsDue,
   externalFeedRead,
+  externalCheckDue,
   signupsDue,
   emailGuessFromKey,
   composeSignupMessages,
@@ -1234,6 +1235,26 @@ describe('anyone\'s theaters — finding and ranking them', () => {
 });
 
 // Film Club spec §3.2 (proposal 0004): the sweep never downloads an unchanged body.
+describe('externalCheckDue (Film Club change notices, spec 1.3.0 §6.3)', () => {
+  const REV = 'a'.repeat(32);
+  const HOUR = 60 * 60 * 1000;
+  const NOW = 10 * HOUR;
+
+  it('checks a friend who sends no notices every sweep, as before', () => {
+    expect(externalCheckDue({ negotiated: false, checkedAt: NOW, now: NOW })).toBe(true);
+  });
+
+  it('checks a negotiated friend hourly, and sooner only for a newer notice naming a revision we have not announced', () => {
+    expect(externalCheckDue({ negotiated: true, checkedAt: NOW - 20 * 60 * 1000, now: NOW })).toBe(false);
+    expect(externalCheckDue({ negotiated: true, checkedAt: NOW - HOUR, now: NOW })).toBe(true);
+    const last = NOW - 20 * 60 * 1000;
+    expect(externalCheckDue({ negotiated: true, checkedAt: last, hint: { revision: REV, at: last + 1 }, storedRevision: 'b'.repeat(32), now: NOW })).toBe(true);
+    // Already announced, or no newer than our last look: no read.
+    expect(externalCheckDue({ negotiated: true, checkedAt: last, hint: { revision: REV, at: last + 1 }, storedRevision: REV, now: NOW })).toBe(false);
+    expect(externalCheckDue({ negotiated: true, checkedAt: last, hint: { revision: REV, at: last - 1 }, storedRevision: 'b'.repeat(32), now: NOW })).toBe(false);
+  });
+});
+
 describe('externalFeedRead', () => {
   const REV = 'a'.repeat(32);
   const HOUR = 60 * 60 * 1000;

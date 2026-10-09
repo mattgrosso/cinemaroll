@@ -364,10 +364,17 @@ export function parseInvite (raw) {
 
 // A request as it sits in an inbox. Kept deliberately small and boring so
 // another app can produce one with a single HTTP call.
-export function buildConnectRequest ({ name, feedUrl, replyInboxUrl, app = CONNECT_APP, now = Date.now() }) {
+// `feed` + `notices: true` (spec 1.3.0 §6.2) say: this is my feed's id for
+// change notices, and I read notices at the inbox this request names (or,
+// for an answer without replyInboxUrl, the inbox it was sent in reply to).
+export function buildConnectRequest ({ name, feedUrl, replyInboxUrl, feed = null, app = CONNECT_APP, now = Date.now() }) {
   if (!name || !feedUrl) return null;
   const request = { name: String(name).slice(0, 120), app, feedUrl: String(feedUrl).slice(0, 500), at: now };
   if (replyInboxUrl) request.replyInboxUrl = String(replyInboxUrl).slice(0, 500);
+  if (typeof feed === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(feed)) {
+    request.feed = feed;
+    request.notices = true;
+  }
   return request;
 }
 
@@ -389,6 +396,8 @@ export function normalizeInboxRequests (raw, { now = Date.now(), maxAgeDays = 60
         replyInboxUrl: typeof request?.replyInboxUrl === 'string' && /^https:\/\//i.test(request.replyInboxUrl)
           ? request.replyInboxUrl
           : null,
+        feed: typeof request?.feed === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(request.feed) ? request.feed : null,
+        notices: request?.notices === true,
         at
       };
     })

@@ -37,7 +37,7 @@ const {
   dueFromDigest, nextBaseline, shouldSend, composeMessage, friendLogBody, friendRequestMessage, EMPTY_BASELINE,
   DAY_FRIEND, localDayStart, dayProfileFrom, dayFeedFrom, dayFeedMarker, dayFriendsByOwner, dayCopyDue, dayNews, composeDayMessage,
   gamesDue, shouldSendGames, composeGamesMessage,
-  externalWatches, externalLogsDue, externalFeedRead,
+  externalWatches, externalLogsDue, externalFeedRead, externalCheckDue,
   signupsDue, composeSignupMessages,
   alamoListings, veeziListings, afiListings, boxofficeListings, afiFirstShowtime,
   cinemaclockListings, uncovered, dismissedFilms, dismissedAtRank, boardForApp, remindersDue, showtimesWaiting, composeReminderMessage, listingsDue, composeListingMessages,
@@ -45,6 +45,7 @@ const {
 } = require('./pushCadence');
 const { publishFeedV2 } = require('./filmClubSyncPublisher.js');
 const { pushId } = require('./filmClubSync.js');
+const { planInbox, coalesceNotices, currentFeedId, isNegotiated, noticeTargets, buildNotice, INBOX_PAGE } = require('./clubNotices.js');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
 const DATABASE_URL = 'https://movie-log-8c4d5-default-rtdb.firebaseio.com';
@@ -877,6 +878,55 @@ const readRevision = async (feedUrl) => {
   }
 };
 
+// Change notices waiting in this account's own inbox (Film Club spec 1.3.0
+// §6.3), newest per negotiated friend — read in our own database, one page,
+// never consumed here: the app deletes them once it has acted. Unknown or
+// ambiguous ones simply count for nobody.
+const INVITE_CODE = /^[A-Za-z0-9_-]{4,64}$/;
+const noticeHints = async (topKey, friends) => {
+  try {
+    const [record, secret, code] = await Promise.all([
+      dbGet(`${topKey}/settings/clubFeedId`),
+      dbGet(`${topKey}/settings/clubFeedKey`),
+      dbGet(`${topKey}/settings/clubInviteCode`)
+    ]);
+    const feedId = currentFeedId(record, secret);
+    if (!feedId || !Object.values(friends).some((friend) => isNegotiated(friend, feedId))) return { feedId, byFriend: {} };
+    const raw = typeof code === 'string' && INVITE_CODE.test(code)
+      ? await dbGet(`clubInbox/${topKey}/${code}`, `orderBy=%22%24key%22&limitToFirst=${INBOX_PAGE}`)
+      : null;
+    return { feedId, byFriend: coalesceNotices(planInbox({ raw, friends }).notices) };
+  } catch (error) {
+    console.error(`Notice hints for ${topKey} failed:`, error.message);
+    return { feedId: null, byFriend: {} };
+  }
+};
+
+// After the end-of-day copy moved the public feed: one notice to each
+// negotiated friend, best effort (the readers' hourly backstop repairs a lost
+// one). Only to inboxes that are Firebase clubInbox paths (safeInboxUrl), so
+// a stored callback can't point this Lambda anywhere else.
+const sendDayNotices = async (owner, secret, revision) => {
+  const [record, friends] = await Promise.all([dbGet(`${owner}/settings/clubFeedId`), dbGet(`${owner}/settings/externalFriends`)]);
+  const feedId = currentFeedId(record, secret);
+  const targets = noticeTargets(friends || {}, feedId);
+  let sent = 0;
+  for (const target of targets) {
+    try {
+      const response = await fetch(target.inboxUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildNotice({ feed: feedId, revision })),
+        signal: AbortSignal.timeout(5000)
+      });
+      if (response.ok) sent += 1;
+    } catch {
+      // Best effort.
+    }
+  }
+  if (targets.length) console.log(`Change notices for ${owner}: ${sent} of ${targets.length} sent`);
+};
+
 const notifyExternalLogs = async (topKey, push, prefs) => {
   const friends = (await dbGet(`${topKey}/settings/externalFriends`)) || {};
   const entries = Object.entries(friends)
@@ -886,6 +936,8 @@ const notifyExternalLogs = async (topKey, push, prefs) => {
 
   const seen = (push.state && push.state.externalSeen) || {};
   const revisions = (push.state && push.state.externalRevision) || {};
+  const checkedTimes = (push.state && push.state.externalCheckedAt) || {};
+  const hints = await noticeHints(topKey, friends);
   const etags = (push.state && push.state.externalEtag) || {};
   const bodyTimes = (push.state && push.state.externalBodyAt) || {};
   let delivered = 0;
@@ -894,6 +946,11 @@ const notifyExternalLogs = async (topKey, push, prefs) => {
 
   for (const [id, friend, feedUrl] of entries) {
     try {
+      // A friend who sends change notices is checked on a notice, or hourly.
+      const negotiated = isNegotiated(friend, hints.feedId);
+      const hint = [hints.byFriend[id], friend.noticePending].filter(Boolean).sort((a, b) => b.at - a.at)[0] || null;
+      if (!externalCheckDue({ negotiated, hint, storedRevision: revisions[id] || null, checkedAt: checkedTimes[id], now: Date.now() })) { unchanged += 1; continue; }
+      if (negotiated) await dbSet(`${topKey}/push/state/externalCheckedAt/${id}`, Date.now());
       const { revision, reachable } = await readRevision(feedUrl);
       const plan = externalFeedRead({ revision, reachable, storedRevision: revisions[id] || null, etag: etags[id] || null, bodyAt: bodyTimes[id], now: Date.now() });
       if (plan.action === 'skip') { unchanged += 1; continue; }
@@ -1153,6 +1210,7 @@ const releaseDayFeeds = async (now) => {
         }
       });
       await dbSet(`social/clubFeedLive/${owner}/release`, { cutoff, source, marker });
+      if (result.mode !== 'unchanged') await sendDayNotices(owner, secret, result.meta.revision).catch((error) => console.error(`Change notices for ${owner} failed:`, error.message));
       console.log(`End-of-day feed for ${owner}: ${copy.movieCount} films (${result.mode})`);
     } catch (error) {
       console.error(`End-of-day feed for ${owner} failed:`, error.message);

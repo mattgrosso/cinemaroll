@@ -37,7 +37,7 @@ import {
   watchMovieHatAuth as observeMovieHatAuth
 } from "../assets/javascript/movieHatAuth.js";
 import { isSignInDismissal, signInFailureSummary } from "../assets/javascript/movieHatSignIn.js";
-import { buildSocialProfile, socialSettingsWithDefaults, countNewFriendUpdates, clubFetchesNeeded, externalSyncDue, feedBodyNeeded, EXTERNAL_FEED_MAX_AGE_MS } from "../assets/javascript/social.js";
+import { buildSocialProfile, socialSettingsWithDefaults, countNewFriendUpdates, clubFetchesNeeded, feedBodyNeeded, EXTERNAL_FEED_MAX_AGE_MS } from "../assets/javascript/social.js";
 import { buildMirrorFeed } from "../assets/javascript/mirrorFeed.js";
 import { buildPushDigest } from "../assets/javascript/pushDigest.js";
 import { appBadgeCount } from "../assets/javascript/appBadge.js";
@@ -77,6 +77,7 @@ import { publishFeedV2 } from "../assets/javascript/filmClubSyncPublisher.js";
 import { hexToken } from "../assets/javascript/filmClubSync.js";
 import { refreshExternalFeed, feedFromSyncCache } from "../utils/filmClubSyncClient.js";
 import { reportFeedFallback } from "../utils/syncFallbackReport.js";
+import { planInbox, coalesceNotices, negotiationUpdate, noticeTargets, queueNotices, afterNoticeSend, buildNotice, friendSyncDue, isNegotiated, currentFeedId, newFeedId, INBOX_PAGE } from "../assets/javascript/clubNotices.js";
 import { awardsByMovie } from "../assets/javascript/awardsShare.js";
 import { awardNameWithThe } from "../assets/javascript/personalAwards.js";
 
@@ -215,6 +216,117 @@ const auth = getAuth();
 
 const db = getDatabase();
 let letterboxdLoadInFlight = null;
+// One external friend's feed, v2 first. True when the feed answered (changed
+// or not), false when it could not be read — a caller holding a pending
+// notice keeps it then. Updates the friend's profile and error in the store.
+async function syncOneExternalFriend (context, id, friend) {
+  if (!friend?.feedUrl) return false;
+  try {
+    // v2 first (Brian's sync guide, 2026-10-06): two small head reads,
+    // then nothing, a journal delta, or a paged bootstrap; the certified
+    // snapshot is kept per friend across launches. Only when the head
+    // cannot be trusted does the legacy body get fetched.
+    const cached = context.state.externalFriendProfiles?.[id];
+    const topKey = context.state.databaseTopKey;
+    const syncKind = `externalSync:${id}`;
+    const syncCache = topKey ? await loadSnapshot(topKey, syncKind).catch(() => null) : null;
+    const v2 = await refreshExternalFeed({ feedUrl: friend.feedUrl, cache: syncCache });
+    if (v2.status === 'revoked') {
+      if (topKey) saveSnapshot(topKey, syncKind, null).catch(() => {});
+      context.commit('setExternalFriendProfile', { id, profile: null });
+      throw new Error('feed access was revoked');
+    }
+    if (v2.status === 'updated') {
+      if (topKey) saveSnapshot(topKey, syncKind, v2.cache).catch(() => {});
+      const profile = profileFromFeed(v2.feed, { fallbackName: friend.name });
+      if (profile) { context.commit('setExternalFriendProfile', { id, profile }); return true; }
+    }
+    // No answer from the feed (bad signal, a timeout): keep what is
+    // shown and what is saved, report nothing, and skip the legacy body.
+    const answered = v2.status !== 'unreachable';
+    const keepCached = v2.status === 'unchanged' || v2.status === 'unreachable';
+    if (keepCached && cached) return answered;
+    if (keepCached && syncCache?.meta) {
+      // The snapshot is certified but this session has no profile yet (a cold start).
+      const profile = profileFromFeed(feedFromSyncCache(syncCache), { fallbackName: friend.name });
+      if (profile) { context.commit('setExternalFriendProfile', { id, profile }); return answered; }
+    }
+    if (v2.status === 'v1' && topKey && v2.cache) saveSnapshot(topKey, syncKind, v2.cache).catch(() => {});
+    // A feed that used to validate and no longer does is an alarm, not a
+    // quiet downgrade (Matt, 2026-10-06): a Sentry warning, once an hour.
+    if (v2.status === 'v1') reportFeedFallback({ friendName: friend.name, feedUrl: friend.feedUrl, reason: v2.reason, established: Boolean(v2.cache?.establishedV2) });
+    // Legacy body, with its revision preflight.
+    const revisionUrl = cached?.revision ? revisionUrlFor(friend.feedUrl) : null;
+    if (revisionUrl) {
+      let headRevision = null;
+      try {
+        const head = await fetchWithTimeout(revisionUrl, { cache: 'no-store' });
+        if (head.ok) headRevision = await head.json();
+      } catch {
+        // Fall through to the body.
+      }
+      if (!feedBodyNeeded({ cached, headRevision })) return true;
+    }
+    const response = await fetchWithTimeout(friend.feedUrl, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`feed responded ${response.status}`);
+    const profile = profileFromFeed(await response.json(), { fallbackName: friend.name });
+    if (!profile) throw new Error('unrecognised feed format');
+    context.commit('setExternalFriendProfile', { id, profile });
+    return true;
+  } catch (error) {
+    console.warn('[film-club] could not sync external friend', friend.name, error.message);
+    context.commit('setExternalFriendError', { id, message: error.message });
+    return false;
+  }
+}
+
+// The body of sendClubNotices (one run at a time).
+async function sendNoticesNow (context, revision) {
+  const me = context.state.databaseTopKey;
+  const secret = context.state.settings?.clubFeedKey;
+  const feedId = currentFeedId(context.state.settings?.clubFeedId, secret);
+  if (!me || !secret || !feedId) return;
+  let outbox = (await loadSnapshot(me, 'clubNoticeOutbox').catch(() => null)) || {};
+  if (revision) outbox = queueNotices(outbox, noticeTargets(context.state.settings?.externalFriends, feedId), revision);
+  if (!Object.keys(outbox).length) return;
+  for (const [id, entry] of Object.entries(outbox)) {
+    // Same account, same capability, still a negotiated friend, same callback.
+    if (context.state.databaseTopKey !== me || context.state.settings?.clubFeedKey !== secret) return;
+    const target = noticeTargets(context.state.settings?.externalFriends, feedId).find((t) => t.id === id);
+    if (!target) { outbox = afterNoticeSend(outbox, id, true); continue; }
+    let ok = false;
+    try {
+      const response = await fetchWithTimeout(target.inboxUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildNotice({ feed: feedId, revision: entry.revision }))
+      });
+      ok = response.ok;
+    } catch {
+      // Counted as one attempt below.
+    }
+    outbox = afterNoticeSend(outbox, id, ok);
+  }
+  await saveSnapshot(me, 'clubNoticeOutbox', outbox).catch(() => {});
+}
+
+function saveExternalFriendsSnapshot (context) {
+  const topKey = context.state.databaseTopKey;
+  if (!topKey) return;
+  saveSnapshot(topKey, 'externalFriends', {
+    profiles: context.state.externalFriendProfiles,
+    syncedAt: context.state.externalFriendsSyncedAt,
+    syncedAtById: context.state.externalFriendSyncedAt
+  }).catch(() => {});
+}
+
+// The inbox listener's path, so a second screen asking for it attaches nothing.
+let clubInboxWatching = null;
+// Inbox snapshots are processed one at a time, in order.
+let clubInboxProcessing = Promise.resolve();
+// One notice-driven refresh per friend at a time; notices sent one batch at a time.
+const noticeRefreshes = new Map();
+let clubNoticeSending = Promise.resolve();
 
 // Pending debounced profile publish (see scheduleSocialPublish).
 let socialPublishTimer = null;
@@ -509,6 +621,10 @@ export default createStore({
     // When syncExternalFriends last ran to completion (ms); restored from the
     // offline snapshot with the profiles, so a cold start can stay quiet.
     externalFriendsSyncedAt: 0,
+    // Per friend (ms), so a friend who sends change notices can be on the
+    // hourly backstop while the rest keep five minutes. Falls back to the
+    // restored externalFriendsSyncedAt.
+    externalFriendSyncedAt: {},
     externalFriendErrors: {},
     // Connect requests from people on other apps (see clubInbox rules).
     clubInboxRequests: {},
@@ -713,8 +829,18 @@ export default createStore({
     crossAppDiscoveryEnabled (state) {
       return Boolean(state.settings?.crossAppDiscovery);
     },
+    // Only what a person should decide on: never a change notice, and never
+    // an existing friend's negotiation that is answered automatically (one
+    // we can't prove they're entitled to stays, as an ordinary request).
     clubInboxRequests (state) {
-      return normalizeInboxRequests(state.clubInboxRequests);
+      const friends = state.settings?.externalFriends || {};
+      const plan = planInbox({ raw: state.clubInboxRequests, friends });
+      const feedId = currentFeedId(state.settings?.clubFeedId, state.settings?.clubFeedKey);
+      const shown = { ...plan.requests };
+      plan.negotiations
+        .filter(({ friendId, request }) => !negotiationUpdate({ friend: friends[friendId], request, feedId }).proven)
+        .forEach(({ key, request }) => { shown[key] = request; });
+      return normalizeInboxRequests(shown);
     },
     filmClubFriends (state, getters) {
       const native = getters.socialFriendKeys.map((key) => ({
@@ -873,10 +999,16 @@ export default createStore({
     setExternalFriendsSyncedAt (state, at) {
       state.externalFriendsSyncedAt = Number(at) || 0;
     },
-    restoreExternalFriends (state, { profiles, syncedAt }) {
+    markExternalFriendsSynced (state, { ids, at }) {
+      const next = { ...state.externalFriendSyncedAt };
+      (ids || []).forEach((id) => { next[id] = Number(at) || 0; });
+      state.externalFriendSyncedAt = next;
+    },
+    restoreExternalFriends (state, { profiles, syncedAt, syncedAtById }) {
       // Only fill what the session hasn't fetched already.
       state.externalFriendProfiles = { ...(profiles || {}), ...state.externalFriendProfiles };
       if (!state.externalFriendsSyncedAt) state.externalFriendsSyncedAt = Number(syncedAt) || 0;
+      state.externalFriendSyncedAt = { ...(syncedAtById || {}), ...state.externalFriendSyncedAt };
     },
     setExternalFriendError (state, { id, message }) {
       state.externalFriendErrors = { ...state.externalFriendErrors, [id]: message };
@@ -2127,6 +2259,8 @@ export default createStore({
         }
       });
       saveSnapshot(me, 'clubFeedPublished', { secret, meta: result.meta, movies: result.movies }).catch(() => {});
+      // The feed moved: tell negotiated friends (§6.3), after the write landed.
+      if (result.mode !== 'unchanged') context.dispatch('sendClubNotices', { revision: result.meta.revision });
     },
     // One switch for every friend on another app: they all read the one feed.
     async setClubFeedTiming (context, timing) {
@@ -2179,19 +2313,9 @@ export default createStore({
     // Add someone straight from the directory — no links, no pasting.
     async requestFriendFromDirectory (context, entry) {
       if (!entry?.inboxUrl) return { ok: false, error: 'That person has no inbox.' };
-      const invite = await context.dispatch('createClubInvite');
-      if (!invite) return { ok: false, error: 'Could not create your own feed.' };
       try {
-        const response = await fetch(entry.inboxUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildConnectRequest({
-            name: invite.name,
-            feedUrl: invite.feedUrl,
-            replyInboxUrl: invite.inboxUrl
-          }))
-        });
-        if (!response.ok) throw new Error(`inbox responded ${response.status}`);
+        const sent = await context.dispatch('sendOwnFeed', { to: entry.inboxUrl });
+        if (!sent) return { ok: false, error: 'Could not create your own feed.' };
         // Remember we asked, so the directory can hide them.
         await context.dispatch('writeDurably', {
           path: `settings/clubRequestsSent/${entry.handle}`,
@@ -2227,39 +2351,174 @@ export default createStore({
         databaseUrl: DATABASE_URL
       });
     },
+    // Our feed's id for change notices (Film Club spec 1.3.0 §6.3): random,
+    // and new whenever the secret is, so "they hold this id" proves they hold
+    // the current feed URL.
+    async ensureClubFeedId (context) {
+      const secret = context.state.settings?.clubFeedKey;
+      if (!secret) return null;
+      const existing = currentFeedId(context.state.settings?.clubFeedId, secret);
+      if (existing) return existing;
+      const id = newFeedId((window.crypto || window.msCrypto).getRandomValues(new Uint8Array(16)));
+      await context.dispatch('writeDurably', { path: 'settings/clubFeedId', value: { id, secret } });
+      return id;
+    },
+    // POST our feed (a connect request, §6.2) to someone's inbox, offering
+    // change notices. `replyInbox: false` is an answer to a negotiation: it
+    // names no inbox, so the two apps can't bounce requests back and forth.
+    // Returns our feed id; throws when the inbox refuses.
+    async sendOwnFeed (context, { to, replyInbox = true }) {
+      const accountKey = context.state.databaseTopKey;
+      const secret = context.state.settings?.clubFeedKey;
+      const code = context.state.settings?.clubInviteCode;
+      // An existing feed needs no republish just to be named.
+      const invite = accountKey && secret && code
+        ? buildInvite({ accountKey, inviteCode: code, feedUrl: `${DATABASE_URL}/clubFeed/${accountKey}/${secret}.json`, name: context.getters.socialSettings.displayName, databaseUrl: DATABASE_URL })
+        : await context.dispatch('createClubInvite');
+      if (!invite) return null;
+      const feed = await context.dispatch('ensureClubFeedId');
+      const post = (withFeed) => fetch(to, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildConnectRequest({
+          name: invite.name,
+          feedUrl: invite.feedUrl,
+          replyInboxUrl: replyInbox ? invite.inboxUrl : null,
+          feed: withFeed ? feed : null
+        }))
+      });
+      const response = await post(Boolean(feed));
+      if (response.ok) return feed || true;
+      // An inbox whose rules predate the negotiation fields still gets the
+      // plain request: adding a friend never depends on notices.
+      if (feed && replyInbox && (await post(false)).ok) return true;
+      throw new Error(`inbox responded ${response.status}`);
+    },
+    // Field-by-field, and only on a friend who still exists: writing one
+    // field of a removed friend would bring back a friend with no feed.
+    async updateExternalFriend (context, { id, changes }) {
+      if (!id || !context.state.settings?.externalFriends?.[id]) return;
+      await Promise.all(Object.entries(changes || {}).map(([field, value]) =>
+        context.dispatch('writeDurably', { path: `settings/externalFriends/${id}/${field}`, value })));
+    },
+    // The inbox, read a page at a time, live while the app is open: connect
+    // requests for the Film Club screen, and change notices acted on at once.
     watchClubInbox (context) {
       const me = context.state.databaseTopKey;
       const code = context.state.settings?.clubInviteCode;
       if (!me || !code) return;
-      onValue(ref(db, `clubInbox/${me}/${code}`), (snapshot) => {
-        context.commit('setClubInboxRequests', snapshot.val());
-      }, (error) => console.warn('[film-club] inbox listener:', error.message));
+      const path = `clubInbox/${me}/${code}`;
+      if (clubInboxWatching === path) return;
+      clubInboxWatching = path;
+      onValue(query(ref(db, path), orderByKey(), limitToFirst(INBOX_PAGE)), (snapshot) => {
+        const raw = snapshot.val();
+        context.commit('setClubInboxRequests', raw);
+        clubInboxProcessing = clubInboxProcessing
+          .then(() => context.dispatch('processClubInbox', { raw, path }))
+          .catch((error) => console.warn('[film-club] inbox:', error.message));
+      }, (error) => {
+        clubInboxWatching = null;
+        console.warn('[film-club] inbox listener:', error.message);
+      });
+    },
+    // Notices are hints from anyone holding the inbox link (§6.3): one that
+    // names no single negotiated friend is deleted unread and costs the
+    // friend's database nothing. A real one is persisted as the friend's
+    // pending refresh BEFORE it is deleted, so a closed tab loses nothing.
+    async processClubInbox (context, { raw, path }) {
+      const friends = context.state.settings?.externalFriends || {};
+      const plan = planInbox({ raw, friends });
+      const feedId = currentFeedId(context.state.settings?.clubFeedId, context.state.settings?.clubFeedKey);
+      const remove = (key) => set(ref(db, `${path}/${key}`), null).catch(() => {});
+
+      for (const { key, friendId, request } of plan.negotiations) {
+        const normalized = normalizeInboxRequests({ [key]: request })[0];
+        if (!normalized) { await remove(key); continue; }
+        const { changes, answer, proven } = negotiationUpdate({ friend: friends[friendId], request: normalized, feedId });
+        await context.dispatch('updateExternalFriend', { id: friendId, changes });
+        // Not provably theirs already: the owner decides, as with any request.
+        if (!proven) continue;
+        if (answer) {
+          try {
+            await context.dispatch('sendOwnFeed', { to: answer, replyInbox: false });
+            await context.dispatch('updateExternalFriend', { id: friendId, changes: { answeredFeedId: feedId } });
+          } catch (error) {
+            console.warn('[film-club] could not answer a negotiation:', error.message);
+            continue;
+          }
+        }
+        await remove(key);
+      }
+
+      const pending = coalesceNotices(plan.notices);
+      for (const [friendId, notice] of Object.entries(pending)) {
+        const prior = friends[friendId]?.noticePending;
+        if (!prior || notice.at >= (Number(prior.at) || 0)) {
+          await context.dispatch('updateExternalFriend', { id: friendId, changes: { noticePending: notice } });
+        }
+      }
+      await Promise.all(plan.notices.map(({ key }) => remove(key)));
+      Object.keys(pending).forEach((friendId) => context.dispatch('refreshNoticedFriend', friendId));
+    },
+    // One friend, because a notice said their feed moved. Never counts as the
+    // hourly backstop. A notice naming the revision we already hold costs
+    // nothing; a failed refresh keeps the pending marker for the next try.
+    async refreshNoticedFriend (context, id) {
+      if (noticeRefreshes.has(id)) return noticeRefreshes.get(id);
+      const run = (async () => {
+        const friend = context.state.settings?.externalFriends?.[id];
+        const pending = friend?.noticePending;
+        if (!pending) return;
+        const topKey = context.state.databaseTopKey;
+        const cache = topKey ? await loadSnapshot(topKey, `externalSync:${id}`).catch(() => null) : null;
+        if (cache?.meta?.revision !== pending.revision) {
+          if (!(await syncOneExternalFriend(context, id, friend))) return;
+          saveExternalFriendsSnapshot(context);
+        }
+        if (context.state.settings?.externalFriends?.[id]?.noticePending?.at === pending.at) {
+          await context.dispatch('updateExternalFriend', { id, changes: { noticePending: null } });
+        }
+      })();
+      noticeRefreshes.set(id, run);
+      try { return await run; } finally { noticeRefreshes.delete(id); }
+    },
+    // After a publish that moved the feed (and on launch, for retries): one
+    // notice per negotiated friend, best effort. One pending revision per
+    // friend is kept on the device, newest wins, and retried on later
+    // sessions a few times; a notice that never lands is repaired by the
+    // reader's hourly backstop. Never throws — a save must not fail on this.
+    async sendClubNotices (context, { revision = null } = {}) {
+      clubNoticeSending = clubNoticeSending
+        .then(() => sendNoticesNow(context, revision))
+        .catch((error) => console.warn('[film-club] notices:', error.message));
+      return clubNoticeSending;
     },
     // Accepting subscribes to them and, when they told us where to reply,
     // posts our own feed back so they can subscribe to us without a second
-    // round of copy-and-paste.
+    // round of copy-and-paste. Our reply offers change notices; theirs, if it
+    // offered them, is bound to the exact feed we just accepted.
     async acceptClubRequest (context, request) {
       if (!request?.feedUrl) return;
-      await context.dispatch('addExternalFriend', { name: request.name, feedUrl: request.feedUrl });
+      const id = await context.dispatch('addExternalFriend', { name: request.name, feedUrl: request.feedUrl });
       if (request.replyInboxUrl) {
-        const invite = await context.dispatch('createClubInvite');
-        if (invite) {
-          try {
-            await fetch(request.replyInboxUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(buildConnectRequest({
-                name: invite.name,
-                feedUrl: invite.feedUrl,
-                replyInboxUrl: invite.inboxUrl
-              }))
-            });
-          } catch (error) {
-            console.warn('[film-club] could not reply to invite:', error.message);
+        try {
+          const feedId = await context.dispatch('sendOwnFeed', { to: request.replyInboxUrl });
+          if (id && typeof feedId === 'string') {
+            await context.dispatch('updateExternalFriend', { id, changes: { sentFeedId: feedId, answeredFeedId: feedId, negotiatedInbox: request.replyInboxUrl } });
           }
+        } catch (error) {
+          console.warn('[film-club] could not reply to invite:', error.message);
         }
       }
+      if (id) await context.dispatch('recordFriendNegotiation', { id, request });
       await context.dispatch('dismissClubRequest', request.id);
+    },
+    async recordFriendNegotiation (context, { id, request }) {
+      const friend = context.state.settings?.externalFriends?.[id];
+      if (!friend) return;
+      const feedId = currentFeedId(context.state.settings?.clubFeedId, context.state.settings?.clubFeedKey);
+      const { changes } = negotiationUpdate({ friend, request, feedId });
+      await context.dispatch('updateExternalFriend', { id, changes });
     },
     async dismissClubRequest (context, requestId) {
       const me = context.state.databaseTopKey;
@@ -2272,22 +2531,18 @@ export default createStore({
       const invite = parseInvite(rawInvite);
       if (!invite) return { ok: false, error: 'That invite could not be read.' };
 
-      await context.dispatch('addExternalFriend', { name: invite.name, feedUrl: invite.feedUrl });
+      const id = await context.dispatch('addExternalFriend', { name: invite.name, feedUrl: invite.feedUrl });
 
       if (!invite.inboxUrl) {
         return { ok: true, replied: false, note: 'Subscribed. They will need your link to see you.' };
       }
-      const mine = await context.dispatch('createClubInvite');
       try {
-        await fetch(invite.inboxUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildConnectRequest({
-            name: mine.name,
-            feedUrl: mine.feedUrl,
-            replyInboxUrl: mine.inboxUrl
-          }))
-        });
+        const feedId = await context.dispatch('sendOwnFeed', { to: invite.inboxUrl });
+        if (!feedId) return { ok: true, replied: false, note: 'Subscribed, but your own feed could not be created.' };
+        // Their answer may name no inbox; this is the one it may call back.
+        if (id && typeof feedId === 'string') {
+          await context.dispatch('updateExternalFriend', { id, changes: { sentFeedId: feedId, negotiatedInbox: invite.inboxUrl } });
+        }
         return { ok: true, replied: true };
       } catch (error) {
         return { ok: true, replied: false, note: `Subscribed, but the request didn't send: ${error.message}` };
@@ -2372,77 +2627,42 @@ export default createStore({
       if (needed.native) context.dispatch('fetchFriendProfiles');
       if (needed.external) context.dispatch('syncExternalFriends');
     },
-    // Fetch each subscribed feed and translate it. Failures are per-friend
-    // and non-fatal — one unreachable feed must not blank the club.
+    // Fetch each subscribed feed that is due and translate it. Failures are
+    // per-friend and non-fatal — one unreachable feed must not blank the club.
     async syncExternalFriends (context, { force = false, maxAgeMs = EXTERNAL_FEED_MAX_AGE_MS } = {}) {
       const friends = context.state.settings?.externalFriends || {};
-      // Someone else's download quota: once an hour unless forced (see
-      // externalSyncDue). Every screen that mounts may ask; most asks are no-ops.
-      if (!externalSyncDue({ friends, profiles: context.state.externalFriendProfiles, syncedAt: context.state.externalFriendsSyncedAt, maxAgeMs, force })) return;
-      if (Object.keys(friends).length) context.commit('setSocialProfilesFetchedAt', Date.now());
-      await Promise.all(Object.entries(friends).map(async ([id, friend]) => {
-        if (!friend?.feedUrl) return;
-        try {
-          // v2 first (Brian's sync guide, 2026-10-06): two small head reads,
-          // then nothing, a journal delta, or a paged bootstrap; the certified
-          // snapshot is kept per friend across launches. Only when the head
-          // cannot be trusted does the legacy body get fetched.
-          const cached = context.state.externalFriendProfiles?.[id];
-          const topKey = context.state.databaseTopKey;
-          const syncKind = `externalSync:${id}`;
-          const syncCache = topKey ? await loadSnapshot(topKey, syncKind).catch(() => null) : null;
-          const v2 = await refreshExternalFeed({ feedUrl: friend.feedUrl, cache: syncCache });
-          if (v2.status === 'revoked') {
-            if (topKey) saveSnapshot(topKey, syncKind, null).catch(() => {});
-            context.commit('setExternalFriendProfile', { id, profile: null });
-            throw new Error('feed access was revoked');
-          }
-          if (v2.status === 'updated') {
-            if (topKey) saveSnapshot(topKey, syncKind, v2.cache).catch(() => {});
-            const profile = profileFromFeed(v2.feed, { fallbackName: friend.name });
-            if (profile) { context.commit('setExternalFriendProfile', { id, profile }); return; }
-          }
-          // No answer from the feed (bad signal, a timeout): keep what is
-          // shown and what is saved, report nothing, and skip the legacy body.
-          const keepCached = v2.status === 'unchanged' || v2.status === 'unreachable';
-          if (keepCached && cached) return;
-          if (keepCached && syncCache?.meta) {
-            // The snapshot is certified but this session has no profile yet (a cold start).
-            const profile = profileFromFeed(feedFromSyncCache(syncCache), { fallbackName: friend.name });
-            if (profile) { context.commit('setExternalFriendProfile', { id, profile }); return; }
-          }
-          if (v2.status === 'v1' && topKey && v2.cache) saveSnapshot(topKey, syncKind, v2.cache).catch(() => {});
-          // A feed that used to validate and no longer does is an alarm, not a
-          // quiet downgrade (Matt, 2026-10-06): a Sentry warning, once an hour.
-          if (v2.status === 'v1') reportFeedFallback({ friendName: friend.name, feedUrl: friend.feedUrl, reason: v2.reason, established: Boolean(v2.cache?.establishedV2) });
-          // Legacy body, with its revision preflight.
-          const revisionUrl = cached?.revision ? revisionUrlFor(friend.feedUrl) : null;
-          if (revisionUrl) {
-            let headRevision = null;
-            try {
-              const head = await fetchWithTimeout(revisionUrl, { cache: 'no-store' });
-              if (head.ok) headRevision = await head.json();
-            } catch {
-              // Fall through to the body.
-            }
-            if (!feedBodyNeeded({ cached, headRevision })) return;
-          }
-          const response = await fetchWithTimeout(friend.feedUrl, { cache: 'no-store' });
-          if (!response.ok) throw new Error(`feed responded ${response.status}`);
-          const profile = profileFromFeed(await response.json(), { fallbackName: friend.name });
-          if (!profile) throw new Error('unrecognised feed format');
-          context.commit('setExternalFriendProfile', { id, profile });
-        } catch (error) {
-          console.warn('[film-club] could not sync external friend', friend.name, error.message);
-          context.commit('setExternalFriendError', { id, message: error.message });
+      // Someone else's download quota (see EXTERNAL_FEED_MAX_AGE_MS). Every
+      // screen that mounts may ask; most asks are no-ops. A friend who sends
+      // change notices is on the hourly backstop instead (friendSyncDue); a
+      // pending notice is due at once but never counts as that backstop.
+      const feedId = currentFeedId(context.state.settings?.clubFeedId, context.state.settings?.clubFeedKey);
+      const now = Date.now();
+      const dueFor = (id, friend) => friendSyncDue({
+        friend,
+        hasProfile: Boolean(context.state.externalFriendProfiles?.[id]),
+        syncedAt: context.state.externalFriendSyncedAt?.[id] ?? context.state.externalFriendsSyncedAt,
+        maxAgeMs,
+        negotiated: isNegotiated(friend, feedId),
+        now,
+        force
+      });
+      const due = Object.entries(friends).filter(([id, friend]) => dueFor(id, friend));
+      if (!due.length) return;
+      const backstop = due.filter(([id, friend]) => dueFor(id, { ...friend, noticePending: null })).map(([id]) => id);
+      context.commit('setSocialProfilesFetchedAt', Date.now());
+      await Promise.all(due.map(async ([id, friend]) => {
+        const ok = await syncOneExternalFriend(context, id, friend);
+        const pending = friend.noticePending;
+        if (ok && pending && context.state.settings?.externalFriends?.[id]?.noticePending?.at === pending.at) {
+          await context.dispatch('updateExternalFriend', { id, changes: { noticePending: null } });
         }
       }));
       const syncedAt = Date.now();
-      context.commit('setExternalFriendsSyncedAt', syncedAt);
+      context.commit('markExternalFriendsSynced', { ids: backstop, at: syncedAt });
+      if (backstop.length === Object.keys(friends).length) context.commit('setExternalFriendsSyncedAt', syncedAt);
       // Keep the result for the next launch, so a cold start shows the club
       // at once and asks the feed only for its revision.
-      const topKey = context.state.databaseTopKey;
-      if (topKey) saveSnapshot(topKey, 'externalFriends', { profiles: context.state.externalFriendProfiles, syncedAt }).catch(() => {});
+      saveExternalFriendsSnapshot(context);
     },
 
     // ------------------------------------------------------------------

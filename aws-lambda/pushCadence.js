@@ -807,6 +807,20 @@ function externalFeedRead ({ revision = null, reachable = true, storedRevision =
   return { action: 'body', conditional: false };
 }
 
+/**
+ * Change notices (Film Club spec 1.3.0 §6.3): may the sweep check this
+ * friend's feed at all this time? Anyone who doesn't send notices: every
+ * sweep, as before. A negotiated friend: when a notice newer than our last
+ * check names a revision we haven't announced, and otherwise hourly — the
+ * backstop. A notice is a hint: it only brings the check forward.
+ */
+function externalCheckDue ({ negotiated = false, hint = null, storedRevision = null, checkedAt = 0, now = Date.now() } = {}) {
+  if (!negotiated) return true;
+  const last = Number(checkedAt) || 0;
+  if (hint && hint.revision !== storedRevision && Number(hint.at) > last) return true;
+  return now - last >= HOUR_MS;
+}
+
 // --- New sign-ups (Matt, 2026-09-28) -----------------------------------------
 //
 // "It would be cool if I knew when someone signed up for this app." The sweep
@@ -1508,6 +1522,7 @@ module.exports = {
   externalWatches,
   externalLogsDue,
   externalFeedRead,
+  externalCheckDue,
   ONE_DAY_MS,
   ACTIVE_IN_APP_MS,
   STALE_REMINDER_MS,

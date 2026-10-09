@@ -69,7 +69,28 @@
         "$inviteCode": {
           "$requestId": {
             ".write": "!data.exists() || (auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-'))",
-            ".validate": "newData.hasChildren(['name', 'app', 'feedUrl']) && newData.child('feedUrl').isString() && newData.child('feedUrl').val().length < 500 && newData.child('name').isString() && newData.child('name').val().length < 120"
+            ".validate": "(!newData.hasChild('kind') && newData.hasChildren(['name', 'app', 'feedUrl']) && newData.child('feedUrl').isString() && newData.child('feedUrl').val().length < 500 && newData.child('name').isString() && newData.child('name').val().length < 120) || (newData.hasChildren(['kind', 'app', 'feed', 'revision', 'at']) && (newData.child('app').val() === 'cinemaroll' || newData.child('app').val() === 'movielog') && newData.child('at').isNumber() && newData.child('at').val() <= now + 300000 && newData.child('at').val() >= now - 604800000 && !newData.hasChild('name') && !newData.hasChild('feedUrl') && !newData.hasChild('replyInboxUrl') && !newData.hasChild('notices'))",
+            "kind": {
+              ".validate": "newData.val() === 'feedChanged'"
+            },
+            "app": {
+              ".validate": "newData.isString() && newData.val().length < 60"
+            },
+            "at": {
+              ".validate": "newData.isNumber()"
+            },
+            "feed": {
+              ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,128}$/)"
+            },
+            "revision": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9a-f]{32}$/)"
+            },
+            "notices": {
+              ".validate": "newData.isBoolean()"
+            },
+            "$other": {
+              ".validate": "!newData.parent().hasChild('kind')"
+            }
           }
         }
       }

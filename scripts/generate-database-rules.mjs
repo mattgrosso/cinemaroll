@@ -57,6 +57,15 @@ const OWNER_KEY = 'mattgrosso-gmail-com';
 const currentFeedSecret = "root.child($userKey).child('settings').child('clubFeedKey').val() === $secret";
 const isOwner = `auth != null && auth.token.email != null && ${sanitizedAuthEmail} === '${OWNER_KEY}'`;
 
+// The inbox's two shapes (clubInbox below).
+const CONNECT_REQUEST = "newData.hasChildren(['name', 'app', 'feedUrl']) && newData.child('feedUrl').isString() && newData.child('feedUrl').val().length < 500 && newData.child('name').isString() && newData.child('name').val().length < 120";
+const CHANGE_NOTICE = [
+  "newData.hasChildren(['kind', 'app', 'feed', 'revision', 'at'])",
+  "(newData.child('app').val() === 'cinemaroll' || newData.child('app').val() === 'movielog')",
+  "newData.child('at').isNumber() && newData.child('at').val() <= now + 300000 && newData.child('at').val() >= now - 604800000",
+  "!newData.hasChild('name') && !newData.hasChild('feedUrl') && !newData.hasChild('replyInboxUrl') && !newData.hasChild('notices')"
+].join(' && ');
+
 const rules = {
   rules: {
     // Deny by default. Everything below is an explicit, narrow grant.
@@ -177,9 +186,20 @@ const rules = {
         // strangers are still confined to the create-only rule below.
         '.write': `auth != null && $userKey === ${sanitizedAuthEmail}`,
         $inviteCode: {
+          // Either a connect request (unchanged since 2026-08-16) or, since
+          // Film Club spec 1.3.0 §6.3, a change notice: exactly kind, app,
+          // feed, revision, at — a hint to refresh, never a URL or secret.
+          // Anything carrying `kind` is held to the notice shape.
           $requestId: {
             '.write': `!data.exists() || (auth != null && $userKey === ${sanitizedAuthEmail})`,
-            '.validate': "newData.hasChildren(['name', 'app', 'feedUrl']) && newData.child('feedUrl').isString() && newData.child('feedUrl').val().length < 500 && newData.child('name').isString() && newData.child('name').val().length < 120"
+            '.validate': `(!newData.hasChild('kind') && ${CONNECT_REQUEST}) || (${CHANGE_NOTICE})`,
+            kind: { '.validate': "newData.val() === 'feedChanged'" },
+            app: { '.validate': 'newData.isString() && newData.val().length < 60' },
+            at: { '.validate': 'newData.isNumber()' },
+            feed: { '.validate': 'newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,128}$/)' },
+            revision: { '.validate': 'newData.isString() && newData.val().matches(/^[0-9a-f]{32}$/)' },
+            notices: { '.validate': 'newData.isBoolean()' },
+            $other: { '.validate': "!newData.parent().hasChild('kind')" }
           }
         }
       }

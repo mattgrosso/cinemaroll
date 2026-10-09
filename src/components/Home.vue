@@ -2082,6 +2082,11 @@ export default {
       handler (ready) {
         if (!ready) return;
         if (!this.$store.state.settings?.clubFeedKey) return;
+        // Film Club change notices (spec 1.3.0 §6.3): the inbox is watched
+        // wherever the app is open, and a notice that didn't send last
+        // session gets another try.
+        this.$store.dispatch('watchClubInbox');
+        this.$store.dispatch('sendClubNotices');
         // Same rule as the profile: a changed name is a reason to republish
         // now, not in six hours (publishDue in social.js). The directory row
         // carries the name too, so it follows on a name change.

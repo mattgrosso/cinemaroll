@@ -296,6 +296,29 @@ The `revision` covers `awardsName` when the feed has one (and only then, so a fe
 it kept its old token): a ceremony rename is a body change, or the header would never
 republish — `buildAppend` returns null on an unmoved revision.
 
+**Change notices (Film Club spec 1.3.0 §6.3, proposal 0003, 2026-10-09).** A publisher
+drops a five-field `feedChanged` hint (`kind, app, feed, revision, at`) in each
+negotiated friend's `clubInbox`; the reader refreshes that one friend through the
+ordinary v2 read. Pure logic in `src/assets/javascript/clubNotices.js` (Lambda twin
+generated). A notice is unauthenticated: it binds to a friend ONLY through the opaque
+`feed` id that friend sent in a connect request whose `feedUrl` exactly matched their
+accepted one; unknown/ambiguous ids are deleted with zero peer reads. Friend records carry
+`noticeFeed/noticeApp` (their id), `noticeInbox` (where they read notices),
+`sentFeedId` (our `settings/clubFeedId.id` when we last sent them our feed URL — proof
+they hold the current capability; the id is new with every secret), `answeredFeedId`
+(an exact-feed negotiation is answered once, without `replyInboxUrl`, and only with
+that proof — otherwise it stays on screen as an ordinary request for the owner),
+`negotiatedInbox` and `noticePending` (persisted before the notice is deleted, cleared
+after a refresh; a failed refresh keeps it). Negotiated friends (`isNegotiated`) are
+polled on an hourly backstop; a notice never resets it. Sending: after a publish that
+moved the feed (`sendClubNotices`; the end-of-day Lambda after its copy), best effort,
+one pending revision per friend in the offline store, five tries. The inbox listener is
+app-wide (Home), bounded to 50 entries. Rules: an inbox entry is a connect request or a
+strict notice; emulator tests in `src/test/emulated/clubInbox.rules.test.js`. The push
+sweep checks a negotiated friend's revision only hourly or for a newer notice in the
+account's own inbox (`externalCheckDue`, `push/state/externalCheckedAt`). Connect requests
+offer `feed` + `notices: true`, and fall back to a plain request if an inbox refuses them.
+
 ## The push Lambda (`aws-lambda/push-notify.js`, deployed as `cinemaroll-push`)
 
 **External friends are read by revision first (2026-10-09).** `notifyExternalLogs`
@@ -615,7 +638,7 @@ committed in `.env` (`VUE_APP_VAPID_PUBLIC_KEY`, with `VUE_APP_PUSH_API_URL`). R
 ```
 # The bundle is index.js (= push-notify.js) + pushCadence.js + feedRevision.js (the
 # Film Club feed's revision token, CommonJS twin of src/assets/javascript/feedRevision.js)
-# + filmClubSync.js + filmClubSyncPublisher.js (GENERATED twins — run
+# + filmClubSync.js + filmClubSyncPublisher.js + clubNotices.js (GENERATED twins — run
 # scripts/sync-lambda-twins.mjs after editing the ESM sources) + sentryLambda.js (the
 # house Sentry reporter, 2026-10-08) + node_modules (web-push and its deps — NOT the aws-lambda/node_modules on disk, which
 # is the AI Lambda's). Start from the deployed bundle so the dependencies stay exactly as
@@ -623,7 +646,7 @@ committed in `.env` (`VUE_APP_VAPID_PUBLIC_KEY`, with `VUE_APP_PUSH_API_URL`). R
 URL=$(aws lambda get-function --function-name cinemaroll-push --profile personal \
   --region us-east-1 --query 'Code.Location' --output text)
 curl -s -o current.zip "$URL" && mkdir -p bundle && (cd bundle && unzip -q -o ../current.zip)
-cp aws-lambda/push-notify.js bundle/index.js && cp aws-lambda/pushCadence.js aws-lambda/feedRevision.js aws-lambda/filmClubSync.js aws-lambda/filmClubSyncPublisher.js aws-lambda/sentryLambda.js bundle/
+cp aws-lambda/push-notify.js bundle/index.js && cp aws-lambda/pushCadence.js aws-lambda/feedRevision.js aws-lambda/filmClubSync.js aws-lambda/filmClubSyncPublisher.js aws-lambda/clubNotices.js aws-lambda/sentryLambda.js bundle/
 (cd bundle && zip -q -r ../function.zip .)
 aws lambda update-function-code --function-name cinemaroll-push \
   --zip-file fileb://function.zip --profile personal --region us-east-1
