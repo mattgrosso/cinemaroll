@@ -304,7 +304,11 @@ it moved (`push/state/externalRevision/<id>`, stored after the body was announce
 Before this the sweep pulled every external friend's whole body (Brian's ~1.5 MB)
 every 15 minutes on the friend's Firebase bill — the Film Club spec (§3/§5.1, proposal
 0004) now forbids a body download on an unchanged feed, server jobs included.
-
+Accepted as spec 1.2.1 §3.2; `externalFeedRead` (pushCadence, tested) decides. A feed
+with no revision child is revalidated with its stored ETag (`externalEtag/<id>`, a 304
+is "unchanged"), and with no ETag yet the body is read at most hourly
+(`externalBodyAt/<id>`). A revision read that fails outright (network, 5xx) skips that
+sweep: no 2 MB GET as the retry. The body cap is 8 MB (Brian's passed 1.9 MB).
 
 Web push notifications (2026-08-27). Same auth pattern as the AI lambda — Firebase ID
 token verified with node crypto for the HTTP routes (`/push/test`, `/push/friend-logged`,

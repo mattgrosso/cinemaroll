@@ -18,6 +18,7 @@ import {
   composeGamesMessage,
   externalWatches,
   externalLogsDue,
+  externalFeedRead,
   signupsDue,
   emailGuessFromKey,
   composeSignupMessages,
@@ -1229,5 +1230,35 @@ describe('anyone\'s theaters — finding and ranking them', () => {
     expect(followedTheaters({ theaters: { 0: { key: 'a', name: 'A' }, 2: { key: 'b', name: 'B' } } }).map((t) => t.key)).toEqual(['a', 'b']);
     const many = Array.from({ length: 20 }, (_, i) => ({ key: `t${i}`, name: `T${i}` }));
     expect(followedTheaters({ theaters: many })).toHaveLength(MAX_FOLLOWED_THEATERS);
+  });
+});
+
+// Film Club spec §3.2 (proposal 0004): the sweep never downloads an unchanged body.
+describe('externalFeedRead', () => {
+  const REV = 'a'.repeat(32);
+  const HOUR = 60 * 60 * 1000;
+
+  it('skips the body when the revision child has not moved', () => {
+    expect(externalFeedRead({ revision: REV, storedRevision: REV })).toEqual({ action: 'skip', reason: 'unchanged' });
+  });
+
+  it('reads the body when the revision moved, or on first sight', () => {
+    expect(externalFeedRead({ revision: REV, storedRevision: 'b'.repeat(32) })).toEqual({ action: 'body', conditional: false });
+    expect(externalFeedRead({ revision: REV })).toEqual({ action: 'body', conditional: false });
+  });
+
+  it('with no revision child, revalidates by ETag rather than downloading', () => {
+    expect(externalFeedRead({ revision: null, etag: '"x"', bodyAt: NOW, now: NOW })).toEqual({ action: 'body', conditional: true });
+  });
+
+  it('with neither, reads the whole body at most hourly', () => {
+    expect(externalFeedRead({ revision: null, bodyAt: NOW - 15 * 60000, now: NOW })).toEqual({ action: 'skip', reason: 'hourly' });
+    expect(externalFeedRead({ revision: null, bodyAt: NOW - HOUR - 1, now: NOW })).toEqual({ action: 'body', conditional: false });
+    expect(externalFeedRead({ revision: null, now: NOW })).toEqual({ action: 'body', conditional: false });
+  });
+
+  it('a network blip on the revision child is not a reason to download the body', () => {
+    expect(externalFeedRead({ reachable: false, storedRevision: REV })).toEqual({ action: 'skip', reason: 'unreachable' });
+    expect(externalFeedRead({ reachable: false })).toEqual({ action: 'skip', reason: 'unreachable' });
   });
 });

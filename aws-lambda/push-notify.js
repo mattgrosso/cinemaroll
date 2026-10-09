@@ -37,7 +37,7 @@ const {
   dueFromDigest, nextBaseline, shouldSend, composeMessage, friendLogBody, friendRequestMessage, EMPTY_BASELINE,
   DAY_FRIEND, localDayStart, dayProfileFrom, dayFeedFrom, dayFeedMarker, dayFriendsByOwner, dayCopyDue, dayNews, composeDayMessage,
   gamesDue, shouldSendGames, composeGamesMessage,
-  externalWatches, externalLogsDue,
+  externalWatches, externalLogsDue, externalFeedRead,
   signupsDue, composeSignupMessages,
   alamoListings, veeziListings, afiListings, boxofficeListings, afiFirstShowtime,
   cinemaclockListings, uncovered, dismissedFilms, dismissedAtRank, boardForApp, remindersDue, showtimesWaiting, composeReminderMessage, listingsDue, composeListingMessages,
@@ -831,7 +831,8 @@ const notifyReminders = async (topKey, now) => {
 // URLs (clubFeed/<uid>/<secret>.json) and nothing else, so only those are
 // fetched, and the body is size-capped before it is parsed.
 const FEED_HOST_RE = /^[a-z0-9-]+\.(firebaseio\.com|firebasedatabase\.app)$/i;
-const MAX_FEED_BYTES = 2 * 1024 * 1024;
+// Brian's body passed 1.9 MB in Oct 2026; the cap is for runaway responses, not big libraries.
+const MAX_FEED_BYTES = 8 * 1024 * 1024;
 const safeFeedUrl = (value) => {
   try {
     const url = new URL(String(value).trim());
@@ -844,28 +845,35 @@ const safeFeedUrl = (value) => {
     return null;
   }
 };
-const readFeed = async (feedUrl) => {
-  const response = await fetch(feedUrl, { cache: 'no-store' });
+// Always asks for the body's ETag (X-Firebase-ETag), and sends the stored
+// one back when the sweep is revalidating: a 304 is "unchanged", no body.
+const readFeed = async (feedUrl, etag = null) => {
+  const headers = { 'X-Firebase-ETag': 'true' };
+  if (etag) headers['If-None-Match'] = etag;
+  const response = await fetch(feedUrl, { cache: 'no-store', headers });
+  if (etag && response.status === 304) return { notModified: true, etag };
   if (!response.ok) throw new Error(`feed responded ${response.status}`);
   const text = await response.text();
   if (text.length > MAX_FEED_BYTES) throw new Error('feed too large');
-  return JSON.parse(text);
+  return { feed: JSON.parse(text), etag: response.headers.get('etag') };
 };
 // The body's content-derived `revision` (Film Club spec §3, 34 bytes), read
 // before the body so an unchanged feed costs the publisher nothing. Found
 // 2026-10-09: this sweep had been downloading every external friend's whole
 // body (Brian's ~1.5 MB) every 15 minutes for every account with external
 // friends, on the friend's Firebase bill — most of what Brian was paying for.
-// A feed without a revision child (not a Film Club feed) reads null and is
-// fetched as before.
+// A feed without a revision child reads null and is revalidated by ETag, or
+// read at most hourly (pushCadence's externalFeedRead). A child that can't be
+// reached at all (network, 5xx) is `reachable: false`: skip this sweep.
 const readRevision = async (feedUrl) => {
   try {
     const response = await fetch(feedUrl.replace(/\.json(\?[^#]*)?$/, '/revision.json$1'), { cache: 'no-store' });
-    if (!response.ok) return null;
+    if (response.status >= 500) return { revision: null, reachable: false };
+    if (!response.ok) return { revision: null, reachable: true };
     const value = await response.json();
-    return typeof value === 'string' && /^[0-9a-f]{32}$/.test(value) ? value : null;
+    return { revision: typeof value === 'string' && /^[0-9a-f]{32}$/.test(value) ? value : null, reachable: true };
   } catch {
-    return null;
+    return { revision: null, reachable: false };
   }
 };
 
@@ -878,15 +886,20 @@ const notifyExternalLogs = async (topKey, push, prefs) => {
 
   const seen = (push.state && push.state.externalSeen) || {};
   const revisions = (push.state && push.state.externalRevision) || {};
+  const etags = (push.state && push.state.externalEtag) || {};
+  const bodyTimes = (push.state && push.state.externalBodyAt) || {};
   let delivered = 0;
   let seeded = 0;
   let unchanged = 0;
 
   for (const [id, friend, feedUrl] of entries) {
     try {
-      const revision = await readRevision(feedUrl);
-      if (revision && revision === revisions[id]) { unchanged += 1; continue; }
-      const watches = externalWatches(await readFeed(feedUrl));
+      const { revision, reachable } = await readRevision(feedUrl);
+      const plan = externalFeedRead({ revision, reachable, storedRevision: revisions[id] || null, etag: etags[id] || null, bodyAt: bodyTimes[id], now: Date.now() });
+      if (plan.action === 'skip') { unchanged += 1; continue; }
+      const read = await readFeed(feedUrl, plan.conditional ? etags[id] : null);
+      if (read.notModified) { unchanged += 1; continue; }
+      const watches = externalWatches(read.feed);
       const { announce, nextSeenAt } = externalLogsDue({
         watches,
         seenAt: Number(seen[id]) || 0,
@@ -920,6 +933,8 @@ const notifyExternalLogs = async (topKey, push, prefs) => {
       // Remembered only once the body was read AND announced, so a sweep that
       // fails part-way is retried next time rather than skipped for good.
       if (revision && revision !== revisions[id]) await dbSet(`${topKey}/push/state/externalRevision/${id}`, revision);
+      if (read.etag && read.etag !== etags[id]) await dbSet(`${topKey}/push/state/externalEtag/${id}`, read.etag);
+      if (!revision) await dbSet(`${topKey}/push/state/externalBodyAt/${id}`, Date.now());
     } catch (error) {
       console.error(`External-friend sweep for ${topKey}/${id} failed:`, error.message);
     }

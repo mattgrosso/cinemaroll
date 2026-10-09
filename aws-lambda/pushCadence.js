@@ -789,6 +789,24 @@ function externalLogsDue ({ watches, seenAt = 0, now = Date.now(), maxAgeMs = EX
   return { announce, nextSeenAt: Math.max(marker, newest), seeded: false };
 }
 
+/**
+ * How the sweep reads ONE external friend's legacy body (Film Club spec
+ * §3.2, proposal 0004): never an unchanged body.
+ *  - the `revision` child first: unchanged → skip; moved → the body.
+ *  - no usable child (a v1-only feed may omit it): revalidate with the
+ *    stored ETag, a 304 meaning unchanged; with no ETag yet, the whole body
+ *    at most once an hour.
+ *  - the child couldn't be reached at all (a network blip, a 5xx): skip.
+ *    The next sweep is 15 minutes away; a 2 MB GET is not the retry.
+ */
+function externalFeedRead ({ revision = null, reachable = true, storedRevision = null, etag = null, bodyAt = 0, now = Date.now() } = {}) {
+  if (!reachable) return { action: 'skip', reason: 'unreachable' };
+  if (revision) return revision === storedRevision ? { action: 'skip', reason: 'unchanged' } : { action: 'body', conditional: false };
+  if (etag) return { action: 'body', conditional: true };
+  if (now - (Number(bodyAt) || 0) < HOUR_MS) return { action: 'skip', reason: 'hourly' };
+  return { action: 'body', conditional: false };
+}
+
 // --- New sign-ups (Matt, 2026-09-28) -----------------------------------------
 //
 // "It would be cool if I knew when someone signed up for this app." The sweep
@@ -1489,6 +1507,7 @@ module.exports = {
   EXTERNAL_MAX_PER_FRIEND,
   externalWatches,
   externalLogsDue,
+  externalFeedRead,
   ONE_DAY_MS,
   ACTIVE_IN_APP_MS,
   STALE_REMINDER_MS,
