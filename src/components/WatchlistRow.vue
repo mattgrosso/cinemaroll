@@ -1,5 +1,5 @@
 <template>
-  <div class="watchlist-row-wrapper">
+  <div class="watchlist-row-wrapper" :class="{ 'watchlist-row-large': large }">
     <div class="watchlist-row">
       <div
         v-for="item in items"
@@ -132,7 +132,10 @@ export default {
     // that movie went into the hat" (2026-08-17). Every list on this screen
     // supplies its own, so a draw can say it came from the rewatch pile or
     // from a director you love.
-    hatNote: { type: String, default: null }
+    hatNote: { type: String, default: null },
+    // Bigger posters, for a row that has a tab to itself (the Watchlist's
+    // Club tab, 2026-10-08 — the same 156px as Film Club's Activity strip).
+    large: { type: Boolean, default: false }
   },
   emits: ['select', 'punt', 'hatted'],
   methods: {
@@ -300,5 +303,17 @@ export default {
 
 .watchlist-meta-line {
   display: block;
+}
+
+/* Same shape, 1.5x: every image in the row still lines up top and bottom. */
+.watchlist-row-large {
+  .watchlist-card,
+  .watchlist-poster-frame,
+  .watchlist-poster { width: 156px; }
+
+  .watchlist-poster-frame,
+  .watchlist-poster { height: 234px; }
+
+  .watchlist-meta { font-size: 0.78rem; }
 }
 </style>

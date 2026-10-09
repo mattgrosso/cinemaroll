@@ -78,23 +78,25 @@ function tmdbImpl (url) {
   return Promise.reject(new Error(`unexpected url ${url}`));
 }
 
-function factory ({ isOnline = true, movies = library(), dispatch = vi.fn(), movieHatMovieIds = {}, movieHatContentsComplete = true, linkedMovieHats = [], state = {}, showtimesBadgeCount = 0 } = {}) {
+function factory ({ isOnline = true, movies = library(), dispatch = vi.fn(), movieHatMovieIds = {}, movieHatContentsComplete = true, linkedMovieHats = [], state = {}, showtimesBadgeCount = 0, filmClubProfiles, route } = {}) {
   const pushSpy = vi.fn();
+  const replaceSpy = vi.fn();
   const commitSpy = vi.fn();
   const wrapper = mount(WatchlistScreen, {
     global: {
       mocks: {
         $store: {
           state: { isOnline, movieHatMovieIds, movieHatContentsComplete, ...state },
-          getters: { allMoviesAsArray: movies, linkedMovieHats, showtimesBadgeCount },
+          getters: { allMoviesAsArray: movies, linkedMovieHats, showtimesBadgeCount, filmClubProfiles },
           commit: commitSpy,
           dispatch
         },
-        $router: { push: pushSpy }
+        $router: { push: pushSpy, replace: replaceSpy },
+        ...(route ? { $route: route } : {})
       }
     }
   });
-  return { wrapper, pushSpy, commitSpy, dispatch };
+  return { wrapper, pushSpy, replaceSpy, commitSpy, dispatch };
 }
 
 // Cards are poster-only now, so a card's accessible name is where the title
@@ -1242,3 +1244,88 @@ describe('every suggestion row leaves out shorts and extras', () => {
     });
   });
 });
+
+// Matt, 2026-10-08, after the Film Club redesign: "have similar principles
+// and do the watch list page as well". Thirteen sections on one scroll became
+// five tabs. v-show keeps every panel mounted (rows still load on arrival), so
+// "on a tab" means its panel is the one not display:none.
+describe('the Watchlist tabs', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    axios.get.mockReset();
+    axios.get.mockImplementation(tmdbImpl);
+  });
+
+  const shown = (wrapper, panel) => wrapper.find(`.wl-panel-${panel}`).element.style.display !== 'none';
+  const shownPanels = (wrapper) => ['foryou', 'club', 'revisit', 'years', 'search'].filter((panel) => shown(wrapper, panel));
+  const panelTitles = (wrapper, panel) => wrapper.findAll(`.wl-panel-${panel} .section-title`).map((h) => h.text());
+
+  it('has five tabs, no title or blurb above them, and opens on For You', async () => {
+    const { wrapper } = factory();
+    await flushPromises();
+
+    expect(wrapper.findAll('.wl-tab').map((t) => t.text())).toEqual(['For You', 'Club', 'Revisit', 'Years', 'Search']);
+    expect(wrapper.find('h1').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Built from your own ratings');
+    expect(shownPanels(wrapper)).toEqual(['foryou']);
+  });
+
+  it('puts each section on its own tab', async () => {
+    const { wrapper } = factory();
+    await flushPromises();
+
+    expect(panelTitles(wrapper, 'foryou')).toContain('From directors you love');
+    expect(panelTitles(wrapper, 'foryou')).not.toContain('Worth a rewatch');
+    expect(panelTitles(wrapper, 'revisit')).toContain('Worth a rewatch');
+    expect(panelTitles(wrapper, 'search')).toEqual(['Ask for something', "Someone's filmography"]);
+  });
+
+  it('Film Club picks get the Club tab to themselves, with the bigger posters', async () => {
+    const filmClubProfiles = { pal: { name: 'Pal', ratings: { 301: { r: 9, t: 'Club Feature', p: '/f.jpg' } } } };
+    const { wrapper } = factory({ filmClubProfiles });
+    await flushPromises();
+
+    expect(panelTitles(wrapper, 'club')).toEqual(['Your Film Club loves these']);
+    expect(wrapper.find('.wl-panel-club .watchlist-row-large').exists()).toBe(true);
+    expect(wrapper.find('.wl-panel-foryou .watchlist-row-large').exists()).toBe(false);
+  });
+
+  it('says what the Club tab is for when it has nothing yet', async () => {
+    const { wrapper } = factory();
+    await flushPromises();
+
+    expect(wrapper.find('.wl-panel-club .wl-empty').exists()).toBe(true);
+  });
+
+  it('a tap shows that tab, remembers it, and puts it in the address without a new history entry', async () => {
+    const { wrapper, replaceSpy, pushSpy } = factory({ route: { path: '/watchlist', query: {} } });
+    await flushPromises();
+
+    await wrapper.find('.wl-tab-search').trigger('click');
+
+    expect(shownPanels(wrapper)).toEqual(['search']);
+    expect(window.localStorage.getItem('cinemaRoll.watchlist.tab')).toBe('search');
+    expect(replaceSpy).toHaveBeenCalledWith({ path: '/watchlist', query: { tab: 'search' } });
+    expect(pushSpy).not.toHaveBeenCalled();
+  });
+
+  it('opens on the remembered tab, and a ?tab= link beats it', async () => {
+    window.localStorage.setItem('cinemaRoll.watchlist.tab', 'revisit');
+    const remembered = factory();
+    const linked = factory({ route: { path: '/watchlist', query: { tab: 'years' } } });
+    await flushPromises();
+
+    expect(shownPanels(remembered.wrapper)).toEqual(['revisit']);
+    expect(shownPanels(linked.wrapper)).toEqual(['years']);
+  });
+
+  it('keeps the Showtimes bar above the tabs, with its count', async () => {
+    const { wrapper } = factory({ showtimesBadgeCount: 3 });
+    await flushPromises();
+
+    const html = wrapper.html();
+    expect(html.indexOf('showtimes-card')).toBeLessThan(html.indexOf('wl-tabs'));
+    expect(wrapper.find('.showtimes-card').text()).toContain('3 waiting');
+  });
+});
+

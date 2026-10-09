@@ -1,13 +1,13 @@
 <template>
   <div class="watchlist-screen">
     <BackLink/>
-    <h1 class="watchlist-title">Watchlist</h1>
-    <p class="watchlist-subtitle">Built from your own ratings — what to revisit, and what to see next.</p>
 
     <!-- Showtimes lived in the Insights directory until 2026-09-29, where
          it was the odd one out: everything else there is about your
          library, and this is about what to go and see — this screen's
-         question. Above the skeleton, so it's there on the first frame. -->
+         question. Above the skeleton, so it's there on the first frame.
+         A slim one-line bar above the tabs since 2026-10-08: it's a door to
+         another screen, not one of this screen's lists. -->
     <button type="button" class="showtimes-card" @click="$router.push('/showtimes')">
       <i class="bi bi-ticket-perforated"></i>
       <span class="showtimes-card-label">Showtimes</span>
@@ -22,6 +22,22 @@
     <!-- Painted for one frame before the real content (nextFrame): the
          tap that opened this screen is acknowledged at once instead of
          after the ~0.5-1s the sections below take to build. -->
+    <!-- Five tabs instead of thirteen look-alike sections on one scroll
+         (Matt, 2026-10-08, after the Film Club redesign: "have similar
+         principles and do the watch list page as well"). No title or blurb
+         above them; same control as Film Club; the choice rides in ?tab=
+         and is remembered. -->
+    <nav class="wl-tabs">
+      <button
+        v-for="t in tabs"
+        :key="t.key"
+        type="button"
+        class="wl-tab"
+        :class="[`wl-tab-${t.key}`, { active: tab === t.key }]"
+        @click="setTab(t.key)"
+      >{{ t.label }}</button>
+    </nav>
+
     <SkeletonBlock v-if="!painted" :rows="7"/>
     <template v-else>
 
@@ -37,6 +53,11 @@
          would give me back a watchlist tailored to that prompt."
          Everything below this is derived from ratings; this is the one place
          you can just say what you're in the mood for. -->
+    <!-- v-show, not v-if: every row still loads on arrival exactly as it did
+         on the one long page, and flipping tabs keeps what you typed, where
+         a row was scrolled to, and a filmography you were working through.
+         Plain wrappers (no d-* class), so v-show really hides them. -->
+    <div v-show="tab === 'search'" class="wl-panel wl-panel-search">
     <section class="watchlist-section prompt-section">
       <h2 class="section-title">Ask for something</h2>
       <p class="section-caption">Describe what you're in the mood for.</p>
@@ -204,6 +225,9 @@
       </p>
     </section>
 
+    </div>
+
+    <div v-show="tab === 'revisit'" class="wl-panel wl-panel-revisit">
     <!-- Local, always available: movies you loved but haven't logged in a
          long time. -->
     <section v-if="rewatchList.length" class="watchlist-section">
@@ -223,6 +247,12 @@
       <WatchlistRow :items="anotherShotItems" puntable hat-note="Worth a second look — rated low here, loved elsewhere" @select="goToMovie" @punt="punt" @hatted="puntAll"/>
     </section>
 
+    <p v-if="!rewatchList.length && !anotherShotList.length" class="wl-empty">
+      Nothing to revisit right now — films you loved a long time ago, and ones you rated low that everyone else loves, land here.
+    </p>
+    </div>
+
+    <div v-show="tab === 'years'" class="wl-panel wl-panel-years">
     <!-- TMDB-fed: well-regarded movies from years you've started but not
          finished (feedback: "I'm often trying to get my years up to 10 so I
          can fill in my awards").
@@ -273,18 +303,30 @@
       <p v-else class="section-loading">Nothing well-regarded found that you haven't already rated.</p>
     </section>
 
-    <!-- TMDB-fed: unseen movies from the people your ratings favor. Tapping
-         one opens its summary (2026-08-20); rating is the button inside that
-         sheet, which then makes the same setMovieToRate + /rate-movie handoff
-         PickMedia uses. -->
+    <p v-if="!nearYears.length && $store.state.isOnline" class="wl-empty">
+      No year is part-way to {{ awardsThreshold }} rated films right now.
+    </p>
+    </div>
+
+    <div v-show="tab === 'club'" class="wl-panel wl-panel-club">
     <!-- Film Club picks: the strongest signal in the app, and until now it
-         only existed on the per-friend comparison page. -->
+         only existed on the per-friend comparison page. With a tab to itself
+         the posters run bigger, like Film Club's Activity strip. -->
     <section v-if="friendPickMedia.length" class="watchlist-section">
       <h2 class="section-title">Your Film Club loves these</h2>
       <p class="section-caption">Rated 8 or better by friends, never rated by you. Agreement sorts first.</p>
-      <WatchlistRow :items="mediaItems(friendPickMedia)" hat-note="Loved by the film club" puntable :punt-label="dismissLabel" @punt="dismiss" @select="previewMedia" @hatted="puntAll"/>
+      <WatchlistRow :items="mediaItems(friendPickMedia)" large hat-note="Loved by the film club" puntable :punt-label="dismissLabel" @punt="dismiss" @select="previewMedia" @hatted="puntAll"/>
     </section>
+    <p v-else class="wl-empty">
+      Nothing here yet — films your friends rate 8 or better, that you haven't rated, show up here.
+    </p>
+    </div>
 
+    <div v-show="tab === 'foryou'" class="wl-panel wl-panel-foryou">
+    <!-- TMDB-fed: unseen movies from the people your ratings favor. Tapping
+         one opens its summary (2026-08-20); rating is the button inside that
+         sheet, which then makes the same setMovieToRate + /rate-movie handoff
+         PickMedia uses. Still ordered by what has actually earned watches. -->
     <section v-for="section in rankedSections" :key="section.key" class="watchlist-section">
       <h2 class="section-title">{{ section.title }}</h2>
       <p class="section-caption">
@@ -295,6 +337,7 @@
       <WatchlistRow v-else-if="section.movies.length" :items="mediaItems(section.movies)" :hat-note="sectionHatNote(section)" puntable :punt-label="dismissLabel" @punt="dismiss" @select="previewMedia" @hatted="puntAll"/>
       <p v-else class="section-loading">Nothing new found — you've seen the good ones.</p>
     </section>
+    </div>
 
     <DrawFromHat/>
 
@@ -304,7 +347,7 @@
     <MoviePreview :movie="previewing" @close="previewing = null" @rate="rateFromPreview"/>
 
     <p v-if="!$store.state.isOnline" class="watchlist-offline-note">
-      You're offline — the "what to see next" lists need a connection, so only the rewatch list is shown.
+      You're offline — the "what to see next" lists need a connection, so only Revisit has anything to show.
     </p>
     </template>
   </div>
@@ -386,6 +429,18 @@ const SHOWN_PER_ROW = 12;
 // down the list are still directors you love.
 const DIRECTOR_POOL_CAP = 20;
 
+const WATCHLIST_TABS = ['foryou', 'club', 'revisit', 'years', 'search'];
+const WATCHLIST_TAB_KEY = 'cinemaRoll.watchlist.tab';
+// A link can name the tab (?tab=years); else the last one you were on; else
+// For You. Film Club's rule (FilmClubScreen.vue), same shape.
+function initialWatchlistTab (route) {
+  const asked = route?.query?.tab;
+  if (WATCHLIST_TABS.includes(asked)) return asked;
+  let stored = null;
+  try { stored = localStorage.getItem(WATCHLIST_TAB_KEY); } catch { /* private mode */ }
+  return WATCHLIST_TABS.includes(stored) ? stored : 'foryou';
+}
+
 export default {
   name: 'WatchlistScreen',
   components: {
@@ -397,6 +452,14 @@ export default {
   },
   data () {
     return {
+      tab: initialWatchlistTab(this.$route),
+      tabs: [
+        { key: 'foryou', label: 'For You' },
+        { key: 'club', label: 'Club' },
+        { key: 'revisit', label: 'Revisit' },
+        { key: 'years', label: 'Years' },
+        { key: 'search', label: 'Search' }
+      ],
       painted: !SKELETON_FIRST,
       dismissLabel: DISMISS_LABEL,
       // Bumped whenever runtimes land (suggestionFilters.js keeps them), so
@@ -799,6 +862,11 @@ export default {
     this.$store.dispatch('ensureMovieHatContents')?.catch?.(() => {});
   },
   watch: {
+    // A link to ?tab=years while the screen is already open (the app stays
+    // mounted across hash changes).
+    '$route.query.tab' (value) {
+      if (WATCHLIST_TABS.includes(value) && value !== this.tab) this.tab = value;
+    },
     // Friend edges arrive asynchronously from the listener, so refetch when
     // the mutual set changes.
     socialFriendKeys: {
@@ -853,6 +921,13 @@ export default {
      * anything ambiguous puts the chooser on screen instead of guessing.
      */
     describeSuggestion,
+    setTab (key) {
+      if (key === this.tab) return;
+      this.tab = key;
+      try { localStorage.setItem(WATCHLIST_TAB_KEY, key); } catch { /* private mode */ }
+      // replace, not push: flipping tabs shouldn't bury the way back.
+      this.$router?.replace?.({ path: this.$route?.path || '/watchlist', query: { ...(this.$route?.query || {}), tab: key } });
+    },
     /**
      * A tapped suggestion is the whole answer: put the name in the box and
      * go and get the filmography, no second tap on Find.
@@ -1447,16 +1522,6 @@ export default {
   padding: 2.5rem 1rem 2rem;
 }
 
-.watchlist-title {
-  margin: 0.5rem 0 0;
-}
-
-.watchlist-subtitle {
-  color: #adb5bd;
-  font-size: 0.85rem;
-  margin: 0.25rem 0 1.25rem;
-}
-
 .showtimes-card {
   align-items: center;
   background: #161616;
@@ -1465,14 +1530,14 @@ export default {
   color: #eee;
   display: flex;
   gap: 0.6rem;
-  margin: 0 0 1.25rem;
-  min-height: 48px;
-  padding: 0.5rem 0.9rem;
+  margin: 0.35rem 0 0.5rem;
+  min-height: 40px;
+  padding: 0.3rem 0.75rem;
   text-align: left;
   width: 100%;
 
   .bi-ticket-perforated { color: #ffc107; font-size: 1.15rem; }
-  .showtimes-card-label { flex: 1 1 auto; font-size: 0.95rem; font-weight: 600; }
+  .showtimes-card-label { flex: 1 1 auto; font-size: 0.88rem; font-weight: 600; }
   /* #9aa0a6 on #161616 is ~7:1. */
   .showtimes-card-chevron { color: #9aa0a6; font-size: 0.9rem; }
 
@@ -1492,10 +1557,25 @@ export default {
   text-transform: uppercase;
 }
 
+/* Film Club's tab control (.fc-tabs), same sizes and the same five colours,
+   each with black text on the lit tab (all well past 4.5:1). */
+.wl-tabs { display: grid; gap: 0.3rem; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0 0 0.9rem; width: 100%; }
+.wl-tab { align-items: center; background: none; border: 1px solid white; border-radius: 3px; color: white; display: inline-flex; font-size: 0.78rem; font-weight: 600; justify-content: center; min-height: 40px; min-width: 0; padding: 0 0.2rem; white-space: nowrap; }
+.wl-tab.active { color: #000; font-weight: 700; }
+.wl-tab-foryou.active { background: #24d776; }
+.wl-tab-club.active { background: #cd7fe8; }
+.wl-tab-revisit.active { background: #FFD700; }
+.wl-tab-years.active { background: #1D8BF1; }
+.wl-tab-search.active { background: #ff7a6b; }
+.wl-tab:active { opacity: 0.7; transform: scale(0.97); }
+
+/* #ccc on the page's dark background, ~10:1. */
+.wl-empty { color: #ccc; font-size: 0.85rem; margin: 0.5rem 0 1.25rem; }
+
 .hat-check-note {
   color: #ccc;
   font-size: 0.8rem;
-  margin: -0.75rem 0 1.25rem;
+  margin: 0 0 0.9rem;
 }
 
 /* 1.75rem when every row still ended in a bulk "add all to a hat" button,

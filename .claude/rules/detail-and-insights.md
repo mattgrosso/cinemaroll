@@ -254,7 +254,7 @@ and deep stats?" — nothing did).** Deep Stats is no longer a page; `/stats` re
   (`BoxOfficePeople`, fed `resultsWithRatings` via the category's `props`).
 - **Places**.
 
-Showtimes lives on the **Watchlist** (a card at the top; `showtimesUnread.js` is the
+Showtimes lives on the **Watchlist** (a slim bar above its tabs; `showtimesUnread.js` is the
 pure "anything new?" check) and the Newsletter is a link row at the top of **Settings**
 (`SettingsSection`'s `to` prop). Neither is about your library, which is why they left.
 `Insights.test.js` ("one question per tab") pins every section to its tab — adding one
@@ -519,3 +519,22 @@ favorites, Most divisive, Running with the crowd, Club vs the crowd), **Charts**
 redirects to `?tab=charts`). A `$route.query.tab` watcher handles links while
 the screen is already mounted.
 Tests pass `tab:` to the factory; the remembered tab is cleared between tests.
+
+## Watchlist tabs (2026-10-08)
+
+Same principles as Film Club's tabs, asked for once those landed ("have similar
+principles and do the watch list page as well"). No title or blurb; the Showtimes card
+is a slim one-line bar above the tabs (keeps its "N waiting" / "new" tag); then five
+tabs on the Film Club control (`.wl-tabs`, URL `?tab=`, remembered in localStorage
+under `cinemaRoll.watchlist.tab`): **For You** (default — the ranked people/similar/gems
+rows, still ordered by `rankSections`), **Club** (Your Film Club loves these, on
+`WatchlistRow large` — 156px posters like Activity), **Revisit** (Worth a rewatch, Give
+these another shot), **Years** (Get a year to N), **Search** (Ask for something,
+Someone's filmography). Each tab has an empty line when it has nothing.
+
+Panels are **`v-show`, not `v-if`**, unlike Film Club: every row still loads on
+arrival as it did on the long page, and flipping tabs keeps typed text, a row's
+scroll and a filmography in progress. The panels are plain divs (no `d-*`), so
+`v-show` really hides them. Tests assert `style.display` per `.wl-panel-<key>`
+("the Watchlist tabs" in `WatchlistScreen.test.js`); every older test still finds its
+section because all panels are mounted.
