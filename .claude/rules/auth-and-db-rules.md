@@ -66,7 +66,9 @@ logs only a console warning, so the saving would be exactly zero.
 `firebase-admin`). The **audience and issuer checks are load-bearing** — without them a
 valid token from *any* Firebase project is accepted. CORS is not the gate; it only
 constrains browsers. Client side, `src/utils/aiRequest.js` is the only place that attaches
-the token, so no caller can forget.
+the token, so no caller can forget. It awaits `auth.authStateReady()` before reading `currentUser`
+(2026-10-09): the router admits a signed-in user from localStorage before Firebase has
+restored the session, so a call from `mounted()` used to see nobody signed in.
 
 The API Gateway `$default` stage is throttled to rate 2 / burst 10. Note the AWS account's
 Lambda concurrency limit is **10**, and overflow surfaces as **503**, not 429. None of

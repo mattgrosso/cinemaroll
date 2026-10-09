@@ -14,7 +14,14 @@ import { getAuth } from 'firebase/auth';
 export const AI_REQUEST_TIMEOUT_MS = 35000;
 
 export async function postToAi (route, payload) {
-  const user = getAuth().currentUser;
+  // Firebase restores a saved session a moment after page load, while the
+  // router has already let a signed-in user in from localStorage. A screen that
+  // asks in mounted() (RateMovie's keywords) used to land in that gap and be
+  // told nobody was signed in (Sentry, 2026-10-09). Wait for the restore first;
+  // it resolves at once after that.
+  const auth = getAuth();
+  await auth.authStateReady();
+  const user = auth.currentUser;
   if (!user) {
     throw new Error('Not signed in — AI features need an authenticated user.');
   }

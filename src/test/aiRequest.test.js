@@ -5,7 +5,12 @@ vi.mock('axios', () => ({ default: { post: vi.fn(() => Promise.resolve({ data: {
 
 const getIdToken = vi.fn(() => Promise.resolve('a-real-token'));
 let currentUser = { getIdToken };
-vi.mock('firebase/auth', () => ({ getAuth: () => ({ get currentUser () { return currentUser; } }) }));
+// Resolves when Firebase has finished restoring a saved session. Tests that
+// need the slow-restore case swap this for one that sets currentUser late.
+let authStateReady = () => Promise.resolve();
+vi.mock('firebase/auth', () => ({
+  getAuth: () => ({ get currentUser () { return currentUser; }, authStateReady: () => authStateReady() })
+}));
 
 const { postToAi } = await import('@/utils/aiRequest.js');
 const { REQUEST_TIMEOUT_MS } = await import('@/utils/networkHealth.js');
@@ -14,7 +19,25 @@ describe('postToAi', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     currentUser = { getIdToken };
+    authStateReady = () => Promise.resolve();
     getIdToken.mockResolvedValue('a-real-token');
+  });
+
+  it('waits for a saved session to finish restoring before deciding nobody is signed in', async () => {
+    // Sentry, 2026-10-09: "Not signed in" from the rating screen's keywords on
+    // a fresh page load. The router lets a signed-in user through from
+    // localStorage at once, but Firebase restores the session a moment later -
+    // a request fired in mounted() checked currentUser in that gap.
+    currentUser = null;
+    authStateReady = () => new Promise((resolve) => setTimeout(() => {
+      currentUser = { getIdToken };
+      resolve();
+    }, 10));
+
+    await postToAi('/keywords', { title: 'Jaws', year: 1975 });
+
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    expect(axios.post.mock.calls[0][2].headers.Authorization).toBe('Bearer a-real-token');
   });
 
   it('attaches the signed-in user\'s ID token', async () => {
