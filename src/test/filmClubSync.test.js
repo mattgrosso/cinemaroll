@@ -7,6 +7,7 @@ import {
   planRefresh, mergeMoviesPage, applyBatches, certifies, feedFromSync, SyncGapError, MAX_BATCHES, MOVIES_PAGE
 } from '@/assets/javascript/filmClubSync.js';
 import { toCommonJs, TWINS } from '../../scripts/sync-lambda-twins.mjs';
+import { profileFromFeed } from '@/assets/javascript/interchange.js';
 
 const require = createRequire(import.meta.url);
 const DB = 'https://movie-log-8c4d5-default-rtdb.firebaseio.com';
@@ -170,5 +171,37 @@ describe('the Lambda twin', () => {
     const feed = feedOf([movie(550, 'Fight Club', 8.25)]);
     expect(twin.buildRebuild({ owner: 'm', secret: 's', feed, epoch: EPOCH, now: 1, databaseUrl: DB }).meta.revision)
       .toBe(buildRebuild({ owner: 'm', secret: 's', feed, epoch: EPOCH, now: 1, databaseUrl: DB }).meta.revision);
+  });
+});
+
+// Matt, 2026-10-08: Knox's awards on Cinema Roll read "Knox's awards", not
+// the Ollies. The v2 header is where a ceremony's name travels now, both ways.
+describe('filmClubSync — the ceremony name in the header', () => {
+  const named = { ...feedOf([movie(550, 'Fight Club', 8.25)]), awardsName: 'The Groskers' };
+
+  it('a publisher puts its ceremony name in meta.profile, and a feed without one is unchanged', () => {
+    const { meta } = buildRebuild({ owner: 'matt', secret: 'abc', feed: named, epoch: EPOCH, now: 5, databaseUrl: DB });
+    expect(meta.profile).toEqual({ name: 'Matt', source: 'cinemaroll', awardsName: 'The Groskers' });
+    expect(validateMeta(meta)).toBe(true);
+    const plain = buildRebuild({ owner: 'matt', secret: 'abc', feed: feedOf([movie(550, 'Fight Club', 8.25)]), epoch: EPOCH, now: 5, databaseUrl: DB });
+    expect(plain.meta.profile).toEqual({ name: 'Matt', source: 'cinemaroll' });
+  });
+
+  it('renaming the ceremony moves the revision, so the header actually republishes', () => {
+    const head = buildRebuild({ owner: 'matt', secret: 'abc', feed: feedOf(named.movies), epoch: EPOCH, now: 5, databaseUrl: DB });
+    const out = buildAppend({ owner: 'matt', secret: 'abc', feed: named, prevMeta: head.meta, prevMovies: head.movies, newKey: 'k1', now: 6, databaseUrl: DB });
+    expect(out).not.toBeNull();
+    expect(out.batch.upserts).toBeUndefined();
+    expect(out.meta.profile.awardsName).toBe('The Groskers');
+  });
+
+  it('a reader keeps a friend\'s ceremony name from the header (Movie Log, the Ollies)', () => {
+    const { meta, movies } = buildRebuild({ owner: 'knox', secret: 'abc', feed: feedOf(named.movies, 'Knox'), epoch: EPOCH, now: 5, databaseUrl: DB });
+    const header = { ...meta, profile: { name: 'Knox', source: 'movielog', awardsName: 'The Ollies' } };
+    expect(validateMeta(header)).toBe(true);
+    const feed = feedFromSync(header, movies);
+    expect(feed.awardsName).toBe('The Ollies');
+    expect(profileFromFeed(feed, { fallbackName: 'Knox' }).awardsName).toBe('The Ollies');
+    expect(feedFromSync(meta, movies).awardsName).toBeUndefined();
   });
 });

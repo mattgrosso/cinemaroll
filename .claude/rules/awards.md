@@ -243,9 +243,12 @@ Cannes and whatever else… the history of any award that we have access to."
   `state.allAcademyAwards`, the rest from `assets/data/otherAwardsWinners.json`
   (titles only — `titleIndex` borrows ids and posters from any library in the
   club). Friends appear only once they publish awards.
-- Movie Log sends labels as "Goegan Globes: Best Picture" and no `awardsName`;
-  `friendCeremony`/`stripCeremony` (awardsShare.js) derive the ceremony from
-  the shared prefix. `categoryMatchKey` lines differently worded categories up
+- A friend's ceremony name: `awardsName` (legacy body top level, or the v2
+  header's `meta.profile.awardsName` since 2026-10-08) wins. Without one,
+  `friendCeremony`/`stripCeremony` (awardsShare.js) take a "Name: " label
+  prefix that MORE THAN HALF the labels share (Movie Log sends "Goegan Globes:
+  Best Picture"); else "<friend>'s awards". Knox's labels carry no prefix at
+  all, which is why the Ollies needed the header field. `categoryMatchKey` lines differently worded categories up
   across members for the Film Club "Club awards" section — conservatively
   (Original vs Adapted Screenplay stay apart).
 - A friend's award on a movie page links to their board for that year.

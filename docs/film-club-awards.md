@@ -82,6 +82,25 @@ that prefix becomes the ceremony and is peeled off the labels
 Sending `awardsName` is still welcome and takes precedence, but nothing on the
 Movie Log side needs to change.
 
+## 6a. Where the ceremony name goes (2026-10-08)
+
+Knox's awards were showing on Cinema Roll as "Knox's awards", not the Ollies:
+his labels carry no "Ollies: " prefix, and the v2 header had nowhere to put a
+name. Movie Log reads the v2 sync feed, so that is where the name now lives,
+in both directions:
+
+- **v2 header:** `meta.profile.awardsName`, beside `name` and `source`. A
+  string, 1–80 characters, optional. Example: `"profile": { "name": "Knox",
+  "source": "movielog", "awardsName": "The Ollies" }`. Cinema Roll publishes
+  its users' ceremony there ("The Groskers") and reads friends' from there.
+- **Legacy body:** `awardsName` at the top level, as in §1.
+- **Revision:** a ceremony rename has to move the feed's `revision`, or a
+  reader that skips unchanged feeds never sees it. Cinema Roll's revision
+  covers `awardsName` whenever the feed has one.
+
+Without a name, Cinema Roll still falls back to a label prefix, now one that
+more than half of the labels share (it used to need every label).
+
 ## 7. Best International Feature (2026-10-07)
 
 Cinema Roll's standard categories gained **Best International Feature**: films

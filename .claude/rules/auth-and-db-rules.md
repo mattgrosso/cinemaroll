@@ -248,7 +248,9 @@ compresses (brotli) and uses the CachingOptimized policy.
 Beside the legacy `clubFeed/OWNER/SECRET` body (format `film-club/1`, now carrying a
 content-derived 32-hex `revision` and a `syncUrl`) lives **`clubFeedSync/OWNER/SECRET`**:
 `meta` (version 2, epoch, revision, bodyRevision, sequence, cursor, minCursor, movieCount,
-profile, marker, snapshotComplete, changeCount), `movies/<tmdbId>` (the certified public
+profile, marker, snapshotComplete, changeCount; `profile` is `{ name, source }` plus an
+optional `awardsName`, the ceremony name, since 2026-10-08 — the rules don't validate it,
+and `feedFromSync` hands it on to the profile), `movies/<tmdbId>` (the certified public
 snapshot), `changes/<pushKey>` (journal batches: epoch, revision, previousRevision,
 sequence, upserts, deleted) and `changeIndex/<pushKey>: true` (owner-only retention
 index, 500 kept). **Every publish is one root `update()`**: legacy body + changed records +
@@ -279,6 +281,9 @@ tests in `src/test/emulated/clubFeedSync.rules.test.js`; the end-to-end protocol
 `src/test/filmClubSyncFlow.test.js` (the guide's ten activation checks against a fake
 Firebase). `scripts/init-club-feed-sync.mjs [--write]` builds the first certified snapshot
 for every existing feed and verifies the public read-back — run 2026-10-06 for all six.
+The `revision` covers `awardsName` when the feed has one (and only then, so a feed without
+it kept its old token): a ceremony rename is a body change, or the header would never
+republish — `buildAppend` returns null on an unmoved revision.
 
 ## The push Lambda (`aws-lambda/push-notify.js`, deployed as `cinemaroll-push`)
 

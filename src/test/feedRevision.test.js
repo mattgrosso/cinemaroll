@@ -28,6 +28,16 @@ describe('feed revision', () => {
     expect(toInterchange([entry(949, 'Heat', 8.5, 1000)], getRating, { name: 'Matthew', now: 1 }).revision).not.toBe(a.revision);
   });
 
+  it('moves with the ceremony name, and a feed without one keeps the token it always had (2026-10-08)', () => {
+    const plain = toInterchange([entry(949, 'Heat', 8.5, 1000)], getRating, { name: 'Matt', now: 1 });
+    const named = toInterchange([entry(949, 'Heat', 8.5, 1000)], getRating, { name: 'Matt', now: 1, awardsName: 'The Groskers' });
+    const renamed = toInterchange([entry(949, 'Heat', 8.5, 1000)], getRating, { name: 'Matt', now: 1, awardsName: 'The Grossies' });
+    expect(named.revision).not.toBe(plain.revision);
+    expect(renamed.revision).not.toBe(named.revision);
+    expect(lambda.contentRevision(named)).toBe(named.revision);
+    expect(lambda.revisionSubject(plain)).toBe(JSON.stringify({ source: plain.source, name: plain.name, movies: plain.movies }));
+  });
+
   it('the Lambda twin computes the same token, and the end-of-day copy gets its own', () => {
     const feed = toInterchange([entry(949, 'Heat', 8.5, 1000), entry(550, 'Fight Club', 7, 5000)], getRating, { name: 'Matt', now: 1 });
     expect(lambda.contentRevision(feed)).toBe(feed.revision);

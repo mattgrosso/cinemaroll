@@ -87,24 +87,26 @@ export function samePeople (listA, listB) {
 }
 
 // --- whose ceremony ---------------------------------------------------------
-// Movie Log (as shipped 2026-10-07) sends no `awardsName`; instead every label
-// reads "Goegan Globes: Best Picture". When a profile has no ceremony name and
-// every one of its labels shares the same "Name: " prefix, that prefix is the
-// ceremony and the labels lose it. Otherwise it is "<friend>'s awards".
+// Movie Log (as shipped 2026-10-07) sends no `awardsName`; instead labels read
+// "Goegan Globes: Best Picture". When a profile has no ceremony name and more
+// than half of its labels share one "Name: " prefix, that prefix is the
+// ceremony and the labels lose it (Matt, 2026-10-08: a stray unprefixed label
+// shouldn't cost a friend their ceremony's name). Otherwise "<friend>'s awards".
 export function friendCeremony (profile, fallbackName) {
   if (typeof profile?.awardsName === 'string' && profile.awardsName.trim()) return profile.awardsName.trim();
-  let prefix;
+  const counts = new Map();
+  let total = 0;
   for (const row of Object.values(profile?.ratings || {})) {
     for (const award of (Array.isArray(row?.a) ? row.a : [])) {
       const label = typeof award?.label === 'string' ? award.label : '';
       const at = label.indexOf(': ');
       const found = at > 0 ? label.slice(0, at).trim() : null;
-      if (!found) return fallbackName ? `${fallbackName}'s awards` : null;
-      if (prefix === undefined) prefix = found;
-      else if (prefix !== found) return fallbackName ? `${fallbackName}'s awards` : null;
+      total += 1;
+      if (found) counts.set(found, (counts.get(found) || 0) + 1);
     }
   }
-  if (prefix) return prefix;
+  const [prefix, count] = [...counts].sort((a, b) => b[1] - a[1])[0] || [];
+  if (prefix && count * 2 > total) return prefix;
   return fallbackName ? `${fallbackName}'s awards` : null;
 }
 

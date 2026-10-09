@@ -87,6 +87,12 @@ describe('friendCeremony', () => {
     expect(friendCeremony({ ratings: { 1: { a: [{ label: 'Best Picture' }] } } }, 'Brian')).toBe("Brian's awards");
     expect(friendCeremony({ ratings: {} }, 'Brian')).toBe("Brian's awards");
   });
+  it('takes a prefix most labels share, even when a few lack it (Matt, 2026-10-08)', () => {
+    const mostly = { ratings: { 1: { a: [{ label: 'The Ollies: Best Picture' }, { label: 'The Ollies: Best Director' }] }, 2: { a: [{ label: 'Best Score' }] } } };
+    expect(friendCeremony(mostly, 'Knox')).toBe('The Ollies');
+    const half = { ratings: { 1: { a: [{ label: 'The Ollies: Best Picture' }, { label: 'Best Score' }] } } };
+    expect(friendCeremony(half, 'Knox')).toBe("Knox's awards");
+  });
   it('shows up on a film page and in the club view with the prefix gone', () => {
     const groups = friendAwardsForMovie([{ name: 'Brian', profile: movieLog }], 11);
     expect(groups[0]).toMatchObject({ ceremony: 'Goegan Globes', won: [{ label: 'Best Picture' }] });

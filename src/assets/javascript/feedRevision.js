@@ -20,9 +20,12 @@ function fnv1a (text, seed) {
   return hash >>> 0;
 }
 
-/** What the revision covers: who, from where, and the movies — not the marker. */
+/** What the revision covers: who, from where, their ceremony's name, and the movies — not the marker. */
 export function revisionSubject (feed) {
-  return JSON.stringify({ source: feed?.source ?? null, name: feed?.name ?? null, movies: feed?.movies ?? [] });
+  // The ceremony name (2026-10-08) only when there is one, so a feed without
+  // it keeps exactly the token it always had.
+  const awardsName = typeof feed?.awardsName === 'string' && feed.awardsName ? { awardsName: feed.awardsName } : {};
+  return JSON.stringify({ source: feed?.source ?? null, name: feed?.name ?? null, ...awardsName, movies: feed?.movies ?? [] });
 }
 
 export function contentRevision (feed) {

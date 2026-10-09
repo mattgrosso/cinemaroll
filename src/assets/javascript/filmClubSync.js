@@ -173,7 +173,16 @@ export function feedWithSync (feed, { revision, syncUrl }) {
   return { ...feed, revision, syncUrl };
 }
 
-const profileOf = (feed) => ({ name: String(feed.name || 'A friend').slice(0, 119) || 'A friend', source: String(feed.source || 'cinemaroll').slice(0, 40) });
+// The header also carries the publisher's ceremony name (Matt, 2026-10-08:
+// Knox's awards showed as "Knox's awards", not the Ollies) — optional, so a
+// head without it is as valid as ever.
+const ceremonyOf = (profile) => (typeof profile?.awardsName === 'string' ? profile.awardsName.trim().slice(0, 80) : '');
+
+const profileOf = (feed) => {
+  const profile = { name: String(feed.name || 'A friend').slice(0, 119) || 'A friend', source: String(feed.source || 'cinemaroll').slice(0, 40) };
+  if (ceremonyOf(feed)) profile.awardsName = ceremonyOf(feed);
+  return profile;
+};
 
 // ---------------------------------------------------------------------------
 // Publishing — multi-path updates relative to the database root
@@ -364,6 +373,7 @@ export function feedFromSync (meta, movies) {
     format: 'film-club/1',
     source: meta.profile.source,
     name: meta.profile.name,
+    ...(ceremonyOf(meta.profile) ? { awardsName: ceremonyOf(meta.profile) } : {}),
     marker: meta.marker,
     movieCount: meta.movieCount,
     revision: meta.bodyRevision,
