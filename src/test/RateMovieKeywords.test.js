@@ -16,14 +16,14 @@ vi.mock('@/services/ErrorLogService.js', () => ({ default: errorLog }))
 
 const { default: RateMovie } = await import('@/components/RateMovie.vue')
 
-function mountWith () {
+function mountWith (movieToRate = { id: 555, title: 'Jaws', release_date: '1975-06-20' }) {
   return shallowMount(RateMovie, {
     global: {
       mocks: {
         $store: {
           state: {
             movieLog: {},
-            movieToRate: { id: 555, title: 'Jaws', release_date: '1975-06-20' },
+            movieToRate,
             settings: { tags: {} },
             weights: [{ name: 'overall', weight: 2 }],
             databaseTopKey: 'test-user'
@@ -79,5 +79,14 @@ describe('RateMovie keyword failures', () => {
     await flush()
     expect(errorLog.error).toHaveBeenCalledWith('Failed to fetch keywords: status 500: Unexpected end of JSON input')
     expect(errorLog.error.mock.calls[0][0]).not.toContain('[object Object]')
+  })
+
+  // Sentry, 2026-10-09: "Request failed with status code 400" - a reload on
+  // the Rate screen left no film in memory and the ask went out with no title.
+  it('does not ask for keywords when there is no film to ask about', async () => {
+    mountWith({})
+    await flush()
+    expect(postToAi).not.toHaveBeenCalled()
+    expect(errorLog.error).not.toHaveBeenCalled()
   })
 })

@@ -4,6 +4,7 @@ import { appScrollBehavior, rememberNavigationSource } from "./scrollBehavior.js
 import { handleRouterChunkError, lazyScreen } from "../utils/staleChunkReload.js";
 import { nextFrame } from "../utils/nextFrame.js";
 import { setAppRouter } from "./appRouter.js";
+import { rateMovieRedirect } from "./rateMovieGuard.js";
 
 const Home = lazyScreen(() => import(/* webpackChunkName: "home" */ "../components/Home.vue"));
 const Login = lazyScreen(() => import(/* webpackChunkName: "login" */ "../components/Login.vue"));
@@ -104,8 +105,9 @@ const routes = [
       requiresLogin: true
     },
     beforeEnter: (to, from, next) => {
-      if (!loggedIn()) {
-        next('/login');
+      const redirect = rateMovieRedirect({ loggedIn: loggedIn(), movieToRate: store.state.movieToRate });
+      if (redirect) {
+        next(redirect);
       } else {
         next();
       }

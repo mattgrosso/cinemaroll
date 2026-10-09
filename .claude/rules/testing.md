@@ -44,6 +44,8 @@ Home.vue on 2026-08-30 and the "pre-fix" run silently tested the fixed code). Us
 `git show HEAD~1:<file> >| <file>` (note `>|` — zsh noclobber blocks plain `>` and the
 "file exists" error otherwise leaves you testing current code again), then
 `git checkout HEAD -- <files>` to restore.
+For an UNCOMMITTED fix the same restore wipes the fix itself (HEAD is the
+pre-fix code) - commit first, or copy the fixed files aside and copy them back.
 
 ## Every "can't find a movie" report becomes a roster test
 

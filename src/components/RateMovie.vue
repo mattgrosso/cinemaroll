@@ -337,6 +337,7 @@ import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import { ratingBreakdown } from "../assets/javascript/ratingMath.js";
 import ErrorLogService from "../services/ErrorLogService.js";
 import { postToAi, describeAiFailure } from '../utils/aiRequest.js';
+import { hasMovieToRate } from '../router/rateMovieGuard.js';
 import { announceLoggedMovie } from '../utils/push.js';
 import { isPlaceholderId } from '../utils/placeholderId.js';
 import { countViewingTagUsage, sortVocabularyByUsage } from "../utils/tags.js";
@@ -1059,6 +1060,9 @@ export default {
       document.body.style.overflow = '';
     },
     async getChatGPTKeywords () {
+      // No title, nothing to ask about: the endpoint answers 400 (Sentry,
+      // 2026-10-09). The route guard keeps a reload from getting here.
+      if (!hasMovieToRate(this.movieToRate)) return;
       try {
         const title = this.movieToRate.title;
         const year = this.movieToRate.release_date ? new Date(this.movieToRate.release_date).getFullYear() : "";
