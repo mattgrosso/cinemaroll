@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildSocialProfile, compareWithFriend, filmClubSummary, socialSettingsWithDefaults, countNewFriendUpdates, friendsLoveUnseen , friendRatingsFor ,
+import { buildSocialProfile, compareWithFriend, filmClubSummary, socialSettingsWithDefaults, publishDue, countNewFriendUpdates, friendsLoveUnseen , friendRatingsFor ,
   friendSnapshot,
   myRatingsById,
   clubFetchesNeeded
@@ -18,6 +18,21 @@ function entry (id, title, rating, { at = NOW - id * 1000, year = 2000, criteria
   }
 }
 const ratingOf = (e) => ({ calculatedTotal: e.ratings[0].calculatedTotal })
+
+describe('publishDue', () => {
+  const hour = 60 * 60 * 1000
+  it('republishes every six hours, and at once when the display name changed', () => {
+    const now = 100 * hour
+    expect(publishDue({ lastPublish: now - 2 * hour, lastName: 'Matt Grosso', name: 'Matt Grosso', now })).toBe(false)
+    expect(publishDue({ lastPublish: now - 7 * hour, lastName: 'Matt Grosso', name: 'Matt Grosso', now })).toBe(true)
+    // 2026-10-09: the feed kept saying "mattgrosso" after the profile said "Matt Grosso".
+    expect(publishDue({ lastPublish: now - 2 * hour, lastName: 'mattgrosso', name: 'Matt Grosso', now })).toBe(true)
+    // A new device has no stamp at all.
+    expect(publishDue({ name: 'Matt Grosso', now })).toBe(true)
+    // Publishers without a name in play keep the plain timer.
+    expect(publishDue({ lastPublish: now - 2 * hour, now })).toBe(false)
+  })
+})
 
 describe('socialSettingsWithDefaults', () => {
   it('defaults everything ON, and falls back to the email when no real name is known', () => {

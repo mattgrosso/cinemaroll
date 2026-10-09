@@ -85,6 +85,21 @@ export function socialSettingsWithDefaults (raw, userEmail, realName) {
   };
 }
 
+export const PUBLISH_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Is a launch republish due? The six-hour throttle is about not re-sending
+ * a large body for no reason; a changed display name is a reason, because
+ * friends (and Movie Log) show whatever was last published. One rule for
+ * the social profile, the Film Club feed and the directory row — the feed
+ * kept calling Matt "mattgrosso" for a day after the profile had moved on
+ * (2026-10-09). A missing stamp (new device) is due too.
+ */
+export function publishDue ({ lastPublish = 0, lastName = null, name, now = Date.now(), maxAge = PUBLISH_MAX_AGE_MS } = {}) {
+  if (name != null && name !== lastName) return true;
+  return now - Number(lastPublish || 0) >= maxAge;
+}
+
 // ---------------------------------------------------------------------------
 // Publishing: shape a profile from the user's own library, respecting the
 // share toggles. Compact keys (t/p/r/at) keep ~1,400 ratings around 100KB.

@@ -1677,6 +1677,7 @@
 
 <script>
 import { isShort, withoutShorts } from '../assets/javascript/shorts.js';
+import { publishDue } from '../assets/javascript/social.js';
 import axios from 'axios';
 import { scrollWindowTo } from '../utils/scrollWindowTo.js';
 import { crowdRating, crowdLovesList, disagreeList, cultList } from '../assets/javascript/letterboxdCompare.js';
@@ -2081,10 +2082,16 @@ export default {
       handler (ready) {
         if (!ready) return;
         if (!this.$store.state.settings?.clubFeedKey) return;
-        const last = Number(localStorage.getItem('cinemaRoll.clubFeed.lastPublish') || 0);
-        if (Date.now() - last < 6 * 60 * 60 * 1000) return;
+        // Same rule as the profile: a changed name is a reason to republish
+        // now, not in six hours (publishDue in social.js). The directory row
+        // carries the name too, so it follows on a name change.
+        const name = this.$store.getters?.socialSettings?.displayName;
+        const lastName = localStorage.getItem('cinemaRoll.clubFeed.lastPublishName');
+        if (!publishDue({ lastPublish: localStorage.getItem('cinemaRoll.clubFeed.lastPublish'), lastName, name })) return;
         this.$store.dispatch('publishClubFeed');
+        if (name !== lastName) this.$store.dispatch('publishDirectoryEntry');
         localStorage.setItem('cinemaRoll.clubFeed.lastPublish', String(Date.now()));
+        localStorage.setItem('cinemaRoll.clubFeed.lastPublishName', name);
       }
     },
     // Magic Mirror feed: republished on the same readiness signal, throttled
@@ -2111,10 +2118,8 @@ export default {
         // calling someone by their email handle would be the bug report
         // (2026-08-20) still on screen. Same for anyone signing in on a new
         // device, where the stamp is absent and this publishes anyway.
-        const lastPublish = Number(localStorage.getItem('cinemaRoll.social.lastPublish') || 0);
         const lastName = localStorage.getItem('cinemaRoll.social.lastPublishName');
-        const nameChanged = social.displayName !== lastName;
-        if (!nameChanged && Date.now() - lastPublish < 6 * 60 * 60 * 1000) return;
+        if (!publishDue({ lastPublish: localStorage.getItem('cinemaRoll.social.lastPublish'), lastName, name: social.displayName })) return;
         this.$store.dispatch('publishSocialProfile');
         localStorage.setItem('cinemaRoll.social.lastPublish', String(Date.now()));
         localStorage.setItem('cinemaRoll.social.lastPublishName', social.displayName);
