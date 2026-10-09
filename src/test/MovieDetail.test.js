@@ -855,3 +855,50 @@ describe('MovieDetail — Best in <span>', () => {
     expect(wrapper.find('#best-since').exists()).toBe(false)
   })
 })
+
+// Sentry, 2026-10-09: opening a film ran the CORS-proxy Letterboxd scraper,
+// which failed on all three proxies. "On Letterboxd" reads the synced diary
+// alone now, and so does the tap that opens the film's Letterboxd page.
+describe('MovieDetail — Letterboxd logged state comes from the synced diary', () => {
+  async function mountWithDiary (reviews) {
+    const store = {
+      state: { movieLog: {}, settings: { tags: { 'viewing-tags': {} }, letterboxdConnected: true }, academyAwardWinners: {}, isOnline: true, letterboxdReviews: reviews },
+      getters: { allMoviesAsArray: [], allMediaAsArray: [], databaseTopKey: 'tester', filmClubFriends: [] },
+      commit: vi.fn(),
+      dispatch: vi.fn()
+    }
+    const w = shallowMount(MovieDetail, {
+      global: {
+        mocks: { $store: store, $route: { params: { tmdbId: '42' }, query: {} }, $router: { push: vi.fn() } },
+        stubs: { ToggleableRating: true, Modal: true, DetailSection: true }
+      }
+    })
+    await w.setData({ result: makeResult(), movie: makeResult().movie })
+    return w
+  }
+
+  it('a film in the diary opens its Letterboxd page rather than a fresh log', async () => {
+    const LetterboxdUrlService = (await import('@/services/LetterboxdUrlService.js')).default
+    const logMovie = vi.spyOn(LetterboxdUrlService, 'logMovie').mockReturnValue(true)
+    const generateUrls = vi.spyOn(LetterboxdUrlService, 'generateUrls').mockReturnValue({ webUrl: null })
+    const w = await mountWithDiary({ 42: { r1: { review: 'Yes.' } } })
+    expect(w.vm.isMovieLoggedOnLetterboxd()).toBe(true)
+    w.vm.logOnLetterboxd()
+    expect(generateUrls).toHaveBeenCalled()
+    expect(logMovie).not.toHaveBeenCalled()
+    logMovie.mockRestore()
+    generateUrls.mockRestore()
+  })
+
+  it('a film missing from the diary, or no diary yet, reads as not logged', async () => {
+    expect((await mountWithDiary({})).vm.isMovieLoggedOnLetterboxd()).toBe(false)
+    expect((await mountWithDiary(null)).vm.isMovieLoggedOnLetterboxd()).toBe(false)
+  })
+
+  it('neither the movie page nor the search card reaches for the proxy scraper', () => {
+    for (const file of ['MovieDetail.vue', 'DBGridLayoutSearchResult.vue']) {
+      const source = readFileSync(resolve(__dirname, '../components', file), 'utf8')
+      expect(source).not.toContain('LetterboxdScrapingService')
+    }
+  })
+})

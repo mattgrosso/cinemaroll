@@ -160,11 +160,10 @@ class LetterboxdScrapingService {
         scrapedAt: new Date().toISOString()
       };
     } catch (error) {
-      console.error(`Failed to scrape Letterboxd for ${username}:`, error);
-
-      // Fallback to mock data if scraping fails
-      console.log('Falling back to mock data...');
-      return this.getMockUserData(username);
+      // No made-up fallback: a list of someone else's films cached as this
+      // member's would mark the wrong movies as logged for a day.
+      console.warn(`Letterboxd scrape unavailable for ${username}:`, error?.message);
+      throw error;
     }
   }
 
@@ -638,76 +637,23 @@ class LetterboxdScrapingService {
   }
 
   /**
-   * Mock data for testing - replace with real scraping
-   * Simulates multiple viewings of the same movie
-   */
-  static getMockUserData (username) {
-    // Simulate popular movies that might be in someone's Letterboxd
-    // Including multiple viewings of some films
-    const mockFilms = [
-      {
-        title: "Fight Club",
-        year: 1999,
-        rating: "★★★★☆",
-        review: null,
-        watchedDate: "2023-06-15"
-      },
-      {
-        title: "Fight Club",
-        year: 1999,
-        rating: "★★★★★",
-        review: "Even better on rewatch!",
-        watchedDate: "2024-01-10"
-      },
-      {
-        title: "The Dark Knight",
-        year: 2008,
-        rating: "★★★★★",
-        review: "Incredible performance by Heath Ledger.",
-        watchedDate: "2023-07-20"
-      },
-      {
-        title: "Pulp Fiction",
-        year: 1994,
-        rating: "★★★★☆",
-        review: null,
-        watchedDate: "2023-05-10"
-      },
-      {
-        title: "The Godfather",
-        year: 1972,
-        rating: "★★★★★",
-        review: "A masterpiece of cinema.",
-        watchedDate: "2023-04-05"
-      },
-      {
-        title: "Inception",
-        year: 2010,
-        rating: "★★★★☆",
-        review: null,
-        watchedDate: "2023-08-12"
-      },
-      {
-        title: "Inception",
-        year: 2010,
-        rating: "★★★☆☆",
-        review: "Still confusing on second watch.",
-        watchedDate: "2024-03-20"
-      }
-    ];
-
-    return {
-      username,
-      films: mockFilms,
-      scrapedAt: new Date().toISOString()
-    };
-  }
-
-  /**
    * Cache management for user data
    */
   static getCacheKey (username) {
     return `letterboxd_user_${username}`;
+  }
+
+  // When the last scrape failed. The free CORS proxies come and go and
+  // Letterboxd sits behind Cloudflare, so a failure usually holds for hours;
+  // without this every caller tried all three proxies again (Sentry,
+  // 2026-10-09).
+  static getFailureKey (username) {
+    return `letterboxd_user_${username}_failedAt`;
+  }
+
+  static recentlyFailed (username, maxAgeHours = 24) {
+    const failedAt = Number(localStorage.getItem(this.getFailureKey(username)));
+    return Boolean(failedAt) && Date.now() - failedAt < maxAgeHours * 60 * 60 * 1000;
   }
 
   static isCacheValid (cacheEntry, maxAgeHours = 24) {
@@ -740,8 +686,22 @@ class LetterboxdScrapingService {
       }
     }
 
+    // A failure is remembered for a day; only an explicit refresh retries.
+    if (!forceRefresh && this.recentlyFailed(username)) return null;
+
     // Scrape fresh data
-    const userData = await this.scrapeUserFilms(username);
+    let userData;
+    try {
+      userData = await this.scrapeUserFilms(username);
+    } catch {
+      try {
+        localStorage.setItem(this.getFailureKey(username), String(Date.now()));
+      } catch {
+        // Storage full or blocked: the next call simply tries again
+      }
+      return null;
+    }
+    localStorage.removeItem(this.getFailureKey(username));
 
     // Cache the results
     try {
@@ -792,11 +752,11 @@ class LetterboxdScrapingService {
       // Scrape fresh data
       const userData = await this.getUserData(username, true);
 
-      console.log(`✅ Found ${userData.films ? userData.films.length : 0} films from Letterboxd`);
+      console.log(`Found ${userData?.films ? userData.films.length : 0} films from Letterboxd`);
 
       return userData;
     } catch (error) {
-      console.error('❌ Scraping test failed:', error);
+      console.warn('Scraping test failed:', error?.message);
       return null;
     }
   }

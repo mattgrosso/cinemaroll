@@ -4874,12 +4874,9 @@ export default {
         // Get user's Letterboxd data (this will use cache if available)
         this.letterboxdUserData = await LetterboxdScrapingService.getUserData(username);
       } catch (error) {
-        console.error('Error fetching Letterboxd data:', error);
-        ErrorLogService.error('Failed to fetch Letterboxd data', {
-          username,
-          error: error.message,
-          stack: error.stack
-        });
+        // The proxy scraper is only a fallback behind the synced diary; its
+        // failing is expected, not an error (Sentry, 2026-10-09).
+        console.warn('Letterboxd scrape unavailable:', error?.message);
         this.letterboxdUserData = null;
       }
     },

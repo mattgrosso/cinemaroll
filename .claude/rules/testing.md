@@ -10,7 +10,7 @@ Run with `yarn test:run`. **Never run `yarn serve`** — see CLAUDE.md.
 
 Coverage is strong on the algorithmic core (`searchFiltering.js` ~98%, rating calc,
 favorites scoring, awards utils 100%) and absent on `Insights.vue` (3,000+ lines),
-`LetterboxdScrapingService.js`, `YearInReview`, `Outliers`, `ShareDBResults`.
+`LetterboxdScrapingService.js` (only its failure path is tested), `YearInReview`, `Outliers`, `ShareDBResults`.
 
 ## A component's tests must reach every interactive path, not just the newest one
 

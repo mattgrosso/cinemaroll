@@ -381,7 +381,6 @@ export default {
       getAllRatings,
       showInsetBrowserModal: false,
       insetBrowserUrl: "",
-      letterboxdData: null,
       placeholderImage,
       isLoading: false
     }
@@ -395,13 +394,6 @@ export default {
   mounted () {
     // Reset loading state when component mounts (when returning from movie detail)
     this.isLoading = false;
-  },
-  watch: {
-    async showDetailsModal (val) {
-      if (val && this.$store.state.settings.letterboxdConnected && this.$store.state.settings.letterboxdUsername) {
-        this.checkLetterboxdData();
-      }
-    }
   },
   computed: {
     // The value this list is sorted by, short enough for an 8px caption.
@@ -509,40 +501,6 @@ export default {
   },
   methods: {
     formatScore,
-    async checkLetterboxdData () {
-      if (!this.$store.state.settings.letterboxdConnected) {
-        return;
-      }
-
-      try {
-        const movie = this.topStructure(this.result);
-        const username = this.$store.state.settings.letterboxdUsername;
-
-        if (!username) {
-          console.log('No Letterboxd username provided');
-          return;
-        }
-
-        // Use the scraping service to get user's film data
-        const LetterboxdScrapingService = (await import('../services/LetterboxdScrapingService.js')).default;
-        const userData = await LetterboxdScrapingService.getUserData(username);
-
-        // Filter to just this movie's entries
-        if (userData && userData.films) {
-          const movieEntries = userData.films.filter(film => {
-            const normalizedFilmTitle = LetterboxdScrapingService.normalizeMovieTitle(film.title);
-            const normalizedSearchTitle = LetterboxdScrapingService.normalizeMovieTitle(movie.title);
-            return normalizedFilmTitle === normalizedSearchTitle;
-          });
-
-          this.letterboxdData = movieEntries;
-        }
-      } catch (error) {
-        console.error('Failed to get Letterboxd data:', error);
-        ErrorLogService.error('Failed to get Letterboxd data:', error);
-        this.letterboxdData = null;
-      }
-    },
     parseNamesToList (names) {
       try {
         if (names.length > 1) {
@@ -802,7 +760,7 @@ export default {
       const movie = this.topStructure(this.result);
 
       // Check if movie is already logged on Letterboxd
-      if (this.isMovieLoggedOnLetterboxd() && this.letterboxdData && this.letterboxdData.length > 0) {
+      if (this.isMovieLoggedOnLetterboxd()) {
         // Movie is logged - open the movie's Letterboxd page where user can see their diary entries
         const urls = LetterboxdUrlService.generateUrls(movie.title, this.getYear(this.result));
 
@@ -846,11 +804,10 @@ export default {
         return true; // Manual override says this movie is logged
       }
 
-      // The synced diary (store, 2026-09-29) knows; the proxy scraper's
-      // answer is the fallback for a session where it hasn't loaded.
-      const synced = this.$store.state.letterboxdReviews;
-      if (synced) return Boolean(synced[movie.id]);
-      return this.letterboxdData && this.letterboxdData.length > 0;
+      // The synced diary (store, 2026-09-29) is the only answer. The CORS
+      // proxy scraper that used to back it up here failed on nearly every
+      // open and tried three proxies each time (Sentry, 2026-10-09).
+      return Boolean(this.$store.state.letterboxdReviews?.[movie.id]);
     },
     getPosterPath (result) {
       // Check if user has selected a custom poster

@@ -216,6 +216,13 @@ rated: a 0–10 weighted score and a 0.5–5 star average can't be subtracted.
   ways), chips Crowd Loves / You Disagree / Cult Films, my review text in the plain search
   (three characters up), and Not on Letterboxd + the logged-on icons read the synced
   diary first — the CORS-proxy scraper (`LetterboxdScrapingService`) is only the fallback.
+- **The proxy scraper is Home-only (2026-10-09, Sentry "No working proxy found").**
+  MovieDetail and the search card's "On Letterboxd" read the synced diary alone (a
+  manual override still wins); the scraper ran on every film opened and the free proxies
+  were all failing. Where it remains (Home's Not on Letterboxd fallback), a failure is
+  remembered for a day (`letterboxd_user_<name>_failedAt`), logged with `console.warn`
+  (a `console.error` is a Sentry event), and returns `null` — never the old made-up
+  films, which used to be cached for a day as the member's own.
 - Newsletter: the crowd rating beside the critics' on every pick and the feature, and the
   reader's own past review of the feature film handed to the model as the one quotation
   it may use.

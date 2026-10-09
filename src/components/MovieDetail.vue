@@ -743,7 +743,6 @@ export default {
       movie: null,
       result: null, // Will be constructed from movie data
       previousEntry: null,
-      letterboxdData: null,
       letterboxdReviews: [],
       letterboxdFilmStats: null,
       showLetterboxdReviews: false,
@@ -1326,7 +1325,12 @@ export default {
 
         // Load Letterboxd data if available
         this.loadLetterboxdExtras(tmdbId);
-        await this.checkLetterboxdData();
+        // "On Letterboxd" reads the synced diary; a page opened straight
+        // from a link may arrive before Home has loaded it. Once only — the
+        // read includes the whole shared film cache.
+        if (this.$store.state.settings.letterboxdConnected && !this.$store.state.letterboxdReviews) {
+          this.$store.dispatch('ensureLetterboxdData');
+        }
       } catch (error) {
         console.error('Error loading movie data:', error);
         this.$router.push('/');
@@ -1631,18 +1635,17 @@ export default {
         return true; // Manual override says this movie is logged
       }
 
-      // The synced diary (store, 2026-09-29) knows; the proxy scraper's
-      // answer is the fallback for a session where it hasn't loaded.
-      const synced = this.$store.state.letterboxdReviews;
-      if (synced) return Boolean(synced[movie.id]);
-      return this.letterboxdData && this.letterboxdData.length > 0;
+      // The synced diary (store, 2026-09-29) is the only answer. The CORS
+      // proxy scraper that used to back it up here failed on nearly every
+      // open and tried three proxies each time (Sentry, 2026-10-09).
+      return Boolean(this.$store.state.letterboxdReviews?.[movie.id]);
     },
 
     logOnLetterboxd () {
       const movie = this.topStructure(this.result);
 
       // Check if movie is already logged on Letterboxd
-      if (this.isMovieLoggedOnLetterboxd() && this.letterboxdData && this.letterboxdData.length > 0) {
+      if (this.isMovieLoggedOnLetterboxd()) {
         // Movie is logged - open the movie's Letterboxd page where user can see their diary entries
         const urls = LetterboxdUrlService.generateUrls(movie.title, this.getYear(this.result));
 
@@ -1711,40 +1714,6 @@ export default {
           return stats;
         })
         .catch(() => {});
-    },
-    async checkLetterboxdData () {
-      if (!this.$store.state.settings.letterboxdConnected) {
-        return;
-      }
-
-      try {
-        const movie = this.topStructure(this.result);
-        const username = this.$store.state.settings.letterboxdUsername;
-
-        if (!username) {
-          console.log('No Letterboxd username provided');
-          return;
-        }
-
-        // Use the scraping service to get user's film data
-        const LetterboxdScrapingService = (await import('../services/LetterboxdScrapingService.js')).default;
-        const userData = await LetterboxdScrapingService.getUserData(username);
-
-        // Filter to just this movie's entries
-        if (userData && userData.films) {
-          const movieEntries = userData.films.filter(film => {
-            const normalizedFilmTitle = LetterboxdScrapingService.normalizeMovieTitle(film.title);
-            const normalizedSearchTitle = LetterboxdScrapingService.normalizeMovieTitle(movie.title);
-            return normalizedFilmTitle === normalizedSearchTitle;
-          });
-
-          this.letterboxdData = movieEntries;
-        }
-      } catch (error) {
-        console.error('Failed to get Letterboxd data:', error);
-        ErrorLogService.error('Failed to get Letterboxd data:', error);
-        this.letterboxdData = null;
-      }
     },
 
     goToWikipedia (query) {
