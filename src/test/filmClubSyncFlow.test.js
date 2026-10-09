@@ -61,7 +61,7 @@ class FakeDb {
 }
 
 let db;
-const publish = (movies, extra = {}) => publishFeedV2({ owner: OWNER, secret: SECRET, feed: feedOf(movies, extra.name), databaseUrl: DB, io: db.io(), lastPublished: extra.lastPublished, now: 123 });
+const publish = (movies, extra = {}) => publishFeedV2({ owner: OWNER, secret: SECRET, feed: { ...feedOf(movies, extra.name), ...(extra.awardsName ? { awardsName: extra.awardsName } : {}) }, databaseUrl: DB, io: db.io(), lastPublished: extra.lastPublished, now: 123 });
 const refresh = (cache) => refreshExternalFeed({ feedUrl: FEED_URL, cache, fetchFn: db.fetch() });
 const many = (n, rating = 7) => Array.from({ length: n }, (_, i) => movie(i + 1, rating));
 
@@ -88,13 +88,13 @@ describe('Film Club v2 end to end', () => {
     expect(r.feed.movies).toEqual([]);
   });
 
-  it('2. an unchanged refresh reads only meta, the legacy revision and the legacy ceremony name', async () => {
+  it('2. an unchanged refresh reads only meta and the legacy revision — two reads (Film Club 0001 §5.1)', async () => {
     await publish(many(5));
     const first = await refresh(null);
     db.resetLog();
     const again = await refresh(first.cache);
     expect(again.status).toBe('unchanged');
-    expect(db.log.map((e) => e.fetch)).toEqual([`/clubFeedSync/${OWNER}/${SECRET}/meta.json`, `/clubFeed/${OWNER}/${SECRET}/revision.json`, `/clubFeed/${OWNER}/${SECRET}/awardsName.json`]);
+    expect(db.log.map((e) => e.fetch)).toEqual([`/clubFeedSync/${OWNER}/${SECRET}/meta.json`, `/clubFeed/${OWNER}/${SECRET}/revision.json`]);
   });
 
   it('3. a rating edit, an addition, a deletion and a profile change arrive by delta, never a snapshot page', async () => {
@@ -243,24 +243,60 @@ describe('Film Club v2 end to end', () => {
     expect((await refresh(established)).status).toBe('unchanged');
   });
 
-  it('12. a ceremony name only the legacy body carries reaches the feed, and a rename arrives without a movie change (Movie Log, 2026-10-09)', async () => {
-    await publish(many(3));
+  // Film Club proposal 0001 (agreed with Movie Log, 2026-10-09): the name
+  // travels in the header; a rename or removal moves the revision and arrives
+  // as a metadata-only batch; a feed that still carries the name only in the
+  // legacy body costs one small read when the revision moved, never on an
+  // unchanged refresh.
+  it('12. a ceremony rename or removal arrives as a metadata-only batch, no snapshot page, and never costs an extra read when unchanged', async () => {
+    const first = await publish(many(3));
     const plain = await refresh(null);
     expect(plain.feed.awardsName).toBeUndefined();
-    // Movie Log publishes the name at the top of the legacy body, not in meta.profile.
-    db.set(`clubFeed/${OWNER}/${SECRET}/awardsName`, 'The Ollie’s');
+    const named = await publish(many(3), { awardsName: 'The Groskers', lastPublished: first });
+    expect(named.mode).toBe('append');
+    expect(named.batch.upserts).toBeUndefined();
+    expect(named.batch.deleted).toBeUndefined();
+    db.resetLog();
+    const r = await refresh(plain.cache);
+    expect(r.status).toBe('updated');
+    expect(r.feed.awardsName).toBe('The Groskers');
+    expect(profileFromFeed(r.feed).awardsName).toBe('The Groskers');
+    expect(db.reads('movies')).toBe(0);
+    expect(db.reads('awardsName')).toBe(0); // the header has it
+    db.resetLog();
+    expect((await refresh(r.cache)).status).toBe('unchanged');
+    expect(db.log).toHaveLength(2);
+    // Removal: the header loses the name, the revision moves, the reader forgets it.
+    const removed = await publish(many(3), { lastPublished: named });
+    expect(removed.mode).toBe('append');
+    const gone = await refresh(r.cache);
+    expect(gone.status).toBe('updated');
+    expect(gone.feed.awardsName).toBeUndefined();
+  });
+
+  it('12b. a feed naming the ceremony only in the legacy body (Movie Log before 0001) costs one small read when the revision moved, none when unchanged', async () => {
+    const first = await publish(many(3));
+    const plain = await refresh(null);
+    // The publisher wrote the name in both places; this peer has no header field.
+    await publish(many(3), { awardsName: 'The Ollie’s', lastPublished: first });
+    db.set(`clubFeedSync/${OWNER}/${SECRET}/meta/profile/awardsName`, null);
+    db.resetLog();
     const named = await refresh(plain.cache);
     expect(named.status).toBe('updated');
     expect(named.feed.awardsName).toBe('The Ollie’s');
-    expect(profileFromFeed(named.feed).awardsName).toBe('The Ollie’s');
-    expect(Object.keys(named.cache.movies)).toHaveLength(3);
+    expect(db.reads('movies')).toBe(0);
+    expect(db.reads('awardsName')).toBe(1);
+    db.resetLog();
     expect((await refresh(named.cache)).status).toBe('unchanged');
-    // A cache saved before names were read takes the name on its next refresh.
+    expect(db.reads('awardsName')).toBe(0);
+    // A cache saved before names were recorded looks once, and records the answer.
     const { legacyAwardsName, ...older } = named.cache;
     expect(legacyAwardsName).toBe('The Ollie’s');
-    expect((await refresh(older)).feed.awardsName).toBe('The Ollie’s');
-    db.set(`clubFeed/${OWNER}/${SECRET}/awardsName`, 'The Knoxies');
-    expect((await refresh(named.cache)).feed.awardsName).toBe('The Knoxies');
+    db.resetLog();
+    const caught = await refresh(older);
+    expect(caught.feed.awardsName).toBe('The Ollie’s');
+    expect(db.reads('awardsName')).toBe(1);
+    expect('legacyAwardsName' in caught.cache).toBe(true);
     // An unreadable name is no name, never a failed refresh.
     db.deny = { path: `/clubFeed/${OWNER}/${SECRET}/awardsName`, status: 401 };
     const denied = await refresh(null);

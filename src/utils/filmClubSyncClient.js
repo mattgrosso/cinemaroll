@@ -37,26 +37,31 @@ const readJson = async (fetchFn, url) => {
 // certified v2 before; for one that never has, it is simply a peer without
 // v2 (rules not yet upgraded) and the head is "no meta".
 //
-// The legacy body's `awardsName` is read alongside (Matt, 2026-10-09): Movie
-// Log publishes its users' ceremony names there but not in meta.profile, and
-// its revision is not known to move on a rename, so the name is compared on
-// every refresh. It is a nicety — any failure reading it is simply no name.
 async function readHead (fetchFn, syncUrl, feedUrl, established) {
   const metaUrl = childUrl(syncUrl, 'meta');
   const revisionUrl = childUrl(feedUrl, 'revision');
-  const [meta, legacyRevision, legacyAwardsName] = await Promise.all([
+  const [meta, legacyRevision] = await Promise.all([
     readJson(fetchFn, metaUrl).catch((error) => {
       if (isUnreachable(error)) throw new UnreachableError(error.message);
       if (REVOKED.has(error.status) && established) throw new RevokedError(error.message);
       return null;
     }),
-    readJson(fetchFn, revisionUrl).catch((error) => { if (isUnreachable(error)) throw new UnreachableError(error.message); return null; }),
-    readJson(fetchFn, childUrl(feedUrl, 'awardsName')).then(ceremonyName, () => null)
+    readJson(fetchFn, revisionUrl).catch((error) => { if (isUnreachable(error)) throw new UnreachableError(error.message); return null; })
   ]);
-  return { meta, legacyRevision, legacyAwardsName };
+  return { meta, legacyRevision };
 }
 
 const ceremonyName = (value) => (typeof value === 'string' && value.trim() ? value.trim().slice(0, 80) : null);
+
+// A feed whose header carries no ceremony name may still have one at the top
+// of the legacy body (Movie Log before Film Club proposal 0001). That small
+// child is read only when the header has no name AND the certified revision
+// moved — a rename moves it (0001 §4.1) — so an unchanged refresh stays at
+// the two reads of §5.1 and a header-capable feed never pays for it. Any
+// failure reading it is simply no name.
+const headerHasName = (meta) => Boolean(ceremonyName(meta?.profile?.awardsName));
+const readLegacyName = (fetchFn, feedUrl, meta) =>
+  (headerHasName(meta) ? Promise.resolve(null) : readJson(fetchFn, childUrl(feedUrl, 'awardsName')).then(ceremonyName, () => null));
 
 /**
  * The feed a certified cache stands for. meta.profile's ceremony name wins;
@@ -134,10 +139,11 @@ export async function refreshExternalFeed ({ feedUrl, cache = null, fetchFn = fe
   let plan = planRefresh({ cache: usable, meta: head.meta, legacyRevision: head.legacyRevision });
   if (plan.mode === 'v1') return { status: 'v1', cache: invalidated, reason: plan.reason };
   if (plan.mode === 'unchanged') {
-    // Same movies, but a renamed ceremony is still news (an older cache, which
-    // never recorded a name, takes one the first time it is seen).
-    if ((usable.legacyAwardsName ?? null) === head.legacyAwardsName) return { status: 'unchanged' };
-    const next = { ...usable, legacyAwardsName: head.legacyAwardsName };
+    // No extra read: a renamed ceremony moves the revision. Only a cache
+    // saved before the name was ever recorded looks once (and records even
+    // "none", so it never looks again).
+    if (headerHasName(head.meta) || 'legacyAwardsName' in usable) return { status: 'unchanged' };
+    const next = { ...usable, legacyAwardsName: await readLegacyName(fetchFn, feedUrl, head.meta) };
     return { status: 'updated', cache: next, feed: feedFromSyncCache(next) };
   }
 
@@ -171,7 +177,7 @@ export async function refreshExternalFeed ({ feedUrl, cache = null, fetchFn = fe
     const check = planRefresh({ cache: usable, meta: head.meta, legacyRevision: head.legacyRevision });
     if (check.mode === 'v1') return { status: 'v1', cache: invalidated, reason: check.reason };
     if (head.meta.revision === target.revision && head.meta.cursor === target.cursor && certifies(head.meta, result)) {
-      const next = { feedUrl, syncUrl, meta: head.meta, movies: result.movies, establishedV2: true, legacyAwardsName: head.legacyAwardsName };
+      const next = { feedUrl, syncUrl, meta: head.meta, movies: result.movies, establishedV2: true, legacyAwardsName: await readLegacyName(fetchFn, feedUrl, head.meta) };
       return { status: 'updated', cache: next, feed: feedFromSyncCache(next) };
     }
     // The head moved under us (or the stable head is inconsistent): try again from it.
