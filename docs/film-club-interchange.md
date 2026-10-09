@@ -1,5 +1,10 @@
 # Film Club Interchange v1
 
+> **The shared contract now lives in `mattgrosso/film-club`** (`~/code/film-club`, since
+> 2026-10-08): `SPEC.md` is authoritative, and anything that changes what Cinema Roll and
+> Movie Log exchange goes through a proposal there (`PROCESS.md`), never straight into
+> either app. This file is kept as history.
+
 A tiny contract that lets two different movie-logging apps share libraries,
 so a friend on another app appears as an ordinary friend — same comparisons,
 same recommendations — without either app knowing what the other is built on.

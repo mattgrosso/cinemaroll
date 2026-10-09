@@ -1,5 +1,10 @@
 # Film Club feeds: sharing personal awards
 
+> **The shared contract now lives in `mattgrosso/film-club`** (`~/code/film-club`, since
+> 2026-10-08): `SPEC.md` is authoritative, and anything that changes what Cinema Roll and
+> Movie Log exchange goes through a proposal there (`PROCESS.md`), never straight into
+> either app. This file is kept as history.
+
 A small, optional extension to the `film-club/1` feed body (and to the v2 sync
 snapshot records, which carry the same movie shape). Cinema Roll publishes and
 reads it as of 2026-10-07. Nothing here is required: a feed without these fields

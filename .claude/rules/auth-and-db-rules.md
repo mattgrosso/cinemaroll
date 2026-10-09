@@ -245,6 +245,12 @@ compresses (brotli) and uses the CachingOptimized policy.
 
 ## Film Club feed sync, v2 (Brian's Movie Log guide, 2026-10-06)
 
+**Talking to Movie Log (2026-10-08):** the contract both apps follow is `SPEC.md` in
+`mattgrosso/film-club` (`~/code/film-club`). A feature that changes what crosses to Movie
+Log starts as a proposal there, Brian's ChatGPT replies in the file, and both sides build
+once it's agreed (`PROCESS.md`). Cinema Roll's own bugs never go there. `node
+check/feed-check.mjs '<feedUrl>'` in that repo shows a feed as the other app reads it.
+
 Beside the legacy `clubFeed/OWNER/SECRET` body (format `film-club/1`, now carrying a
 content-derived 32-hex `revision` and a `syncUrl`) lives **`clubFeedSync/OWNER/SECRET`**:
 `meta` (version 2, epoch, revision, bodyRevision, sequence, cursor, minCursor, movieCount,
