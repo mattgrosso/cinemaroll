@@ -851,6 +851,23 @@ const readFeed = async (feedUrl) => {
   if (text.length > MAX_FEED_BYTES) throw new Error('feed too large');
   return JSON.parse(text);
 };
+// The body's content-derived `revision` (Film Club spec §3, 34 bytes), read
+// before the body so an unchanged feed costs the publisher nothing. Found
+// 2026-10-09: this sweep had been downloading every external friend's whole
+// body (Brian's ~1.5 MB) every 15 minutes for every account with external
+// friends, on the friend's Firebase bill — most of what Brian was paying for.
+// A feed without a revision child (not a Film Club feed) reads null and is
+// fetched as before.
+const readRevision = async (feedUrl) => {
+  try {
+    const response = await fetch(feedUrl.replace(/\.json(\?[^#]*)?$/, '/revision.json$1'), { cache: 'no-store' });
+    if (!response.ok) return null;
+    const value = await response.json();
+    return typeof value === 'string' && /^[0-9a-f]{32}$/.test(value) ? value : null;
+  } catch {
+    return null;
+  }
+};
 
 const notifyExternalLogs = async (topKey, push, prefs) => {
   const friends = (await dbGet(`${topKey}/settings/externalFriends`)) || {};
@@ -860,11 +877,15 @@ const notifyExternalLogs = async (topKey, push, prefs) => {
   if (!entries.length) return 0;
 
   const seen = (push.state && push.state.externalSeen) || {};
+  const revisions = (push.state && push.state.externalRevision) || {};
   let delivered = 0;
   let seeded = 0;
+  let unchanged = 0;
 
   for (const [id, friend, feedUrl] of entries) {
     try {
+      const revision = await readRevision(feedUrl);
+      if (revision && revision === revisions[id]) { unchanged += 1; continue; }
       const watches = externalWatches(await readFeed(feedUrl));
       const { announce, nextSeenAt } = externalLogsDue({
         watches,
@@ -896,6 +917,9 @@ const notifyExternalLogs = async (topKey, push, prefs) => {
         await dbSet(`${topKey}/push/state/externalSeen/${id}`, nextSeenAt);
         seeded += 1;
       }
+      // Remembered only once the body was read AND announced, so a sweep that
+      // fails part-way is retried next time rather than skipped for good.
+      if (revision && revision !== revisions[id]) await dbSet(`${topKey}/push/state/externalRevision/${id}`, revision);
     } catch (error) {
       console.error(`External-friend sweep for ${topKey}/${id} failed:`, error.message);
     }
@@ -904,7 +928,7 @@ const notifyExternalLogs = async (topKey, push, prefs) => {
   // One line per account that has any, so a silent sweep is still legible:
   // "3 feed(s), 0 sent" is working as designed; no line at all means the
   // account has no friends on other apps.
-  console.log(`External friends for ${topKey}: ${entries.length} feed(s), ${delivered} sent, ${seeded} marker(s) moved`);
+  console.log(`External friends for ${topKey}: ${entries.length} feed(s), ${unchanged} unchanged (not downloaded), ${delivered} sent, ${seeded} marker(s) moved`);
   return delivered;
 };
 

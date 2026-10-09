@@ -298,6 +298,14 @@ republish — `buildAppend` returns null on an unmoved revision.
 
 ## The push Lambda (`aws-lambda/push-notify.js`, deployed as `cinemaroll-push`)
 
+**External friends are read by revision first (2026-10-09).** `notifyExternalLogs`
+reads each external feed's 34-byte `revision` child and downloads the body only when
+it moved (`push/state/externalRevision/<id>`, stored after the body was announced).
+Before this the sweep pulled every external friend's whole body (Brian's ~1.5 MB)
+every 15 minutes on the friend's Firebase bill — the Film Club spec (§3/§5.1, proposal
+0004) now forbids a body download on an unchanged feed, server jobs included.
+
+
 Web push notifications (2026-08-27). Same auth pattern as the AI lambda — Firebase ID
 token verified with node crypto for the HTTP routes (`/push/test`, `/push/friend-logged`,
 `/push/friend-request`). **"Did a friend's push go out?" is a CloudWatch search, not a
