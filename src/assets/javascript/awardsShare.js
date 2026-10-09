@@ -92,8 +92,14 @@ export function samePeople (listA, listB) {
 // than half of its labels share one "Name: " prefix, that prefix is the
 // ceremony and the labels lose it (Matt, 2026-10-08: a stray unprefixed label
 // shouldn't cost a friend their ceremony's name). Otherwise "<friend>'s awards".
+// A placeholder name ("Personal awards" — Movie Log's default when a user never
+// named theirs, seen on Brian's feed 2026-10-08) counts as no name, so it never
+// hides a real ceremony found on the labels.
+const PLACEHOLDER_CEREMONY = /^(the |my )?(personal )?awards$/i;
+
 export function friendCeremony (profile, fallbackName) {
-  if (typeof profile?.awardsName === 'string' && profile.awardsName.trim()) return profile.awardsName.trim();
+  const named = typeof profile?.awardsName === 'string' ? profile.awardsName.trim() : '';
+  if (named && !PLACEHOLDER_CEREMONY.test(named)) return named;
   const counts = new Map();
   let total = 0;
   for (const row of Object.values(profile?.ratings || {})) {

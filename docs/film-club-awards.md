@@ -101,6 +101,19 @@ in both directions:
 Without a name, Cinema Roll still falls back to a label prefix, now one that
 more than half of the labels share (it used to need every label).
 
+## 6b. What Movie Log actually sends (2026-10-09)
+
+Movie Log now sends `awardsName`, but only at the top of the legacy body, not
+in `meta.profile`; Knox's is "The Ollie’s", Brian's "Personal awards" (the
+default for a user who never named theirs). Cinema Roll's v2 reader now also
+reads the legacy `awardsName` beside meta and revision on every refresh, uses
+it when the header has none, and treats a changed name as an update even when
+the revision did not move. "Personal awards" (and "Awards", "My awards")
+counts as no name, so Brian's ceremony still comes from his label prefix.
+The cleaner fix on Movie Log's side is still §6a: put the name in
+`meta.profile.awardsName`, cover it in the revision, and omit it when the user
+has not named their awards.
+
 ## 7. Best International Feature (2026-10-07)
 
 Cinema Roll's standard categories gained **Best International Feature**: films

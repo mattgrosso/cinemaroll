@@ -75,7 +75,7 @@ import { toInterchange, profileFromFeed, buildInvite, parseInvite, buildConnectR
 import { revisionUrlFor } from "../assets/javascript/feedRevision.js";
 import { publishFeedV2 } from "../assets/javascript/filmClubSyncPublisher.js";
 import { hexToken } from "../assets/javascript/filmClubSync.js";
-import { refreshExternalFeed } from "../utils/filmClubSyncClient.js";
+import { refreshExternalFeed, feedFromSyncCache } from "../utils/filmClubSyncClient.js";
 import { reportFeedFallback } from "../utils/syncFallbackReport.js";
 import { awardsByMovie } from "../assets/javascript/awardsShare.js";
 import { awardNameWithThe } from "../assets/javascript/personalAwards.js";
@@ -2408,8 +2408,7 @@ export default createStore({
           if (keepCached && cached) return;
           if (keepCached && syncCache?.meta) {
             // The snapshot is certified but this session has no profile yet (a cold start).
-            const { feedFromSync } = await import('../assets/javascript/filmClubSync.js');
-            const profile = profileFromFeed(feedFromSync(syncCache.meta, syncCache.movies), { fallbackName: friend.name });
+            const profile = profileFromFeed(feedFromSyncCache(syncCache), { fallbackName: friend.name });
             if (profile) { context.commit('setExternalFriendProfile', { id, profile }); return; }
           }
           if (v2.status === 'v1' && topKey && v2.cache) saveSnapshot(topKey, syncKind, v2.cache).catch(() => {});

@@ -36,18 +36,36 @@ const readJson = async (fetchFn, url) => {
 // A 401/403/404/410 on meta is a revocation for a capability that has
 // certified v2 before; for one that never has, it is simply a peer without
 // v2 (rules not yet upgraded) and the head is "no meta".
+//
+// The legacy body's `awardsName` is read alongside (Matt, 2026-10-09): Movie
+// Log publishes its users' ceremony names there but not in meta.profile, and
+// its revision is not known to move on a rename, so the name is compared on
+// every refresh. It is a nicety — any failure reading it is simply no name.
 async function readHead (fetchFn, syncUrl, feedUrl, established) {
   const metaUrl = childUrl(syncUrl, 'meta');
   const revisionUrl = childUrl(feedUrl, 'revision');
-  const [meta, legacyRevision] = await Promise.all([
+  const [meta, legacyRevision, legacyAwardsName] = await Promise.all([
     readJson(fetchFn, metaUrl).catch((error) => {
       if (isUnreachable(error)) throw new UnreachableError(error.message);
       if (REVOKED.has(error.status) && established) throw new RevokedError(error.message);
       return null;
     }),
-    readJson(fetchFn, revisionUrl).catch((error) => { if (isUnreachable(error)) throw new UnreachableError(error.message); return null; })
+    readJson(fetchFn, revisionUrl).catch((error) => { if (isUnreachable(error)) throw new UnreachableError(error.message); return null; }),
+    readJson(fetchFn, childUrl(feedUrl, 'awardsName')).then(ceremonyName, () => null)
   ]);
-  return { meta, legacyRevision };
+  return { meta, legacyRevision, legacyAwardsName };
+}
+
+const ceremonyName = (value) => (typeof value === 'string' && value.trim() ? value.trim().slice(0, 80) : null);
+
+/**
+ * The feed a certified cache stands for. meta.profile's ceremony name wins;
+ * the legacy body's fills in when the header has none.
+ */
+export function feedFromSyncCache (cache) {
+  const feed = feedFromSync(cache.meta, cache.movies);
+  if (!feed.awardsName && cache.legacyAwardsName) feed.awardsName = cache.legacyAwardsName;
+  return feed;
 }
 
 async function bootstrap (fetchFn, syncUrl) {
@@ -115,7 +133,13 @@ export async function refreshExternalFeed ({ feedUrl, cache = null, fetchFn = fe
 
   let plan = planRefresh({ cache: usable, meta: head.meta, legacyRevision: head.legacyRevision });
   if (plan.mode === 'v1') return { status: 'v1', cache: invalidated, reason: plan.reason };
-  if (plan.mode === 'unchanged') return { status: 'unchanged' };
+  if (plan.mode === 'unchanged') {
+    // Same movies, but a renamed ceremony is still news (an older cache, which
+    // never recorded a name, takes one the first time it is seen).
+    if ((usable.legacyAwardsName ?? null) === head.legacyAwardsName) return { status: 'unchanged' };
+    const next = { ...usable, legacyAwardsName: head.legacyAwardsName };
+    return { status: 'updated', cache: next, feed: feedFromSyncCache(next) };
+  }
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
     const target = head.meta;
@@ -147,8 +171,8 @@ export async function refreshExternalFeed ({ feedUrl, cache = null, fetchFn = fe
     const check = planRefresh({ cache: usable, meta: head.meta, legacyRevision: head.legacyRevision });
     if (check.mode === 'v1') return { status: 'v1', cache: invalidated, reason: check.reason };
     if (head.meta.revision === target.revision && head.meta.cursor === target.cursor && certifies(head.meta, result)) {
-      const next = { feedUrl, syncUrl, meta: head.meta, movies: result.movies, establishedV2: true };
-      return { status: 'updated', cache: next, feed: feedFromSync(head.meta, result.movies) };
+      const next = { feedUrl, syncUrl, meta: head.meta, movies: result.movies, establishedV2: true, legacyAwardsName: head.legacyAwardsName };
+      return { status: 'updated', cache: next, feed: feedFromSyncCache(next) };
     }
     // The head moved under us (or the stable head is inconsistent): try again from it.
     if (head.meta.revision === target.revision && head.meta.cursor === target.cursor) break;

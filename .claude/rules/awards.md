@@ -248,7 +248,11 @@ Cannes and whatever else… the history of any award that we have access to."
   `friendCeremony`/`stripCeremony` (awardsShare.js) take a "Name: " label
   prefix that MORE THAN HALF the labels share (Movie Log sends "Goegan Globes:
   Best Picture"); else "<friend>'s awards". Knox's labels carry no prefix at
-  all, which is why the Ollies needed the header field. `categoryMatchKey` lines differently worded categories up
+  all, which is why the Ollies needed the header field. Movie Log (2026-10-09)
+  puts the name only in the legacy body, so the v2 reader also fetches the
+  legacy `awardsName` child on every head read and caches it
+  (`legacyAwardsName`; a change alone makes the refresh "updated"). A
+  placeholder name ("Personal awards", Movie Log's default) counts as none. `categoryMatchKey` lines differently worded categories up
   across members for the Film Club "Club awards" section — conservatively
   (Original vs Adapted Screenplay stay apart).
 - A friend's award on a movie page links to their board for that year.

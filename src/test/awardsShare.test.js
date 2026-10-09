@@ -87,6 +87,11 @@ describe('friendCeremony', () => {
     expect(friendCeremony({ ratings: { 1: { a: [{ label: 'Best Picture' }] } } }, 'Brian')).toBe("Brian's awards");
     expect(friendCeremony({ ratings: {} }, 'Brian')).toBe("Brian's awards");
   });
+  it('treats a placeholder ceremony name as no name (Brian\'s feed sends "Personal awards", 2026-10-09)', () => {
+    expect(friendCeremony({ awardsName: 'Personal awards', ...movieLog }, 'Brian')).toBe('Goegan Globes');
+    expect(friendCeremony({ awardsName: 'Personal Awards', ratings: {} }, 'Brian')).toBe("Brian's awards");
+    expect(friendCeremony({ awardsName: 'The Ollie’s', ratings: {} }, 'Knox')).toBe('The Ollie’s');
+  });
   it('takes a prefix most labels share, even when a few lack it (Matt, 2026-10-08)', () => {
     const mostly = { ratings: { 1: { a: [{ label: 'The Ollies: Best Picture' }, { label: 'The Ollies: Best Director' }] }, 2: { a: [{ label: 'Best Score' }] } } };
     expect(friendCeremony(mostly, 'Knox')).toBe('The Ollies');
