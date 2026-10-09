@@ -307,7 +307,10 @@ accepted one; unknown/ambiguous ids are deleted with zero peer reads. Friend rec
 `sentFeedId` (our `settings/clubFeedId.id` when we last sent them our feed URL — proof
 they hold the current capability; the id is new with every secret), `answeredFeedId`
 (an exact-feed negotiation is answered once, without `replyInboxUrl`, and only with
-that proof — otherwise it stays on screen as an ordinary request for the owner),
+that proof AND no callback or the one already on record — knowing a friend's feed URL
+is not being that friend; otherwise nothing is bound and it stays on screen as an
+ordinary request, whose Accept binds what it carries; a bound feed id is never
+replaced automatically),
 `negotiatedInbox` and `noticePending` (persisted before the notice is deleted, cleared
 after a refresh; a failed refresh keeps it). Negotiated friends (`isNegotiated`) are
 polled on an hourly backstop; a notice never resets it. Sending: after a publish that

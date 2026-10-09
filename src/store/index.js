@@ -2517,7 +2517,8 @@ export default createStore({
       const friend = context.state.settings?.externalFriends?.[id];
       if (!friend) return;
       const feedId = currentFeedId(context.state.settings?.clubFeedId, context.state.settings?.clubFeedKey);
-      const { changes } = negotiationUpdate({ friend, request, feedId });
+      // The owner just accepted this request: bind what it carries.
+      const { changes } = negotiationUpdate({ friend, request, feedId, explicit: true });
       await context.dispatch('updateExternalFriend', { id, changes });
     },
     async dismissClubRequest (context, requestId) {

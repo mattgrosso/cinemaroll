@@ -142,7 +142,7 @@ describe('an existing friend negotiating', () => {
   const negotiation = (patch = {}) => ({ name: 'Brian', app: 'movielog', feedUrl: FEED, replyInboxUrl: THEIR_INBOX, feed: 'f2', notices: true, at: Date.now(), ...patch });
 
   it('who provably holds our feed is answered once, with no reply inbox, and never shown', async () => {
-    setFriends({ ext1: brian() });
+    setFriends({ ext1: brian({ noticeFeed: undefined, negotiatedInbox: THEIR_INBOX }) });
     store.commit('setClubInboxRequests', { r1: negotiation() });
     expect(store.getters.clubInboxRequests).toEqual([]);
     await store.dispatch('processClubInbox', { raw: { r1: negotiation() }, path: INBOX_PATH });
@@ -167,8 +167,28 @@ describe('an existing friend negotiating', () => {
     await store.dispatch('processClubInbox', { raw: { r1: negotiation() }, path: INBOX_PATH });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(deletes()).toEqual([]);
-    expect(friendWrites('noticeFeed')).toEqual(['f2']);
+    expect(friendWrites('noticeFeed')).toEqual([]);
     expect(store.getters.clubInboxRequests.map((r) => r.id)).toEqual(['r1']);
+  });
+
+  it('carrying their exact feed URL but a new reply inbox is never answered automatically', async () => {
+    setFriends({ ext1: brian({ negotiatedInbox: THEIR_INBOX }) });
+    const forged = negotiation({ replyInboxUrl: 'https://other-db.firebaseio.com/clubInbox/forger/x.json', feed: 'forged' });
+    store.commit('setClubInboxRequests', { r1: forged });
+    await store.dispatch('processClubInbox', { raw: { r1: forged }, path: INBOX_PATH });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(deletes()).toEqual([]);
+    expect(friendWrites('noticeFeed')).toEqual([]);
+    expect(friendWrites('noticeInbox')).toEqual([]);
+    expect(store.getters.clubInboxRequests.map((r) => r.id)).toEqual(['r1']);
+  });
+
+  it('the owner accepting binds what it carries', async () => {
+    setFriends({ ext1: brian({ sentFeedId: undefined, noticeFeed: undefined }) });
+    await store.dispatch('acceptClubRequest', { id: 'r1', ...negotiation() });
+    expect(friendWrites('sentFeedId')).toEqual([OURS]);
+    expect(friendWrites('noticeFeed')).toEqual(['f2']);
+    expect(friendWrites('noticeInbox')).toEqual([THEIR_INBOX]);
   });
 });
 

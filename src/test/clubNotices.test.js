@@ -93,23 +93,34 @@ describe('reading the inbox', () => {
 describe('negotiating', () => {
   const request = (patch = {}) => normalizeInboxRequests({ r: { ...buildConnectRequest({ name: 'Brian', app: 'movielog', feedUrl: brian().feedUrl, replyInboxUrl: INBOX, feed: 'f2', now: NOW }), ...patch } }, { now: NOW })[0];
 
-  it('binds their feed id to the exact friend, and answers once, without a reply inbox, when they already hold our feed', () => {
-    const friend = brian({ sentFeedId: OURS });
+  it('binds their feed id and answers once, without a reply inbox, when they hold our feed and name the callback on record', () => {
+    const friend = brian({ noticeFeed: undefined, sentFeedId: OURS, negotiatedInbox: INBOX });
     const first = negotiationUpdate({ friend, request: request(), feedId: OURS });
     expect(first).toEqual({ changes: { noticeFeed: 'f2', noticeInbox: INBOX }, answer: INBOX, proven: true });
     const again = negotiationUpdate({ friend: { ...friend, noticeFeed: 'f2', noticeInbox: INBOX, answeredFeedId: OURS }, request: request(), feedId: OURS });
     expect(again).toEqual({ changes: {}, answer: null, proven: true });
   });
 
-  it('never sends our feed to someone we can\'t show already has it; their id is still bound', () => {
-    const result = negotiationUpdate({ friend: brian({ noticeFeed: undefined }), request: request(), feedId: OURS });
-    expect(result.proven).toBe(false);
-    expect(result.answer).toBeNull();
-    expect(result.changes).toEqual({ noticeFeed: 'f2' });
+  it('knowing a friend\'s feed URL is not enough: a new callback gets nothing sent and nothing bound', () => {
+    const forged = request({ replyInboxUrl: 'https://other-db.firebaseio.com/clubInbox/forger/x.json' });
+    const result = negotiationUpdate({ friend: brian({ noticeFeed: undefined, sentFeedId: OURS, negotiatedInbox: INBOX }), request: forged, feedId: OURS });
+    expect(result).toEqual({ changes: {}, answer: null, proven: false });
+  });
+
+  it('an automatic negotiation never replaces a feed id already bound', () => {
+    const result = negotiationUpdate({ friend: brian({ sentFeedId: OURS, negotiatedInbox: INBOX }), request: request(), feedId: OURS });
+    expect(result.changes.noticeFeed).toBeUndefined();
+  });
+
+  it('never sends our feed to someone we can\'t show already has it, and binds nothing until the owner accepts', () => {
+    const friend = brian({ noticeFeed: undefined });
+    const result = negotiationUpdate({ friend, request: request(), feedId: OURS });
+    expect(result).toEqual({ changes: {}, answer: null, proven: false });
+    expect(negotiationUpdate({ friend, request: request(), feedId: OURS, explicit: true }).changes).toEqual({ noticeFeed: 'f2', noticeInbox: INBOX });
   });
 
   it('a proof for an older secret proves nothing', () => {
-    expect(negotiationUpdate({ friend: brian({ sentFeedId: 'd'.repeat(32) }), request: request(), feedId: OURS }).proven).toBe(false);
+    expect(negotiationUpdate({ friend: brian({ sentFeedId: 'd'.repeat(32), negotiatedInbox: INBOX }), request: request(), feedId: OURS }).proven).toBe(false);
   });
 
   it('an answer without a reply inbox calls back only where we sent our own request', () => {

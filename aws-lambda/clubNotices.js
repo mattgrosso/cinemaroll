@@ -144,24 +144,33 @@ function coalesceNotices (notices) {
 /**
  * What an exact-feed negotiation (or an accepted request) changes on the
  * friend record, and whether we answer it. Only fields that change are
- * returned. We answer — with our feed URL — only when they demonstrably hold
- * our current capability already (sentFeedId), never twice for the same feed
- * id, and only when they gave a replyInboxUrl; otherwise the owner decides
- * (the request stays on screen as an ordinary one).
+ * returned.
+ *
+ * Knowing a friend's feed URL is NOT proof of being that friend (Movie Log's
+ * exact-callback safeguard, proposal 0003): a forged negotiation could carry
+ * their exact URL and the forger's own inbox. So an automatic one is trusted
+ * only when they demonstrably hold our current feed (sentFeedId) AND it names
+ * no callback or the one already on record; only then is anything bound,
+ * once (an already-bound feed id is never replaced), and answered with our
+ * feed. Anything else stays on screen as an ordinary request, and the
+ * owner's Accept (`explicit`) binds what it carries.
  */
-function negotiationUpdate ({ friend, request, feedId }) {
+function negotiationUpdate ({ friend, request, feedId, explicit = false }) {
   const changes = {};
-  if (isFeedId(request?.feed)) {
+  const replyTo = safeInboxUrl(request?.replyInboxUrl);
+  const known = [friend?.noticeInbox, friend?.negotiatedInbox].map(safeInboxUrl).filter(Boolean);
+  const sameCallback = !request?.replyInboxUrl || Boolean(replyTo && known.includes(replyTo));
+  const proven = Boolean(feedId && friend?.sentFeedId === feedId && sameCallback);
+  if (!proven && !explicit) return { changes, answer: null, proven };
+  if (isFeedId(request?.feed) && (explicit || !friend?.noticeFeed)) {
     if (friend?.noticeFeed !== request.feed) changes.noticeFeed = request.feed;
     const app = NOTICE_APPS.includes(request.app) ? request.app : null;
     if (app && friend?.noticeApp !== app) changes.noticeApp = app;
   }
-  const proven = Boolean(feedId && friend?.sentFeedId === feedId);
-  if (request?.notices === true && proven) {
-    const callback = safeInboxUrl(request.replyInboxUrl) || safeInboxUrl(friend?.negotiatedInbox);
+  if (request?.notices === true) {
+    const callback = replyTo || safeInboxUrl(friend?.negotiatedInbox);
     if (callback && friend?.noticeInbox !== callback) changes.noticeInbox = callback;
   }
-  const replyTo = safeInboxUrl(request?.replyInboxUrl);
   const answer = proven && replyTo && friend?.answeredFeedId !== feedId ? replyTo : null;
   return { changes, answer, proven };
 }
