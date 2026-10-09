@@ -424,7 +424,12 @@ bookable things, so both are separate news. `listingsDue` and `composeListingMes
 `push/state/theaters/<key>` ({ slug: lastSeenAt }), more than three at once is one summary.
 Unlike sign-ups the map is NOT grow-only: a listing off the board for 14 days is forgotten,
 so a repertory return (next October's Halloween) is news again, while one feed hiccup is
-not. An empty board is treated as a failed fetch, never as "everything left". Each push
+not. An empty board is treated as a failed fetch, never as "everything left" — and since
+2026-10-09 one failed or empty read is only a `console.warn` (a single 1 AM empty
+CinemaClock page for someone's Brooklyn Alamo opened a Sentry issue). `noteBoardFailures`
+keeps each theater's streak at `mattgrosso-gmail-com/push/state/boardFailures/<key>` =
+{ since, reportedAt } and `boardFailuresDue` (tested) raises a `console.error` — Sentry —
+only after a day unreadable, then once a day while it lasts; a good read clears it. Each push
 `navigate`s straight to the listing's ticket page — `buildPayload` now passes absolute URLs
 through untouched — which is untested on iOS's declarative path; if a tap lands in the app
 instead, fall back to `/`. Adding a theater is adding a `THEATERS` entry with its own adapter.

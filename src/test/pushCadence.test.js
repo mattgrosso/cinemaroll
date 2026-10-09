@@ -26,6 +26,8 @@ import {
   SIGNUP_MAX_PER_SWEEP,
   alamoListings,
   listingsDue,
+  boardFailuresDue,
+  BOARD_FAILURE_REPORT_MS,
   showTimeLabel,
   composeListingMessages,
   decodeEntities,
@@ -938,6 +940,45 @@ describe('theater listings', () => {
 // Spring … the Miracle Theater … a really small independent theater in
 // Fairfax" — Cinema Arts). None has a JSON feed; these fixtures are cut
 // from the real pages, so a parser that survives them survives the sites.
+describe('unreadable boards — a blip is quiet, a day-long failure is an error', () => {
+  const DAY = 24 * HOUR;
+  it('waits a day before it reports, as the Sentry email for one 1 AM blip showed it should', () => {
+    expect(BOARD_FAILURE_REPORT_MS).toBe(DAY);
+    const first = boardFailuresDue({ known: null, results: [{ key: 'brooklyn', error: 'returned no listings' }], now: NOW });
+    expect(first.report).toEqual([]);
+    expect(first.next).toEqual({ brooklyn: { since: NOW } });
+    const later = boardFailuresDue({ known: first.next, results: [{ key: 'brooklyn', error: 'returned no listings' }], now: NOW + DAY - HOUR });
+    expect(later.report).toEqual([]);
+    expect(later.next).toEqual({ brooklyn: { since: NOW } });
+  });
+
+  it('reports once a day has passed, then once more each further day', () => {
+    const fail = [{ key: 'brooklyn', error: 'returned no listings' }];
+    const day = boardFailuresDue({ known: { brooklyn: { since: NOW } }, results: fail, now: NOW + DAY });
+    expect(day.report).toEqual([{ key: 'brooklyn', error: 'returned no listings', since: NOW }]);
+    expect(day.next.brooklyn).toEqual({ since: NOW, reportedAt: NOW + DAY });
+    const soon = boardFailuresDue({ known: day.next, results: fail, now: NOW + DAY + HOUR });
+    expect(soon.report).toEqual([]);
+    const next = boardFailuresDue({ known: soon.next, results: fail, now: NOW + 2 * DAY });
+    expect(next.report.map((r) => r.key)).toEqual(['brooklyn']);
+  });
+
+  it('a good read clears the note, and an unfollowed theater drops out', () => {
+    const known = { brooklyn: { since: NOW - 20 * HOUR }, gone: { since: NOW - 5 * DAY } };
+    const result = boardFailuresDue({ known, results: [{ key: 'brooklyn', error: null }, { key: 'tysons', error: 'x -> 503' }], now: NOW });
+    expect(result.next).toEqual({ tysons: { since: NOW } });
+    expect(result.report).toEqual([]);
+  });
+
+  it('the sweep logs a single bad read as a warning, never as the error Sentry picks up', () => {
+    const source = readFileSync(resolve(__dirname, '../../aws-lambda/push-notify.js'), 'utf8');
+    const fetchBoards = source.slice(source.indexOf('const fetchBoards'), source.indexOf('const noteBoardFailures'));
+    expect(fetchBoards).toMatch(/console\.warn\(`Listings \(\$\{theater\.key\}\) fetch failed/);
+    expect(fetchBoards).not.toMatch(/console\.error/);
+    expect(source).toMatch(/await noteBoardFailures\(fetched, now\)/);
+  });
+});
+
 describe('theater listings — the parsed sites', () => {
   const VEEZI = `
     <div id="sessionsByDateConent"><div class="date"><h3 class="date-title">Friday 2, October</h3>

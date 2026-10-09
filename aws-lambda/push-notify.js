@@ -40,6 +40,7 @@ const {
   externalWatches, externalLogsDue, externalFeedRead, externalCheckDue,
   signupsDue, composeSignupMessages,
   alamoListings, veeziListings, afiListings, boxofficeListings, afiFirstShowtime,
+  boardFailuresDue,
   cinemaclockListings, uncovered, dismissedFilms, dismissedAtRank, boardForApp, remindersDue, showtimesWaiting, composeReminderMessage, listingsDue, composeListingMessages,
   cinemaclockCitySlug, cinemaclockCityTheaters, followedTheaters
 } = require('./pushCadence');
@@ -630,12 +631,37 @@ const fetchBoards = async (theaters, now) => Promise.all(theaters.map(async (the
     // An empty board is a broken fetch until proven otherwise - never let
     // it age everything out and re-announce the whole schedule later.
     if (!listings.length && !theater.mayBeEmpty) throw new Error('returned no listings');
-    return { theater, listings };
+    return { theater, listings, error: null };
   } catch (error) {
-    console.error(`Listings (${theater.key}) fetch failed:`, error.message);
-    return { theater, listings: null };
+    // A warning, not an error: one bad read is a blip the sweep already
+    // copes with. noteBoardFailures raises it once it has lasted a day.
+    console.warn(`Listings (${theater.key}) fetch failed:`, error.message);
+    return { theater, listings: null, error: error.message || String(error) };
   }
 }));
+
+// Every theater is fetched once for everyone, so its failure streak lives in
+// one place: the owner's push state. Written only when something changed.
+const BOARD_FAILURES_PATH = `${OWNER_ACCOUNT_KEY}/push/state/boardFailures`;
+const noteBoardFailures = async (fetched, now) => {
+  try {
+    const known = await dbGet(BOARD_FAILURES_PATH);
+    const { next, report } = boardFailuresDue({
+      known,
+      results: fetched.map((b) => ({ key: b.theater.key, error: b.error })),
+      now
+    });
+    for (const { key, error, since } of report) {
+      console.error(`Listings (${key}) unreadable since ${new Date(since).toISOString()}:`, error);
+    }
+    // Firebase hands keys back sorted; compare that way or every sweep rewrites.
+    const sorted = (map) => JSON.stringify(Object.keys(map || {}).sort().map((k) => [k, map[k].since, map[k].reportedAt || null]));
+    const changed = sorted(known) !== sorted(next);
+    if (changed) await dbSet(BOARD_FAILURES_PATH, Object.keys(next).length ? next : null);
+  } catch (error) {
+    console.warn('Listings failure record failed:', error.message);
+  }
+};
 
 // Everyone who follows theaters, each with their list in pecking order. The
 // owner without a list of his own follows THEATERS.
@@ -657,6 +683,7 @@ const notifyTheaterListings = async (accounts, now) => {
   const unique = new Map();
   followers.forEach((f) => f.theaters.forEach((t) => { if (!unique.has(t.key)) unique.set(t.key, t); }));
   const fetched = await fetchBoards([...unique.values()], now);
+  await noteBoardFailures(fetched, now);
   const boardByKey = new Map(fetched.map((b) => [b.theater.key, b.listings]));
   const results = [];
   for (const { topKey, theaters } of followers) {

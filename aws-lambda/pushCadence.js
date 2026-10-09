@@ -990,6 +990,37 @@ function listingsDue ({ known, current, now = Date.now() }) {
   return { fresh, nextKnown, seeded: false };
 }
 
+/**
+ * Which unreadable boards are worth an error (2026-10-09). One empty or failed
+ * read is a blip - a 1 AM CinemaClock page with nothing on it opened a Sentry
+ * issue for a Brooklyn Alamo - and the sweep already copes by skipping that
+ * theater. A board still unreadable a day on means the page moved or broke.
+ * `known` is { theaterKey: { since, reportedAt? } }; `results` is this
+ * sweep's [{ key, error }] (error null on a good read). A good read clears the
+ * note, a theater no one follows any more drops out, and a long failure is
+ * reported once, then again each further day it lasts.
+ */
+const BOARD_FAILURE_REPORT_MS = ONE_DAY_MS;
+function boardFailuresDue ({ known, results, now = Date.now(), reportAfterMs = BOARD_FAILURE_REPORT_MS }) {
+  const previous = known && typeof known === 'object' ? known : {};
+  const next = {};
+  const report = [];
+  for (const { key, error } of results || []) {
+    if (!error) continue;
+    const prior = previous[key] || {};
+    const since = Number.isFinite(prior.since) ? prior.since : now;
+    const row = { since };
+    if (Number.isFinite(prior.reportedAt)) row.reportedAt = prior.reportedAt;
+    const lastSaid = Number.isFinite(prior.reportedAt) ? prior.reportedAt : since;
+    if (now - lastSaid >= reportAfterMs) {
+      row.reportedAt = now;
+      report.push({ key, error, since });
+    }
+    next[key] = row;
+  }
+  return { next, report };
+}
+
 // "2026-12-15T18:00:00" (the cinema's own clock) -> "Tue Dec 15, 6:00 PM".
 // String arithmetic on purpose: the feed already speaks local time, and
 // Date would re-interpret it in the Lambda's zone.
@@ -1483,6 +1514,8 @@ module.exports = {
   LISTINGS_FORGET_MS,
   alamoListings,
   listingsDue,
+  BOARD_FAILURE_REPORT_MS,
+  boardFailuresDue,
   showTimeLabel,
   decodeEntities,
   veeziDateTime,
