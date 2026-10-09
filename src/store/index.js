@@ -1026,6 +1026,18 @@ export default createStore({
         state.settings = { ...(state.settings || {}), personalAwards: state.personalAwards };
         return;
       }
+      // Showtimes dismissals and reminders (2026-10-09): theaters/dismissed
+      // and theaters/reminders, one theater/slug leaf at a time. A null is a
+      // removal, so the key goes rather than sitting there as null.
+      if (root === 'theaters' && (rest[0] === 'dismissed' || rest[0] === 'reminders') && rest.length === 3) {
+        const field = rest[0] === 'dismissed' ? 'theaterDismissed' : 'theaterReminders';
+        const [, theaterKey, slug] = rest;
+        const forTheater = { ...((state[field] || {})[theaterKey] || {}) };
+        if (value == null) delete forTheater[slug];
+        else forTheater[slug] = value;
+        state[field] = { ...(state[field] || {}), [theaterKey]: forTheater };
+        return;
+      }
       if (root === 'settings') {
         // The migration deletes settings/personalAwards; the awards themselves
         // live on in state.personalAwards, so that delete must not blank them.
@@ -2989,6 +3001,9 @@ export default createStore({
       context.commit('setTheaterBoard', board);
       context.commit('setTheaterDismissed', dismissed.kept);
       context.commit('setTheaterReminders', reminders.kept);
+      // A dismissal or reminder the server hasn't got yet (offline, or the
+      // page reloaded mid-save) still shows as made.
+      await context.dispatch('replayPendingWrites', 'theaters').catch(() => {});
       if (Object.keys(dismissed.removals).length) update(ref(db, `${root}/theaters/dismissed`), dismissed.removals).catch(() => {});
       if (Object.keys(reminders.removals).length) update(ref(db, `${root}/theaters/reminders`), reminders.removals).catch(() => {});
       return board;
@@ -2999,25 +3014,22 @@ export default createStore({
     // "Swipe left can be remind me again one week before the showtime"
     // (2026-09-28). The app picks the time (src/utils/reminderTime.js); the
     // push sweep sends it and stamps sentAt. `reminder: null` cancels.
+    //
+    // Both are choices the user made, so both go through writeDurably
+    // (2026-10-09: an update reloaded the Showtimes screen mid-dismissing,
+    // and a bare update() still on its way would have been lost with the
+    // page). loadTheaterBoard replays anything still queued.
     async remindListing (context, { theaterKey, slug, reminder }) {
       const root = context.getters.databaseTopKey;
       if (!root || !theaterKey || !slug) return;
-      const next = { ...context.state.theaterReminders, [theaterKey]: { ...(context.state.theaterReminders[theaterKey] || {}) } };
-      if (reminder) next[theaterKey][slug] = reminder;
-      else delete next[theaterKey][slug];
-      context.commit('setTheaterReminders', next);
-      await update(ref(db, `${root}/theaters/reminders/${theaterKey}`), { [slug]: reminder || null });
+      await context.dispatch('writeDurably', { path: `theaters/reminders/${theaterKey}/${slug}`, value: reminder || null });
     },
     async dismissListing (context, { theaterKey, slug, restore = false }) {
       const root = context.getters.databaseTopKey;
       if (!root || !theaterKey || !slug) return;
       // Dealt with here, so its notifications go too (the new-listing one and any reminder).
       if (!restore) closeNotificationsWhere((tag) => tag === `listings-${slug}` || tag.startsWith(`remind-${theaterKey}-${slug}-`));
-      const next = { ...context.state.theaterDismissed, [theaterKey]: { ...(context.state.theaterDismissed[theaterKey] || {}) } };
-      if (restore) delete next[theaterKey][slug];
-      else next[theaterKey][slug] = Date.now();
-      context.commit('setTheaterDismissed', next);
-      await update(ref(db, `${root}/theaters/dismissed/${theaterKey}`), { [slug]: restore ? null : next[theaterKey][slug] });
+      await context.dispatch('writeDurably', { path: `theaters/dismissed/${theaterKey}/${slug}`, value: restore ? null : Date.now() });
     },
     // Anyone's theaters (2026-09-30: "other people could set it up for their
     // own local theaters"). The sweep reads theaters/follow; saving asks the

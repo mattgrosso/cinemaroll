@@ -287,10 +287,21 @@ export default {
       // The banner reads this to say "Updating…" instead of offering a
       // Refresh that would only get in the way.
       this.$store.commit('setUpdateApplying', true);
-      const outcome = await reloadForUpdate({ target: this.deployedBundleSeen, sinceVisibleMs: Date.now() - (this.lastBecameVisibleAt || 0) });
+      const startedAt = Date.now();
+      const outcome = await reloadForUpdate({
+        target: this.deployedBundleSeen,
+        sinceVisibleMs: startedAt - (this.lastBecameVisibleAt || 0),
+        // Quiet when it began isn't quiet now (2026-10-09: the wait took 9
+        // seconds and the reload landed mid-dismissing on Showtimes).
+        stillQuiet: () => this.lastTouchAt <= startedAt && isSafeMomentForReload({ routePath: this.$route?.path || '' })
+      });
       if (outcome === 'deferred') {
         this.$store.commit('setUpdateApplying', false);
         this.$store.commit('setUpdateDeferred', true);
+      } else if (outcome === 'interrupted') {
+        // Back to the banner, and try again after a quiet stretch.
+        this.$store.commit('setUpdateApplying', false);
+        this.applyWhenQuiet();
       }
     },
     armAutoUpdate () {
@@ -305,7 +316,10 @@ export default {
         return;
       }
 
-      // Otherwise: poll for a quiet stretch.
+      this.applyWhenQuiet();
+    },
+    // Poll for a quiet stretch, then apply.
+    applyWhenQuiet () {
       if (this.autoUpdateTimer) clearInterval(this.autoUpdateTimer);
       this.autoUpdateTimer = setInterval(() => {
         const quiet = Date.now() - this.lastActivityAt > QUIET_MS;

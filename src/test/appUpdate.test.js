@@ -412,3 +412,36 @@ describe('update timing for bug reports', () => {
     expect(getUpdateTiming(storage).landedMs).toBe(1500)
   })
 })
+
+// Bug report (Matt, 2026-10-09): opened Showtimes from a notification - a
+// fresh moment, so the update started at once - then the wait for the new
+// worker took 9 seconds and the reload landed while he was dismissing films.
+describe('reloadForUpdate when the user starts using the page during the wait', () => {
+  function memoryStorage () {
+    const map = new Map()
+    return { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => map.set(k, String(v)), removeItem: (k) => map.delete(k) }
+  }
+
+  it('does not reload once the page has been touched since the attempt began', async () => {
+    let touched = false
+    const h = { storage: memoryStorage(), reload: vi.fn(), hard: vi.fn(), wait: vi.fn(async () => { touched = true; return 'settled' }), canFetchNewApp: vi.fn(async () => true) }
+    expect(await reloadForUpdate({ target: 'js/app.new.js', stillQuiet: () => !touched, ...h })).toBe('interrupted')
+    expect(h.reload).not.toHaveBeenCalled()
+    expect(h.hard).not.toHaveBeenCalled()
+    expect(getUpdateTiming(h.storage)).toMatchObject({ wait: 'settled', result: 'interrupted' })
+  })
+
+  it('does not go hard either when a stuck install meets a busy page', async () => {
+    const h = { storage: memoryStorage(), reload: vi.fn(), hard: vi.fn(), wait: vi.fn(async () => 'stuck'), canFetchNewApp: vi.fn(async () => true) }
+    expect(await reloadForUpdate({ target: 'js/app.new.js', stillQuiet: () => false, ...h })).toBe('interrupted')
+    expect(h.hard).not.toHaveBeenCalled()
+  })
+
+  it('the retry after an interruption is an ordinary reload, not a hard one', async () => {
+    const h = { storage: memoryStorage(), reload: vi.fn(), hard: vi.fn(), wait: vi.fn(async () => 'settled'), canFetchNewApp: vi.fn(async () => true) }
+    await reloadForUpdate({ target: 'js/app.new.js', stillQuiet: () => false, ...h })
+    expect(await reloadForUpdate({ target: 'js/app.new.js', stillQuiet: () => true, ...h })).toBe('reloaded')
+    expect(h.reload).toHaveBeenCalledTimes(1)
+    expect(h.hard).not.toHaveBeenCalled()
+  })
+})

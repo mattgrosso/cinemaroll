@@ -32,11 +32,11 @@ describe('Showtimes screen wiring', () => {
     expect(screen).not.toMatch(/\bset\(|\bupdate\(/);
     // Dismissals go through the store, to their own node, never the board.
     expect(screen).toContain("dispatch('dismissListing'");
-    expect(store).toContain('`${root}/theaters/dismissed/${theaterKey}`');
+    expect(store).toContain('`theaters/dismissed/${theaterKey}/${slug}`');
     // Reminders likewise: the screen chooses the time, the store writes it,
     // the sweep sends it.
     expect(screen).toContain("dispatch('remindListing'");
-    expect(store).toContain('`${root}/theaters/reminders/${theaterKey}`');
+    expect(store).toContain('`theaters/reminders/${theaterKey}/${slug}`');
     expect(lambda).toContain('/theaters/reminders`');
     // A notification lands on this screen, never on a theater's site.
     const cadence = read('../../aws-lambda/pushCadence.js');

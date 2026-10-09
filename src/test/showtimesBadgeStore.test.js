@@ -120,3 +120,39 @@ describe('refreshAppBadge and Showtimes', () => {
     expect(store.getters.showtimesBadgeCount).toBe(0);
   });
 });
+
+// Bug report 2026-10-09: an update reloaded the Showtimes screen while Matt
+// was dismissing films. Dismissals and reminders are the user's choices, so
+// they're queued on the phone before the network write - a reload, a kill or
+// a dead connection can't lose one.
+describe('Showtimes choices are saved on the phone first', () => {
+  it('queues a dismissal at its leaf path and shows it at once', async () => {
+    const { enqueueWrite } = await import('@/utils/pendingWriteQueue.js')
+    enqueueWrite.mockClear()
+    await store.dispatch('dismissListing', { theaterKey: 'alamo', slug: 'a' })
+    expect(enqueueWrite).toHaveBeenCalledWith({ type: 'write', dbEntry: { path: 'theaters/dismissed/alamo/a', value: expect.any(Number) } })
+    expect(store.state.theaterDismissed.alamo.a).toEqual(expect.any(Number))
+
+    await store.dispatch('dismissListing', { theaterKey: 'alamo', slug: 'a', restore: true })
+    expect(enqueueWrite).toHaveBeenLastCalledWith({ type: 'write', dbEntry: { path: 'theaters/dismissed/alamo/a', value: null } })
+    expect('a' in store.state.theaterDismissed.alamo).toBe(false)
+  })
+
+  it('queues a reminder and its cancellation the same way', async () => {
+    const { enqueueWrite } = await import('@/utils/pendingWriteQueue.js')
+    enqueueWrite.mockClear()
+    const reminder = { remindAt: 123 }
+    await store.dispatch('remindListing', { theaterKey: 'alamo', slug: 'b', reminder })
+    expect(enqueueWrite).toHaveBeenCalledWith({ type: 'write', dbEntry: { path: 'theaters/reminders/alamo/b', value: reminder } })
+    expect(store.state.theaterReminders.alamo.b).toEqual(reminder)
+    await store.dispatch('remindListing', { theaterKey: 'alamo', slug: 'b', reminder: null })
+    expect('b' in store.state.theaterReminders.alamo).toBe(false)
+  })
+
+  it('a dismissal still waiting in the queue survives the board reloading from the server', async () => {
+    const { listPendingWrites } = await import('@/utils/pendingWriteQueue.js')
+    listPendingWrites.mockResolvedValueOnce([{ id: 1, type: 'write', dbEntry: { path: 'theaters/dismissed/alamo/b', value: 5 } }])
+    await store.dispatch('loadTheaterBoard')
+    expect(store.state.theaterDismissed.alamo.b).toBe(5)
+  })
+})

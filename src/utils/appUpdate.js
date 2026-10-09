@@ -141,7 +141,14 @@ export function getUpdateTiming (storage = window.localStorage) {
 
 // Resolves 'reloaded', 'hard', or 'deferred' - the last when a hard reload
 // was called for but the connection couldn't carry the new app, so the
-// running (cached) app stays put and the banner stays up.
+// running (cached) app stays put and the banner stays up - or 'interrupted'
+// when `stillQuiet` says the user started using the page while we waited.
+//
+// Bug report (Matt, 2026-10-09): opened Showtimes from a notification, which
+// counts as a fresh moment, so the update started at once - then the wait
+// for the new worker took 9 seconds, he was dismissing films by then, and
+// the reload came down on him anyway. The moment was quiet when the attempt
+// began; `stillQuiet` asks again right before the page goes.
 // One update attempt at a time on this page. Bug report (Matt, 2026-09-30):
 // the notice still offered "Refresh" while the automatic update was already
 // under way, and a tap then counted as a SECOND attempt for the same version
@@ -163,6 +170,7 @@ async function runReloadForUpdate ({
   wait = waitForNewWorker,
   canFetchNewApp = newAppIsReachable,
   sinceVisibleMs = null,
+  stillQuiet = () => true,
   now = Date.now
 } = {}) {
   // No known target still counts (2026-09-29 loop): a null target used to
@@ -180,10 +188,25 @@ async function runReloadForUpdate ({
   // as he stayed. Only go hard when the new app can actually be fetched,
   // right now, in a few seconds; otherwise keep the working app and let the
   // worker finish in its own time.
+  // Interrupted, nothing reloaded: put back the attempt record as it was,
+  // so the retry isn't mistaken for a second reload that didn't land (which
+  // would go hard for no reason).
+  const interrupted = () => {
+    try {
+      if (previous) storage.setItem(RELOAD_KEY, JSON.stringify(previous));
+      else storage.removeItem(RELOAD_KEY);
+    } catch { /* storage unavailable */ }
+    return 'interrupted';
+  };
+  const quiet = () => {
+    try { return stillQuiet() !== false; } catch { return true; }
+  };
+
   const goHard = async () => {
     let reachable = false;
     try { reachable = await canFetchNewApp(target); } catch { reachable = false; }
     if (!reachable) return 'deferred';
+    if (!quiet()) return interrupted();
     await hard();
     return 'hard';
   };
@@ -200,6 +223,7 @@ async function runReloadForUpdate ({
   timing.waitMs = now() - at;
   timing.wait = outcome;
   if (outcome === 'stuck') return finish(await goHard());
+  if (!quiet()) return finish(interrupted());
   finish('reloaded');
   reload();
   return 'reloaded';

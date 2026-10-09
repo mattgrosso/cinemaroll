@@ -156,6 +156,15 @@ already installing. A second `update()` queues behind the first one's install
 on iOS, which is what made every auto-refresh sit out the 5-second cap.
 Bug reports carry `update.lastUpdate` (spotted-after, wait time, result, landed-after).
 
+**Quiet when it started is not quiet now (2026-10-09).** The automatic update
+passes `stillQuiet` to `reloadForUpdate`, which asks it again right before
+reloading (plain or hard). A touch since the attempt began, or a newly unsafe
+moment, returns `'interrupted'`: nothing reloads, the reload-attempt record is
+put back (so the retry isn't mistaken for a repeat and sent hard), and App.vue
+goes back to waiting for an 8-second quiet stretch. Showtimes dismissals and
+reminders go through `writeDurably` at `theaters/<dismissed|reminders>/<theater>/<slug>`;
+`applyDbPathLocally` knows those paths and `loadTheaterBoard` replays the queue.
+
 **A small deploy must stay a small download (2026-10-02).** `vite.config.mjs`'s
 `coreChunk` puts everything loaded up front in `js/core.<hash>.js`; only
 `main.js` and `router/index.js` (which names every screen file) stay in
