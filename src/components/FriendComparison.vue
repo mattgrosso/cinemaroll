@@ -264,14 +264,15 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+@import '@/assets/scss/screen-top';
 .friend-comparison {
   color: #eee;
   min-width: 0;
-  padding: 0.75rem 1rem 2rem;
+  padding: $screen-top-gap 1rem 2rem;
   width: 100%;
 }
 
-.fc-title { margin: 0.25rem 0 0; }
+.fc-title { margin: 0; }
 .fc-subtitle { color: #ccc; font-size: 0.85rem; margin: 0.25rem 0 1rem; }
 .fc-empty { color: #ccc; font-size: 0.85rem; margin: 0; }
 .fc-caption { color: #ccc; font-size: 0.75rem; margin: 0 0 0.5rem; }

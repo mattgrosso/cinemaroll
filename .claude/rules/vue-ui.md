@@ -116,6 +116,16 @@ trap below — that trap is a full viewport stacked *under* the header. Games ke
 header (with their own banner, see Six Degrees); don't hide it anywhere else without
 the same restore-on-unmount, or the next screen inherits a headerless app.
 
+## One gap under the header: `$screen-top-gap`
+
+Every non-game screen starts the same distance below the header (2026-10-09: "make sure
+that we have that same consistent gap across all of the various pages"). `_screen-top.scss`
+holds the one value (0.5rem); a screen root's `padding-top` is `$screen-top-gap` and its
+first child (tab row, title) has **no top margin**, so the two never stack. BackLink needs
+no reserved room — it floats over the header banner; the old 2.5rem "safety margin" was
+dead air. Insights has no root padding, so the gap sits on `.insights-tabs`. A new screen
+joins `screenTopGap.test.js`. Games keep their own padding (their banner differs).
+
 ## Layout traps that have bitten here
 
 - **Don't put `min-height: 100vh` on a routed component's root.** `.cinema-roll` and

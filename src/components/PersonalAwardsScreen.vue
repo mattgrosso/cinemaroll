@@ -296,7 +296,8 @@ export default {
 };
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
+@import '@/assets/scss/screen-top';
 .ceremony-scroller {
   display: flex;
   gap: 0.4rem;
@@ -353,7 +354,7 @@ export default {
      misunderstanding: BackLink is position:absolute and floats over the
      global header banner, so the reserved space was pure dead air below
      the header image (feedback, twice). */
-  padding: 0.75rem 1rem 2rem;
+  padding: $screen-top-gap 1rem 2rem;
 }
 
 .awards-year-scroller {

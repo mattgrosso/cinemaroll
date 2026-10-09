@@ -3005,6 +3005,7 @@ export default {
 </script>
 
 <style lang="scss">
+@import '@/assets/scss/screen-top';
   .insights {
   /* Matt's house tile language (see .insights-pane-item in InsightsPane.vue):
      white 1px borders, 3px radius, white body text.
@@ -3071,7 +3072,7 @@ export default {
     display: grid;
     gap: 0.35rem;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    margin: 0.25rem 0 0.75rem;
+    margin: $screen-top-gap 0 0.75rem;
     width: 100%;
 
     .insights-pane-pending {

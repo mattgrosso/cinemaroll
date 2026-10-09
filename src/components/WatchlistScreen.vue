@@ -1525,10 +1525,10 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+@import '@/assets/scss/screen-top';
 .watchlist-screen {
   color: #eee;
-  /* BackLink safety margin, same as every screen using it. */
-  padding: 2.5rem 1rem 2rem;
+  padding: $screen-top-gap 1rem 2rem;
 }
 
 .showtimes-card {
@@ -1569,7 +1569,7 @@ export default {
 
 /* Film Club's tab control (.fc-tabs), same sizes and the same five colours,
    each with black text on the lit tab (all well past 4.5:1). */
-.wl-tabs { display: grid; gap: 0.3rem; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 0.35rem 0 0.9rem; width: 100%; }
+.wl-tabs { display: grid; gap: 0.3rem; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 0 0 0.9rem; width: 100%; }
 .wl-tab { align-items: center; background: none; border: 1px solid white; border-radius: 3px; color: white; display: inline-flex; font-size: 0.78rem; font-weight: 600; justify-content: center; min-height: 40px; min-width: 0; padding: 0 0.2rem; white-space: nowrap; }
 .wl-tab.active { color: #000; font-weight: 700; }
 .wl-tab-foryou.active { background: #24d776; }

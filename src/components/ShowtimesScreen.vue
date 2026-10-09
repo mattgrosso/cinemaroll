@@ -453,9 +453,10 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+@import '@/assets/scss/screen-top';
 .showtimes {
   color: #eee;
-  padding: 0.75rem 1rem 2rem;
+  padding: $screen-top-gap 1rem 2rem;
 }
 
 .st-head {
@@ -463,7 +464,6 @@ export default {
   display: flex;
   gap: 0.75rem;
   justify-content: space-between;
-  margin-top: 0.25rem;
 }
 
 .st-title { margin: 0; }

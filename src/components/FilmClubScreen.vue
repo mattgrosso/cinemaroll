@@ -905,10 +905,11 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+@import '@/assets/scss/screen-top';
 .film-club-screen {
   color: #eee;
   min-width: 0;
-  padding: 0.75rem 1rem 2rem;
+  padding: $screen-top-gap 1rem 2rem;
   width: 100%;
 }
 
@@ -1071,7 +1072,7 @@ export default {
 /* No title or blurb above these (Matt, 2026-10-07: "the actual content
    starts more than halfway down the page"); the banner names the app and the
    back link names the way out. */
-.fc-tabs { display: grid; gap: 0.3rem; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0.35rem 0 0.9rem; width: 100%; }
+.fc-tabs { display: grid; gap: 0.3rem; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0 0 0.9rem; width: 100%; }
 .fc-tab { align-items: center; background: none; border: 1px solid white; border-radius: 3px; color: white; display: inline-flex; font-size: 0.78rem; font-weight: 600; gap: 0.25rem; justify-content: center; min-height: 40px; min-width: 0; padding: 0 0.2rem; }
 .fc-tab-charts.active { background: #ff7a6b; }
 .fc-tab.active { color: #000; font-weight: 700; }

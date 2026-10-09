@@ -294,11 +294,12 @@ export default {
 </script>
 
 <style lang="scss">
+@import '@/assets/scss/screen-top';
 .newsletter-screen {
   color: white;
   margin: 0 auto;
   max-width: 44rem;
-  padding: 1rem 1rem 4rem;
+  padding: $screen-top-gap 1rem 4rem;
 }
 
 .newsletter-empty,

@@ -504,9 +504,10 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+@import '@/assets/scss/screen-top';
 .trophy-case {
   color: #eee;
-  padding: 0 1rem 2rem;
+  padding: $screen-top-gap 1rem 2rem;
 }
 
 .home-link {
@@ -523,7 +524,7 @@ export default {
 }
 
 .trophy-case-title {
-  margin: 0.25rem 0 0;
+  margin: 0;
 }
 
 .trophy-case-subtitle {

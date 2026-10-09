@@ -456,11 +456,12 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+@import '@/assets/scss/screen-top';
 @import '@/assets/scss/game-buttons';
 
 .library-poster-screen {
   color: #eee;
-  padding: 2.5rem 1rem 2rem;
+  padding: $screen-top-gap 1rem 2rem;
   text-align: center;
 }
 
@@ -585,7 +586,7 @@ export default {
 }
 
 .poster-title {
-  margin: 0.5rem 0 0;
+  margin: 0;
 }
 
 .poster-subtitle {

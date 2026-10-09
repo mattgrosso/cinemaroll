@@ -237,12 +237,13 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+@import '@/assets/scss/screen-top';
 .setup {
   color: #eee;
-  padding: 0.75rem 1rem 6rem;
+  padding: $screen-top-gap 1rem 6rem;
 }
 
-.su-title { margin: 0.25rem 0 0; }
+.su-title { margin: 0; }
 .su-subtitle { color: #ccc; font-size: 0.85rem; margin: 0.25rem 0 0.9rem; }
 
 .su-panel {

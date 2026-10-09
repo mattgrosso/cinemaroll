@@ -1,0 +1,11 @@
+// The one gap between the header and the first thing on a screen (Matt,
+// 2026-10-09, on the Watchlist: "the space between the header and the tabs is
+// still much too large... make sure that we have that same consistent gap
+// across all of the various pages").
+//
+// A screen root's padding-top is this, and whatever comes first inside it (a
+// tab row, a title) has no top margin of its own, so the two never stack.
+// BackLink needs no room here: it is position:absolute and floats over the
+// header banner. Game screens keep their own padding — see games.md.
+// screenTopGap.test.js holds every screen to this.
+$screen-top-gap: 0.5rem;
