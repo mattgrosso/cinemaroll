@@ -667,3 +667,73 @@ describe('change tracking on every library write (delta sync, phase 0)', () => {
     expect(updateMock.mock.calls[0][1]['movieLog/abc/updatedAt']).toEqual({ '.sv': 'timestamp' })
   })
 })
+
+// Sentry 2026-10-09: "Database write timed out after 8000ms:
+// settings/tieBreakTournament" from an iPhone that had just woken the app.
+// captureConsole turns every console.error into a Sentry event, so an
+// expected timeout (the write is queued and retried) must be a warning; a
+// server refusal, and a queued write that keeps failing, stay errors.
+describe('write failures and the console (what reaches Sentry)', () => {
+  let errorSpy
+  let warnSpy
+  beforeEach(() => {
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    errorSpy.mockClear()
+    warnSpy.mockClear()
+  })
+  afterEach(() => {
+    errorSpy.mockRestore()
+    warnSpy.mockRestore()
+  })
+
+  it('a timed-out writeDurably is a warning, never a console.error', async () => {
+    vi.useFakeTimers()
+    try {
+      store.commit('setSettings', {})
+      setMock.mockImplementation(() => new Promise(() => {}))
+      const pending = store.dispatch('writeDurably', { path: 'settings/tieBreakTournament', value: { contestantIds: ['a', 'b'] } })
+      await vi.advanceTimersByTimeAsync(9000)
+      await pending
+
+      const writeErrors = errorSpy.mock.calls.filter((call) => call.flat().map(String).join(' ').match(/timed out|database value|direct write failed/i))
+      expect(writeErrors).toEqual([])
+      expect(warnSpy.mock.calls.flat().join(' ')).toContain('settings/tieBreakTournament')
+      expect(removePendingWriteMock).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a refused write is still a console.error', async () => {
+    store.commit('setSettings', {})
+    setMock.mockImplementation(() => Promise.reject(new Error('PERMISSION_DENIED: Permission denied')))
+
+    await store.dispatch('writeDurably', { path: 'settings/lastTweak', value: 1 })
+
+    expect(errorSpy.mock.calls.flat().map(String).join(' ')).toContain('PERMISSION_DENIED')
+  })
+
+  it('a queued write that keeps timing out is reported once, on its fifth failure', async () => {
+    const { QUEUED_WRITE_REPORT_AFTER } = await import('@/store/index.js')
+    vi.useFakeTimers()
+    try {
+      setMock.mockImplementation(() => new Promise(() => {}))
+      for (const attempts of [0, QUEUED_WRITE_REPORT_AFTER - 2, QUEUED_WRITE_REPORT_AFTER - 1, QUEUED_WRITE_REPORT_AFTER]) {
+        listPendingWritesMock.mockResolvedValue([
+          { id: 'stuck', type: 'write', attempts, dbEntry: { path: 'settings/tieBreakTournament', value: {} } }
+        ])
+        store.commit('setIsOnline', true)
+        const flush = store.dispatch('flushPendingWrites')
+        await vi.advanceTimersByTimeAsync(9000)
+        await flush
+      }
+
+      const reports = errorSpy.mock.calls.filter((call) => String(call[0]).includes('still failing'))
+      expect(reports).toHaveLength(1)
+      expect(reports[0]).toContain('settings/tieBreakTournament')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})

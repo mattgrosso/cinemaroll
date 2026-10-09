@@ -128,6 +128,11 @@ const DATABASE_WRITE_TIMEOUT_MS = 8000;
 // Used to build absolute feed/inbox URLs for people on other apps.
 const DATABASE_URL = 'https://movie-log-8c4d5-default-rtdb.firebaseio.com';
 
+const isWriteTimeout = (error) => /timed out/.test(error?.message || '');
+// A queued write that has failed this many flushes is stuck, not unlucky:
+// that one gets a console.error (so Sentry hears about it), once.
+export const QUEUED_WRITE_REPORT_AFTER = 5;
+
 const withTimeout = (promise, ms, errorMessage) => {
   let timer;
   const timeout = new Promise((resolve, reject) => {
@@ -160,11 +165,21 @@ const performDatabaseWrite = async (context, dbEntry) => {
       `Database write timed out after ${DATABASE_WRITE_TIMEOUT_MS}ms: ${dbEntry.path}`
     );
   } catch (error) {
-    console.error('Error setting database value:', error);
-    ErrorLogService.error('Error setting database value:', dbEntry.path, error);
     // A write that never came back is lie-fi's signature: flip the app to
     // its offline paths until something answers again (networkHealth.js).
-    if (/timed out/.test(error?.message || '')) markStalled();
+    // It's a warning, not an error: captureConsole files every console.error
+    // in Sentry, and a timeout is expected (iOS waking the PWA with a dead
+    // socket, Sentry 2026-10-09). The write is already queued, and the flush
+    // reports one that keeps failing (QUEUED_WRITE_REPORT_AFTER). A refusal
+    // from the server (permission denied) is still an error.
+    if (isWriteTimeout(error)) {
+      console.warn('Database write timed out, left for the queue:', dbEntry.path);
+      ErrorLogService.warn('Database write timed out:', dbEntry.path, error);
+      markStalled();
+    } else {
+      console.error('Error setting database value:', error);
+      ErrorLogService.error('Error setting database value:', dbEntry.path, error);
+    }
     throw error;
   }
 };
@@ -2080,7 +2095,11 @@ export default createStore({
               await updatePendingWrite(entry.id, { written: true });
             }
           } catch (error) {
-            await updatePendingWrite(entry.id, { attempts: (entry.attempts || 0) + 1, lastError: String(error) });
+            const attempts = (entry.attempts || 0) + 1;
+            await updatePendingWrite(entry.id, { attempts, lastError: String(error) });
+            if (attempts === QUEUED_WRITE_REPORT_AFTER) {
+              console.error(`Queued write still failing after ${attempts} attempts:`, entry.dbEntry.path, error);
+            }
           }
         }
 
@@ -2175,7 +2194,8 @@ export default createStore({
       } catch (error) {
         // Already durably queued regardless of this failure.
         await queuedPromise.catch(() => null);
-        console.error('writeDurably: direct write failed, will retry via the background queue:', dbEntry.path, error);
+        const log = isWriteTimeout(error) ? console.warn : console.error;
+        log('writeDurably: direct write failed, will retry via the background queue:', dbEntry.path, error);
       } finally {
         // Always untrack, including the offline path — otherwise
         // inFlightWrites would grow unboundedly across an offline session.

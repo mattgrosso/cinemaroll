@@ -130,6 +130,10 @@ always a real `YYYY-01-01` (null breaks date parsing everywhere), `runtime` 90 (
 `store.state.isOnline` is no longer `navigator.onLine`. `src/utils/networkHealth.js`
 flips it false when a request times out (every axios call has an 8s timeout,
 Firebase writes 8s) and back when anything answers or the probe gets through.
+A timed-out Firebase write logs `console.warn`, not `console.error`
+(captureConsole makes every error a Sentry event, and the write is already
+queued); a refusal stays an error, and `flushPendingWrites` errors once when a
+queued write reaches `QUEUED_WRITE_REPORT_AFTER` (5) failures (Sentry, 2026-10-09).
 Branch on `state.isOnline` for offline behaviour, never on `navigator.onLine`;
 never add a network call without a timeout (axios has the default; raw `fetch`
 goes through `fetchWithTimeout`). Everything queued through `pendingWriteQueue`
