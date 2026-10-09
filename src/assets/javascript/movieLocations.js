@@ -29,6 +29,12 @@ const WDQS_ENDPOINT = 'https://query.wikidata.org/sparql';
 // not 1,400. Kept well under the endpoint's complexity/timeout limits.
 export const ID_BATCH_SIZE = 200;
 
+// Every network call gets a deadline (data-writes rules). Longer than the
+// app-wide 8s because a 200-id batch legitimately takes a few seconds, and
+// deliberately not fetchWithTimeout: a slow Wikidata must not mark the whole
+// app offline.
+export const LOOKUP_TIMEOUT_MS = 20000;
+
 // Bounds the stored payload. Nothing realistically has this many distinct
 // mapped places, but a runaway item shouldn't bloat every movie record.
 export const MAX_LOCATIONS_PER_MOVIE = 30;
@@ -153,7 +159,8 @@ export function collectMoviesNeedingLocations (movieLog) {
 
 async function runQuery (query, fetchImpl) {
   const response = await fetchImpl(`${WDQS_ENDPOINT}?query=${encodeURIComponent(query)}`, {
-    headers: { Accept: 'application/sparql-results+json' }
+    headers: { Accept: 'application/sparql-results+json' },
+    signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS)
   });
 
   if (!response?.ok) {

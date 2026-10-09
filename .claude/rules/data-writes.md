@@ -134,6 +134,11 @@ A timed-out Firebase write logs `console.warn`, not `console.error`
 (captureConsole makes every error a Sentry event, and the write is already
 queued); a refusal stays an error, and `flushPendingWrites` errors once when a
 queued write reaches `QUEUED_WRITE_REPORT_AFTER` (5) failures (Sentry, 2026-10-09).
+The same split applies to any optional lookup with a fallback (the
+post-rating Wikidata locations lookup, keywords): `isStallError` → warn,
+anything else → error. Third-party lookups get their own `AbortSignal.timeout`
+rather than `fetchWithTimeout`, so a slow outside service doesn't flip the app
+offline (Wikidata: 20s, `LOOKUP_TIMEOUT_MS`).
 Branch on `state.isOnline` for offline behaviour, never on `navigator.onLine`;
 never add a network call without a timeout (axios has the default; raw `fetch`
 goes through `fetchWithTimeout`). Everything queued through `pendingWriteQueue`

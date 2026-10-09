@@ -162,6 +162,12 @@ describe('fetchLocationsForIds', () => {
     const fetchImpl = vi.fn(() => Promise.resolve({ ok: false, status: 500 }));
     await expect(fetchLocationsForIds(['1'], { fetchImpl })).rejects.toThrow(/500/);
   });
+
+  it('gives every request a deadline, so a dead connection cannot hang forever', async () => {
+    const fetchImpl = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(response([])) }));
+    await fetchLocationsForIds(['1'], { fetchImpl });
+    expect(fetchImpl.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
 });
 
 describe('backfillMovieLocations', () => {

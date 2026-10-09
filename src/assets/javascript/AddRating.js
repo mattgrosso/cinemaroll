@@ -5,6 +5,7 @@ import { fetchLocationsForIds } from './movieLocations.js';
 import { isPlaceholderId, makePlaceholderId } from '../../utils/placeholderId.js';
 import { trimCrew, RUNTIME_ENTRY_FIELDS } from './storedEntry.js';
 import { enqueueWrite, removePendingWrite, updatePendingWrite } from '../../utils/pendingWriteQueue.js';
+import { isStallError } from '../../utils/networkHealth.js';
 
 const getTMDBData = async (rating) => {
   const apiKey = process.env.VUE_APP_TMDB_API_KEY;
@@ -210,7 +211,7 @@ const CARRIED_OVER_MOVIE_FIELDS = ['locations'];
 // never delay or fail an actual rating. Anything missed here is picked up by
 // the backfill, since a movie only counts as "checked" once `locations` is
 // actually written.
-const storeLocationsForRating = async (dbEntry) => {
+export const storeLocationsForRating = async (dbEntry) => {
   const movie = dbEntry?.value?.movie;
 
   // Placeholders have no real TMDB id to join on; they get locations once
@@ -252,7 +253,12 @@ const storeLocationsForRating = async (dbEntry) => {
       value: locations
     });
   } catch (error) {
-    console.error('Could not look up locations for this rating; the Settings backfill will catch it:', error);
+    // A request nothing answered ("Load failed" on iOS, a timeout) is
+    // expected and already covered by the backfill, so it's a warning:
+    // captureConsole makes every console.error a Sentry event (2026-10-09).
+    // Wikidata saying no, or a bad answer, is still worth hearing about.
+    const log = isStallError(error) ? console.warn : console.error;
+    log('Could not look up locations for this rating; the Settings backfill will catch it:', error);
   }
 };
 
