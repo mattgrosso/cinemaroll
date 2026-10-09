@@ -58,7 +58,8 @@ const {
   issueDue,
   previouslyIssued,
   ISSUE_TOOL,
-  issueFromReply
+  issueFromReply,
+  RELEASE_WINDOW_DAYS
 } = require('./newsletterCompose.js');
 const letterboxd = require('./letterboxd.js');
 const {
@@ -435,7 +436,7 @@ const buildIssue = async ({ topKey, profile, pastIssues = null, now, alwaysOn })
   // providers landed a few days after its logged digital date, and the
   // already-seen and already-issued filters stop it repeating itself.
   const { pickIds, featureIds } = previouslyIssued(pastIssues, weekKey(now), now);
-  const candidates = await discoverReleases(tmdbKey, iso(now - 14 * 86400000), iso(now));
+  const candidates = await discoverReleases(tmdbKey, iso(now - RELEASE_WINDOW_DAYS * 86400000), iso(now));
 
   // Enrich only what could plausibly survive the floor — the network is the
   // expensive part, and enriching sixty titles to shortlist eleven is forty

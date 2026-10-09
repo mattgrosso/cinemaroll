@@ -789,6 +789,15 @@ data, and each has a test:
 - **A digital release date is not a release date.** TMDB logs re-releases and
   new physical editions with fresh `release_type` 4/5 dates, so a straight
   window query put FIGHT CLUB (1999) in a list of this week's new films.
+- **A film is new only on its FIRST trip home** (2026-10-09, Matt: "I want
+  movies that have not been available before at all"). TMDB also logs a fresh
+  4/5 date every time a film changes service, so CHALLENGERS (home since May
+  2024) came in as new for its move to Paramount+ — 8 of 25 that week were
+  2023-24 films. `enrichCandidate` now carries `usReleases` (TMDB keeps the old
+  dates), and `firstHomeRelease` must fall inside the window
+  (`RELEASE_WINDOW_DAYS`); no US home date at all means opened within a year.
+  The year guard reads the film's OWN release date — discover's region=US date
+  made THE CABLE GUY (1996) a "2026" film via a 4K steelbook.
 - **Acclaim is RT + Metacritic, never IMDb.** Ranking on all three put BATMAN:
   KNIGHTFALL PART 1 second on the whole shortlist with no RT score, no
   Metacritic score and an IMDb of 8.1. IMDb's average is fan enthusiasm wearing

@@ -34,6 +34,29 @@ const VOTE_FLOOR = 150;
 // it is not a reissue.
 const MAX_AGE_YEARS = 3;
 
+// How far back the discover query looks, and so how recently a film's FIRST
+// trip home has to be. Shared with newsletter.js and the dry run.
+const RELEASE_WINDOW_DAYS = 14;
+
+// A film with no home dates on record at all has to have opened this recently.
+const NO_HOME_DATE_MAX_DAYS = 365;
+
+// The Fight Club guard wasn't enough (Matt, 2026-10-09: "a bunch of old movies
+// that are for some reason being claimed to be new releases... I want movies
+// that have not been available before at all"). TMDB logs a fresh digital
+// date every time a film changes streaming service, so CHALLENGERS (home since
+// May 2024) arrived as new the week it moved to Paramount+, and eight of that
+// week's twenty-five were 2023-24 films doing the same. TMDB keeps the old
+// dates too, so the rule is: the EARLIEST US digital or physical date must be
+// inside the window. Returns that date as ms, or null when none is on record.
+function firstHomeRelease (releases = []) {
+  const times = (releases || [])
+    .filter((r) => r && (r.type === 4 || r.type === 5))
+    .map((r) => Date.parse(r.date))
+    .filter(Number.isFinite);
+  return times.length ? Math.min(...times) : null;
+}
+
 /**
  * Where a film can be watched right now, flattened from TMDB's
  * /watch/providers shape into something a template can render.
@@ -134,6 +157,8 @@ function shortlistReleases ({
   now = Date.now(),
   voteFloor = VOTE_FLOOR,
   maxAgeYears = MAX_AGE_YEARS,
+  // Midnight UTC of the window's first day, the date discover was asked from.
+  windowStart = Date.parse(new Date(now - RELEASE_WINDOW_DAYS * 86400000).toISOString().slice(0, 10)),
   limit = 25
 } = {}) {
   const thisYear = new Date(now).getUTCFullYear();
@@ -148,10 +173,23 @@ function shortlistReleases ({
     if (issued.has(movie.id)) continue;          // an earlier issue picked it
     if ((movie.vote_count || 0) < voteFloor) continue;
 
-    const year = releaseYear(movie);
+    const extra = enriched.get(movie.id) || {};
+    // The film's own release date, not discover's: with region=US discover
+    // answers with a US date, so THE CABLE GUY (1996) came back as a 2026
+    // film on the strength of a new 4K steelbook.
+    const released = extra.releaseDate || movie.release_date;
+    const year = releaseYear({ release_date: released });
     if (year != null && thisYear - year > maxAgeYears) continue;  // the Fight Club guard
 
-    const extra = enriched.get(movie.id) || {};
+    if (extra.usReleases) {
+      const firstHome = firstHomeRelease(extra.usReleases);
+      if (firstHome != null) {
+        if (firstHome < windowStart) continue;   // it was home before; this is a move
+      } else if (!(now - Date.parse(released) <= NO_HOME_DATE_MAX_DAYS * 86400000)) {
+        continue;
+      }
+    }
+
     const where = availability(extra.providers);
     if (!where) continue;                        // not actually watchable yet
 
@@ -660,6 +698,8 @@ const issueFromReply = (message) => {
 module.exports = {
   VOTE_FLOOR,
   MAX_AGE_YEARS,
+  RELEASE_WINDOW_DAYS,
+  firstHomeRelease,
   ANNIVERSARY_YEARS,
   TRENDING_WEIGHT,
   TRENDING_MIN_AGE_YEARS,

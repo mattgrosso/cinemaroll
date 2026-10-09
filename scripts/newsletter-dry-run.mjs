@@ -20,7 +20,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
 const require = createRequire(import.meta.url);
 
-const { shortlistReleases, anniversariesThisWeek, featureCandidates, issueBrief, weekKey } =
+const { shortlistReleases, anniversariesThisWeek, featureCandidates, issueBrief, weekKey, RELEASE_WINDOW_DAYS } =
   require(path.join(root, 'aws-lambda/newsletterCompose.js'));
 const { discoverReleases, enrichCandidate, anniversaryPool, trendingThisWeek } =
   require(path.join(root, 'aws-lambda/newsletterSources.js'));
@@ -59,9 +59,9 @@ if (!Number.isFinite(asOf)) {
 const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
 const pad = (s, n) => String(s ?? '').padEnd(n).slice(0, n);
 
-console.log(`\nIssue ${weekKey(asOf)} — window ${iso(asOf - 14 * 86400000)} to ${iso(asOf)}\n`);
+console.log(`\nIssue ${weekKey(asOf)} — window ${iso(asOf - RELEASE_WINDOW_DAYS * 86400000)} to ${iso(asOf)}\n`);
 
-const candidates = await discoverReleases(tmdbKey, iso(asOf - 14 * 86400000), iso(asOf));
+const candidates = await discoverReleases(tmdbKey, iso(asOf - RELEASE_WINDOW_DAYS * 86400000), iso(asOf));
 console.log(`discover:   ${candidates.length} candidates`);
 
 const worth = candidates.filter((m) => (m.vote_count || 0) >= 150).slice(0, 30);

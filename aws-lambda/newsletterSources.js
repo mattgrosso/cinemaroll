@@ -70,7 +70,7 @@ const enrichCandidate = async (key, omdbKey, movie) => {
   try {
     const [providers, details] = await Promise.all([
       json(`${TMDB}/movie/${movie.id}/watch/providers?api_key=${key}`),
-      json(`${TMDB}/movie/${movie.id}?api_key=${key}&append_to_response=credits`)
+      json(`${TMDB}/movie/${movie.id}?api_key=${key}&append_to_response=credits,release_dates`)
     ]);
     const director = (details.credits?.crew || []).find((c) => c.job === 'Director')?.name || null;
     let omdb = null;
@@ -89,6 +89,11 @@ const enrichCandidate = async (key, omdbKey, movie) => {
       posterPath: details.poster_path || null,
       backdropPath: details.backdrop_path || null,
       releaseDate: details.release_date || null,
+      // Every US date TMDB has, so shortlistReleases can tell a film's first
+      // trip home from a later move between services.
+      usReleases: (details.release_dates?.results || [])
+        .find((r) => r.iso_3166_1 === 'US')?.release_dates
+        ?.map((r) => ({ type: r.type, date: r.release_date })) || [],
       genres: (details.genres || []).map((g) => g.name)
     };
   } catch (error) {

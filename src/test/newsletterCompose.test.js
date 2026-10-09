@@ -13,6 +13,7 @@ import {
   issueDue,
   pushHeadline,
   previouslyIssued,
+  firstHomeRelease,
   VOTE_FLOOR,
   ISSUE_TOOL,
   issueFromReply
@@ -217,6 +218,76 @@ describe('shortlistReleases', () => {
       now: Date.UTC(2026, 8, 20)
     });
     expect(rows.map((r) => r.title)).toEqual(['Modestly Reviewed', 'Batman: Knightfall']);
+  });
+});
+
+// Matt, 2026-10-09: "a bunch of old movies that are for some reason being
+// claimed to be new releases... I want movies that have not been available
+// before at all". TMDB logs a fresh digital date each time a film changes
+// service. The US release histories below are TMDB's own, as fetched that day;
+// the issue's window was 2026-09-25 to 2026-10-09.
+describe('shortlistReleases — first time home, not a move', () => {
+  const now = Date.UTC(2026, 9, 9, 13);
+  const streaming = { flatrate: [{ provider_name: 'Prime Video' }] };
+  const rel = (type, date) => ({ type, date: `${date}T00:00:00.000Z` });
+  const run = (movie, extra) => shortlistReleases({
+    candidates: [candidate(movie)],
+    enriched: new Map([[movie.id, { providers: providers(streaming), omdb: omdb({ rt: 90 }), ...extra }]]),
+    now
+  });
+
+  it('drops CHALLENGERS, home since 2024, back as "new" for its move to Paramount+', () => {
+    const rows = run({ id: 937287, title: 'Challengers', release_date: '2026-10-01' }, {
+      releaseDate: '2024-04-18',
+      usReleases: [rel(3, '2024-04-26'), rel(4, '2024-05-17'), rel(4, '2024-09-18'), rel(4, '2026-10-01'), rel(5, '2024-07-09')]
+    });
+    expect(rows).toEqual([]);
+  });
+
+  it('drops a 2026 film that was already to rent in June (THE SHEEP DETECTIVES)', () => {
+    const rows = run({ id: 1301421, title: 'The Sheep Detectives', release_date: '2026-09-29' }, {
+      releaseDate: '2026-04-30',
+      usReleases: [rel(3, '2026-05-08'), rel(4, '2026-06-24'), rel(4, '2026-09-29'), rel(5, '2026-08-25')]
+    });
+    expect(rows).toEqual([]);
+  });
+
+  it('keeps a film whose first home date is this fortnight (COYOTE VS. ACME)', () => {
+    const rows = run({ id: 1204680, title: 'Coyote vs. Acme', release_date: '2026-09-29' }, {
+      releaseDate: '2026-08-17',
+      usReleases: [rel(3, '2026-08-28'), rel(4, '2026-09-29'), rel(5, '2026-12-01')]
+    });
+    expect(rows.map((r) => r.title)).toEqual(['Coyote vs. Acme']);
+  });
+
+  it('counts the window from midnight on its first day', () => {
+    const rows = run({ id: 5, title: 'First Day', release_date: '2026-09-25' }, {
+      releaseDate: '2026-08-01',
+      usReleases: [rel(3, '2026-08-01'), rel(4, '2026-09-25')]
+    });
+    expect(rows).toHaveLength(1);
+  });
+
+  // Discover answers with region=US dates, so a new 4K steelbook made THE
+  // CABLE GUY (1996) look like a 2026 film.
+  it('judges the year by the film\'s own release date, not discover\'s', () => {
+    const rows = run({ id: 9894, title: 'The Cable Guy', release_date: '2026-10-06' }, {
+      releaseDate: '1996-06-10',
+      usReleases: [rel(3, '1996-06-14'), rel(5, '2026-10-06')]
+    });
+    expect(rows).toEqual([]);
+  });
+
+  it('with no US home date on record, keeps only a film from the last year', () => {
+    expect(run({ id: 6, title: 'Recent' }, { releaseDate: '2026-05-01', usReleases: [] })).toHaveLength(1);
+    expect(run({ id: 7, title: 'Older' }, { releaseDate: '2025-06-01', usReleases: [] })).toEqual([]);
+  });
+
+  it('firstHomeRelease ignores theatrical dates and is null with no home dates', () => {
+    expect(firstHomeRelease([rel(3, '2024-04-26'), rel(5, '2024-07-09'), rel(4, '2024-05-17')]))
+      .toBe(Date.UTC(2024, 4, 17));
+    expect(firstHomeRelease([rel(1, '2024-04-16')])).toBe(null);
+    expect(firstHomeRelease(undefined)).toBe(null);
   });
 });
 
