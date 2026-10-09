@@ -177,3 +177,12 @@ pagehide / hidden in `App.vue`, because a backgrounded PWA doesn't run timers.
 Home's six-hourly watchers are only backstops. A new published feed should hook in
 the same way, not via a Home watcher (2026-10-05: the mirror kept showing a film as
 "Now Showing" for hours after it was rated).
+
+**A publish waits for the personal awards (2026-10-09).** Both the Film Club profile
+and the club feed carry my awards, and the awards load on their own after the
+library. `publishSocialProfile` / `publishClubFeed` go through
+`personalAwardsReadyToPublish`, which awaits `ensurePersonalAwards` (one shared read)
+and skips the publish if the awards can't be read and nothing is cached. Before this,
+a launch publish could beat the awards and wipe them from every friend's view
+("I can't see Seth's or Natalie's" awards). Anything else published from
+`settings.personalAwards` must do the same.

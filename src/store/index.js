@@ -218,6 +218,42 @@ let letterboxdLoadInFlight = null;
 
 // Pending debounced profile publish (see scheduleSocialPublish).
 let socialPublishTimer = null;
+// The one ensurePersonalAwards read in progress, shared by every caller.
+let personalAwardsInFlight = null;
+
+// Resolves true once settings.personalAwards can be trusted: loaded from the
+// node or the offline copy, or still riding in the settings node (no stamp
+// yet). False when the node exists but could not be read and nothing is
+// cached — a publish then must wait rather than go out with no awards.
+async function loadPersonalAwards (context) {
+  const topKey = context.state.databaseTopKey;
+  if (!topKey) return true;
+  if (context.state.personalAwards == null) {
+    const cached = await loadSnapshot(topKey, 'personalAwards').catch(() => null);
+    if (cached?.data) context.commit('setPersonalAwards', cached);
+  }
+  try {
+    const stamp = (await get(ref(db, `${topKey}/personalAwardsMeta/updatedAt`))).val();
+    if (!stamp) return true;
+    if (stamp === context.state.personalAwardsStamp && context.state.personalAwards) return true;
+    const data = (await get(ref(db, `${topKey}/personalAwards`))).val() || {};
+    context.commit('setPersonalAwards', { data, updatedAt: stamp });
+    saveSnapshot(topKey, 'personalAwards', { data, updatedAt: stamp }).catch(() => {});
+    return true;
+  } catch (error) {
+    console.warn('personal awards: could not refresh', error?.message);
+    return context.state.personalAwards != null;
+  }
+}
+
+// Publishing shares my awards with the club. Until they have loaded, a
+// publish would send none and wipe them from every friend's view (report
+// 2026-10-09: "I can't see Seth's or Natalie's" awards) — so wait for them,
+// and skip the publish if they can't be had.
+async function personalAwardsReadyToPublish (context) {
+  if (context.state.personalAwards != null) return true;
+  return context.dispatch('ensurePersonalAwards');
+}
 // Pending debounced Magic Mirror feed publish (see scheduleMirrorPublish).
 let mirrorPublishTimer = null;
 // The one ensureMovieHatContents read in progress, shared by every caller.
@@ -2039,6 +2075,7 @@ export default createStore({
       if (!me || !secret || !context.state.dbLoaded) return;
       const entries = context.getters.allMediaAsArray;
       if (!entries.length) return;
+      if (!(await personalAwardsReadyToPublish(context))) return;
       const feed = toInterchange(entries, getRating, {
         name: context.getters.socialSettings.displayName || 'A Cinema Roll user',
         awards: awardsByMovie(context.state.settings?.personalAwards),
@@ -2521,6 +2558,7 @@ export default createStore({
       if (!me || isQaAccountKey(me) || !social.enabled || !context.state.settingsLoaded) return;
       const entries = context.getters.allMediaAsArray;
       if (!entries.length) return;
+      if (!(await personalAwardsReadyToPublish(context))) return;
       const profile = buildSocialProfile(entries, getRating, {
         name: social.displayName || 'A Cinema Roll user',
         shareRatings: Boolean(social.shareRatings),
@@ -3183,22 +3221,11 @@ export default createStore({
      * absent and the settings listener still carries the awards.
      */
     async ensurePersonalAwards (context) {
-      const topKey = context.state.databaseTopKey;
-      if (!topKey) return;
-      if (context.state.personalAwards == null) {
-        const cached = await loadSnapshot(topKey, 'personalAwards').catch(() => null);
-        if (cached?.data) context.commit('setPersonalAwards', cached);
+      // One read at a time: the launch and an early publish ask together.
+      if (!personalAwardsInFlight) {
+        personalAwardsInFlight = loadPersonalAwards(context).finally(() => { personalAwardsInFlight = null; });
       }
-      try {
-        const stamp = (await get(ref(db, `${topKey}/personalAwardsMeta/updatedAt`))).val();
-        if (!stamp) return;
-        if (stamp === context.state.personalAwardsStamp && context.state.personalAwards) return;
-        const data = (await get(ref(db, `${topKey}/personalAwards`))).val() || {};
-        context.commit('setPersonalAwards', { data, updatedAt: stamp });
-        saveSnapshot(topKey, 'personalAwards', { data, updatedAt: stamp }).catch(() => {});
-      } catch (error) {
-        console.warn('personal awards: could not refresh', error?.message);
-      }
+      return personalAwardsInFlight;
     },
     /** A durable write under personalAwards/ plus the stamp that tells other devices. */
     async savePersonalAwards (context, { path, value }) {

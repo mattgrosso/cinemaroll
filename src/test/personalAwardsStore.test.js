@@ -102,3 +102,36 @@ describe('personal awards out of the settings node', () => {
     expect(calls.filter(([k]) => k === 'set')).toHaveLength(1);
   });
 });
+
+// Report 2026-10-09 ("I can't see Seth's or Natalie's" awards): a launch
+// publishes the Film Club profile as soon as the library and settings are in,
+// and the awards load on their own, a moment later. A publish that won the
+// race went out with no awards and wiped them from every friend's view.
+describe('publishing waits for the awards', () => {
+  const won = { 2024: { categories: { bestPicture: { winner: { movieId: 550 } } } } };
+  function seed () {
+    store.commit('setSettings', { social: { enabled: true, shareRatings: true } });
+    store.commit('setMovieLogEntry', {
+      key: 'fight-club',
+      value: { movie: { id: 550, title: 'Fight Club', release_date: '1999-10-15' }, ratings: [{ date: '2024-06-15' }] }
+    });
+  }
+  const published = () => calls.filter(([k, p]) => k === 'set' && p === `social/profiles/${KEY}`).map(([, , v]) => v);
+
+  it('a publish before the awards have loaded fetches them first and includes them', async () => {
+    seed();
+    dbValues[`${KEY}/personalAwardsMeta/updatedAt`] = 100;
+    dbValues[`${KEY}/personalAwards`] = won;
+    await store.dispatch('publishSocialProfile');
+    const [profile] = published();
+    expect(profile.ratings[550].a).toEqual([{ year: 2024, category: 'bestPicture', label: 'Best Picture', result: 'won' }]);
+  });
+
+  it('skips the publish when the awards cannot be read and nothing is cached', async () => {
+    seed();
+    const firebase = await import('firebase/database');
+    firebase.get.mockImplementationOnce(() => Promise.reject(new Error('offline')));
+    await store.dispatch('publishSocialProfile');
+    expect(published()).toHaveLength(0);
+  });
+});
