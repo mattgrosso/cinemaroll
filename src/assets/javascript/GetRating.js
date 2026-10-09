@@ -94,7 +94,12 @@ const calculatePostStickyRatingFor = (rating) => {
 
   const calculatedTotal = rawCalculatedTotal(rating);
 
-  let normalizedRating;
+  // Null until the library has a range to normalize against. An empty
+  // library (a brand-new user's first rating, previewed on the Rate page)
+  // has none, and the clamp below turned the missing value into NaN, which
+  // then travelled into the saved rating and tripped the write path's NaN
+  // check (Sentry, 2026-10-09).
+  let normalizedRating = null;
 
   const { ratings: allRatings, min: minRating, max: maxRating } = scoreRange();
 
@@ -114,7 +119,9 @@ const calculatePostStickyRatingFor = (rating) => {
   }
 
   // Clamp the normalized rating between 0 and 10
-  normalizedRating = Math.max(0, Math.min(10, normalizedRating));
+  if (normalizedRating !== null) {
+    normalizedRating = Math.max(0, Math.min(10, normalizedRating));
+  }
 
   return {
     ...rating,

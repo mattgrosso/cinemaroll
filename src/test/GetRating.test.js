@@ -358,5 +358,19 @@ describe('GetRating', () => {
       expect(getRating(movie(8)).normalizedRating).toBe(10)
       expect(getRating(movie(2)).normalizedRating).toBe(0)
     })
+
+    // A brand-new user's first rating: the library is empty, so there is
+    // no range yet. This came back NaN, rode into the saved rating via the
+    // Rate page's score preview, and tripped the write path's NaN check
+    // (Sentry, 2026-10-09). Null is a value Firebase can store.
+    it('gives null, not NaN, when the library has no scores yet', () => {
+      mockStore.getters.allMediaRatingsArray = []
+      const rating = getRating(movie(7))
+      expect(rating.normalizedRating).toBeNull()
+      expect(rating.calculatedTotal).toBeGreaterThan(0)
+
+      mockStore.getters.allMediaRatingsArray = [NaN]
+      expect(getRating(movie(7)).normalizedRating).toBeNull()
+    })
   })
 })
