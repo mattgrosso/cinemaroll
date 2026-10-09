@@ -23,7 +23,7 @@ vi.mock('axios', () => ({
   }
 }))
 vi.mock('@/assets/javascript/AddRating.js', () => ({ default: vi.fn() }))
-vi.mock('@/services/ErrorLogService.js', () => ({ default: { error: vi.fn() } }))
+vi.mock('@/services/ErrorLogService.js', () => ({ default: { error: vi.fn(), warn: vi.fn() } }))
 
 const film = { id: 555, title: 'Under Test', release_date: '2020-06-01', poster_path: '/u.jpg', backdrop_path: '/b.jpg' }
 

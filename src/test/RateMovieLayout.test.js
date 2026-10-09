@@ -26,7 +26,7 @@ vi.mock('@/assets/javascript/GetRating.js', () => ({
   }),
   getAllRatings: vi.fn(() => null)
 }))
-vi.mock('@/services/ErrorLogService.js', () => ({ default: { error: vi.fn() } }))
+vi.mock('@/services/ErrorLogService.js', () => ({ default: { error: vi.fn(), warn: vi.fn() } }))
 
 const entry = (id, title, calculatedTotal, releaseDate = '2020-06-15') => ({
   movie: { id, title, release_date: releaseDate, poster_path: `/p${id}.jpg`, backdrop_path: `/b${id}.jpg` },

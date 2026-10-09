@@ -27,7 +27,7 @@ vi.mock('@/assets/javascript/GetRating.js', () => ({
   }),
   getAllRatings: vi.fn(() => [])
 }))
-vi.mock('@/services/ErrorLogService.js', () => ({ default: { error: vi.fn() } }))
+vi.mock('@/services/ErrorLogService.js', () => ({ default: { error: vi.fn(), warn: vi.fn() } }))
 
 const WEIGHTS = [
   { name: 'love', weight: 2.8 },

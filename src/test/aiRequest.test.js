@@ -61,3 +61,34 @@ describe('postToAi', () => {
     expect(axios.post).not.toHaveBeenCalled();
   });
 });
+
+const { describeAiFailure } = await import('@/utils/aiRequest.js');
+
+describe('describeAiFailure', () => {
+  // Sentry, 2026-10-09: "Failed to fetch keywords [object Object]" - the axios
+  // error went out as context and the reason never reached the message.
+  it('calls a dropped connection or timeout expected, and says which', () => {
+    const timeout = { isAxiosError: true, code: 'ECONNABORTED', message: 'timeout of 35000ms exceeded' };
+    expect(describeAiFailure(timeout)).toEqual({ expected: true, reason: 'no answer (ECONNABORTED)' });
+    const dropped = { isAxiosError: true, code: 'ERR_NETWORK', message: 'Network Error' };
+    expect(describeAiFailure(dropped).expected).toBe(true);
+  });
+
+  it('calls the endpoint being busy (429, 503) expected', () => {
+    expect(describeAiFailure({ response: { status: 429, data: { error: 'Too many requests, slow down' } } }))
+      .toEqual({ expected: true, reason: 'status 429: Too many requests, slow down' });
+    expect(describeAiFailure({ response: { status: 503, data: {} } }))
+      .toEqual({ expected: true, reason: 'status 503' });
+  });
+
+  it('calls a server failure unexpected and carries its detail', () => {
+    const failed = { response: { status: 500, data: { error: 'AI request failed', detail: 'Unexpected end of JSON input' } } };
+    expect(describeAiFailure(failed))
+      .toEqual({ expected: false, reason: 'status 500: Unexpected end of JSON input' });
+  });
+
+  it('calls nobody signed in expected, and anything else unexpected with its message', () => {
+    expect(describeAiFailure(new Error('Not signed in — AI features need an authenticated user.')).expected).toBe(true);
+    expect(describeAiFailure(new Error('boom'))).toEqual({ expected: false, reason: 'boom' });
+  });
+});

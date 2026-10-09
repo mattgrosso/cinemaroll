@@ -350,22 +350,47 @@ const getKeywords = async ({ title, year }) => {
     return response(400, { error: 'Title is required' });
   }
 
+  // A forced tool call, not JSON asked for in prose (Sentry, 2026-10-09).
+  // The old prompt left the reply to be cut out with a regex at 256 tokens;
+  // a long list ran out of room mid-array, the match or JSON.parse threw, and
+  // the Rate page logged a failure. Same lesson as /watchlist's.
   const message = await client.messages.create({
     model: MODELS.keywords,
-    max_tokens: 256,
+    max_tokens: 1024,
+    tools: [{
+      name: 'record_keywords',
+      description: 'Return the keywords for the film.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          keywords: {
+            type: 'array',
+            maxItems: 30,
+            items: { type: 'string', description: 'One lowercase keyword or short phrase.' }
+          }
+        },
+        required: ['keywords']
+      }
+    }],
+    tool_choice: { type: 'tool', name: 'record_keywords' },
     messages: [
       {
         role: 'user',
         content: `Give me a list of keywords for the movie "${title}"${year ? ` (${year})` : ''}.
-Include keywords for themes, genre, mood, and the location or locations where the movie takes place.
-Return only a JSON object with a single key "keywords" whose value is an array of lowercase strings.`
+Include keywords for themes, genre, mood, and the location or locations where the movie takes place.`
       }
     ]
   });
 
-  const text = textFrom(message);
-  const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)[0]);
-  const keywords = (parsed.keywords || []).map(k => k.toLowerCase());
+  const call = (message.content || []).find((block) => block?.type === 'tool_use');
+  if (!Array.isArray(call?.input?.keywords)) {
+    console.error('keywords: no tool call', `stop_reason: ${message?.stop_reason}`);
+    return response(200, { keywords: [] });
+  }
+
+  const keywords = call.input.keywords
+    .filter((k) => typeof k === 'string' && k.trim())
+    .map((k) => k.trim().toLowerCase());
 
   return response(200, { keywords });
 };

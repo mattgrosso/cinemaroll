@@ -336,7 +336,7 @@ import addRating from "../assets/javascript/AddRating.js";
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import { ratingBreakdown } from "../assets/javascript/ratingMath.js";
 import ErrorLogService from "../services/ErrorLogService.js";
-import { postToAi } from '../utils/aiRequest.js';
+import { postToAi, describeAiFailure } from '../utils/aiRequest.js';
 import { announceLoggedMovie } from '../utils/push.js';
 import { isPlaceholderId } from '../utils/placeholderId.js';
 import { countViewingTagUsage, sortVocabularyByUsage } from "../utils/tags.js";
@@ -1067,8 +1067,15 @@ export default {
 
         this.chatGPTKeywords = response.data.keywords || [];
       } catch (error) {
-        console.error('Failed to fetch keywords:', error);
-        ErrorLogService.error("Failed to fetch keywords", { error });
+        // Keywords are a nicety; the page carries on without them. A dropped
+        // connection or a busy endpoint is a warning (a console.error is a
+        // Sentry event); anything else is an error that says what happened.
+        const { expected, reason } = describeAiFailure(error);
+        if (expected) {
+          ErrorLogService.warn(`Keywords unavailable: ${reason}`);
+        } else {
+          ErrorLogService.error(`Failed to fetch keywords: ${reason}`);
+        }
         this.chatGPTKeywords = [];
       }
     },

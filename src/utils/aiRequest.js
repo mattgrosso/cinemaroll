@@ -31,3 +31,32 @@ export async function postToAi (route, payload) {
     }
   });
 }
+
+// Statuses the endpoint answers on purpose when it is busy: the per-person
+// limit (429) and AWS's concurrency overflow (503, see auth-and-db-rules.md).
+const EXPECTED_STATUSES = new Set([429, 503]);
+
+/**
+ * What went wrong with a postToAi call, in words, and whether it is the kind
+ * of failure that just happens (no connection, a timeout, the endpoint busy,
+ * nobody signed in). Sentry, 2026-10-09: the keywords failure logged the
+ * axios error as context and arrived as "[object Object]", with no way to
+ * tell a dropped connection from a broken route.
+ */
+export function describeAiFailure (error) {
+  const status = error?.response?.status;
+  const detail = error?.response?.data?.detail || error?.response?.data?.error;
+  if (status) {
+    return {
+      expected: EXPECTED_STATUSES.has(status),
+      reason: `status ${status}${detail ? `: ${String(detail).slice(0, 200)}` : ''}`
+    };
+  }
+  const message = String(error?.message || error || 'unknown error').slice(0, 200);
+  const noAnswer = Boolean(error?.isAxiosError || error?.request || error?.code === 'ECONNABORTED');
+  const signedOut = /signed in/i.test(message);
+  return {
+    expected: noAnswer || signedOut,
+    reason: noAnswer ? `no answer (${error?.code || message})` : message
+  };
+}
