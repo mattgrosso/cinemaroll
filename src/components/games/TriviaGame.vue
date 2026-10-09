@@ -1,6 +1,7 @@
 <template>
   <div class="trivia-game">
     <BackLink/>
+    <GameHowTo/>
 
     <div v-if="eligibleGameEntries.length < 5" class="not-enough-movies">
       <p>Rate a few more movies before there's enough to quiz you on.</p>
@@ -86,6 +87,7 @@
 
 <script>
 import BackLink from './BackLink.vue';
+import GameHowTo from './GameHowTo.vue';
 import NewRatingSearch from '../NewRatingSearch.vue';
 import gameDataMixin from '../../mixins/gameData.js';
 import { postToAi } from '../../utils/aiRequest.js';
@@ -102,7 +104,7 @@ const STORAGE_KEY = 'cinemaRoll.trivia.current';
 
 export default {
   name: 'TriviaGame',
-  components: { BackLink, NewRatingSearch },
+  components: { BackLink, GameHowTo, NewRatingSearch },
   mixins: [gameDataMixin],
   // Custom banner graphic (with its own "Trivia / Cinema Roll Games"
   // branding baked in) in place of the usual movie-backdrop banner, and

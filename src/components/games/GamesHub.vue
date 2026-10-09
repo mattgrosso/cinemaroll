@@ -48,20 +48,7 @@
 import BackLink from './BackLink.vue';
 import NewRatingSearch from '../NewRatingSearch.vue';
 import gameDataMixin, { LAST_PLAYED_KEY, gameWinKey, todayStamp } from '../../mixins/gameData.js';
-// The same artwork each game swaps into the header banner on entry, reused
-// here as tile art so the hub looks like the games it leads to.
-import higherLowerBanner from '../../assets/images/games/higher-lower-banner.jpg';
-import reelWordleBanner from '../../assets/images/games/reel-wordle-banner.jpg';
-import connectionsBanner from '../../assets/images/games/connections-banner.jpg';
-import sixDegreesBanner from '../../assets/images/games/six-degrees-banner.jpg';
-import timelineBanner from '../../assets/images/games/timeline-banner.jpg';
-import clueBudgetBanner from '../../assets/images/games/clue-budget-banner.jpg';
-import tagBanner from '../../assets/images/games/tag-banner.jpg';
-import triviaBanner from '../../assets/images/games/trivia-banner.jpg';
-import stampBanner from '../../assets/images/games/stamp-banner.jpg';
-import posterZoomBanner from '../../assets/images/games/poster-zoom-banner.jpg';
-import youOrCrowdBanner from '../../assets/images/games/you-or-crowd-banner.jpg';
-import cineplexityBanner from '../../assets/images/games/cineplexity-banner.svg';
+import { GAMES } from '../../assets/javascript/games/gameList.js';
 
 export default {
   name: 'GamesHub',
@@ -85,80 +72,9 @@ export default {
   },
   data () {
     return {
-      games: [
-        {
-          path: '/games/higher-lower',
-          name: 'Higher or Lower',
-          banner: higherLowerBanner,
-          description: 'Which movie scored higher?'
-        },
-        {
-          path: '/games/wordle',
-          name: 'Reel Wordle',
-          banner: reelWordleBanner,
-          description: 'Guess it from year/genre clues.'
-        },
-        {
-          path: '/games/connections',
-          name: 'Connections',
-          banner: connectionsBanner,
-          description: 'Find four groups of four.'
-        },
-        {
-          path: '/games/six-degrees',
-          name: 'Six Degrees',
-          banner: sixDegreesBanner,
-          description: 'Link two movies by shared cast.'
-        },
-        {
-          path: '/games/timeline',
-          name: 'Timeline',
-          banner: timelineBanner,
-          description: 'Put movies in release order.'
-        },
-        {
-          path: '/games/clue-budget',
-          name: 'Clue Budget',
-          banner: clueBudgetBanner,
-          description: 'Buy clues, then name the movie.'
-        },
-        {
-          path: '/games/tagline',
-          name: 'Tag',
-          banner: tagBanner,
-          description: 'Match the tagline to its poster.'
-        },
-        {
-          path: '/games/trivia',
-          name: 'Trivia',
-          banner: triviaBanner,
-          description: 'Name it, hardest fact first.'
-        },
-        {
-          path: '/games/poster-zoom',
-          name: 'Poster Zoom',
-          banner: posterZoomBanner,
-          description: 'Name it from a close-up.'
-        },
-        {
-          path: '/games/stamp',
-          name: 'Stamp',
-          banner: stampBanner,
-          description: 'Sort which keywords fit.'
-        },
-        {
-          path: '/games/you-or-crowd',
-          name: 'You or the Crowd?',
-          banner: youOrCrowdBanner,
-          description: 'Who scored it higher — you or Letterboxd?'
-        },
-        {
-          path: '/games/cineplexity',
-          name: 'Cineplexity',
-          banner: cineplexityBanner,
-          description: 'Name every movie fitting both traits.'
-        }
-      ]
+      // The list (with each game's banner art, tile line and how-to card)
+      // lives in gameList.js, shared with GameHowTo.
+      games: GAMES
     };
   },
   computed: {

@@ -1,6 +1,7 @@
 <template>
   <div class="cineplexity-game">
     <BackLink/>
+    <GameHowTo/>
 
     <div v-if="!round" class="not-enough">
       <p>Rate a few more movies before there's enough overlap to play with.</p>
@@ -85,6 +86,7 @@
 // name every movie in your library matching both. Round logic is pure
 // (games/cineplexity.js); this component owns input and reveal state.
 import BackLink from './BackLink.vue';
+import GameHowTo from './GameHowTo.vue';
 import gameData from '../../mixins/gameData.js';
 import { buildCineplexityRound, matchGuess } from '../../assets/javascript/games/cineplexity.js';
 import cineplexityBanner from '../../assets/images/games/cineplexity-banner.svg';
@@ -93,7 +95,7 @@ const STORAGE_KEY = 'cinemaRoll.cineplexity.current';
 
 export default {
   name: 'CineplexityGame',
-  components: { BackLink },
+  components: { BackLink, GameHowTo },
   mixins: [gameData],
   data () {
     return {

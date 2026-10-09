@@ -1,6 +1,7 @@
 <template>
   <div class="connections-game">
     <BackLink/>
+    <GameHowTo/>
 
     <!-- Bug report: Connections in particular needs far more data than the
          GamesHub gate (4 movies) guarantees - a real puzzle needs several
@@ -68,6 +69,7 @@
 
 <script>
 import BackLink from './BackLink.vue';
+import GameHowTo from './GameHowTo.vue';
 import NewRatingSearch from '../NewRatingSearch.vue';
 import gameDataMixin from '../../mixins/gameData.js';
 import { generateConnectionsPuzzle, CATEGORY_KIND_LABELS } from '../../assets/javascript/games/connectionsGenerator.js';
@@ -82,7 +84,7 @@ const STORAGE_KEY = 'cinemaRoll.connections.current';
 
 export default {
   name: 'ConnectionsGame',
-  components: { BackLink, NewRatingSearch },
+  components: { BackLink, GameHowTo, NewRatingSearch },
   mixins: [gameDataMixin],
   data () {
     return {

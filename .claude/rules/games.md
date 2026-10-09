@@ -70,6 +70,19 @@ All `requiresLogin`.
 - **A destructive control ("New Puzzle") must not sit above the input mid-round.** Show
   the prominent version only after a win; mid-round use an understated text link.
 
+## How-to cards (2026-10-09)
+
+Every game has a short how-to card: `GameHowTo.vue`, one `<GameHowTo/>` right after
+`<BackLink/>` in each game. It opens by itself the first time that game is played on a
+device (a per-game `localStorage` flag, `cinemaRoll.games.howToSeen:<path>`, set when it's
+DISMISSED), and the ? in the top-right corner reopens it. The card is the game's banner art
+plus three or four icon-led lines. **The words live in `gameList.js`** beside each game's
+name, banner and tile line — GamesHub reads the same list — and `gameList.test.js` fails if
+a routed game is missing from it or its how-to has fewer than three or more than four
+lines. A new game: add it to `GAMES`, write its card, put `<GameHowTo/>` in its template.
+Keep the lines short: a long two-paragraph explainer was cut from You or the Crowd? for
+not matching the other games.
+
 ## Win tracking
 
 `recordGameWin()` writes `settings/games/wins/<key>` via `writeDurably`, keyed by

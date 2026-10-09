@@ -1,6 +1,7 @@
 <template>
   <div ref="root" class="poster-zoom-game">
     <BackLink/>
+    <GameHowTo/>
 
     <div v-if="zoomablePool.length < 5" class="not-enough-movies">
       <p>Rate a few more movies (with posters) before there's enough to zoom into.</p>
@@ -98,6 +99,7 @@
 
 <script>
 import BackLink from './BackLink.vue';
+import GameHowTo from './GameHowTo.vue';
 import NewRatingSearch from '../NewRatingSearch.vue';
 import gameDataMixin from '../../mixins/gameData.js';
 import { entryKey, rankTitleMatches } from '../../assets/javascript/games/gameUtils.js';
@@ -129,7 +131,7 @@ const POSTER_SIZE = 'original';
 
 export default {
   name: 'PosterZoomGame',
-  components: { BackLink, NewRatingSearch },
+  components: { BackLink, GameHowTo, NewRatingSearch },
   mixins: [gameDataMixin],
   // Custom banner + hidden logo, same pattern as every other game (see
   // CLAUDE.md) — the artwork carries its own branding.

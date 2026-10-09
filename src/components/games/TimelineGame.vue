@@ -1,6 +1,7 @@
 <template>
   <div class="timeline-game" :style="started ? { '--step-duration': stepDurationMs + 'ms' } : {}">
     <BackLink/>
+    <GameHowTo/>
 
     <div v-if="eligibleGameEntries.length < 5" class="not-enough-movies">
       <p>Rate a few more movies before there's enough to build a timeline with.</p>
@@ -115,6 +116,7 @@
 
 <script>
 import BackLink from './BackLink.vue';
+import GameHowTo from './GameHowTo.vue';
 import NewRatingSearch from '../NewRatingSearch.vue';
 import gameDataMixin from '../../mixins/gameData.js';
 import { shuffle, entryKey, movieYear } from '../../assets/javascript/games/gameUtils.js';
@@ -123,7 +125,7 @@ import timelineBanner from '../../assets/images/games/timeline-banner.jpg';
 
 export default {
   name: 'TimelineGame',
-  components: { BackLink, NewRatingSearch },
+  components: { BackLink, GameHowTo, NewRatingSearch },
   mixins: [gameDataMixin],
   // Custom banner graphic (with its own "Timeline / Cinema Roll Games"
   // branding baked in) in place of the usual movie-backdrop banner, and

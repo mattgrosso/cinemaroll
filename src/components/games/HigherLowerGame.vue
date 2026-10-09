@@ -1,6 +1,7 @@
 <template>
   <div class="higher-lower-game">
     <BackLink/>
+    <GameHowTo/>
 
     <div v-if="!leftCard" class="setup">
       <p>See a movie's real Cinema Roll score, then guess whether the next one scored higher or lower.</p>
@@ -65,6 +66,7 @@
 
 <script>
 import BackLink from './BackLink.vue';
+import GameHowTo from './GameHowTo.vue';
 import gameDataMixin from '../../mixins/gameData.js';
 import { shuffle, entryKey, ratingFor } from '../../assets/javascript/games/gameUtils.js';
 import { getRating } from '../../assets/javascript/GetRating.js';
@@ -73,7 +75,7 @@ import higherLowerBanner from '../../assets/images/games/higher-lower-banner.jpg
 
 export default {
   name: 'HigherLowerGame',
-  components: { BackLink },
+  components: { BackLink, GameHowTo },
   mixins: [gameDataMixin],
   // Custom banner graphic (with its own "Higher or Lower / Cinema Roll
   // Games" branding baked in) in place of the usual movie-backdrop banner,

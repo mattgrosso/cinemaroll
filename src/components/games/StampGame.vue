@@ -1,6 +1,7 @@
 <template>
   <div class="stamp-game">
     <BackLink/>
+    <GameHowTo/>
 
     <div v-if="!round" class="not-enough-tags">
       <p v-if="eligibleGameEntries.length < 5">Rate a few more movies before there's enough to work with.</p>
@@ -115,6 +116,7 @@
 
 <script>
 import BackLink from './BackLink.vue';
+import GameHowTo from './GameHowTo.vue';
 import NewRatingSearch from '../NewRatingSearch.vue';
 import gameDataMixin from '../../mixins/gameData.js';
 import { entryKey } from '../../assets/javascript/games/gameUtils.js';
@@ -129,7 +131,7 @@ import stampBanner from '../../assets/images/games/stamp-banner.jpg';
 
 export default {
   name: 'StampGame',
-  components: { BackLink, NewRatingSearch },
+  components: { BackLink, GameHowTo, NewRatingSearch },
   mixins: [gameDataMixin],
   data () {
     return {

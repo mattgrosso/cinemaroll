@@ -1,6 +1,7 @@
 <template>
   <div class="you-or-crowd-game">
     <BackLink/>
+    <GameHowTo/>
 
     <div v-if="!current" class="setup">
       <p>See a film from your library, then guess who scored it higher: you, or the Letterboxd crowd.</p>
@@ -56,6 +57,7 @@
 // other games, make this one match their styles"): a check/X badge on the
 // poster, the scores revealed big, and a right answer moves on by itself.
 import BackLink from './BackLink.vue';
+import GameHowTo from './GameHowTo.vue';
 import gameDataMixin from '../../mixins/gameData.js';
 import { shuffle } from '../../assets/javascript/games/gameUtils.js';
 import { youOrCrowdRounds, answerFor, balancedDeck, starLabel } from '../../assets/javascript/games/youOrCrowd.js';
@@ -67,7 +69,7 @@ const ADVANCE_MS = 900;
 
 export default {
   name: 'YouOrCrowdGame',
-  components: { BackLink },
+  components: { BackLink, GameHowTo },
   mixins: [gameDataMixin],
   created () {
     this.$store.dispatch?.('ensureLetterboxdData');

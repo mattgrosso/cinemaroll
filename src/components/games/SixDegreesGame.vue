@@ -1,6 +1,7 @@
 <template>
   <div class="six-degrees-game">
     <BackLink/>
+    <GameHowTo/>
 
     <!-- Bug report: needs a well-connected cast graph, more than the bare
          GamesHub gate guarantees. Same "help me get started" quick-pick
@@ -158,6 +159,7 @@
 
 <script>
 import BackLink from './BackLink.vue';
+import GameHowTo from './GameHowTo.vue';
 import NewRatingSearch from '../NewRatingSearch.vue';
 import gameDataMixin from '../../mixins/gameData.js';
 import { buildPeopleGraph, pickConnectedPair, shortestPath, scorePathDifficulty, difficultyForScore, DIFFICULTY_LEVELS, nextHintStep } from '../../assets/javascript/games/sixDegrees.js';
@@ -172,7 +174,7 @@ const SCROLL_MARGIN_PX = 12;
 
 export default {
   name: 'SixDegreesGame',
-  components: { BackLink, NewRatingSearch },
+  components: { BackLink, GameHowTo, NewRatingSearch },
   mixins: [gameDataMixin],
   // The shared Header stays visible on every game screen (see BackLink's own
   // comment) and just renders store.state.bannerUrl - swap it for a custom

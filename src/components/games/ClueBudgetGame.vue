@@ -1,6 +1,7 @@
 <template>
   <div class="clue-budget-game">
     <BackLink/>
+    <GameHowTo/>
 
     <div v-if="eligibleGameEntries.length < 5" class="not-enough-movies">
       <p>Rate a few more movies before there's enough to quiz you on.</p>
@@ -87,6 +88,7 @@
 <script>
 import axios from 'axios';
 import BackLink from './BackLink.vue';
+import GameHowTo from './GameHowTo.vue';
 import NewRatingSearch from '../NewRatingSearch.vue';
 import gameDataMixin from '../../mixins/gameData.js';
 import { entryKey, rankTitleMatches } from '../../assets/javascript/games/gameUtils.js';
@@ -103,7 +105,7 @@ const WRONG_GUESS_COST = 10;
 
 export default {
   name: 'ClueBudgetGame',
-  components: { BackLink, NewRatingSearch },
+  components: { BackLink, GameHowTo, NewRatingSearch },
   mixins: [gameDataMixin],
   // Custom banner graphic (with its own "Clue Budget / Cinema Roll Games"
   // branding baked in) in place of the usual movie-backdrop banner, and

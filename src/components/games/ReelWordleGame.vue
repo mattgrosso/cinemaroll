@@ -1,6 +1,7 @@
 <template>
   <div class="reel-wordle-game">
     <BackLink/>
+    <GameHowTo/>
     <p class="game-subtitle">
       Guess the movie from your own library.
       {{ guesses.length }} guess{{ guesses.length === 1 ? '' : 'es' }}.
@@ -105,6 +106,7 @@
 
 <script>
 import BackLink from './BackLink.vue';
+import GameHowTo from './GameHowTo.vue';
 import gameDataMixin from '../../mixins/gameData.js';
 import { entryKey, rankTitleMatches } from '../../assets/javascript/games/gameUtils.js';
 import { compareGuessToTarget } from '../../assets/javascript/games/wordleClues.js';
@@ -114,7 +116,7 @@ const STORAGE_KEY = 'cinemaRoll.reelWordle.current';
 
 export default {
   name: 'ReelWordleGame',
-  components: { BackLink },
+  components: { BackLink, GameHowTo },
   mixins: [gameDataMixin],
   // Custom banner graphic (with its own "Reel Wordle / Cinema Roll Games"
   // branding baked in) in place of the usual movie-backdrop banner, and

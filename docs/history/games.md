@@ -287,3 +287,16 @@ Matt, the same day: "The whole design of the new game is trash. Look at the othe
 Now it's Higher or Lower's screen with one poster: the same padding, `#adb5bd` greys, streak row, two-line status line and full-width Start. The two answer buttons are the shared `.btn-game-secondary` pills under a pair of big scores that read "?" until you guess (Higher or Lower's `.hl-card-score` look), the result is the check/X corner badge on the poster, and a right answer moves on by itself after 900ms like Higher or Lower and Tag. The pending advance is cleared on unmount and on restart; both guards were proven by reverting.
 
 The SVG banner (flat text on a dark rectangle) was replaced with poster-style art like the rest of the set — halftone dots growing toward a torn dark edge, a cream "you" figure against a green crowd, "YOU OR THE CROWD?" in DIN Condensed. It's rendered to JPG from a throwaway generator so the typeface doesn't depend on the device. Cineplexity's banner is still the older SVG style.
+
+## How-to cards for every game (2026-10-09)
+
+Bug Desk's daily look noticed the twelve games had no rules anywhere but a few words on
+each hub tile, while Matt's other game apps (License Plate Hunt, incan-gold) all carry a
+first-visit how-to and a ? to reopen it. Stamp was the sharpest case: it asks "Is this
+heist?" over a poster stack, never says which swipe means yes, and quietly edits the
+films' keywords. Matt said go. Built as one shared card (`GameHowTo.vue`) whose text sits
+in `gameList.js` with the rest of each game's hub entry, so the list and the cards can't
+drift and a new game can't ship without one. Every game got a card, not just the five
+with unobvious controls, because the completeness test is what keeps the next game honest
+— the obvious ones are three lines. Seen-flags are per device, set on dismiss.
+

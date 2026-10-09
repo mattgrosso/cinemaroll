@@ -1,6 +1,7 @@
 <template>
   <div class="tagline-quiz-game">
     <BackLink/>
+    <GameHowTo/>
 
     <div v-if="eligibleGameEntries.length < 4" class="not-enough-movies">
       <p>Rate a few more movies before there's enough to build a round with.</p>
@@ -47,6 +48,7 @@
 <script>
 import axios from 'axios';
 import BackLink from './BackLink.vue';
+import GameHowTo from './GameHowTo.vue';
 import NewRatingSearch from '../NewRatingSearch.vue';
 import gameDataMixin from '../../mixins/gameData.js';
 import { entryKey } from '../../assets/javascript/games/gameUtils.js';
@@ -55,7 +57,7 @@ import tagBanner from '../../assets/images/games/tag-banner.jpg';
 
 export default {
   name: 'TaglineQuizGame',
-  components: { BackLink, NewRatingSearch },
+  components: { BackLink, GameHowTo, NewRatingSearch },
   mixins: [gameDataMixin],
   // Custom banner graphic (with its own "TAG / Cinema Roll Games" branding
   // baked in) in place of the usual movie-backdrop banner, and hides the
