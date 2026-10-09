@@ -232,7 +232,11 @@ export function buildRebuild ({ owner, secret, feed, epoch, now = Date.now(), da
 export function buildAppend ({ owner, secret, feed, prevMeta, prevMovies, newKey, oldestKey = null, now = Date.now(), databaseUrl }) {
   const movies = moviesMapFromFeed(feed);
   const revision = contentRevision(feed);
-  if (revision === prevMeta.bodyRevision) return null;
+  // Nothing to say only when the body AND the header agree. A head written
+  // by an older publisher can lag the body (2026-10-08: the body carried
+  // `awardsName` for a day before the header learned it), and the body's
+  // revision never moves for that — so the profile is compared on its own.
+  if (revision === prevMeta.bodyRevision && same(profileOf(feed), prevMeta.profile)) return null;
   const diff = diffMovies(prevMovies, movies);
   const syncUrl = `${databaseUrl}/clubFeedSync/${owner}/${secret}.json`;
   const root = `clubFeedSync/${owner}/${secret}`;

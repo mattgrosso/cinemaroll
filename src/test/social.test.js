@@ -40,6 +40,14 @@ describe('socialSettingsWithDefaults', () => {
     expect(settings.displayName).toBe('MG')
   })
 
+  // 2026-10-08: Matt's saved display name was "mattgrosso" — the old default
+  // written back by the settings form — and it beat his real name, so Movie
+  // Log showed him as "mattgrosso".
+  it('a saved name that is only the email handle does not beat the real name', () => {
+    expect(socialSettingsWithDefaults({ displayName: 'mattgrosso' }, 'mattgrosso@gmail.com', 'Matt Grosso').displayName).toBe('Matt Grosso')
+    expect(socialSettingsWithDefaults({ displayName: 'mattgrosso' }, 'mattgrosso@gmail.com', null).displayName).toBe('mattgrosso')
+  })
+
   it('ignores a blank or whitespace-only real name rather than publishing it', () => {
     expect(socialSettingsWithDefaults(undefined, 'mattgrosso@gmail.com', '   ').displayName).toBe('mattgrosso')
     expect(socialSettingsWithDefaults(undefined, 'mattgrosso@gmail.com', null).displayName).toBe('mattgrosso')

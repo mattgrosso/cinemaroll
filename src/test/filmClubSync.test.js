@@ -81,6 +81,27 @@ describe('filmClubSync — publishing', () => {
     expect(out.meta.profile.name).toBe('Matthew');
   });
 
+  // 2026-10-08: Matt's live header had no awardsName while the body did — the
+  // header was written before it learned the field, and the body's revision
+  // (which already covered the name) never moved again to carry it over.
+  it('a header lagging the body on the profile alone is brought up to date, with an empty batch', () => {
+    const named = { ...base, awardsName: 'The Groskers' };
+    const head = buildRebuild({ owner: 'matt', secret: 'abc', feed: named, epoch: EPOCH, now: 5, databaseUrl: DB });
+    const stale = { ...head.meta, profile: { name: 'Matt', source: 'cinemaroll' } };
+    const out = buildAppend({ owner: 'matt', secret: 'abc', feed: named, prevMeta: stale, prevMovies: head.movies, newKey: 'k1', now: 6, databaseUrl: DB });
+    expect(out).not.toBeNull();
+    expect(out.meta.profile).toEqual({ name: 'Matt', source: 'cinemaroll', awardsName: 'The Groskers' });
+    expect(out.meta.revision).toBe(stale.revision);
+    expect(out.batch).toMatchObject({ sequence: 1, previousRevision: stale.revision, revision: stale.revision });
+    expect(out.batch.upserts).toBeUndefined();
+    expect(out.batch.deleted).toBeUndefined();
+    // And a reader holding the stale head takes that batch as an ordinary delta.
+    const applied = applyBatches(head.movies, [{ key: 'k1', batch: out.batch }], { epoch: EPOCH, revision: stale.revision, sequence: 0, cursor: '' });
+    expect(certifies(out.meta, applied)).toBe(true);
+    // While an identical republish still says nothing.
+    expect(buildAppend({ owner: 'matt', secret: 'abc', feed: named, prevMeta: out.meta, prevMovies: out.movies, newKey: 'k2', now: 7, databaseUrl: DB })).toBeNull();
+  });
+
   it('with a full journal, the oldest batch is pruned in the same update and minCursor moves', () => {
     const head = buildRebuild({ owner: 'matt', secret: 'abc', feed: base, epoch: EPOCH, now: 5, databaseUrl: DB });
     const full = { ...head.meta, changeCount: MAX_BATCHES, cursor: 'k500' };

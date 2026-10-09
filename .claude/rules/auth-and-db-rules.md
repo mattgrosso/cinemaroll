@@ -251,6 +251,11 @@ Log starts as a proposal there, Brian's ChatGPT replies in the file, and both si
 once it's agreed (`PROCESS.md`). Cinema Roll's own bugs never go there. `node
 check/feed-check.mjs '<feedUrl>'` in that repo shows a feed as the other app reads it.
 
+**The header is compared on its own (2026-10-08).** `buildAppend` says "unchanged" only
+when the body's revision AND `meta.profile` both match the live head; a profile-only
+difference writes an empty journal batch so readers take it as a delta. Before this, a
+head written by an older publisher (no `awardsName`) stayed stale until a movie changed.
+
 Beside the legacy `clubFeed/OWNER/SECRET` body (format `film-club/1`, now carrying a
 content-derived 32-hex `revision` and a `syncUrl`) lives **`clubFeedSync/OWNER/SECRET`**:
 `meta` (version 2, epoch, revision, bodyRevision, sequence, cursor, minCursor, movieCount,

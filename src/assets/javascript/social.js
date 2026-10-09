@@ -72,11 +72,16 @@ export function criteriaArrayFrom (rating) {
 export function socialSettingsWithDefaults (raw, userEmail, realName) {
   const social = raw || {};
   const emailName = (userEmail || '').split('@')[0];
+  // A saved name that is just the email handle was the old default written
+  // back by the settings form, not a choice (2026-10-08: Matt's feed reached
+  // Movie Log as "mattgrosso"). The real name wins over it, as it does over
+  // no saved name at all.
+  const typed = social.displayName && social.displayName !== emailName ? social.displayName : '';
   return {
     enabled: social.enabled !== false,
     shareRatings: social.shareRatings !== false,
     shareCriteria: social.shareCriteria !== false,
-    displayName: social.displayName || (realName || '').trim() || emailName || 'A Cinema Roll user'
+    displayName: typed || (realName || '').trim() || emailName || 'A Cinema Roll user'
   };
 }
 
