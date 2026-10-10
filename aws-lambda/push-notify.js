@@ -41,7 +41,7 @@ const {
   signupsDue, composeSignupMessages,
   alamoListings, veeziListings, afiListings, boxofficeListings, afiFirstShowtime,
   boardFailuresDue,
-  cinemaclockListings, uncovered, dismissedFilms, dismissedAtRank, boardForApp, remindersDue, showtimesWaiting, composeReminderMessage, listingsDue, composeListingMessages,
+  cinemaclockListings, uncovered, dismissedFilms, dismissedAtRank, staleTheaterEntries, boardForApp, remindersDue, showtimesWaiting, composeReminderMessage, listingsDue, composeListingMessages,
   cinemaclockCitySlug, cinemaclockCityTheaters, followedTheaters
 } = require('./pushCadence');
 const { publishFeedV2 } = require('./filmClubSyncPublisher.js');
@@ -805,6 +805,25 @@ const notifyAccountListings = async (topKey, boards, now, { announce = true } = 
     }
   } catch (error) {
     console.error(`Theater board publish for ${topKey} failed:`, error.message);
+  }
+
+  // Dismissals and reminders are forgotten here, never by the app: only once
+  // the seen-state has forgotten the film too, so one empty or failed read
+  // can't bring dismissed films back (2026-10-10, the Udvar-Hazy IMAX).
+  try {
+    const [d, r] = await Promise.all([
+      dismissed !== undefined ? dismissed : dbGet(`${topKey}/theaters/dismissed`),
+      dbGet(`${topKey}/theaters/reminders`)
+    ]);
+    const removals = {};
+    Object.keys(staleTheaterEntries(d, knownByKey, boards)).forEach((p) => { removals[`${topKey}/theaters/dismissed/${p}`] = null; });
+    Object.keys(staleTheaterEntries(r, knownByKey, boards)).forEach((p) => { removals[`${topKey}/theaters/reminders/${p}`] = null; });
+    if (Object.keys(removals).length) {
+      await dbPatch(removals);
+      console.log(`Listings (${topKey}): forgot ${Object.keys(removals).length} dismissal(s)/reminder(s) for films long off the board`);
+    }
+  } catch (error) {
+    console.warn(`Listings (${topKey}) dismissal cleanup failed:`, error.message);
   }
   return delivered;
 };

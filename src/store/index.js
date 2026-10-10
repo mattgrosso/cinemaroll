@@ -3225,33 +3225,31 @@ export default createStore({
         get(ref(db, `${root}/theaters/reminders`))
       ]);
       const board = boardSnap.exists() ? boardSnap.val() : null;
-      // A dismissed film or reminder whose film has since left the board is
-      // forgotten, so the nodes stay the size of the board and a repertory
-      // return is fresh - Matt: "I don't want these to be dismissed for all
-      // time. Just for these showings."
+      // Only what is on this board is held in memory. Nothing is DELETED here
+      // (2026-10-10: "the showtimes at Udvar Hazy just constantly give me the
+      // same movies over and over again") - one empty or failed read put
+      // nothing on the board and wiped every dismissal there. The push sweep
+      // forgets a dismissal or reminder once the film has been off the board
+      // for two weeks (staleTheaterEntries in aws-lambda/pushCadence.js), so
+      // a repertory return is still fresh - Matt: "I don't want these to be
+      // dismissed for all time. Just for these showings."
       const onBoard = new Set();
       (board?.theaters || []).forEach((t) => (t.listings || []).forEach((l) => onBoard.add(`${t.key}/${l.slug}`)));
-      const prune = (node) => {
+      const onScreen = (node) => {
         const kept = {};
-        const removals = {};
         Object.entries(node || {}).forEach(([theaterKey, slugs]) => {
           Object.entries(slugs || {}).forEach(([slug, value]) => {
-            if (board && !onBoard.has(`${theaterKey}/${slug}`)) removals[`${theaterKey}/${slug}`] = null;
-            else (kept[theaterKey] = kept[theaterKey] || {})[slug] = value;
+            if (!board || onBoard.has(`${theaterKey}/${slug}`)) (kept[theaterKey] = kept[theaterKey] || {})[slug] = value;
           });
         });
-        return { kept, removals };
+        return kept;
       };
-      const dismissed = prune(dismissedSnap.exists() ? dismissedSnap.val() : {});
-      const reminders = prune(remindersSnap.exists() ? remindersSnap.val() : {});
       context.commit('setTheaterBoard', board);
-      context.commit('setTheaterDismissed', dismissed.kept);
-      context.commit('setTheaterReminders', reminders.kept);
+      context.commit('setTheaterDismissed', onScreen(dismissedSnap.exists() ? dismissedSnap.val() : {}));
+      context.commit('setTheaterReminders', onScreen(remindersSnap.exists() ? remindersSnap.val() : {}));
       // A dismissal or reminder the server hasn't got yet (offline, or the
       // page reloaded mid-save) still shows as made.
       await context.dispatch('replayPendingWrites', 'theaters').catch(() => {});
-      if (Object.keys(dismissed.removals).length) update(ref(db, `${root}/theaters/dismissed`), dismissed.removals).catch(() => {});
-      if (Object.keys(reminders.removals).length) update(ref(db, `${root}/theaters/reminders`), reminders.removals).catch(() => {});
       return board;
     },
     // "a way for me to dismiss things off of this screen … I see that, I'm

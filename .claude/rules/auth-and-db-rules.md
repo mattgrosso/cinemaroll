@@ -466,7 +466,7 @@ AMC Tysons. Regal Gallery Place has 4DX and RPX, no IMAX. AMC Hoffman Center was
 list until 2026-09-29, when Matt asked for it off ("I don't really know where AMC Hoffman
 Center is"); its `push/state/theaters/imax-amc-hoffman` seen map was deleted with it.
 Removing a theater is deleting its entry and that key — the board is rewritten each sweep,
-and `loadTheaterBoard` prunes the dismissals/reminders of films no longer on it.
+and the sweep forgets that theater's dismissals/reminders (`staleTheaterEntries`).
 
 The IMAXs are read from **CinemaClock** (`cinemaclock.com/movie-theaters/<slug>`), the one
 source that isn't bot-walled: Regal, AMC, imax.com and www.si.edu all answer 403 to a plain
@@ -512,13 +512,23 @@ TMDB (`src/utils/posterLookup.js`: `/search/movie` with the bracketed or feed ye
 misses cached in localStorage `showtimesPosters` for 30 days, module cache + shared in-flight
 like personLookup). A feed poster that 404s falls through to the lookup. Dismissals live at
 `theaters/dismissed/<theaterKey>/<slug> = at`, written by store `dismissListing` (optimistic;
-`restore: true` undoes), pruned to the current board by `loadTheaterBoard`, and excluded from
+`restore: true` undoes), excluded from
 the Insights "new" pill. The screen is one poster to a row on a phone (two/three on wide screens), X
 in the corner, swipe RIGHT past 110px or a third of the card dismisses (the back gesture owns
 the left 20px of the screen and the cards start 30px in); horizontal intent is decided once so
 scrolling never fires it. Verified with synthetic TouchEvents in the tester's iframe (v1.118.9).
 Dismissals are per listing and pruned when the film leaves the board, so a return years later
 is shown and pushed again — Matt asked for exactly that.
+
+**Only the sweep forgets a dismissal, and only after two weeks off the board** (2026-10-10:
+"The showtimes at Udvar Hazy just constantly give me the same movies over and over again").
+`loadTheaterBoard` used to DELETE every dismissal/reminder not on the board it had just
+read, so one failed read, or one empty Smithsonian read (`mayBeEmpty`, accepted as real),
+wiped them all and the films returned. Now the app only filters what it holds in memory,
+and `notifyAccountListings` ends with `staleTheaterEntries` (tested): a slug is forgotten
+once it is neither on the board nor in that theater's seen-state (i.e. off for
+`LISTINGS_FORGET_MS`), only at theaters recorded THIS sweep; theaters no longer followed
+lose all theirs. Never reintroduce a client-side delete keyed on one board read.
 
 **A dismissal covers that theater and every WORSE one, never a better one** (2026-10-06,
 two rounds the same day). Morning: "At the Udvar-Hazy IMAX, I keep getting notifications for

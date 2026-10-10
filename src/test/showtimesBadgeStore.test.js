@@ -156,3 +156,33 @@ describe('Showtimes choices are saved on the phone first', () => {
     expect(store.state.theaterDismissed.alamo.b).toBe(5)
   })
 })
+
+// Bug report 2026-10-10: "The showtimes at Udvar Hazy just constantly give me
+// the same movies over and over again." Loading a board used to DELETE every
+// dismissal whose film wasn't on it, so one empty or failed Udvar-Hazy read
+// wiped them all and the films came back. Only the push sweep forgets now,
+// after two weeks off the board (staleTheaterEntries).
+describe('loading a board never deletes dismissals or reminders', () => {
+  it('keeps the server copy of a dismissal whose film is missing from this board', async () => {
+    const { update } = await import('firebase/database')
+    update.mockClear()
+    getMock.mockImplementation((path) => Promise.resolve({
+      exists: () => true,
+      val: () => (path.endsWith('/theaters/board') ? BOARD
+        : path.endsWith('/theaters/dismissed') ? { 'imax-udvar-hazy': { 7: 1 }, alamo: { a: 2 } }
+          : { 'imax-udvar-hazy': { 8: { remindAt: 1 } } })
+    }))
+    try {
+      await store.dispatch('loadTheaterBoard')
+    } finally {
+      getMock.mockImplementation((path) => Promise.resolve({
+        exists: () => path.endsWith('/theaters/board'),
+        val: () => (path.endsWith('/theaters/board') ? BOARD : null)
+      }))
+    }
+    expect(update).not.toHaveBeenCalled()
+    // What's on screen is still just what's on this board.
+    expect(store.state.theaterDismissed).toEqual({ alamo: { a: 2 } })
+    expect(store.state.theaterReminders).toEqual({})
+  })
+})

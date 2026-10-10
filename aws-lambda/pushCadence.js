@@ -1447,6 +1447,39 @@ function dismissedAtRank (gone, title, rank) {
   return Boolean(key) && gone.has(key) && gone.get(key) <= rank;
 }
 
+// --- Forgetting dismissals and reminders (2026-10-10) -------------------------
+//
+// "The showtimes at Udvar Hazy just constantly give me the same movies over
+// and over again." The app used to delete every dismissal whose film wasn't
+// on the board it had just loaded - and one empty Smithsonian read (accepted
+// as real, they publish in batches) or one failed read put nothing on the
+// board, so every Udvar-Hazy dismissal went and the films came back. Now only
+// the sweep forgets, and only what its seen-state has forgotten: a film off
+// the board for LISTINGS_FORGET_MS, the same window that makes it news again.
+
+/**
+ * node: { [theaterKey]: { [slug]: value } } (dismissed or reminders);
+ * knownByKey: the seen-maps recorded THIS sweep - a theater not in it wasn't
+ * read or recorded, so nothing of its is touched; boards: [{ theater: { key },
+ * listings|null }], the account's whole list. Returns the removals as
+ * { '<theaterKey>/<slug>': null }: slugs neither remembered nor on the board
+ * at a recorded theater, and everything at a theater no longer followed.
+ */
+function staleTheaterEntries (node, knownByKey, boards) {
+  const removals = {};
+  const followed = new Set((boards || []).map((b) => b && b.theater && b.theater.key).filter(Boolean));
+  const listed = new Map((boards || []).filter((b) => b && b.theater).map((b) => [b.theater.key, new Set((b.listings || []).map((l) => l && l.slug))]));
+  Object.entries(node && typeof node === 'object' ? node : {}).forEach(([theaterKey, slugs]) => {
+    const known = knownByKey && knownByKey[theaterKey];
+    if (followed.has(theaterKey) && !(known && typeof known === 'object')) return;
+    Object.keys(slugs && typeof slugs === 'object' ? slugs : {}).forEach((slug) => {
+      const kept = followed.has(theaterKey) && (slug in known || listed.get(theaterKey).has(slug));
+      if (!kept) removals[`${theaterKey}/${slug}`] = null;
+    });
+  });
+  return removals;
+}
+
 // --- Showtimes on the icon badge (Matt, 2026-10-05) --------------------------
 //
 // "Movies in the Showtime screen that I have not yet either dismissed or
@@ -1528,6 +1561,7 @@ module.exports = {
   uncovered,
   dismissedFilms,
   dismissedAtRank,
+  staleTheaterEntries,
   boardForApp,
   remindersDue,
   showtimesWaiting,

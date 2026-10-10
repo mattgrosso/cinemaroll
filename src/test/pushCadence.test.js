@@ -26,6 +26,7 @@ import {
   SIGNUP_MAX_PER_SWEEP,
   alamoListings,
   listingsDue,
+  staleTheaterEntries,
   boardFailuresDue,
   BOARD_FAILURE_REPORT_MS,
   showTimeLabel,
@@ -1322,5 +1323,38 @@ describe('externalFeedRead', () => {
   it('a network blip on the revision child is not a reason to download the body', () => {
     expect(externalFeedRead({ reachable: false, storedRevision: REV })).toEqual({ action: 'skip', reason: 'unreachable' });
     expect(externalFeedRead({ reachable: false })).toEqual({ action: 'skip', reason: 'unreachable' });
+  });
+});
+
+// Bug report 2026-10-10: Udvar-Hazy films kept coming back after being
+// dismissed. The sweep is now the only thing that forgets a dismissal, and
+// only once the seen-state has forgotten the film (two weeks off the board).
+describe('staleTheaterEntries (forgetting dismissals and reminders)', () => {
+  const now = 1_800_000_000_000;
+  const udvar = { key: 'imax-udvar-hazy' };
+  const alamo = { key: 'alamo' };
+
+  it('keeps a dismissal through an empty board while the film is still remembered', () => {
+    const { nextKnown } = listingsDue({ known: { 7: { f: now - 1e6, l: now - 1e6 } }, current: [], now });
+    const removals = staleTheaterEntries({ 'imax-udvar-hazy': { 7: now - 5e5 } }, { 'imax-udvar-hazy': nextKnown }, [{ theater: udvar, listings: [] }]);
+    expect(removals).toEqual({});
+  });
+
+  it('forgets it once the film has been off the board for the forget window', () => {
+    const { nextKnown } = listingsDue({ known: { 7: { f: 1, l: now - LISTINGS_FORGET_MS - 1 } }, current: [], now });
+    const removals = staleTheaterEntries({ 'imax-udvar-hazy': { 7: 5 } }, { 'imax-udvar-hazy': nextKnown }, [{ theater: udvar, listings: [] }]);
+    expect(removals).toEqual({ 'imax-udvar-hazy/7': null });
+  });
+
+  it('touches nothing at a theater that was not read or recorded this sweep', () => {
+    expect(staleTheaterEntries({ 'imax-udvar-hazy': { 7: 5 } }, {}, [{ theater: udvar, listings: null }])).toEqual({});
+  });
+
+  it('keeps a film on the current board even before its seen-state has it', () => {
+    expect(staleTheaterEntries({ alamo: { new1: 5 } }, { alamo: {} }, [{ theater: alamo, listings: [{ slug: 'new1' }] }])).toEqual({});
+  });
+
+  it('forgets everything at a theater no longer on the list', () => {
+    expect(staleTheaterEntries({ gone: { x: 1, y: 2 } }, {}, [{ theater: alamo, listings: [] }])).toEqual({ 'gone/x': null, 'gone/y': null });
   });
 });
