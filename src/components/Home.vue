@@ -609,14 +609,14 @@
       <StickinessInline
         :allEntriesWithFlatKeywordsAdded="allEntriesWithFlatKeywordsAdded"
         :showStickinessModal="showStickinessModal"
-        :autoOpen="openChoreRequested"
+        :autoOpen="choreOpenIsFor('stickiness')"
         :now="promptNow"
         @stickiness-updated="onStickinessUpdated"
       />
       <TweakInline
         :allEntriesWithFlatKeywordsAdded="allEntriesWithFlatKeywordsAdded"
         :showTweakModal="showTweakModal"
-        :autoOpen="openChoreRequested"
+        :autoOpen="choreOpenIsFor('tieBreak')"
         @tweak-updated="onTweakUpdated"
       />
       <!-- Banner-only on Home: tapping the "year is ready" notice navigates
@@ -631,7 +631,7 @@
         :personalAwardName="personalAwardName"
         :awardNameWithThe="getAwardNameWithThe()"
         :awardNameSingular="getAwardNameSingular()"
-        :autoOpen="awardsPromptState === 'forced' || openChoreRequested"
+        :autoOpen="awardsPromptState === 'forced' || choreOpenIsFor('awards')"
         :navigateOnOpen="true"
       />
     </section>
@@ -1892,6 +1892,12 @@ export default {
       // already opened and ready to go." Read once in mounted() and the
       // query stripped, so a refresh doesn't re-open anything.
       openChoreRequested: false,
+      // WHICH prompt the request belongs to: 'stickiness' | 'tieBreak' |
+      // 'awards', 'none' when nothing was due, or null while the library is
+      // still loading and nothing has claimed it yet. Only that card may
+      // open itself, and the request is dropped the moment a different
+      // prompt takes the screen — see the `activeModalType` watcher.
+      openChoreFor: null,
       // True once the library has taken long enough to load that a spinner
       // is worth showing. See the loading-screen comment in the template.
       libraryLoadIsSlow: false,
@@ -2037,6 +2043,29 @@ export default {
     // router being usable.
     '$route.query.open' () {
       this.readChoreOpenRequest();
+    },
+    // Report -P3bg_m1nXLcjC3DGPc5 (2026-10-10): "Sometimes when i follow a
+    // notification to a tiebreak. When i tap on the winner to break the tie
+    // i end up looking at an awards year."
+    //
+    // The request used to be one flag handed to all three cards and left on
+    // for as long as Home stayed mounted. Finishing the tournament let the
+    // next prompt take the screen; the awards card mounted, saw the leftover
+    // flag, and did what a tap does — navigate to /awards. (Stickiness would
+    // have popped its form open the same way.) The request belongs to the
+    // prompt it opened, and ends when that prompt leaves. A `pre` watcher, so
+    // it runs before the render that would mount the next card.
+    activeModalType (type, previous) {
+      if (!this.openChoreRequested) return;
+      // Unclaimed and nothing was on screen: a cold launch, where the request
+      // arrived before the library did. The first prompt to appear takes it.
+      const owner = this.openChoreFor ?? previous;
+      if (owner == null) {
+        this.openChoreFor = type;
+      } else if (type !== owner) {
+        this.openChoreRequested = false;
+        this.openChoreFor = null;
+      }
     },
     // Report -P-HHWRf-WATy1lEwdYP: "We set up the default viewing order for
     // the homepage, but it doesn't seem to be respected. I chose to have it
@@ -4404,6 +4433,12 @@ export default {
       if (document.visibilityState === 'visible') this.refreshPromptClock();
     },
 
+    choreOpenIsFor (type) {
+      // Unclaimed (the library arrived before the request settled): it is
+      // for whatever is on screen.
+      return this.openChoreRequested && (this.openChoreFor ?? this.activeModalType) === type;
+    },
+
     readChoreOpenRequest () {
       if (!this.$route?.query?.open) return;
 
@@ -4418,7 +4453,13 @@ export default {
       // so a second notification in the same session — arriving while the
       // flag is already true, after the user closed the card — would change
       // nothing at all.
+      // Claim it for the prompt on screen right now. With no library yet
+      // there is nothing to claim, and the first prompt to appear takes it;
+      // with a library and nothing due, it belongs to nothing.
+      const onScreen = this.activeModalType;
+      const libraryLoaded = Boolean(this.allEntriesWithFlatKeywordsAdded.length);
       this.openChoreRequested = false;
+      this.openChoreFor = onScreen || (libraryLoaded ? 'none' : null);
       this.$nextTick(() => {
         this.openChoreRequested = true;
         this.scrollToTopForChore();

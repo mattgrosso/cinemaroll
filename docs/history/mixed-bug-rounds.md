@@ -810,3 +810,21 @@ left a hole. `rankFeatures` (people rows, More Like Your Favorites) now ranks un
 walks the ranking a `RANK_POOL`-sized batch at a time looking up runtimes until that many
 features are known, then ranks again with the cap. Guarded by "fills a row with features
 when shorts rank above them" — 40 shorts outranking 15 features; the old code showed 0.
+
+## A tiebreak notification ending on the awards page (2026-10-10)
+
+"Sometimes when i follow a notification to a tiebreak. When i tap on the winner
+to break the tie i end up looking at an awards year." The notification's
+`?open=` request was one flag (`openChoreRequested`) handed to all three chore
+cards and left on while Home stayed mounted. Finishing the tournament let the
+next prompt take the screen, and the awards card mounted with `autoOpen` true
+and navigated to /awards, as a tap does. Now the request is claimed by the
+prompt on screen (`openChoreFor`; on a cold launch, the first prompt to appear)
+and dropped by a watcher on `activeModalType` the moment a different prompt
+takes over. `HomeChoreOpenScope.test.js` guards it.
+
+Why "sometimes" even with every year complete: `shouldShowAwardsModal` returns
+true all day whenever `settings.dailyAwardsYear` was stamped today — the
+"Resume Awards" shortcut — regardless of whether any year still needs work.
+Matt's settings had it set (1973) with 2024–2026 all completed. Not changed;
+flagged to him.
