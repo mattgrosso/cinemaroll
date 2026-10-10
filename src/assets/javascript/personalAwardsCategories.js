@@ -18,6 +18,9 @@ export const PERSONAL_AWARD_CATEGORIES = [
   { key: 'bestDocumentaryFeature', name: 'Best Documentary Feature', type: 'movie' },
   // Films made outside the US (2026-10-07; eligibility in awardEligibility.js).
   { key: 'bestInternationalFeature', name: 'Best International Feature', type: 'movie' },
+  // Matt, 2026-10-09: "a category for most important movie". Any film rated
+  // that year is eligible; nominees sort by overall score.
+  { key: 'mostImportantMovie', name: 'Most Important Movie', type: 'movie' },
 ];
 
 export const PERSONAL_AWARD_CATEGORY_NAMES = PERSONAL_AWARD_CATEGORIES.reduce((acc, category) => {

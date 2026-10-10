@@ -285,3 +285,8 @@ Cannes and whatever else… the history of any award that we have access to."
   backfills missing production countries for a year when it opens
   (`backfillCountriesForYear`). Completed past years simply show the new
   category undecided; nothing reopens them.
+- **Most Important Movie** (2026-10-09): fifteenth standard category, last
+  in the list. Matt asked for "a category for most important movie" in every
+  year. Ungated (any film rated that year), sorted by overall score through the
+  `'rating'` fallback in the modal's sort maps. Like International Feature,
+  completed years show it undecided without reopening.
