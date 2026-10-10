@@ -243,6 +243,15 @@ are silent no-ops (this dropped new users' typed usernames).
   day for an evening viewing in a western timezone.
 - `rating` is the normalized 0–10 score halved to 0.5–5 stars; 0/missing omits the param.
 
+**The tile has three states (2026-10-10, report: a rewatch already in the diary could
+only open the film page).** `letterboxdTileState` (`letterboxdFormat.js`, tested):
+"Log it" when the film isn't in the synced diary; **"Log again"** (orange) when the
+newest Cinema Roll viewing's local day is later than the newest diary `watchedDate` —
+it opens the same log deep link; otherwise "On Letterboxd" opens the film page, with a
+small `.letterboxd-relog` "Log again" link under it for what dates can't see (manual
+overrides, a second viewing the same day). The diary syncs every six hours, so a fresh
+log can still read "Log again" until then.
+
 ## Insights
 
 **One question per tab (2026-09-29 regroup, "what distinguishes between regular stats

@@ -10,7 +10,8 @@ import {
   buildTitleIndex,
   matchTitle,
   reviewsCsvToUpdates,
-  relativeTimeFrom
+  relativeTimeFrom,
+  letterboxdTileState
 } from '@/assets/javascript/letterboxdFormat.js';
 
 describe('starsFor', () => {
@@ -178,5 +179,34 @@ describe('relativeTimeFrom', () => {
     expect(relativeTimeFrom(now - 5 * 60000, now)).toBe('5 minutes ago');
     expect(relativeTimeFrom(now - 3 * 3600000, now)).toBe('3 hours ago');
     expect(relativeTimeFrom(now - 49 * 3600000, now)).toBe('2 days ago');
+  });
+});
+
+// Report 2026-10-10: a rewatch of a film already in the diary had no way to
+// be logged again from the movie page.
+describe('letterboxdTileState', () => {
+  const diary = { r1: { watchedDate: '2024-05-01', review: 'Yes.' }, w2: { watchedDate: '2025-02-14' } };
+
+  it('a film not on Letterboxd is a fresh log', () => {
+    expect(letterboxdTileState({ diaryNode: undefined, latestViewingDay: '2026-10-10' })).toBe('log');
+    expect(letterboxdTileState({ diaryNode: {}, latestViewingDay: '2026-10-10' })).toBe('log');
+  });
+
+  it('a viewing newer than the newest diary entry offers Log again', () => {
+    expect(letterboxdTileState({ diaryNode: diary, latestViewingDay: '2026-10-10' })).toBe('log-again');
+  });
+
+  it('a viewing already in the diary (same day or older) reads as logged', () => {
+    expect(letterboxdTileState({ diaryNode: diary, latestViewingDay: '2025-02-14' })).toBe('logged');
+    expect(letterboxdTileState({ diaryNode: diary, latestViewingDay: '2024-12-31' })).toBe('logged');
+  });
+
+  it('with nothing to compare, it stays logged', () => {
+    expect(letterboxdTileState({ diaryNode: diary, latestViewingDay: null })).toBe('logged');
+    expect(letterboxdTileState({ diaryNode: { r1: { review: 'Undated.' } }, latestViewingDay: '2026-10-10' })).toBe('logged');
+  });
+
+  it('a manual override with no diary reads as logged', () => {
+    expect(letterboxdTileState({ diaryNode: null, overridden: true, latestViewingDay: '2026-10-10' })).toBe('logged');
   });
 });

@@ -64,18 +64,27 @@
             v-if="$store.state.settings.letterboxdConnected"
             type="button"
             class="action-tile action-letterboxd"
-            :class="isMovieLoggedOnLetterboxd() ? 'logged' : 'not-logged'"
-            :title="isMovieLoggedOnLetterboxd() ? 'View movie on Letterboxd' : 'Log on Letterboxd'"
-            :aria-label="isMovieLoggedOnLetterboxd() ? 'View movie on Letterboxd' : 'Log on Letterboxd'"
+            :class="letterboxdTile"
+            :title="letterboxdTileLabel"
+            :aria-label="letterboxdTileLabel"
             @click="logOnLetterboxd">
-            <img :src="isMovieLoggedOnLetterboxd() ? 'https://a.ltrbxd.com/logos/letterboxd-decal-dots-pos-rgb-500px.png' : 'https://a.ltrbxd.com/logos/letterboxd-decal-dots-pos-mono-500px.png'" alt="" class="action-letterboxd-icon">
-            <span>{{ isMovieLoggedOnLetterboxd() ? 'On Letterboxd' : 'Log it' }}</span>
+            <img :src="letterboxdTile === 'log' ? 'https://a.ltrbxd.com/logos/letterboxd-decal-dots-pos-mono-500px.png' : 'https://a.ltrbxd.com/logos/letterboxd-decal-dots-pos-rgb-500px.png'" alt="" class="action-letterboxd-icon">
+            <span>{{ { log: 'Log it', 'log-again': 'Log again', logged: 'On Letterboxd' }[letterboxdTile] }}</span>
           </button>
           <button type="button" class="action-tile" @click="goToWikipedia()">
             <i class="bi bi-wikipedia"></i><span>Wikipedia</span>
           </button>
           <button type="button" class="action-tile action-primary" @click="rateMedia(topStructure(result))">
             <i class="bi bi-plus-circle"></i><span>Add rating</span>
+          </button>
+          <!-- Report 2026-10-10: a rewatch the diary can't tell apart (a manual
+               override, a second viewing the same day) still needs a way in. -->
+          <button
+            v-if="$store.state.settings.letterboxdConnected && letterboxdTile === 'logged'"
+            type="button"
+            class="letterboxd-relog"
+            @click="relogOnLetterboxd">
+            Log again
           </button>
         </div>
 
@@ -714,7 +723,7 @@ import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import ErrorLogService from "../services/ErrorLogService.js";
 import LetterboxdUrlService from '../services/LetterboxdUrlService.js';
 import { myLetterboxdReviews, letterboxdFilm } from '../utils/letterboxdData.js';
-import { starsFor, compactCount, watchedDateLabel } from '../assets/javascript/letterboxdFormat.js';
+import { starsFor, compactCount, watchedDateLabel, letterboxdTileState } from '../assets/javascript/letterboxdFormat.js';
 import { computeFlatKeywords } from '../utils/keywords.js';
 import { buildTagSuggestions, canCreateNewTag } from '../utils/tags.js';
 import { awardCategoryNameMap } from '../assets/javascript/personalAwardsCategories.js';
@@ -810,6 +819,23 @@ export default {
     }
   },
   computed: {
+    // 'log' | 'log-again' | 'logged' — see letterboxdTileState.
+    letterboxdTile () {
+      const movie = this.topStructure(this.result);
+      if (!movie) return 'log';
+      const overrides = this.$store.state.settings.letterboxdOverrides || {};
+      const overrideKey = `${movie.title.toLowerCase().replace(/[^a-z0-9]/g, '')}_${this.getYear(this.result)}`;
+      return letterboxdTileState({
+        diaryNode: this.$store.state.letterboxdReviews?.[movie.id],
+        overridden: Boolean(overrides[overrideKey]),
+        latestViewingDay: LetterboxdUrlService.toLocalISODate(this.mostRecentRating(this.result)?.date)
+      });
+    },
+
+    letterboxdTileLabel () {
+      return { log: 'Log on Letterboxd', 'log-again': 'Log this viewing on Letterboxd', logged: 'View movie on Letterboxd' }[this.letterboxdTile];
+    },
+
     letterboxdWrittenReviews () {
       return this.letterboxdReviews.filter((review) => review.review);
     },
@@ -1644,8 +1670,7 @@ export default {
     logOnLetterboxd () {
       const movie = this.topStructure(this.result);
 
-      // Check if movie is already logged on Letterboxd
-      if (this.isMovieLoggedOnLetterboxd()) {
+      if (this.letterboxdTile === 'logged') {
         // Movie is logged - open the movie's Letterboxd page where user can see their diary entries
         const urls = LetterboxdUrlService.generateUrls(movie.title, this.getYear(this.result));
 
@@ -1661,20 +1686,26 @@ export default {
           }
         }
       } else {
-        // Movie not logged - use the log action to open rating/review interface,
-        // pre-filling the star rating from Cinema Roll's normalized score.
-        const success = LetterboxdUrlService.logMovie(movie.title, this.getYear(this.result), {
-          normalizedRating: this.normalizedRatingForMedia(this.result),
-          // The date it was actually watched, not today. mostRecentRating is
-          // the latest viewing, which is the one being logged when a movie has
-          // been seen more than once.
-          viewingDate: this.mostRecentRating(this.result)?.date
-        });
+        // Not logged, or a newer viewing than the diary has: open the log
+        // screen with this viewing's date and stars.
+        this.relogOnLetterboxd();
+      }
+    },
 
-        if (!success) {
-          console.error('Failed to open movie on Letterboxd for logging:', movie.title);
-          ErrorLogService.error('Failed to open movie on Letterboxd for logging:', movie.title);
-        }
+    relogOnLetterboxd () {
+      const movie = this.topStructure(this.result);
+      // Pre-fill the star rating from Cinema Roll's normalized score.
+      const success = LetterboxdUrlService.logMovie(movie.title, this.getYear(this.result), {
+        normalizedRating: this.normalizedRatingForMedia(this.result),
+        // The date it was actually watched, not today. mostRecentRating is
+        // the latest viewing, which is the one being logged when a movie has
+        // been seen more than once.
+        viewingDate: this.mostRecentRating(this.result)?.date
+      });
+
+      if (!success) {
+        console.error('Failed to open movie on Letterboxd for logging:', movie.title);
+        ErrorLogService.error('Failed to open movie on Letterboxd for logging:', movie.title);
       }
     },
 
@@ -2533,6 +2564,21 @@ export default {
     .action-primary i { color: #6fd39b; }
 
     .action-letterboxd.logged { color: #6fd39b; }
+    .action-letterboxd.log-again { color: #ff8000; } /* Letterboxd's orange: something to do */
+
+    .letterboxd-relog {
+      background: none;
+      border: 0;
+      color: #ccc;
+      font-size: ds(0.7rem);
+      letter-spacing: 0.04em;
+      margin-top: -2px;
+      min-height: 40px;
+      text-decoration: underline;
+      text-transform: uppercase;
+
+      &:active { color: #fff; }
+    }
 
     .action-letterboxd-icon {
       height: ds(1.15rem);

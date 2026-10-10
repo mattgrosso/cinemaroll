@@ -203,3 +203,24 @@ export const relativeTimeFrom = (then, now = Date.now()) => {
   const days = Math.round(hours / 24);
   return `${days} day${days === 1 ? '' : 's'} ago`;
 };
+
+// What the movie page's Letterboxd tile offers (report, 2026-10-10: a
+// rewatch already in the diary had no way to be logged again — the tile only
+// opened the film page). 'log' when the film isn't on Letterboxd at all;
+// 'log-again' when the newest Cinema Roll viewing (a local "YYYY-MM-DD") is
+// later than the newest diary date, i.e. a viewing Letterboxd hasn't heard
+// of; otherwise 'logged'. A manual override has no dates, so it reads as
+// logged — the page keeps a small "Log again" link for that and any other
+// case this can't see. The diary syncs every six hours, so a fresh log can
+// read 'log-again' until the next sync.
+export const letterboxdTileState = ({ diaryNode, overridden = false, latestViewingDay } = {}) => {
+  const dates = Object.values(diaryNode || {})
+    .filter((entry) => entry && typeof entry === 'object')
+    .map((entry) => String(entry.watchedDate || ''))
+    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date));
+  const inDiary = Object.keys(diaryNode || {}).length > 0;
+  if (!inDiary) return overridden ? 'logged' : 'log';
+  if (!dates.length || !latestViewingDay) return 'logged';
+  const newestDiary = dates.sort().pop();
+  return latestViewingDay > newestDiary ? 'log-again' : 'logged';
+};

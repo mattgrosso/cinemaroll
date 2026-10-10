@@ -890,6 +890,32 @@ describe('MovieDetail — Letterboxd logged state comes from the synced diary', 
     generateUrls.mockRestore()
   })
 
+  // Report 2026-10-10: a rewatch of Avengers: Endgame, already in the diary,
+  // could only open the film page — no way to log the new viewing.
+  it('a viewing newer than the diary turns the tile into Log again, which opens the log screen', async () => {
+    const LetterboxdUrlService = (await import('@/services/LetterboxdUrlService.js')).default
+    const logMovie = vi.spyOn(LetterboxdUrlService, 'logMovie').mockReturnValue(true)
+    const w = await mountWithDiary({ 42: { r1: { review: 'Yes.', watchedDate: '2020-03-15' } } })
+    const tile = w.find('.action-letterboxd')
+    expect(tile.text()).toBe('Log again')
+    expect(w.find('.letterboxd-relog').exists()).toBe(false)
+    await tile.trigger('click')
+    expect(logMovie).toHaveBeenCalledTimes(1)
+    expect(LetterboxdUrlService.toLocalISODate(logMovie.mock.calls[0][2].viewingDate)).toBe(LetterboxdUrlService.todayLocalISODate())
+    logMovie.mockRestore()
+  })
+
+  it('a film already logged for its latest viewing keeps a small Log again link under the tile', async () => {
+    const LetterboxdUrlService = (await import('@/services/LetterboxdUrlService.js')).default
+    const logMovie = vi.spyOn(LetterboxdUrlService, 'logMovie').mockReturnValue(true)
+    const today = LetterboxdUrlService.todayLocalISODate()
+    const w = await mountWithDiary({ 42: { r1: { review: 'Yes.', watchedDate: today } } })
+    expect(w.find('.action-letterboxd').text()).toBe('On Letterboxd')
+    await w.find('.letterboxd-relog').trigger('click')
+    expect(logMovie).toHaveBeenCalledTimes(1)
+    logMovie.mockRestore()
+  })
+
   it('a film missing from the diary, or no diary yet, reads as not logged', async () => {
     expect((await mountWithDiary({})).vm.isMovieLoggedOnLetterboxd()).toBe(false)
     expect((await mountWithDiary(null)).vm.isMovieLoggedOnLetterboxd()).toBe(false)
