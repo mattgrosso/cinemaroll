@@ -231,6 +231,18 @@ initializeApp(firebaseConfig);
 const auth = getAuth();
 
 const db = getDatabase();
+
+// A library or settings listener refused with nobody signed in is an expired
+// session the sign-out already handles (verifyRestoredSession), so it's a
+// warning — captureConsole files every console.error in Sentry (2026-10-11).
+// Refused while signed in is a real rules problem and stays an error.
+function reportRefusedListener (label, error) {
+  if (auth.currentUser) {
+    ErrorLogService.error(`${label} listener cancelled:`, error);
+  } else {
+    ErrorLogService.warn(`${label} listener cancelled with no sign-in:`, error);
+  }
+}
 let letterboxdLoadInFlight = null;
 // One external friend's feed, v2 first. True when the feed answered (changed
 // or not), false when it could not be read — a caller holding a pending
@@ -1492,7 +1504,8 @@ export default createStore({
         return;
       }
 
-      ErrorLogService.error('Stored login found but no Firebase session — signing out', { storedKey });
+      // A warning: this is the routine, handled case (Sentry, 2026-10-11).
+      ErrorLogService.warn('Stored login found but no Firebase session — signing out', { storedKey });
       await context.dispatch('logout');
     },
     async resetLocalDB (context) {
@@ -1563,8 +1576,7 @@ export default createStore({
         // isn't empty, this device just can't see it — surface that
         // (LibraryAccessBanner) instead of leaving a silent empty grid.
         const onMovieLogCancelled = (error) => {
-          console.error('movieLog listener cancelled:', error);
-          ErrorLogService.error('movieLog listener cancelled:', error);
+          reportRefusedListener('movieLog', error);
           context.commit('setDbReadDenied', true);
           // Whatever the snapshot fallback managed to show is all there is;
           // stop any loading state so the banner + cached view take over.
@@ -1767,7 +1779,7 @@ export default createStore({
         }, (error) => {
           // Same denial signal as the movieLog listener above (the rules
           // gate both identically); committing the flag twice is harmless.
-          console.error('settings listener cancelled:', error);
+          reportRefusedListener('settings', error);
           context.commit('setDbReadDenied', true);
         });
       }

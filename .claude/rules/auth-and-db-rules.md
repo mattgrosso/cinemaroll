@@ -26,6 +26,13 @@ deploy shows live users an empty library. `LibraryAccessBanner.vue` (driven by
 `state.dbReadDenied`, set by the listeners' error callbacks) is the user-facing guidance
 if a device loses read access.
 
+**A refusal with nobody signed in is a warning (Sentry, 2026-10-11).** A stored login
+whose Firebase session lapsed (Safari storage eviction, sign-out elsewhere) gets its
+listeners refused and is signed out by `verifyRestoredSession` — routine, not a bug.
+`reportRefusedListener` (store) logs that case as a warning so captureConsole doesn't
+file it; refused while `auth.currentUser` is set stays an error (a real rules problem).
+New listeners on the account root should report through it; Film Club's warn always.
+
 **The global `firebase-tools` install is broken** (upstream ESM-only `uuid` under
 `universal-analytics`). Deploy with a fresh `firebase-tools@13` install carrying an npm
 override `{"uuid": "8.3.2"}` — Node is pinned to 18, so firebase-tools 14 (Node 20+) is

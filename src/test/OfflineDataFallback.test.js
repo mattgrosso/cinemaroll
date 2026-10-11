@@ -28,7 +28,7 @@ vi.mock('firebase/app', () => ({
   initializeApp: vi.fn(() => ({}))
 }))
 vi.mock('firebase/auth', () => ({
-  getAuth: vi.fn(),
+  getAuth: vi.fn(() => ({ currentUser: null })),
   GoogleAuthProvider: vi.fn(),
   OAuthProvider: vi.fn(),
   signInWithPopup: vi.fn(),
