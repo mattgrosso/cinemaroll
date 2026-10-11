@@ -215,5 +215,14 @@ cached the Watchlist's TMDB lookups and never touched it, so the issue came
 back. A complete answer now stands for six hours
 (`MOVIE_HAT_CONTENTS_MAX_AGE_MS`, kept across launches); a draw forces a read,
 an incomplete read retries after a minute, and the send-time check stays the
-authority. If it returns, the next step is one combined read instead of one
-per hat, which needs Movie Hat's side.
+authority.
+
+**It came back on v1.124.7 the same morning, and that is accepted (2026-10-11).**
+The six-hour window works; the first Film Club or Watchlist open of a day is
+simply always past it, so the burst (index + one read per hat, in parallel)
+still runs about once a day and Sentry still names it. Decided: archive it in
+Sentry as expected, change nothing. Rejected: reading hats one at a time (only
+hides the burst from the detector, and hat buttons settle ~1s later) and a
+single combined read (needs a Movie Hat-side summary node — not worth it). A
+recurrence on a build with the six-hour window is not a regression; only treat
+it as one if the burst fires more than about once per six hours per device.
