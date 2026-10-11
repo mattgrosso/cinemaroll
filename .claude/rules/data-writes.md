@@ -226,3 +226,10 @@ hides the burst from the detector, and hat buttons settle ~1s later) and a
 single combined read (needs a Movie Hat-side summary node — not worth it). A
 recurrence on a build with the six-hour window is not a regression; only treat
 it as one if the burst fires more than about once per six hours per device.
+
+**Same call for the WatchlistScreen variant (2026-10-11).** Sentry reopened the
+WatchlistScreen issue on v1.124.7 too. Every TMDB lookup on that screen is
+already device-cached (`watchlistLookups.js` a week, runtimes 180 days), so the
+only burst left there is the same hat read. Archived as expected; no code change.
+Raising or disabling N+1 detection in the Sentry project settings is the way to
+stop these reopening.
