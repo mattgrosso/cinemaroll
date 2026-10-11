@@ -48,6 +48,14 @@ makes Apple's "Hide My Email" fine (stable per-app relay).
   proceeding if no email comes back. Silently dropping someone into a wrongly-keyed empty
   database is far worse than refusing the sign-in.
 
+**A stored key is not a session.** The router trusts `databaseTopKey` from localStorage,
+so a listener attached on a cold launch may have no token. Anything that listens or reads
+outside the snapshot path must `await authReady` and then check `auth.currentUser` (after a
+later sign-in, `authReady` still holds the first, null answer). And any "already attached"
+marker must be cleared on logout and when the listener is cancelled — a refused listener
+never refires. `attachSocialListeners` / `detachSocialListeners` are the pattern (Sentry,
+2026-10-11: `permission_denied at /social/requests/<me>` on an expired session).
+
 ## Generated rules
 
 `database.rules.json` is **generated** — `yarn generate-db-rules`. Never hand-edit it.

@@ -344,6 +344,10 @@ let clubInboxProcessing = Promise.resolve();
 const noticeRefreshes = new Map();
 let clubNoticeSending = Promise.resolve();
 
+// Unsubscribers for the Film Club requests + friends listeners, so signing
+// out can drop them and the next sign-in attaches fresh ones.
+let socialListenerStops = [];
+
 // Pending debounced profile publish (see scheduleSocialPublish).
 let socialPublishTimer = null;
 // The one ensurePersonalAwards read in progress, shared by every caller.
@@ -1441,6 +1445,9 @@ export default createStore({
     },
     async logout (context) {
       await signOut(getAuth());
+      // Otherwise signing back in to the same account in this tab finds the
+      // marker still set and Film Club never listens again until a reload.
+      context.dispatch('detachSocialListeners');
       window.localStorage.removeItem('databaseTopKey');
       window.localStorage.removeItem('userEmail');
       context.commit('setUserEmail', null);
@@ -2805,19 +2812,40 @@ export default createStore({
     // ------------------------------------------------------------------
     // Social layer. All writes land OUTSIDE the user's private branch, under
     // social/ — see src/assets/javascript/social.js and the database rules.
-    attachSocialListeners (context) {
+    // Waits for Firebase to settle the sign-in, like initializeDB, and does
+    // nothing without a live session: the router trusts the stored key, so
+    // an expired session used to attach these unauthenticated and get refused
+    // (Sentry, 2026-10-11). A refused listener never refires, so a refusal
+    // clears the marker and the next screen to ask tries again.
+    async attachSocialListeners (context) {
       const me = context.getters.socialUserKey;
       if (!me || context.state.socialAttachedFor === me) return;
       context.commit('setSocialAttachedFor', me);
-      onValue(ref(db, `social/requests/${me}`), (snapshot) => {
-        context.commit('setSocialRequests', snapshot.val());
-      }, (error) => console.error('social requests listener cancelled:', error));
-      onValue(ref(db, 'social/friends'), (snapshot) => {
-        context.commit('setSocialEdges', snapshot.val());
-        // Profiles feed the Film Club badge on Home, so they load wherever
-        // the listeners attach — not just on the Film Club screen.
-        context.dispatch('fetchFriendProfiles');
-      }, (error) => console.error('social friends listener cancelled:', error));
+      await authReady;
+      if (!auth.currentUser || context.getters.socialUserKey !== me) {
+        if (context.state.socialAttachedFor === me) context.commit('setSocialAttachedFor', null);
+        return;
+      }
+      const cancelled = (label) => (error) => {
+        console.error(`social ${label} listener cancelled:`, error);
+        if (context.state.socialAttachedFor === me) context.commit('setSocialAttachedFor', null);
+      };
+      socialListenerStops = [
+        onValue(ref(db, `social/requests/${me}`), (snapshot) => {
+          context.commit('setSocialRequests', snapshot.val());
+        }, cancelled('requests')),
+        onValue(ref(db, 'social/friends'), (snapshot) => {
+          context.commit('setSocialEdges', snapshot.val());
+          // Profiles feed the Film Club badge on Home, so they load wherever
+          // the listeners attach — not just on the Film Club screen.
+          context.dispatch('fetchFriendProfiles');
+        }, cancelled('friends'))
+      ];
+    },
+    detachSocialListeners (context) {
+      socialListenerStops.forEach((stop) => typeof stop === 'function' && stop());
+      socialListenerStops = [];
+      context.commit('setSocialAttachedFor', null);
     },
     // Publish (or refresh) my public profile + directory row. Safe to call
     // liberally — it no-ops unless social is enabled and the library is in.
