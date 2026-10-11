@@ -634,6 +634,11 @@ export default createStore({
     // so every reader is unchanged; this is the authoritative copy.
     personalAwards: null,
     personalAwardsStamp: null,
+    // True until the awards are known (the offline copy, the node, or — before
+    // the migration — the settings node). The settings arrive first, and in
+    // that gap every year looks untouched: Home flashed "a year is ready" and
+    // saved the wrong year as today's pick (report 2026-10-11).
+    personalAwardsPending: true,
     // When syncExternalFriends last ran to completion (ms); restored from the
     // offline snapshot with the profiles, so a cold start can stay quiet.
     externalFriendsSyncedAt: 0,
@@ -952,7 +957,11 @@ export default createStore({
     setPersonalAwards (state, { data, updatedAt }) {
       state.personalAwards = data || {};
       state.personalAwardsStamp = updatedAt ?? null;
+      state.personalAwardsPending = false;
       state.settings = { ...(state.settings || {}), personalAwards: state.personalAwards };
+    },
+    setPersonalAwardsPending (state, value) {
+      state.personalAwardsPending = value;
     },
     setPersonalAwardsStamp (state, updatedAt) {
       state.personalAwardsStamp = updatedAt ?? null;
@@ -3479,7 +3488,12 @@ export default createStore({
     async ensurePersonalAwards (context) {
       // One read at a time: the launch and an early publish ask together.
       if (!personalAwardsInFlight) {
-        personalAwardsInFlight = loadPersonalAwards(context).finally(() => { personalAwardsInFlight = null; });
+        personalAwardsInFlight = loadPersonalAwards(context)
+          .then((ready) => {
+            if (ready) context.commit('setPersonalAwardsPending', false);
+            return ready;
+          })
+          .finally(() => { personalAwardsInFlight = null; });
       }
       return personalAwardsInFlight;
     },

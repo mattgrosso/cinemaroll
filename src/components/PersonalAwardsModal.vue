@@ -841,25 +841,13 @@ export default {
           this.initializeAwardsData();
         }
 
-        // Persist the daily selection so the banner and openModal() agree on the same year.
-        // Skip when an explicit selectedYear prop is in play (Resume/Edit actions own that state).
-        if (this.selectedYear != null) return;
-        if (newYear == null) return;
-
-        const settings = this.$store.state.settings || {};
-        const today = new Date().toDateString();
-        const alreadyPersisted =
-          settings.dailyAwardsYear === newYear && settings.dailyAwardsYearDate === today;
-        if (alreadyPersisted) return;
-
-        try {
-          this.$store.dispatch('writeDurably', { path: 'settings/dailyAwardsYear', value: newYear });
-          this.$store.dispatch('writeDurably', { path: 'settings/dailyAwardsYearDate', value: today });
-        } catch (error) {
-          console.error('Error persisting daily awards selection:', error);
-          ErrorLogService.error('Error persisting daily awards selection:', error);
-        }
+        this.persistDailyAwardsYear(newYear);
       }
+    },
+    // The pick held back while the awards were loading is saved once they
+    // land, even when it turns out to be the same year.
+    '$store.state.personalAwardsPending' (pending) {
+      if (!pending) this.persistDailyAwardsYear(this.firstEligibleYear);
     },
     selectedCategory () {
       // The sentinel lives in the detail pane; (re)bind whenever it
@@ -904,6 +892,29 @@ export default {
     this.teardownStickyObserver();
   },
   methods: {
+    // Persist the daily selection so the banner and openModal() agree on the same year.
+    // Skip when an explicit selectedYear prop is in play (Resume/Edit actions own that state).
+    persistDailyAwardsYear (newYear) {
+      if (this.selectedYear != null) return;
+      if (newYear == null) return;
+      // Picked before the awards loaded, every year looks untouched — that
+      // pick is wrong and must not become today's (report 2026-10-11).
+      if (this.$store.state.personalAwardsPending) return;
+
+      const settings = this.$store.state.settings || {};
+      const today = new Date().toDateString();
+      const alreadyPersisted =
+        settings.dailyAwardsYear === newYear && settings.dailyAwardsYearDate === today;
+      if (alreadyPersisted) return;
+
+      try {
+        this.$store.dispatch('writeDurably', { path: 'settings/dailyAwardsYear', value: newYear });
+        this.$store.dispatch('writeDurably', { path: 'settings/dailyAwardsYearDate', value: today });
+      } catch (error) {
+        console.error('Error persisting daily awards selection:', error);
+        ErrorLogService.error('Error persisting daily awards selection:', error);
+      }
+    },
     setupStickyObserver () {
       this.teardownStickyObserver();
       const sentinel = this.$refs.stickySentinel;

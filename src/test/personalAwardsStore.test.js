@@ -135,3 +135,35 @@ describe('publishing waits for the awards', () => {
     expect(published()).toHaveLength(0);
   });
 });
+
+// Report 2026-10-11: the awards arrive after the settings, and Home's
+// "a year is ready" notice flashed in that gap. It now waits on this flag.
+describe('personalAwardsPending', () => {
+  it('starts true and clears once the awards are read', async () => {
+    expect(store.state.personalAwardsPending).toBe(true);
+    dbValues[`${KEY}/personalAwardsMeta/updatedAt`] = 100;
+    dbValues[`${KEY}/personalAwards`] = awards;
+    await store.dispatch('ensurePersonalAwards');
+    expect(store.state.personalAwardsPending).toBe(false);
+  });
+
+  it('clears when the offline copy is all there is', async () => {
+    snapshots[`${KEY}/personalAwards`] = { data: awards, updatedAt: 100 };
+    const firebase = await import('firebase/database');
+    firebase.get.mockImplementationOnce(() => Promise.reject(new Error('offline')));
+    await store.dispatch('ensurePersonalAwards');
+    expect(store.state.personalAwardsPending).toBe(false);
+  });
+
+  it('clears for an account whose awards still ride in the settings node', async () => {
+    await store.dispatch('ensurePersonalAwards');
+    expect(store.state.personalAwardsPending).toBe(false);
+  });
+
+  it('stays true when the awards cannot be read and nothing is cached', async () => {
+    const firebase = await import('firebase/database');
+    firebase.get.mockImplementationOnce(() => Promise.reject(new Error('offline')));
+    await store.dispatch('ensurePersonalAwards');
+    expect(store.state.personalAwardsPending).toBe(true);
+  });
+});

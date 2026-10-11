@@ -4135,6 +4135,13 @@ export default {
         return false; // Settings not loaded yet
       }
 
+      // The awards load on their own, after the settings. Until they land,
+      // every year looks untouched and the prompt flashed up and vanished
+      // (report 2026-10-11).
+      if (this.$store.state.personalAwardsPending) {
+        return false;
+      }
+
       const today = new Date().toDateString();
       const dailyAwardsYear = settings.dailyAwardsYear;
       const dailyAwardsYearDate = settings.dailyAwardsYearDate;

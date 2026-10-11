@@ -42,6 +42,16 @@ carrying a `movieId`. `PERSONAL_AWARD_CATEGORIES` lives in
   three movies and I haven't gotten a pop-up" (Natalie, 2026-08-22). Never re-derive the
   count; the "which years still need work" predicate is separate and stays per-caller.
 
+- **The prompt waits for the awards (2026-10-11).** Since the move out of the
+  settings node, the awards arrive AFTER the settings; in that gap every year
+  looks untouched. Home flashed "a year is ready" and the modal saved that year
+  as today's pick, then both vanished when the awards landed. `shouldShowAwardsModal`
+  and the modal's `persistDailyAwardsYear` return early while
+  `state.personalAwardsPending` is true (cleared by `setPersonalAwards` or a
+  successful `ensurePersonalAwards`, offline copy included). Anything new that
+  judges years from `settings.personalAwards` at launch must wait the same way.
+  Mocked stores without the field read as loaded. `AwardsPromptWaitsForAwards.test.js`.
+
 ## Prompt quotas
 
 `promptQuota.js` answers "may this prompt appear yet" for all three home-screen chores.
