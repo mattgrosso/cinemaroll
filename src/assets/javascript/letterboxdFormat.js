@@ -224,3 +224,22 @@ export const letterboxdTileState = ({ diaryNode, overridden = false, latestViewi
   const newestDiary = dates.sort().pop();
   return latestViewingDay > newestDiary ? 'log-again' : 'logged';
 };
+
+// The stars on the newest diary entry that has any (the latest watched date,
+// then the latest published), or null when the diary holds no stars.
+export const newestDiaryStars = (diaryNode) => {
+  const rated = Object.values(diaryNode || {})
+    .filter((entry) => entry && typeof entry === 'object' && Number(entry.rating) > 0)
+    .sort((a, b) => String(b.watchedDate || '').localeCompare(String(a.watchedDate || '')) || (b.publishedAt || 0) - (a.publishedAt || 0));
+  return rated.length ? Number(rated[0].rating) : null;
+};
+
+// Report 2026-10-11: logging a rewatch carries the new stars in the link, but
+// Letterboxd's log screen keeps the stars the film already has. When the new
+// stars differ from the diary's, the page says so before opening Letterboxd —
+// { newStars, oldStars } — otherwise null and the log screen opens at once.
+export const relogStarsChange = ({ diaryNode, newStars } = {}) => {
+  const oldStars = newestDiaryStars(diaryNode);
+  if (oldStars === null || newStars === null || newStars === undefined) return null;
+  return Number(newStars) === oldStars ? null : { newStars: Number(newStars), oldStars };
+};

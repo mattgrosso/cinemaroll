@@ -252,6 +252,14 @@ small `.letterboxd-relog` "Log again" link under it for what dates can't see (ma
 overrides, a second viewing the same day). The diary syncs every six hours, so a fresh
 log can still read "Log again" until then.
 
+**Letterboxd keeps a film's existing stars on a re-log (2026-10-11 report).** The log
+link carries the new stars (`rating=`), and a first log takes them, but on a film that
+already has stars Letterboxd's log screen shows the old ones. Both "Log again" paths go
+through `relogOnLetterboxd`: when `relogStarsChange` (`letterboxdFormat.js`) finds the
+new stars differ from the newest rated diary entry, a `.letterboxd-stars-card` under the
+tiles says "New rating ★★★½ — Letterboxd keeps your old ★★★" with Open Letterboxd /
+Cancel; when they match or the diary has no stars, the log screen opens at once.
+
 ## Insights
 
 **One question per tab (2026-09-29 regroup, "what distinguishes between regular stats

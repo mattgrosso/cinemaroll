@@ -11,7 +11,9 @@ import {
   matchTitle,
   reviewsCsvToUpdates,
   relativeTimeFrom,
-  letterboxdTileState
+  letterboxdTileState,
+  newestDiaryStars,
+  relogStarsChange
 } from '@/assets/javascript/letterboxdFormat.js';
 
 describe('starsFor', () => {
@@ -208,5 +210,31 @@ describe('letterboxdTileState', () => {
 
   it('a manual override with no diary reads as logged', () => {
     expect(letterboxdTileState({ diaryNode: null, overridden: true, latestViewingDay: '2026-10-10' })).toBe('logged');
+  });
+});
+
+// Report 2026-10-11: Letterboxd's log screen keeps a film's existing stars,
+// so a rerate that changes them has to be pointed out before opening it.
+describe('relogStarsChange', () => {
+  const diary = {
+    a: { rating: 3, watchedDate: '2021-05-01' },
+    b: { rating: 4.5, watchedDate: '2024-02-10' },
+    c: { watchedDate: '2025-01-01' }
+  };
+
+  it('reads the stars on the newest diary entry that has some', () => {
+    expect(newestDiaryStars(diary)).toBe(4.5);
+    expect(newestDiaryStars({ c: { watchedDate: '2025-01-01' } })).toBeNull();
+    expect(newestDiaryStars(null)).toBeNull();
+  });
+
+  it('flags new stars that differ from the diary', () => {
+    expect(relogStarsChange({ diaryNode: diary, newStars: 3.5 })).toEqual({ newStars: 3.5, oldStars: 4.5 });
+  });
+
+  it('stays quiet when the stars match, the diary has none, or there are no new stars', () => {
+    expect(relogStarsChange({ diaryNode: diary, newStars: 4.5 })).toBeNull();
+    expect(relogStarsChange({ diaryNode: {}, newStars: 3 })).toBeNull();
+    expect(relogStarsChange({ diaryNode: diary, newStars: null })).toBeNull();
   });
 });

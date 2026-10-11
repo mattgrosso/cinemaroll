@@ -916,6 +916,34 @@ describe('MovieDetail — Letterboxd logged state comes from the synced diary', 
     logMovie.mockRestore()
   })
 
+  // Report 2026-10-11: the log link carries the new stars, but Letterboxd
+  // keeps the old ones on a film it already has stars for.
+  it('Log again with stars different from the diary says so before opening Letterboxd', async () => {
+    const LetterboxdUrlService = (await import('@/services/LetterboxdUrlService.js')).default
+    const logMovie = vi.spyOn(LetterboxdUrlService, 'logMovie').mockReturnValue(true)
+    const w = await mountWithDiary({ 42: { r1: { rating: 2.5, watchedDate: '2020-03-15' } } })
+    await w.find('.action-letterboxd').trigger('click')
+    expect(logMovie).not.toHaveBeenCalled()
+    const card = w.find('.letterboxd-stars-card')
+    expect(card.text()).toContain('★★★★')
+    expect(card.text()).toContain('★★½')
+    await card.find('.letterboxd-stars-open').trigger('click')
+    expect(logMovie).toHaveBeenCalledTimes(1)
+    expect(logMovie.mock.calls[0][2].normalizedRating).toBe(8)
+    expect(w.find('.letterboxd-stars-card').exists()).toBe(false)
+    logMovie.mockRestore()
+  })
+
+  it('Log again with the same stars as the diary opens Letterboxd at once', async () => {
+    const LetterboxdUrlService = (await import('@/services/LetterboxdUrlService.js')).default
+    const logMovie = vi.spyOn(LetterboxdUrlService, 'logMovie').mockReturnValue(true)
+    const w = await mountWithDiary({ 42: { r1: { rating: 4, watchedDate: '2020-03-15' } } })
+    await w.find('.action-letterboxd').trigger('click')
+    expect(logMovie).toHaveBeenCalledTimes(1)
+    expect(w.find('.letterboxd-stars-card').exists()).toBe(false)
+    logMovie.mockRestore()
+  })
+
   it('a film missing from the diary, or no diary yet, reads as not logged', async () => {
     expect((await mountWithDiary({})).vm.isMovieLoggedOnLetterboxd()).toBe(false)
     expect((await mountWithDiary(null)).vm.isMovieLoggedOnLetterboxd()).toBe(false)

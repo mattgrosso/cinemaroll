@@ -87,6 +87,18 @@
             Log again
           </button>
         </div>
+        <!-- Report 2026-10-11: the log link carries the new stars, but
+             Letterboxd's log screen keeps the stars a film already has. -->
+        <div v-if="relogStars" class="letterboxd-stars-card" role="status">
+          <p>
+            New rating: <strong>{{ starsFor(relogStars.newStars) }}</strong>.
+            Letterboxd keeps your old {{ starsFor(relogStars.oldStars) }}, so change the stars there.
+          </p>
+          <div class="letterboxd-stars-actions">
+            <button type="button" class="letterboxd-stars-open" @click="openLetterboxdLog">Open Letterboxd</button>
+            <button type="button" class="letterboxd-stars-cancel" @click="relogStars = null">Cancel</button>
+          </div>
+        </div>
 
         <!-- Credits (Matt, 2026-10-06: "what I'm looking for is director,
              I'm looking for cast members, and I have to scroll pretty far
@@ -722,8 +734,9 @@ import { formatMoneyShort } from '../assets/javascript/formatMoney.js';
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import ErrorLogService from "../services/ErrorLogService.js";
 import LetterboxdUrlService from '../services/LetterboxdUrlService.js';
+import { normalizedRatingToStars } from '../assets/javascript/starRating.js';
 import { myLetterboxdReviews, letterboxdFilm } from '../utils/letterboxdData.js';
-import { starsFor, compactCount, watchedDateLabel, letterboxdTileState } from '../assets/javascript/letterboxdFormat.js';
+import { starsFor, compactCount, watchedDateLabel, letterboxdTileState, relogStarsChange } from '../assets/javascript/letterboxdFormat.js';
 import { computeFlatKeywords } from '../utils/keywords.js';
 import { buildTagSuggestions, canCreateNewTag } from '../utils/tags.js';
 import { awardCategoryNameMap } from '../assets/javascript/personalAwardsCategories.js';
@@ -775,6 +788,7 @@ export default {
       cinemaScoreSite: CINEMASCORE_SITE,
       // The cast line: one line of whole names until "+N more" is tapped.
       castExpanded: false,
+      relogStars: null,
       // Per crew row, how many names its NameRow clips; 0 means the row has
       // nothing more to open and loses its chevron.
       crewOverflow: {}
@@ -1309,6 +1323,7 @@ export default {
     },
     async loadMovieData (tmdbId) {
       this.castExpanded = false;
+      this.relogStars = null;
       this.crewOverflow = {};
       try {
         // Wait for database to be loaded if it isn't already
@@ -1693,6 +1708,16 @@ export default {
     },
 
     relogOnLetterboxd () {
+      const movie = this.topStructure(this.result);
+      this.relogStars = relogStarsChange({
+        diaryNode: this.$store.state.letterboxdReviews?.[movie?.id],
+        newStars: normalizedRatingToStars(this.normalizedRatingForMedia(this.result))
+      });
+      if (!this.relogStars) this.openLetterboxdLog();
+    },
+
+    openLetterboxdLog () {
+      this.relogStars = null;
       const movie = this.topStructure(this.result);
       // Pre-fill the star rating from Cinema Roll's normalized score.
       const success = LetterboxdUrlService.logMovie(movie.title, this.getYear(this.result), {
@@ -2586,6 +2611,45 @@ export default {
     }
 
     &.two-up { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .letterboxd-stars-card {
+    background: #2e2e2e;
+    border-radius: 6px;
+    color: #fff;
+    font-size: ds(0.85rem);
+    margin: -8px 0 18px;
+    padding: 10px 12px;
+
+    p { margin: 0 0 8px; }
+    strong { color: #ff8000; }
+
+    .letterboxd-stars-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 6px;
+      flex: 1;
+      font-size: ds(0.75rem);
+      letter-spacing: 0.04em;
+      min-height: 40px;
+      text-transform: uppercase;
+    }
+
+    .letterboxd-stars-open {
+      background: #ff8000;
+      color: #000;
+      &:active { background: #cc6600; }
+    }
+
+    .letterboxd-stars-cancel {
+      background: rgba(255, 255, 255, 0.08);
+      color: #ccc;
+      &:active { background: rgba(255, 255, 255, 0.16); }
+    }
   }
 
   .awards {
