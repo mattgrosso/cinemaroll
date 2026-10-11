@@ -20,6 +20,20 @@ describe('Login', () => {
     delete process.env.VUE_APP_ENABLE_APPLE_SIGNIN
   })
 
+  describe('signed out because the session ended', () => {
+    afterEach(() => window.sessionStorage.clear())
+
+    it('says so, once, instead of looking like a crash', () => {
+      window.sessionStorage.setItem('cinemaRoll.sessionExpired', '1')
+      expect(mountLogin().wrapper.find('.login-session-expired').text()).toContain('You were signed out')
+      expect(mountLogin().wrapper.find('.login-session-expired').exists()).toBe(false)
+    })
+
+    it('stays quiet on an ordinary visit', () => {
+      expect(mountLogin().wrapper.find('.login-session-expired').exists()).toBe(false)
+    })
+  })
+
   describe('Google', () => {
     it('renders a Google button and dispatches loginWithGoogle', async () => {
       const { wrapper, dispatch } = mountLogin()

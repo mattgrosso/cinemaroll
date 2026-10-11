@@ -936,3 +936,12 @@ did not glued `VUE_APP_NEWSLETTER_API_URL` onto the end of
 then silently kept the corrupted key and dropped the new one. It shipped in
 v1.116.3 before anyone noticed. Check `tail -c 1 .env` before appending, and
 prefer rewriting the file over appending to it.
+
+## A lapsed session signs out quietly (2026-10-11)
+
+`verifyRestoredSession` signing out a stored login with no Firebase session is
+routine (password changed, signed out elsewhere, long time away): it warns, never
+errors (captureConsole makes every error a Sentry event), and logs no context —
+the stored key is the person's email. It sets a one-shot sessionStorage flag
+(`utils/sessionExpiredNotice.js`) so the login screen says "You were signed out.
+Please sign in again." instead of looking like a crash.

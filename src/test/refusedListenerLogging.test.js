@@ -97,6 +97,17 @@ describe('a refused library listener and the sign-in', () => {
     expect(errorSpy.mock.calls.filter(([msg]) => String(msg).includes('no Firebase session'))).toHaveLength(0)
     expect(store.state.databaseTopKey).toBeFalsy()
   })
+
+  it('warns without the stored key (an email) and tells the login screen why', async () => {
+    window.sessionStorage.clear()
+    window.localStorage.setItem('databaseTopKey', ME)
+    store.commit('setDatabaseTopKey', ME)
+    await store.dispatch('verifyRestoredSession')
+    const warnings = console.warn.mock.calls.filter(([msg]) => String(msg).includes('no Firebase session'))
+    expect(warnings).toHaveLength(1)
+    expect(JSON.stringify(warnings[0])).not.toContain(ME)
+    expect(window.sessionStorage.getItem('cinemaRoll.sessionExpired')).toBe('1')
+  })
 })
 
 // The Sentry issue itself was the newsletter's read ("Error: Permission

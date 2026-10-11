@@ -18,6 +18,7 @@ import {
 import * as Sentry from "@sentry/vue";
 import { getRating, rawScore } from "../assets/javascript/GetRating";
 import { pushRoute } from '@/router/appRouter.js';
+import { markSessionExpired } from '@/utils/sessionExpiredNotice.js';
 import ErrorLogService from "../services/ErrorLogService.js";
 import { markStalled, fetchWithTimeout } from '../utils/networkHealth.js';
 import { placeholdersReadyToFinish, finalizePlaceholder } from '../assets/javascript/reconcilePlaceholder.js';
@@ -1505,7 +1506,9 @@ export default createStore({
       }
 
       // A warning: this is the routine, handled case (Sentry, 2026-10-11).
-      ErrorLogService.warn('Stored login found but no Firebase session — signing out', { storedKey });
+      // No context — the stored key is the person's email address.
+      ErrorLogService.warn('Stored login found but no Firebase session — signing out');
+      markSessionExpired();
       await context.dispatch('logout');
     },
     async resetLocalDB (context) {

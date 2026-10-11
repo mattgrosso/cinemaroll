@@ -2,6 +2,9 @@
   <div class="login">
     <h1 class="login-title">Welcome to Cinema Roll</h1>
     <p class="login-subtitle">Sign in to get to your library.</p>
+    <p v-if="sessionExpired" class="login-session-expired" role="status">
+      You were signed out. Please sign in again.
+    </p>
 
     <div class="login-panel">
       <button
@@ -91,6 +94,7 @@
 
 <script>
 import { friendlyAuthError, CANCELLED_CODES } from '../assets/javascript/authErrors.js';
+import { takeSessionExpired } from '../utils/sessionExpiredNotice.js';
 
 export default {
   data () {
@@ -101,7 +105,10 @@ export default {
       confirmPassword: '',
       busy: false,
       errorMessage: '',
-      noticeMessage: ''
+      noticeMessage: '',
+      // Set when the app signed you out because Firebase no longer had your
+      // session (password changed, signed out elsewhere, long time away).
+      sessionExpired: takeSessionExpired()
     };
   },
   computed: {
@@ -213,6 +220,14 @@ export default {
     color: #adb5bd;
     font-size: 0.9rem;
     margin-bottom: 1.75rem;
+    text-align: center;
+  }
+
+  // Sits between the subtitle and the panel, so pull the subtitle's gap up.
+  .login-session-expired {
+    color: #ffd27f;
+    font-size: 0.9rem;
+    margin: -1rem 0 1.75rem;
     text-align: center;
   }
 
