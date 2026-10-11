@@ -386,6 +386,8 @@ async function personalAwardsReadyToPublish (context) {
 let mirrorPublishTimer = null;
 // The one ensureMovieHatContents read in progress, shared by every caller.
 let movieHatContentsInFlight = null;
+// How long a complete read of the hats' contents stands (see ensureMovieHatContents).
+export const MOVIE_HAT_CONTENTS_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 // Records that the profile was just published, so Home's every-six-hours
 // backstop doesn't immediately repeat a ~100KB write. Every path that publishes
@@ -2999,8 +3001,15 @@ export default createStore({
      * Now it's only held for `retryAfterMs`, and it's flagged so the
      * watchlist can say it couldn't check everything. Sending still reports
      * "already in there" either way — that check stays the authority.
+     *
+     * A complete read is good for six hours (Sentry N+1, reopened
+     * 2026-10-11). It is one index read plus one per hat, all at once, and
+     * at ten minutes nearly every Film Club or Watchlist open after a break
+     * fired the whole burst again. The answer is kept across launches, a
+     * draw forces a fresh one, and the send-time check still catches a film
+     * someone else added in Movie Hat since.
      */
-    ensureMovieHatContents (context, { maxAgeMs = 10 * 60 * 1000, retryAfterMs = 60 * 1000, force = false } = {}) {
+    ensureMovieHatContents (context, { maxAgeMs = MOVIE_HAT_CONTENTS_MAX_AGE_MS, retryAfterMs = 60 * 1000, force = false } = {}) {
       const hats = context.getters.linkedMovieHats;
 
       if (!hats.length) {

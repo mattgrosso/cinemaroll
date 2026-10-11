@@ -204,3 +204,16 @@ and skips the publish if the awards can't be read and nothing is cached. Before 
 a launch publish could beat the awards and wipe them from every friend's view
 ("I can't see Seth's or Natalie's" awards). Anything else published from
 `settings.personalAwards` must do the same.
+
+## Movie Hat reads are the Film Club / Watchlist "N+1" (2026-10-11)
+
+Sentry's "N+1 API Call" on FilmClubScreen (and earlier WatchlistScreen) was
+first seen 2026-10-06 as nine Movie Hat reads: `ensureMovieHatContents` reads
+the hat index and then every hat at once, triggered by the first `SendToHat`
+button on a screen. The 2026-10-08 fixes (`personIdCache.js`, `deviceCache.js`)
+cached the Watchlist's TMDB lookups and never touched it, so the issue came
+back. A complete answer now stands for six hours
+(`MOVIE_HAT_CONTENTS_MAX_AGE_MS`, kept across launches); a draw forces a read,
+an incomplete read retries after a minute, and the send-time check stays the
+authority. If it returns, the next step is one combined read instead of one
+per hat, which needs Movie Hat's side.
