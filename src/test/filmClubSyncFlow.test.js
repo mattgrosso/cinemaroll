@@ -43,6 +43,8 @@ class FakeDb {
       const path = u.pathname.replace(/\.json$/, '');
       if (self.drop && path.startsWith(self.drop)) throw new TypeError('Load failed');
       if (self.deny && path.startsWith(self.deny.path)) return { ok: false, status: self.deny.status, json: async () => null };
+      // The live database refuses an empty key bound (Sentry, 2026-10-11).
+      if (['startAt', 'endAt'].some((p) => u.searchParams.get(p) === '""')) return { ok: false, status: 400, json: async () => null };
       let value = self.get(path);
       if (u.searchParams.get('orderBy') === '"$key"' && value && typeof value === 'object') {
         let keys = Object.keys(value).sort(firebaseKeyCompare);
@@ -162,6 +164,19 @@ describe('Film Club v2 end to end', () => {
     const behind = await refresh({ ...cache, meta: { ...cache.meta, cursor: '', sequence: 0 } });
     expect(behind.status).toBe('updated');
     expect(db.reads('movies')).toBeGreaterThan(0);
+  });
+
+  it('3b. the first change after a fresh feed arrives by delta: a blank cursor is never sent as an empty key (Sentry: read-failed:400)', async () => {
+    const first = await publish(many(3));
+    const cache = (await refresh(null)).cache;
+    expect(cache.meta.cursor).toBe('');
+    await publish([movie(1, 9), movie(2), movie(3)], { lastPublished: first });
+    db.resetLog();
+    const r = await refresh(cache);
+    expect(r.status).toBe('updated');
+    expect(r.cache.movies['1'].rating).toBe(9);
+    expect(db.reads('changes')).toBe(1);
+    expect(db.reads('movies')).toBe(0);
   });
 
   it('6. a publication mid-bootstrap never certifies a mixed snapshot', async () => {

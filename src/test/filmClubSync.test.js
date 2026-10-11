@@ -38,6 +38,7 @@ describe('filmClubSync — keys and URLs', () => {
       .toBe(`${DB}/clubFeedSync/matt/abc/movies.json?ns=x&orderBy=%22%24key%22&limitToFirst=250`);
     expect(moviesPageParams('250')).toBe('orderBy=%22%24key%22&startAt=%22250%22&limitToFirst=250');
     expect(changesPageParams('k1', 'k9')).toBe('orderBy=%22%24key%22&startAt=%22k1%22&endAt=%22k9%22&limitToFirst=100');
+    expect(changesPageParams('', 'k9')).toBe('orderBy=%22%24key%22&endAt=%22k9%22&limitToFirst=100');
   });
 });
 

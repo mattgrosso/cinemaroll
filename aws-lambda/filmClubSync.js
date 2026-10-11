@@ -99,7 +99,10 @@ function childUrl (rootUrl, child, params = '') {
 
 const q = (v) => encodeURIComponent(`"${v}"`);
 const moviesPageParams = (afterKey) => `orderBy=${q('$key')}${afterKey ? `&startAt=${q(afterKey)}` : ''}&limitToFirst=${MOVIES_PAGE}`;
-const changesPageParams = (fromKey, toKey) => `orderBy=${q('$key')}&startAt=${q(fromKey)}&endAt=${q(toKey)}&limitToFirst=${CHANGES_PAGE}`;
+// A fresh epoch's cursor is '' — and the live database answers an empty
+// startAt/endAt key with a 400 (Sentry, 2026-10-11: Knox's first journal
+// read after a rebuild fell back to v1). Blank means "from the start".
+const changesPageParams = (fromKey, toKey) => `orderBy=${q('$key')}${fromKey ? `&startAt=${q(fromKey)}` : ''}${toKey ? `&endAt=${q(toKey)}` : ''}&limitToFirst=${CHANGES_PAGE}`;
 
 // ---------------------------------------------------------------------------
 // Shapes
