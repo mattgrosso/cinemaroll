@@ -89,8 +89,13 @@ describe('Film Club listeners and the sign-in', () => {
     signIn()
     await store.dispatch('attachSocialListeners')
     const [, , onCancel] = requestListens()[0]
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     onCancel(new Error('permission_denied'))
+    // captureConsole makes every console.error a Sentry event; an expired
+    // session is routine, so the refusal is only a warning.
+    expect(error).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith('social requests listener cancelled:', expect.any(Error))
 
     await store.dispatch('attachSocialListeners')
     expect(requestListens()).toHaveLength(2)

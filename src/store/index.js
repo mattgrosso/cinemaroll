@@ -2826,8 +2826,11 @@ export default createStore({
         if (context.state.socialAttachedFor === me) context.commit('setSocialAttachedFor', null);
         return;
       }
+      // A warning, not an error: captureConsole files every console.error in
+      // Sentry, and a session that expires mid-visit is routine — the router
+      // and verifyRestoredSession own the sign-out.
       const cancelled = (label) => (error) => {
-        console.error(`social ${label} listener cancelled:`, error);
+        console.warn(`social ${label} listener cancelled:`, error);
         if (context.state.socialAttachedFor === me) context.commit('setSocialAttachedFor', null);
       };
       socialListenerStops = [
