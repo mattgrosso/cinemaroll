@@ -98,3 +98,37 @@ describe('a refused library listener and the sign-in', () => {
     expect(store.state.databaseTopKey).toBeFalsy()
   })
 })
+
+// The Sentry issue itself was the newsletter's read ("Error: Permission
+// denied"), which fails alongside the listeners when the session lapses.
+describe('a refused newsletter read and the sign-in', () => {
+  let errorSpy
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    fakeAuth.currentUser = null
+    store.commit('setDatabaseTopKey', ME)
+    const { get } = await import('firebase/database')
+    get.mockImplementation(() => Promise.reject(new Error('Permission denied')))
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+  afterEach(async () => {
+    const { get } = await import('firebase/database')
+    get.mockImplementation(() => Promise.resolve({ val: () => null }))
+    vi.restoreAllMocks()
+  })
+
+  const newsletterErrors = () => errorSpy.mock.calls.filter(([msg]) => String(msg).includes('newsletter'))
+
+  it('is a warning, not a Sentry error, when nobody is signed in', async () => {
+    await store.dispatch('loadNewsletter')
+    expect(newsletterErrors()).toHaveLength(0)
+    expect(store.state.newsletterLoaded).toBe(true)
+  })
+
+  it('stays an error while someone is signed in', async () => {
+    fakeAuth.currentUser = { email: 'matt@example.com' }
+    await store.dispatch('loadNewsletter')
+    expect(newsletterErrors()).toHaveLength(1)
+  })
+})

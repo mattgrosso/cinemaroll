@@ -32,6 +32,7 @@ listeners refused and is signed out by `verifyRestoredSession` — routine, not 
 `reportRefusedListener` (store) logs that case as a warning so captureConsole doesn't
 file it; refused while `auth.currentUser` is set stays an error (a real rules problem).
 New listeners on the account root should report through it; Film Club's warn always.
+The newsletter read (`loadNewsletter`) follows the same split — it was the Sentry issue itself.
 
 **The global `firebase-tools` install is broken** (upstream ESM-only `uuid` under
 `universal-analytics`). Deploy with a fresh `firebase-tools@13` install carrying an npm

@@ -3374,7 +3374,11 @@ export default createStore({
           context.commit('setNewsletterIssue', null);
         }
       } catch (error) {
-        console.error('Failed to load the newsletter:', error);
+        // Refused with nobody signed in is the same lapsed session the
+        // library listeners report (reportRefusedListener): a warning, or one
+        // expired login files a second Sentry issue (2026-10-11).
+        if (auth.currentUser) console.error('Failed to load the newsletter:', error);
+        else console.warn('Failed to load the newsletter with no sign-in:', error);
       } finally {
         // Always, or a failed read leaves the screen spinning forever.
         context.commit('setNewsletterLoaded', true);
