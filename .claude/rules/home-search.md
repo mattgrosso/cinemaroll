@@ -238,3 +238,20 @@ Count directors with `.filter()`, not `.find()` — `.find` credits only the fir
 of a co-directed film. Count crew by **job**, not array position: TMDB orders crew by
 department, so a composer routinely sits past index 10. All counts respect
 `settings.includeShorts` through `isShort` in `shorts.js` — never an inline `runtime <= 40`.
+
+## Watch numbers: "#812", "812th", "watch 812" (2026-10-11)
+
+`watchNumbers.js` numbers every DATED viewing in the library, rewatches included,
+oldest first (stable sort, so same-instant ties keep logged order); undated viewings
+get no number. **Shorts count regardless of the setting**, like the Insights calendar,
+so a viewing's number never changes when a toggle flips. Built once per library change
+(`watchNumbersFor`, memoized on `allMediaAsArray`) and shared with the result card's
+and MovieDetail's ratings lists, which label each row "812th watch" (row index =
+`ratings` index, since `getAllRatings` keeps stored order).
+
+`detectFilterType` checks it BEFORE years, so "#1999" is a watch and a bare "1999"
+stays a year; a bare number is never a watch. The `watchNumber` chip is resolved to its
+film's `dbKey` in `allActiveFilters` — the kind's matcher can't see the library — and a
+film found by number is exempt from the shorts filter, the way a title-named short is.
+Grouped sections and "Did you mean?" stand aside for it. Guarded in
+`watchNumbers.test.js` and the roster (`UnfindableMovieReports.test.js`).

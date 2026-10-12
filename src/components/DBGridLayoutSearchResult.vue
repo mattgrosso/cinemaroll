@@ -122,6 +122,7 @@
                     <span v-if="rating.medium && rating.date">&nbsp;on&nbsp;</span>
                     <span v-else-if="rating.date">On&nbsp;</span>
                     <span>{{formattedDate(rating.date)}}</span>
+                    <span v-if="watchNumberLabel(index)" class="watch-number">{{ watchNumberLabel(index) }}</span>
                   </span>
                   <p class="col-3 m-0 text-center border-start">{{formatScore(rating.calculatedTotal)}}</p>
                 </button>
@@ -316,6 +317,7 @@ import Modal from './Modal.vue';
 import InsetBrowserModal from './InsetBrowserModal.vue';
 import ToggleableRating from './ToggleableRating.vue';
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
+import { watchNumbersFor, watchNumberOf, ordinalSuffix } from "../assets/javascript/watchNumbers.js";
 import placeholderImage from '../assets/images/sheen-placeholder.jpg';
 import notFoundImage from '../assets/images/Image_not_available.png';
 import LetterboxdUrlService from '../services/LetterboxdUrlService.js';
@@ -500,6 +502,15 @@ export default {
     }
   },
   methods: {
+    // "812th watch" — this viewing's place among every dated viewing you've
+    // logged (watchNumbers.js). getAllRatings keeps the stored order, so the
+    // row index is the rating's index.
+    watchNumberLabel (index) {
+      const dbKey = this.previousEntry?.dbKey;
+      if (!dbKey) return null;
+      const number = watchNumberOf(watchNumbersFor(this.$store.getters.allMediaAsArray), dbKey, index);
+      return number ? `${ordinalSuffix(number)} watch` : null;
+    },
     formatScore,
     parseNamesToList (names) {
       try {
@@ -1030,6 +1041,13 @@ export default {
             background-color: white;
             color: black;
             padding: 8px 12px;
+
+            .watch-number {
+              color: #555;
+              font-size: 0.8em;
+              margin-left: 0.5rem;
+              white-space: nowrap;
+            }
 
             &:focus {
               box-shadow: none;

@@ -176,6 +176,18 @@ export const FILTER_KINDS = {
     }
   },
 
+  // "#812" / "812th watch" — your Nth viewing (watchNumbers.js). The number
+  // only means something against the whole library, so Home resolves it to
+  // the film's dbKey before filtering (`filter.dbKey`); unresolved — a
+  // number past your last watch — it matches nothing. Local: TMDB has no
+  // idea what order you watched things in.
+  watchNumber: {
+    discoverGroup: 'local',
+    matchLocal (result, filter) {
+      return Boolean(filter.dbKey) && result.dbKey === filter.dbKey;
+    }
+  },
+
   // A curated view — Best Picture, Annual Best, This Month… (Phase 4: quick
   // links are chips now, not a parallel mode). A list is not a per-movie
   // predicate: it selects the BASE result set (it can aggregate, like the

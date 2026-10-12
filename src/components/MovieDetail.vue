@@ -145,6 +145,7 @@
                     <span class="medium-and-date">
                       <span class="viewing-date">{{ viewingDateLabel(rating.date) }}</span>
                       <span v-if="rating.medium" class="viewing-medium">{{ rating.medium }}</span>
+                      <span v-if="watchNumberLabel(index)" class="viewing-watch-number">{{ watchNumberLabel(index) }}</span>
                     </span>
                     <span class="viewing-score">{{formatScore(rating.calculatedTotal)}}</span>
                     <i class="bi bi-chevron-down viewing-chevron"></i>
@@ -732,6 +733,7 @@ import { fetchCinemaScore } from '../utils/cinemaScoreRequest.js';
 import NameRow from './NameRow.vue';
 import { formatMoneyShort } from '../assets/javascript/formatMoney.js';
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
+import { watchNumbersFor, watchNumberOf, ordinalSuffix } from "../assets/javascript/watchNumbers.js";
 import ErrorLogService from "../services/ErrorLogService.js";
 import LetterboxdUrlService from '../services/LetterboxdUrlService.js';
 import { normalizedRatingToStars } from '../assets/javascript/starRating.js';
@@ -1279,6 +1281,15 @@ export default {
     },
   },
   methods: {
+    // "812th watch" — this viewing's place among every dated viewing you've
+    // logged (watchNumbers.js). getAllRatings keeps the stored order, so the
+    // row index is the rating's index.
+    watchNumberLabel (index) {
+      const dbKey = this.previousEntry?.dbKey;
+      if (!dbKey) return null;
+      const number = watchNumberOf(watchNumbersFor(this.$store.getters.allMediaAsArray), dbKey, index);
+      return number ? `${ordinalSuffix(number)} watch` : null;
+    },
     formatScore,
     criticRoleLabel,
     criticByline,
@@ -3393,6 +3404,12 @@ export default {
     }
 
     .viewing-date { white-space: nowrap; }
+
+    .viewing-watch-number {
+      color: #bbb;
+      font-size: ds(0.72rem);
+      white-space: nowrap;
+    }
 
     .viewing-medium {
       background: rgba(255, 255, 255, 0.1);

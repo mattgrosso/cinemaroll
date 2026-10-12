@@ -396,3 +396,35 @@ describe('report -P1_JRO10YcGNAXX0zzk: numbers spelled either way', () => {
     expect(renderedTitles(wrapper)).toContain('Moonstruck')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Report 2026-10-11: "I should be able to look up what my Xth watch was."
+// The roster's viewings, oldest first: Moonstruck, Ocean's Eleven, Vengeance
+// Most Fowl, 1917, A Grand Day Out (a short), A Trip to the Moon, ...
+describe('report 2026-10-11: look up my Nth watch', () => {
+  it('"#5" finds the fifth watch — a short, even with shorts hidden', async () => {
+    const wrapper = mountHome({ includeShorts: false })
+    await wrapper.vm.$nextTick()
+    await typeSearch(wrapper, '#5')
+
+    expect(renderedTitles(wrapper)).toEqual(['A Grand Day Out'])
+    expect(wrapper.find('.watch-lookup-line').text()).toMatch(/^Your 5th watch, on /)
+  })
+
+  it('"3rd watch" finds the third', async () => {
+    const wrapper = mountHome({ includeShorts: false })
+    await wrapper.vm.$nextTick()
+    await typeSearch(wrapper, '3rd watch')
+
+    expect(renderedTitles(wrapper)).toEqual(['Wallace & Gromit: Vengeance Most Fowl'])
+  })
+
+  it('a number past the last watch says how many there are', async () => {
+    const wrapper = mountHome({ includeShorts: false })
+    await wrapper.vm.$nextTick()
+    await typeSearch(wrapper, '#99')
+
+    expect(renderedTitles(wrapper)).toEqual([])
+    expect(wrapper.find('.watch-lookup-line').text()).toBe("You've logged 8 dated watches so far.")
+  })
+})

@@ -82,6 +82,7 @@
            guarantee against overflow; the fit-count just decides how many
            terms to attempt. -->
       <p v-if="!typeaheadOpen && didYouMeanLineSuggestions.length" class="did-you-mean-inline mb-1">Did you mean?: <template v-for="(suggestion, index) in didYouMeanLineSuggestions" :key="`${suggestion.typeLabel}-${suggestion.value}`"><a href="#" class="did-you-mean-link" @click.prevent="applyDidYouMeanSuggestion(suggestion)">{{ suggestion.value }}</a><span v-if="index < didYouMeanLineSuggestions.length - 1">, </span></template></p>
+      <p v-if="watchLookupLine" class="watch-lookup-line mb-1">{{ watchLookupLine }}</p>
     </div>
 
     <!-- Quick-links panel: expands here, between the search input and
@@ -316,7 +317,7 @@
         </transition-group>
 
         <!-- Wikipedia Button - only show when there's exactly one chip -->
-        <button v-if="activeFiltersMinusTemps.length === 1" class="btn btn-link text-light p-0 my-1 d-inline-flex align-items-center" style="font-size: 0.9rem; text-decoration: none; opacity: 0.7;" @click="goToWikipediaForChip" title="Wikipedia Info">
+        <button v-if="activeFiltersMinusTemps.length === 1 && activeFiltersMinusTemps[0].type !== 'watchNumber'" class="btn btn-link text-light p-0 my-1 d-inline-flex align-items-center" style="font-size: 0.9rem; text-decoration: none; opacity: 0.7;" @click="goToWikipediaForChip" title="Wikipedia Info">
           <i class="bi bi-wikipedia" style="font-size: 1rem;"></i>
         </button>
 
@@ -1816,6 +1817,7 @@ import { backfillMovieLocations, collectMoviesNeedingLocations } from '../assets
 import { trimStoredEntries, collectEntriesNeedingTrim, entryForStorage } from '../assets/javascript/storedEntry.js';
 import { collectEntriesNeedingStamp, stampBackfillUpdates } from '../assets/javascript/syncStamp.js';
 import { makePlaceholderId } from '../utils/placeholderId.js';
+import { watchNumbersFor, parseWatchNumberQuery, viewingNumbered, ordinalSuffix } from '../assets/javascript/watchNumbers.js';
 import { isSignInDismissal, movieHatSignInMessage } from '../assets/javascript/movieHatSignIn.js';
 import {
   countDirectors as countDirectorsUtil,
@@ -2887,10 +2889,11 @@ export default {
       // Add input text as a general search filter if it exists AND no chips are active at all
       // (avoid double filtering when any chips exist, temp or permanent)
       if (this.searchValue && this.searchValue.trim() && this.activeFilters.length === 0) {
+        const watchNumber = parseWatchNumberQuery(this.searchValue);
         filters.push({
           id: '__input__',
-          type: 'general',
-          value: this.searchValue.trim(),
+          type: watchNumber ? 'watchNumber' : 'general',
+          value: watchNumber || this.searchValue.trim(),
           display: this.searchValue.trim(),
           source: 'input'
         });
@@ -2904,7 +2907,31 @@ export default {
         });
       });
 
-      return filters;
+      // A watch number only means something against the whole library, so
+      // it's resolved to its film here (see filterKinds.js's watchNumber).
+      return filters.map((filter) => {
+        if (filter.type !== 'watchNumber') return filter;
+        const viewing = viewingNumbered(this.watchNumberIndex, Number(filter.value));
+        return { ...filter, dbKey: viewing?.dbKey ?? null };
+      });
+    },
+    watchNumberIndex () {
+      // Shared, built once per library change (watchNumbers.js).
+      return watchNumbersFor(this.$store.getters.allMediaAsArray);
+    },
+    // "Your 812th watch, on Mar 4, 2024" under the search bar while a watch
+    // number is being looked up.
+    watchLookupLine () {
+      const filter = this.allActiveFilters.find((f) => f.type === 'watchNumber');
+      if (!filter) return null;
+      const number = Number(filter.value);
+      const viewing = viewingNumbered(this.watchNumberIndex, number);
+      if (!viewing) {
+        const total = this.watchNumberIndex.ordered.length;
+        return `You've logged ${total.toLocaleString()} dated ${total === 1 ? 'watch' : 'watches'} so far.`;
+      }
+      const date = new Date(viewing.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      return `Your ${ordinalSuffix(number)} watch, on ${date}`;
     },
     allCastCrew () {
       return Object.keys(this.countCastCrew).map((keyword) => {
@@ -3282,7 +3309,7 @@ export default {
       // suggestions in place of the normal zero-results UI.
       const term = (this.searchValue || '').trim();
 
-      if (term.length < 3) {
+      if (term.length < 3 || parseWatchNumberQuery(term)) {
         return [];
       }
       // Only suggest when there are no local results to show. (showResultsList
@@ -3477,7 +3504,7 @@ export default {
       // so the guard was never carrying its weight in speed either.
 
       // Check if this is a year search - if so, bypass grouping and use normal results
-      if (this.detectYearTypes(searchTerm)) {
+      if (this.detectYearTypes(searchTerm) || parseWatchNumberQuery(searchTerm)) {
         return null; // Let normal filtering handle years
       }
 
@@ -4358,10 +4385,12 @@ export default {
       // (typing "A Trip to the Moon" — rated, in the library — found nothing;
       // report -P0Jz3pTqFQuw). A genre/person/decade chip is still browsing,
       // so those don't resurface hidden shorts — only naming one does.
+      // Asking for a watch by number names its film just as surely.
       if (!this.showShorts) {
         results = results.filter(result => {
           return !isShort(result.movie) ||
-            titleNamedByFilters(result, this.allActiveFilters);
+            titleNamedByFilters(result, this.allActiveFilters) ||
+            this.allActiveFilters.some(filter => filter.type === 'watchNumber' && filter.dbKey === result.dbKey);
         });
       }
 
@@ -6262,6 +6291,13 @@ export default {
     detectFilterType (value) {
       const trimmed = value.trim();
 
+      // "#812", "812th", "watch 812" — your Nth watch. Checked before years
+      // so "#1999" is a watch, while a bare "1999" still falls to the year.
+      const watchNumber = parseWatchNumberQuery(trimmed);
+      if (watchNumber) {
+        return { type: 'watchNumber', value: watchNumber, display: `${ordinalSuffix(watchNumber)} watch` };
+      }
+
       const asYear = this.detectYearTypes(trimmed);
       if (asYear) return asYear;
 
@@ -7514,6 +7550,11 @@ export default {
   margin: 0.5rem auto 0;
   max-width: 26rem;
   padding: 0 1rem;
+}
+.watch-lookup-line {
+  color: #ddd;
+  font-size: 0.8rem;
+  margin-top: 0.35rem;
 }
 .did-you-mean-inline {
   font-size: 0.75rem;
