@@ -111,7 +111,7 @@ describe('ReconcilePlaceholder', () => {
       // Bulletproofing (Jul 2026): durably queued BEFORE the write attempt,
       // not only as a fallback after failure - survives being killed
       // mid-write, not just mid-idle.
-      expect(enqueueWriteMock).toHaveBeenCalledWith({ type: 'write', dbEntry: finalizedDbEntry })
+      expect(enqueueWriteMock).toHaveBeenCalledWith({ type: 'write', dbEntry: finalizedDbEntry }, { online: true })
       const enqueueOrder = enqueueWriteMock.mock.invocationCallOrder[0]
       const writeOrder = dispatch.mock.calls.findIndex((call) => call[0] === 'writeDatabaseEntryNow')
       expect(enqueueOrder).toBeLessThan(dispatch.mock.invocationCallOrder[writeOrder])
@@ -160,7 +160,7 @@ describe('ReconcilePlaceholder', () => {
       // The finalized write WAS durably queued (that's the whole point -
       // it's not lost even though the direct attempt failed) but neither
       // queue entry is removed, so a retry has everything it needs.
-      expect(enqueueWriteMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'write' }))
+      expect(enqueueWriteMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'write' }), { online: true })
       expect(removePendingWriteMock).not.toHaveBeenCalled()
     })
   })

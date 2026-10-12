@@ -606,7 +606,7 @@ describe('TMDb Data Processing & Movie Rating Addition', () => {
       })
       // Enqueued BEFORE the write attempt - this is the actual durability
       // guarantee, not an afterthought.
-      expect(enqueueWriteMock).toHaveBeenCalledWith({ type: 'write', dbEntry: result })
+      expect(enqueueWriteMock).toHaveBeenCalledWith({ type: 'write', dbEntry: result }, expect.anything())
       const enqueueOrder = enqueueWriteMock.mock.invocationCallOrder[0]
       const dispatchOrder = store.dispatch.mock.invocationCallOrder[0]
       expect(enqueueOrder).toBeLessThan(dispatchOrder)
@@ -622,7 +622,7 @@ describe('TMDb Data Processing & Movie Rating Addition', () => {
       })
 
       await expect(addRating(mockRatings)).rejects.toThrow('write failed')
-      expect(enqueueWriteMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'write' }))
+      expect(enqueueWriteMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'write' }), expect.anything())
       expect(removePendingWriteMock).not.toHaveBeenCalled()
     })
 
@@ -632,7 +632,7 @@ describe('TMDb Data Processing & Movie Rating Addition', () => {
       const result = await addRating(mockRatings)
 
       expect(store.dispatch).not.toHaveBeenCalledWith('writeDatabaseEntryNow', expect.anything())
-      expect(enqueueWriteMock).toHaveBeenCalledWith({ type: 'write', dbEntry: result })
+      expect(enqueueWriteMock).toHaveBeenCalledWith({ type: 'write', dbEntry: result }, expect.anything())
       expect(removePendingWriteMock).not.toHaveBeenCalled()
     })
 
@@ -645,7 +645,7 @@ describe('TMDb Data Processing & Movie Rating Addition', () => {
       const result = await addRating([{ id: 'offline-swallow-test', title: 'Some Movie', love: 5 }])
 
       expect(result).toBeDefined()
-      expect(enqueueWriteMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'placeholder' }))
+      expect(enqueueWriteMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'placeholder' }), expect.anything())
       expect(removePendingWriteMock).not.toHaveBeenCalled()
       expect(updatePendingWriteMock).not.toHaveBeenCalledWith('queued-1', { written: true })
     })
@@ -768,7 +768,7 @@ describe('TMDb Data Processing & Movie Rating Addition', () => {
         title: 'Some Movie I Remember',
         year: '2010',
         status: 'unreconciled'
-      }))
+      }), expect.anything())
       expect(store.commit).toHaveBeenCalledWith('setMovieLogEntry', expect.objectContaining({
         value: expect.objectContaining({ movie: expect.objectContaining({ isPendingReconciliation: true }) })
       }))

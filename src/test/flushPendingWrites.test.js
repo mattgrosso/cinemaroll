@@ -402,7 +402,7 @@ describe('writeDurably action (offline support extension, Jul 2026 — Stickines
     await store.dispatch('writeDurably', { path: 'settings/tieBreakTournament', value: { contestantIds: ['a', 'b'] } })
 
     expect(sawLocalValueDuringWrite).toEqual({ contestantIds: ['a', 'b'] })
-    expect(enqueueWriteMock).toHaveBeenCalledWith({ type: 'write', dbEntry: { path: 'settings/tieBreakTournament', value: { contestantIds: ['a', 'b'] } } })
+    expect(enqueueWriteMock).toHaveBeenCalledWith({ type: 'write', dbEntry: { path: 'settings/tieBreakTournament', value: { contestantIds: ['a', 'b'] } } }, expect.anything())
   })
 
   it('removes the queued entry once the direct write is confirmed', async () => {
@@ -712,6 +712,26 @@ describe('write failures and the console (what reaches Sentry)', () => {
     await store.dispatch('writeDurably', { path: 'settings/lastTweak', value: 1 })
 
     expect(errorSpy.mock.calls.flat().map(String).join(' ')).toContain('PERMISSION_DENIED')
+  })
+
+  // Sentry 2026-10-11: the device queue's IndexedDB open stalled on Safari.
+  // writeDurably now tells enqueueWrite whether it is also writing to the
+  // server, so the queue can keep a stall to a warning when it is.
+  it('tells the queue whether the same write is going to the server', async () => {
+    store.commit('setSettings', {})
+    store.state.isOnline = true
+    await store.dispatch('writeDurably', { path: 'settings/dailyAwardsYear', value: 1999 })
+    expect(enqueueWriteMock).toHaveBeenLastCalledWith({ type: 'write', dbEntry: { path: 'settings/dailyAwardsYear', value: 1999 } }, { online: true })
+  })
+
+  it('a change that reached neither the server nor the queue is an error', async () => {
+    store.commit('setSettings', {})
+    setMock.mockImplementation(() => Promise.reject(new Error('PERMISSION_DENIED: Permission denied')))
+    enqueueWriteMock.mockImplementationOnce(() => Promise.resolve(null))
+
+    await store.dispatch('writeDurably', { path: 'settings/dailyAwardsYear', value: 1999 })
+
+    expect(errorSpy.mock.calls.flat().map(String).join(' ')).toContain('device queue is unavailable')
   })
 
   it('a queued write that keeps timing out is reported once, on its fifth failure', async () => {

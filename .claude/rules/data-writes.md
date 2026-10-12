@@ -147,6 +147,18 @@ Reproduce a dead-but-connected network with `scripts/liefi-proxy.mjs`
 (`blackhole`), and one bar of signal with its `trickle` mode - the case where
 slow requests DO get through, which is what starts an update.
 
+## Every IndexedDB open is bounded and retried once (2026-10-11)
+
+WebKit can leave the first `indexedDB.open()` of a launch unanswered while a
+second goes straight through. Both `offlineStore.js` and `pendingWriteQueue.js`
+bound each open (4s) and try once more; in the queue, list/get/put/delete are
+bounded too, so nothing can wait on storage forever. `enqueueWrite(entry,
+{ online })`: when the caller is also sending the write to the server, a
+storage STALL is a `console.warn`; offline, or a real failure (blocked,
+refused, unclonable), it stays `console.error`. `writeDurably` errors loudly
+when a change reached neither the server nor the queue - the only case where
+it exists only on screen. A new IndexedDB store must follow the same shape.
+
 ## Updates must never cost the offline copy (2026-09-30)
 
 A hard reload (`hardReload` in `appUpdate.js`) deletes the precache and loads

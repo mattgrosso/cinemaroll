@@ -130,11 +130,11 @@ describe('Showtimes choices are saved on the phone first', () => {
     const { enqueueWrite } = await import('@/utils/pendingWriteQueue.js')
     enqueueWrite.mockClear()
     await store.dispatch('dismissListing', { theaterKey: 'alamo', slug: 'a' })
-    expect(enqueueWrite).toHaveBeenCalledWith({ type: 'write', dbEntry: { path: 'theaters/dismissed/alamo/a', value: expect.any(Number) } })
+    expect(enqueueWrite).toHaveBeenCalledWith({ type: 'write', dbEntry: { path: 'theaters/dismissed/alamo/a', value: expect.any(Number) } }, expect.anything())
     expect(store.state.theaterDismissed.alamo.a).toEqual(expect.any(Number))
 
     await store.dispatch('dismissListing', { theaterKey: 'alamo', slug: 'a', restore: true })
-    expect(enqueueWrite).toHaveBeenLastCalledWith({ type: 'write', dbEntry: { path: 'theaters/dismissed/alamo/a', value: null } })
+    expect(enqueueWrite).toHaveBeenLastCalledWith({ type: 'write', dbEntry: { path: 'theaters/dismissed/alamo/a', value: null } }, expect.anything())
     expect('a' in store.state.theaterDismissed.alamo).toBe(false)
   })
 
@@ -143,7 +143,7 @@ describe('Showtimes choices are saved on the phone first', () => {
     enqueueWrite.mockClear()
     const reminder = { remindAt: 123 }
     await store.dispatch('remindListing', { theaterKey: 'alamo', slug: 'b', reminder })
-    expect(enqueueWrite).toHaveBeenCalledWith({ type: 'write', dbEntry: { path: 'theaters/reminders/alamo/b', value: reminder } })
+    expect(enqueueWrite).toHaveBeenCalledWith({ type: 'write', dbEntry: { path: 'theaters/reminders/alamo/b', value: reminder } }, expect.anything())
     expect(store.state.theaterReminders.alamo.b).toEqual(reminder)
     await store.dispatch('remindListing', { theaterKey: 'alamo', slug: 'b', reminder: null })
     expect('b' in store.state.theaterReminders.alamo).toBe(false)

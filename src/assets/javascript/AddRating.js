@@ -407,7 +407,7 @@ const addRating = async (ratings) => {
       status: 'unreconciled'
     });
   }
-  const queuedRecord = await enqueueWrite(queueEntry);
+  const queuedRecord = await enqueueWrite(queueEntry, { online: store.state.isOnline });
 
   // enqueueWrite never throws — it resolves null on ANY IndexedDB failure
   // (private browsing, iOS storage pressure, a wedged database). Offline,

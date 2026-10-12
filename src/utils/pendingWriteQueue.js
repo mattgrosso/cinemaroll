@@ -20,7 +20,7 @@ const DB_NAME = 'cinemaRollPendingWrites';
 const DB_VERSION = 1;
 const STORE_NAME = 'pendingWrites';
 
-function openDB () {
+function openOnce () {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
       reject(new Error('IndexedDB unavailable'));
@@ -74,11 +74,48 @@ function putRecord (db, record) {
 // private window). Whatever happens, the caller gets an answer: null from
 // enqueueWrite, and the save path takes it from there.
 const STORAGE_TIMEOUT_MS = 6000;
-const bounded = (promise, what) => {
+const bounded = (promise, what, ms = STORAGE_TIMEOUT_MS) => {
   let timer;
-  const timeout = new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error(`${what} timed out after ${STORAGE_TIMEOUT_MS}ms`)), STORAGE_TIMEOUT_MS); });
+  const timeout = new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error(`${what} timed out after ${ms}ms`)), ms); });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 };
+
+// WebKit has been known to leave the first open() of a launch unanswered
+// while a second one goes straight through - offlineStore.js retries for the
+// same reason. Sentry, 2026-10-11 (Safari on a Mac): a single 6s open here
+// timed out and a settings write lost its durable copy. So every open is
+// bounded and gets one more try. An open that answers after we gave up on
+// it is closed, so it can't sit on the database holding a connection.
+export const OPEN_TIMEOUT_MS = 4000;
+
+async function closeWhenItAnswers (opening) {
+  try {
+    (await opening).close();
+  } catch {
+    // It failed after all - nothing to close.
+  }
+}
+
+async function attempt () {
+  const opening = openOnce();
+  try {
+    return await bounded(opening, 'IndexedDB open', OPEN_TIMEOUT_MS);
+  } catch (error) {
+    closeWhenItAnswers(opening);
+    throw error;
+  }
+}
+
+async function openDB () {
+  try {
+    return await attempt();
+  } catch (error) {
+    if (!isStorageStall(error)) throw error;
+    return attempt();
+  }
+}
+
+export const isStorageStall = (error) => /timed out/.test(error?.message || '');
 
 // Adds a new pending write, or — for type 'write' — overwrites the existing
 // entry targeting the same dbEntry.path so repeated offline edits to the
@@ -87,14 +124,19 @@ const bounded = (promise, what) => {
 // a reload). Returns the stored record, or null if IndexedDB is unavailable.
 const toPlain = (value) => JSON.parse(JSON.stringify(value));
 
-export async function enqueueWrite (entry) {
+// `online`: whether the caller is about to send this same write to the
+// server itself. Then a storage STALL only narrows the safety net (the
+// server copy still lands), so it's a warning; offline, or any real failure
+// (blocked, refused, unclonable), the change may exist only on screen, and
+// that stays an error (captureConsole turns it into a Sentry event).
+export async function enqueueWrite (entry, { online = false } = {}) {
   try {
-    const db = await bounded(openDB(), 'IndexedDB open');
+    const db = await openDB();
 
     let existingId = null;
     let existingCreatedAt = null;
     if (entry.type === 'write' && entry.dbEntry?.path) {
-      const all = await listAll(db);
+      const all = await bounded(listAll(db), 'IndexedDB list');
       const match = all.find((record) => record.type === 'write' && record.dbEntry?.path === entry.dbEntry.path);
       if (match) {
         existingId = match.id;
@@ -124,7 +166,8 @@ export async function enqueueWrite (entry) {
     // Still resolves null (callers depend on that), but never silently:
     // a swallowed DataCloneError here surfaced to the user as "offline
     // storage is unavailable" for a day before anyone could see why.
-    console.error('pendingWriteQueue: could not enqueue', entry?.type, entry?.dbEntry?.path, error);
+    const log = online && isStorageStall(error) ? console.warn : console.error;
+    log('pendingWriteQueue: could not enqueue', entry?.type, entry?.dbEntry?.path, error);
     return null;
   }
 }
@@ -137,7 +180,7 @@ export async function enqueueWrite (entry) {
 export async function listPendingWrites () {
   try {
     const db = await openDB();
-    const all = await listAll(db);
+    const all = await bounded(listAll(db), 'IndexedDB list');
     return all.sort((a, b) => a.createdAt - b.createdAt);
   } catch {
     return [];
@@ -147,12 +190,12 @@ export async function listPendingWrites () {
 export async function removePendingWrite (id) {
   try {
     const db = await openDB();
-    await new Promise((resolve, reject) => {
+    await bounded(new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       tx.objectStore(STORE_NAME).delete(id);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
-    });
+    }), 'IndexedDB delete');
   } catch {
     // Best-effort only — see openDB's failure modes above.
   }
@@ -163,11 +206,11 @@ export async function removePendingWrite (id) {
 export async function updatePendingWrite (id, patch) {
   try {
     const db = await openDB();
-    const existing = await getRecord(db, id);
+    const existing = await bounded(getRecord(db, id), 'IndexedDB get');
     if (!existing) return null;
 
     const updated = toPlain({ ...existing, ...patch });
-    await putRecord(db, updated);
+    await bounded(putRecord(db, updated), 'IndexedDB put');
     return updated;
   } catch {
     return null;

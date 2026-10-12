@@ -2212,7 +2212,7 @@ export default createStore({
       // happens to the network write) without the network write inheriting
       // IndexedDB's latency. trackInFlightWrite above covers the remaining
       // in-flight window.
-      const queuedPromise = enqueueWrite({ type: 'write', dbEntry });
+      const queuedPromise = enqueueWrite({ type: 'write', dbEntry }, { online: context.state.isOnline });
 
       try {
         // Offline: nothing to attempt, just make sure it's durably queued.
@@ -2225,8 +2225,14 @@ export default createStore({
         const queuedRecord = await queuedPromise;
         if (queuedRecord) await removePendingWrite(queuedRecord.id);
       } catch (error) {
-        // Already durably queued regardless of this failure.
-        await queuedPromise.catch(() => null);
+        // Normally already durably queued regardless of this failure. If the
+        // queue couldn't take it either (enqueueWrite only warned, expecting
+        // the server copy), the change now exists only on this screen.
+        const queuedRecord = await queuedPromise.catch(() => null);
+        if (!queuedRecord) {
+          console.error('writeDurably: direct write failed and the device queue is unavailable, change is not saved:', dbEntry.path, error);
+          return;
+        }
         const log = isWriteTimeout(error) ? console.warn : console.error;
         log('writeDurably: direct write failed, will retry via the background queue:', dbEntry.path, error);
       } finally {

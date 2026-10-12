@@ -38,7 +38,7 @@ export async function finalizePlaceholder (store, queueEntry, tmdbId) {
   // same "survives being killed mid-write" guarantee AddRating.js's
   // addRating() uses. Different queue `type` from the placeholder entry, so
   // enqueueWrite's type:'write' dedupe never touches that one.
-  const finalizedRecord = await enqueueWrite({ type: 'write', dbEntry });
+  const finalizedRecord = await enqueueWrite({ type: 'write', dbEntry }, { online: true });
 
   // A direct, awaited write - what guarantees the match is confirmed before
   // anyone is told it is done (see writeDatabaseEntryNow in store/index.js).

@@ -454,3 +454,16 @@ stamp's version/time inlined into `buildStamp.js` (now handed over by
 chunk, since it picks names by character frequency. After: the same change
 gives 2 new files (the screen and `app.js`). Shared-code changes still mean a
 big download; that's inherent.
+
+## The write queue's open gets the same retry (2026-10-11)
+
+Sentry, Safari on a Mac, v1.124.7: "pendingWriteQueue: could not enqueue write
+settings/dailyAwardsYear: IndexedDB open timed out after 6000ms", while Film
+Club feeds were syncing (whether that caused the stall is unproven). The
+snapshot cache had retried its open since 2026-09-30; the write queue had a
+single 6s open, and its list/update/remove had no bound at all. Now every
+queue open is 4s with one retry (an open that answers late is closed), every
+queue operation is bounded, and a stall is a warning when the same write is
+going to the server anyway. Nothing was lost in the reported case - the
+server write went through; only the device copy underneath it was skipped.
+
