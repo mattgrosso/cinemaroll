@@ -52,6 +52,23 @@ carrying a `movieId`. `PERSONAL_AWARD_CATEGORIES` lives in
   judges years from `settings.personalAwards` at launch must wait the same way.
   Mocked stores without the field read as loaded. `AwardsPromptWaitsForAwards.test.js`.
 
+- **The awards page waits for them too, and saves every pick (2026-10-12).**
+  Natalie reopened a half-done 1999 and saw it blank: "none of my progress was
+  saved". It was saved; the page read the year when the SETTINGS landed and never
+  again when the awards did (the device copy and the settings snapshot race out of
+  IndexedDB). Now the modal shows "Loading your saved awards…" while
+  `personalAwardsPending` (a retry if `ensurePersonalAwards` answers false),
+  `saveCurrentState` refuses to run while pending (Back on the blank page would
+  have written the empty year over the real one), and a watcher on
+  `state.personalAwards` re-reads the year each time a copy lands unless
+  `awardsDataDirty`. Picks inside a category used to save only on Back; every
+  nominee/winner/no-nominees tap now saves after `AWARDS_SAVE_DELAY_MS` (1s), and a
+  waiting save goes at once on `visibilitychange → hidden`, `pagehide`, close,
+  year switch and unmount. Saves are chained in order, each carrying the picks as
+  they were when made — a second save during the first used to be dropped.
+  Anything that marks the year edited must set `awardsDataDirty`, or a late copy
+  re-reads over it. `AwardsSavedPicksLoad.test.js`.
+
 ## Prompt quotas
 
 `promptQuota.js` answers "may this prompt appear yet" for all three home-screen chores.

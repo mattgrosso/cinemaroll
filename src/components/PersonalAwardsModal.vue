@@ -19,7 +19,7 @@
 
           <!-- New Movies Notification: dark card + poster row (house style:
                posters over text, no Bootstrap alert-info blue on dark) -->
-          <div v-if="hasNewMovies" class="new-movies-card text-start">
+          <div v-if="hasNewMovies && !awardsLoading" class="new-movies-card text-start">
             <h6 class="new-movies-title">
               Movies you&rsquo;ve watched since you last nominated
             </h6>
@@ -45,7 +45,20 @@
                whole surface left to expose the detail pane, and the slim
                rail on the detail pane's left edge slides back. All motion
                is a single transform, so it cannot read as janky. -->
-          <div ref="awardsSlider" class="awards-slider" :class="{ 'showing-detail': Boolean(selectedCategory) }">
+          <!-- Until the saved awards arrive, the year would read as empty —
+               and saving it would write that empty year over the real one
+               (report 2026-10-12: "none of my progress was saved"). -->
+          <div v-if="awardsLoading" class="awards-loading" role="status">
+            <template v-if="awardsLoadFailed">
+              <p class="awards-loading-text">Couldn&rsquo;t load your saved awards. Check your connection and try again.</p>
+              <button type="button" class="btn btn-outline-light awards-loading-retry" @click="loadSavedAwards">Try again</button>
+            </template>
+            <template v-else>
+              <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+              <p class="awards-loading-text">Loading your saved awards&hellip;</p>
+            </template>
+          </div>
+          <div v-else ref="awardsSlider" class="awards-slider" :class="{ 'showing-detail': Boolean(selectedCategory) }">
           <div class="awards-pane list-pane" :aria-hidden="Boolean(selectedCategory)">
           <div class="category-grid">
             <div class="category-buttons">
@@ -468,7 +481,7 @@
       </template>
       <template v-slot:footer>
         <!-- Only show footer on category screen, not nomination screens -->
-        <div v-if="!selectedCategory" class="awards-modal-footer w-100">
+        <div v-if="!selectedCategory && !awardsLoading" class="awards-modal-footer w-100">
           <div v-if="completedCategories === totalCategories" class="completion-section w-100">
             <button
               class="btn btn-success w-100"
@@ -509,6 +522,9 @@ import { expandNomineeFromMinimal as expandNomineeFromMinimalShared, actingSibli
 // stored untrimmed (Six Degrees walks the full billing list on purpose), so
 // without a cap a ten-film year would render hundreds of tiles.
 const CUSTOM_AWARD_CAST_DEPTH = 10;
+
+// A pick is saved this long after the last tap, so a run of taps is one write.
+export const AWARDS_SAVE_DELAY_MS = 1000;
 
 export default {
   name: "PersonalAwardsModal",
@@ -578,6 +594,10 @@ export default {
       showTrashIcon: false, // For Matt's category reset functionality
       nomineesBarStuck: false, // Sentinel scrolled off => bar is pinned
       awardsDataDirty: false, // User has edited this session; late data must not clobber
+      awardsLoadFailed: false, // The saved awards could not be read (offline, nothing cached)
+      saveTimer: null, // The pending debounced save, if any
+      saveChain: null, // Saves run one after another, in the order they were made
+      savesInFlight: 0,
       // Cache expensive operations per year/category
       optionsCache: {}, // Format: { "1994-bestActor": [{ movieId, movie, loadedCast, hasMore }] }
       // Cache TMDb person details across all categories
@@ -597,6 +617,11 @@ export default {
       return leading
         ? `${leading[1]} ${this.currentYear} ${name.slice(leading[0].length)}`
         : `${name} ${this.currentYear}`;
+    },
+    // The awards load on their own, after the settings (since 2026-10-06).
+    // Mocked stores without the field read as loaded.
+    awardsLoading () {
+      return this.$store.state.personalAwardsPending === true;
     },
     isMatt () {
       return this.$store.state.databaseTopKey === "mattgrosso-gmail-com" || !this.$store.state.databaseTopKey;
@@ -814,6 +839,8 @@ export default {
     // nothing at all. Note it only reloads data; the modal never auto-closes.
     selectedYear (year) {
       if (year == null || year === this.currentYear) return;
+      // Picks still waiting on the debounce belong to the year being left.
+      this.flushPendingSave();
       this.currentYear = year;
       this.selectedCategory = null;
       this.optionsCache = {};
@@ -849,6 +876,15 @@ export default {
     '$store.state.personalAwardsPending' (pending) {
       if (!pending) this.persistDailyAwardsYear(this.firstEligibleYear);
     },
+    // Cold-boot recovery, part four (report 2026-10-12): the awards arrive
+    // AFTER the settings, from the device copy and then the server, so the
+    // settings watcher below had already read an empty year. Re-read each
+    // time they land — but never over user edits already made.
+    '$store.state.personalAwards' () {
+      if (!this.showModal || this.currentYear == null) return;
+      if (this.awardsDataDirty) return;
+      this.initializeAwardsData();
+    },
     selectedCategory () {
       // The sentinel lives in the detail pane; (re)bind whenever it
       // appears or goes away.
@@ -882,6 +918,9 @@ export default {
     }
   },
   mounted () {
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    window.addEventListener('pagehide', this.flushPendingSave);
+    if (this.awardsLoading) this.loadSavedAwards();
     if (this.autoOpen) {
       this.openModal();
       // Reset forced state so it doesn't re-trigger on next visit
@@ -889,9 +928,42 @@ export default {
     }
   },
   beforeUnmount () {
+    this.flushPendingSave();
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    window.removeEventListener('pagehide', this.flushPendingSave);
     this.teardownStickyObserver();
   },
   methods: {
+    // Joins the store's one shared read. False means the awards could not be
+    // read and nothing is cached, so the page offers a retry instead of
+    // spinning forever.
+    async loadSavedAwards () {
+      this.awardsLoadFailed = false;
+      const ready = await this.$store.dispatch('ensurePersonalAwards');
+      if (ready === false && this.awardsLoading) this.awardsLoadFailed = true;
+    },
+    // Every pick saves itself shortly after the tap; it used to wait for
+    // Back, so picks made inside a category were lost if the app was closed
+    // or left from there.
+    scheduleSave () {
+      if (this.awardsLoading) return;
+      if (this.saveTimer) clearTimeout(this.saveTimer);
+      this.saveTimer = setTimeout(() => {
+        this.saveTimer = null;
+        this.saveCurrentState();
+      }, AWARDS_SAVE_DELAY_MS);
+    },
+    flushPendingSave () {
+      if (!this.saveTimer) return;
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+      this.saveCurrentState();
+    },
+    // A backgrounded PWA runs no timers, so a save still waiting when the
+    // phone goes in a pocket goes now.
+    onVisibilityChange () {
+      if (document.visibilityState === 'hidden') this.flushPendingSave();
+    },
     // Persist the daily selection so the banner and openModal() agree on the same year.
     // Skip when an explicit selectedYear prop is in play (Resume/Edit actions own that state).
     persistDailyAwardsYear (newYear) {
@@ -941,8 +1013,7 @@ export default {
       this.awardsData[this.selectedCategory].nominees = [];
       this.awardsData[this.selectedCategory].winner = null;
       this.awardsData[this.selectedCategory].noNominees = true; // Special flag
-
-      // Save removed - will save on Back/Complete/Close only
+      this.scheduleSave();
 
       // Navigate back to category grid to show updated status
       this.selectedCategory = null;
@@ -962,6 +1033,7 @@ export default {
 
     resetYear () {
       if (!confirm(`Reset ALL awards data for ${this.currentYear}? This cannot be undone.`)) return;
+      this.awardsDataDirty = true;
 
       // Clear all awards data for this year
       this.awardsData = {};
@@ -1075,6 +1147,7 @@ export default {
       }
     },
     closeModal () {
+      this.flushPendingSave();
       if (this.pageMode) this.$emit('closed');
       try {
         this.showModal = false;
@@ -1091,80 +1164,98 @@ export default {
       }
     },
     async saveCurrentState (explicitComplete = false) {
-      // Prevent multiple clicks or saves after completion
-      if (this.savingState || this.completingYear) {
-        return;
+      if (this.saveTimer) {
+        clearTimeout(this.saveTimer);
+        this.saveTimer = null;
       }
-      this.savingState = true;
+      // No saves after completion starts (completeYearAndClose lifts this
+      // for its own one).
+      if (this.completingYear) return;
+      // Before the saved awards load this page holds an empty year, and
+      // saving it would write that empty year over the real one.
+      if (this.awardsLoading) return;
 
+      let awardsEntry;
       try {
-        // Bug (Matt): "nothing should complete the year except for me
-        // clicking complete the year." This used to compute completed from
-        // all-categories-decided on EVERY save — and saves fire on every
-        // back-slide/reset/close — so merely visiting a fully-decided year
-        // silently re-completed it and refreshed availableMovieIds, eating
-        // the new-movies prompt. Both now move ONLY on the explicit button.
-        const existingData = this.$store.state.settings.personalAwards?.[this.currentYear];
-        const isNowComplete = explicitComplete || Boolean(existingData?.completed);
-
-        let movieIds = null;
-        if (explicitComplete) {
-          // The completion snapshot: what was available when the user
-          // declared the year done.
-          const moviesForYear = this.getMoviesForYear();
-          movieIds = moviesForYear.map(entry => entry?.movie?.id).filter(id => id);
-        } else if (existingData?.availableMovieIds) {
-          // Intermediate save on a completed year: preserve the snapshot.
-          movieIds = existingData.availableMovieIds;
-        }
-
-        // Create minimal data structure by removing huge movie objects
-        const cleanedCategories = {};
-        Object.keys(this.awardsData).forEach(key => {
-          const categoryData = this.awardsData[key];
-          if (categoryData) {
-            cleanedCategories[key] = {
-              nominees: (categoryData.nominees || []).map(nominee => this.convertNomineeToMinimal(nominee)).filter(n => n),
-              winner: categoryData.winner ? this.convertNomineeToMinimal(categoryData.winner) : null,
-              noNominees: categoryData.noNominees || false
-            };
-          }
-        });
-
-        const awardsEntry = {
-          completed: isNowComplete,
-          lastUpdated: Date.now(),
-          categories: cleanedCategories
-        };
-        // Only when there are some: writing an empty object would have
-        // Firebase delete the key anyway, and every year carrying an
-        // explicit `customCategories: {}` is noise in the stored shape.
-        if (Object.keys(this.customCategories).length) {
-          awardsEntry.customCategories = { ...this.customCategories };
-        }
-        if (movieIds) {
-          awardsEntry.availableMovieIds = movieIds;
-        }
-
-        // writeDurably (not setDBValue, everywhere in this component) - bug
-        // report: personal awards changes should work offline and sync once
-        // back online, same as ratings/stickiness/tiebreak. Commits locally
-        // first (via applyDbPathLocally) so awardsData/this.$store.state
-        // reflects the save immediately regardless of connectivity, then
-        // durably queues before attempting the network write. See
-        // CLAUDE.md's Offline Support Extension section.
-        // The awards live at <topKey>/personalAwards (own node, stamped) since
-        // 2026-10-06; in memory they are still settings.personalAwards.
-        await this.$store.dispatch('savePersonalAwards', {
-          path: String(this.currentYear),
-          value: awardsEntry
-        });
-
-        this.savingState = false;
+        awardsEntry = this.buildAwardsEntry(explicitComplete);
       } catch (error) {
         console.error('🚨 SAVE PREPARATION FAILED:', error.message);
         ErrorLogService.error('Error saving Personal Awards state:', error);
+        return;
       }
+      const year = String(this.currentYear);
+
+      // writeDurably (not setDBValue, everywhere in this component) - bug
+      // report: personal awards changes should work offline and sync once
+      // back online, same as ratings/stickiness/tiebreak. Commits locally
+      // first (via applyDbPathLocally) so awardsData/this.$store.state
+      // reflects the save immediately regardless of connectivity, then
+      // durably queues before attempting the network write. See
+      // CLAUDE.md's Offline Support Extension section.
+      // The awards live at <topKey>/personalAwards (own node, stamped) since
+      // 2026-10-06; in memory they are still settings.personalAwards.
+      // Each save carries the picks as they were when it was made, and
+      // they run in order, so a save made mid-write is never dropped (it
+      // used to be: a second save during the first simply returned).
+      this.savesInFlight += 1;
+      this.savingState = true;
+      const run = (this.saveChain || Promise.resolve())
+        .then(() => this.$store.dispatch('savePersonalAwards', { path: year, value: awardsEntry }));
+      this.saveChain = run.catch(() => {});
+      try {
+        await run;
+      } catch (error) {
+        console.error('🚨 SAVE FAILED:', error.message);
+        ErrorLogService.error('Error saving Personal Awards state:', error);
+      } finally {
+        this.savesInFlight -= 1;
+        if (!this.savesInFlight) this.savingState = false;
+      }
+    },
+    buildAwardsEntry (explicitComplete) {
+      const existingData = this.$store.state.settings.personalAwards?.[this.currentYear];
+      const isNowComplete = explicitComplete || Boolean(existingData?.completed);
+
+      let movieIds = null;
+      if (explicitComplete) {
+        // The completion snapshot: what was available when the user
+        // declared the year done.
+        const moviesForYear = this.getMoviesForYear();
+        movieIds = moviesForYear.map(entry => entry?.movie?.id).filter(id => id);
+      } else if (existingData?.availableMovieIds) {
+        // Intermediate save on a completed year: preserve the snapshot.
+        movieIds = existingData.availableMovieIds;
+      }
+
+      // Create minimal data structure by removing huge movie objects
+      const cleanedCategories = {};
+      Object.keys(this.awardsData).forEach(key => {
+        const categoryData = this.awardsData[key];
+        if (categoryData) {
+          cleanedCategories[key] = {
+            nominees: (categoryData.nominees || []).map(nominee => this.convertNomineeToMinimal(nominee)).filter(n => n),
+            winner: categoryData.winner ? this.convertNomineeToMinimal(categoryData.winner) : null,
+            noNominees: categoryData.noNominees || false
+          };
+        }
+      });
+
+      const awardsEntry = {
+        completed: isNowComplete,
+        lastUpdated: Date.now(),
+        categories: cleanedCategories
+      };
+      // Only when there are some: writing an empty object would have
+      // Firebase delete the key anyway, and every year carrying an
+      // explicit `customCategories: {}` is noise in the stored shape.
+      if (Object.keys(this.customCategories).length) {
+        awardsEntry.customCategories = { ...this.customCategories };
+      }
+      if (movieIds) {
+        awardsEntry.availableMovieIds = movieIds;
+      }
+
+      return awardsEntry;
     },
     // Best International Feature needs each film's production countries. Films
     // rated before AddRating kept them (a handful) are fetched the first time
@@ -1293,6 +1384,7 @@ export default {
         ...this.customCategories,
         [key]: { name, type: this.customAwardType, createdAt: Date.now() }
       };
+      this.awardsDataDirty = true;
       this.cancelCustomAward();
       // Persist before drilling in: an award you invented and then lost to a
       // reload would be worse than not offering it.
@@ -1310,6 +1402,7 @@ export default {
       const key = this.selectedCategory;
       if (!isCustomAwardKey(key)) return;
 
+      this.awardsDataDirty = true;
       const remaining = { ...this.customCategories };
       delete remaining[key];
       this.customCategories = remaining;
@@ -2112,6 +2205,7 @@ export default {
       }
 
       this.awardsData[this.selectedCategory] = categoryData;
+      this.scheduleSave();
     },
 
     toggleActorNomination (option, categoryData) {
@@ -2230,8 +2324,7 @@ export default {
       const categoryData = this.awardsData[this.selectedCategory] || { nominees: [], winner: null };
       categoryData.winner = option;
       this.awardsData[this.selectedCategory] = categoryData;
-
-      // Save removed - will save on Back/Complete/Close only
+      this.scheduleSave();
     },
     isNominee (option) {
       const categoryData = this.awardsData[this.selectedCategory];
@@ -3380,6 +3473,25 @@ export default {
 @media (min-width: 992px) {
   :deep(.cinemaroll-modal-content) {
     max-width: 750px !important;
+  }
+}
+
+.awards-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 3rem 1rem;
+  color: #ccc;
+  text-align: center;
+
+  .awards-loading-text {
+    margin: 0;
+    color: #ccc;
+  }
+
+  .awards-loading-retry {
+    min-height: 44px;
   }
 }
 
