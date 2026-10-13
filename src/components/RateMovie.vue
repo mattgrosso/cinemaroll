@@ -333,6 +333,7 @@
 <script>
 import { formatScore } from '../assets/javascript/formatScore.js';
 import addRating from "../assets/javascript/AddRating.js";
+import { trackEvent } from "../utils/usage.js";
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import { ratingBreakdown } from "../assets/javascript/ratingMath.js";
 import ErrorLogService from "../services/ErrorLogService.js";
@@ -946,6 +947,7 @@ export default {
       let dbEntry;
       try {
         dbEntry = await addRating(ratings);
+        trackEvent('rating-logged');
       } catch (error) {
         console.error('Failed to save rating:', error);
         ErrorLogService.error('Failed to save rating:', error);

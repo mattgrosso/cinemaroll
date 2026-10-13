@@ -32,6 +32,10 @@ import './registerServiceWorker'
 import axios from 'axios';
 import { installNetworkHealth } from './utils/networkHealth.js';
 import { setBuildInfo } from './assets/javascript/buildStamp.js';
+import { trackUsage } from './utils/usage.js';
+
+// One anonymous ping per open → Bug Desk's Visitors tab (house module).
+trackUsage('cinemaroll');
 
 // Every network request gets a timeout, and a request nothing answers flips
 // the app to its offline paths (lie-fi, bug report 2026-09-23). Before the

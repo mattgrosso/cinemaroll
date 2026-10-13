@@ -466,6 +466,7 @@
 // and the directory for sending requests. All set math is pure in
 // src/assets/javascript/social.js; this screen only renders and dispatches.
 import BackLink from './games/BackLink.vue';
+import { trackEvent } from '../utils/usage.js';
 import SkeletonBlock from './SkeletonBlock.vue';
 import { afterFrame, SKELETON_FIRST } from '../utils/nextFrame.js';
 import SettingsSection from './SettingsSection.vue';
@@ -814,6 +815,7 @@ export default {
     },
     add (key) {
       this.$store.dispatch('sendFriendRequest', key);
+      trackEvent('friend-request-sent');
     },
     poster (path) {
       return `https://image.tmdb.org/t/p/w185${path}`;
