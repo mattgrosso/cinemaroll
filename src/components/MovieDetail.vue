@@ -151,6 +151,9 @@
                     <i class="bi bi-chevron-down viewing-chevron"></i>
                   </button>
                 </h2>
+                <!-- What the country was watching that weekend, from Box
+                     Office Archive (2026-10-14). A quiet line, tap for the chart. -->
+                <a v-if="viewingWeekend(rating)" class="viewing-weekend" :href="archiveWeekendUrl(viewingWeekend(rating).k)" target="_blank" rel="noopener">{{ weekendLine(viewingWeekend(rating)) }}</a>
                 <div :id="`collapse-${index}`" class="accordion-collapse collapse" :aria-labelledby="`heading-${index}`">
                   <div class="accordion-body">
                     <!-- The eight criteria as small tiles, four across, each
@@ -507,11 +510,24 @@
         <!-- Box Office -->
         <div v-if="hasBoxOfficeInfo" class="box-office mb-3">
           <h4>Box Office</h4>
-          <p class="long-list mb-0">
+          <!-- The domestic run as it was reported at the time, from Box
+               Office Archive (Matt's rescue of the old Box Office Mojo,
+               2026-10-14), ahead of TMDB's one worldwide number. -->
+          <dl v-if="archiveBoxOffice" class="box-office-archive">
+            <div><dt>Domestic</dt><dd>{{ formatCurrency(archiveBoxOffice.domestic) }}<span v-if="archiveBoxOffice.domesticToday" class="box-office-note">{{ formatMoneyShort(archiveBoxOffice.domesticToday) }} {{ archiveTodaysDollars }}</span></dd></div>
+            <div v-if="archiveBoxOffice.opening"><dt>Opening weekend</dt><dd>{{ formatCurrency(archiveBoxOffice.opening.gross) }}<span class="box-office-note"><template v-if="archiveBoxOffice.opening.rank">#{{ archiveBoxOffice.opening.rank }}</template><template v-if="archiveBoxOffice.opening.theaters"> · {{ archiveBoxOffice.opening.theaters.toLocaleString() }} theaters</template><template v-if="archiveBoxOffice.opening.average"> · {{ formatMoneyShort(archiveBoxOffice.opening.average) }} each</template></span></dd></div>
+            <div v-if="archiveBoxOffice.weekends"><dt>Weekends</dt><dd>{{ archiveBoxOffice.atOne }} at #1<span class="box-office-note">{{ archiveBoxOffice.inTopTen }} in the top ten · {{ archiveBoxOffice.weekends }} charted</span></dd></div>
+            <div v-if="archiveBoxOffice.biggest"><dt>Biggest weekend</dt><dd>{{ formatCurrency(archiveBoxOffice.biggest.gross) }}<span v-if="archiveBoxOffice.biggest.week" class="box-office-note">week {{ archiveBoxOffice.biggest.week }}</span></dd></div>
+            <div v-if="archiveBoxOffice.widest"><dt>Widest release</dt><dd>{{ archiveBoxOffice.widest.toLocaleString() }} theaters<span v-if="archiveBoxOffice.days" class="box-office-note">{{ archiveBoxOffice.days }} days in release</span></dd></div>
+            <div v-if="archiveBoxOffice.worldwide || movieRevenue"><dt>Worldwide</dt><dd>{{ formatCurrency(archiveBoxOffice.worldwide || movieRevenue) }}<span v-if="!archiveBoxOffice.worldwide" class="box-office-note">TMDB</span></dd></div>
+            <div v-if="movieBudget"><dt>Budget</dt><dd>{{ formatCurrency(movieBudget) }}</dd></div>
+          </dl>
+          <p v-else class="long-list mb-0">
             <span v-if="movieBudget">Budget: {{ formatCurrency(movieBudget) }}</span>
             <br v-if="movieBudget && movieRevenue">
             <span v-if="movieRevenue">Box Office: {{ formatCurrency(movieRevenue) }}</span>
           </p>
+          <a v-if="archiveBoxOffice" class="box-office-link" :href="archiveBoxOffice.url" target="_blank" rel="noopener">Weekend by weekend at Box Office Archive <i class="bi bi-box-arrow-up-right"></i></a>
         </div>
         </DetailSection>
         <DetailSection v-if="productionCountries.length || narrativePlaces.length || filmingPlaces.length" id="places" tile label="Places" tone="plain" :summary="placesSummary">
@@ -730,6 +746,8 @@ import { criticRoleLabel, criticByline, criticsSummary } from '../assets/javascr
 import { fetchCriticReviews, criticErrorMessage } from '../utils/criticReviewsRequest.js';
 import { cinemaScoreReading, CINEMASCORE_SITE } from '../assets/javascript/cinemaScore.js';
 import { fetchCinemaScore } from '../utils/cinemaScoreRequest.js';
+import { fetchArchiveFilm, fetchArchiveCalendar } from '../utils/boxOfficeArchiveRequest.js';
+import { archiveFacts, archiveSummary, weekendForDate, weekendLine, archiveWeekendUrl, todaysDollarsLabel } from '../assets/javascript/boxOfficeArchive.js';
 import NameRow from './NameRow.vue';
 import { formatMoneyShort } from '../assets/javascript/formatMoney.js';
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
@@ -788,6 +806,9 @@ export default {
       critics: { tmdbId: null, state: 'idle', reviews: [], message: '' },
       // CinemaScore, looked up alongside the critics: null until known.
       cinemaScore: { tmdbId: null, score: null },
+      // Box Office Archive: the film's domestic run, and the weekend charts
+      // of the years you saw it (for "#1 that weekend" on each viewing).
+      archive: { tmdbId: null, film: null, calendars: {} },
       cinemaScoreSite: CINEMASCORE_SITE,
       // The cast line: one line of whole names until "+N more" is tapped.
       castExpanded: false,
@@ -822,6 +843,18 @@ export default {
     document.removeEventListener('visibilitychange', this.clearBackSpinner);
   },
   watch: {
+    'movie.id': {
+      immediate: true,
+      handler (id) {
+        this.loadArchiveBoxOffice(id);
+      }
+    },
+    viewingYears: {
+      immediate: true,
+      handler (years) {
+        this.loadArchiveCalendars(years);
+      }
+    },
     '$route.params.tmdbId': {
       handler (newId) {
         this.isLoading = false;
@@ -892,9 +925,28 @@ export default {
     },
     boxOfficeSummary () {
       const parts = [];
+      if (this.archiveBoxOffice) parts.push(archiveSummary(this.archiveBoxOffice));
+      else if (this.movieRevenue) parts.push(`${formatMoneyShort(this.movieRevenue)} box office`);
       if (this.movieBudget) parts.push(`${formatMoneyShort(this.movieBudget)} budget`);
-      if (this.movieRevenue) parts.push(`${formatMoneyShort(this.movieRevenue)} box office`);
       return parts.join(' · ');
+    },
+    // What Box Office Archive knows about this film (null until it answers,
+    // or when it has nothing): the domestic run as reported at the time.
+    archiveBoxOffice () {
+      return this.archive.tmdbId === this.movie?.id ? archiveFacts(this.archive.film) : null;
+    },
+    archiveTodaysDollars () {
+      return todaysDollarsLabel();
+    },
+    // The years of your viewings, for the archive's weekend calendars.
+    viewingYears () {
+      const ratings = this.getAllRatings(this.previousEntry) || [];
+      const years = new Set();
+      for (const rating of ratings) {
+        const day = LetterboxdUrlService.toLocalISODate(rating?.date);
+        if (day) years.add(Number(day.slice(0, 4)));
+      }
+      return [...years].filter((y) => y >= 1970).sort();
     },
     placesSummary () {
       const parts = [];
@@ -976,7 +1028,7 @@ export default {
       return this.movie?.revenue || 0;
     },
     hasBoxOfficeInfo () {
-      return this.movieBudget > 0 || this.movieRevenue > 0;
+      return this.movieBudget > 0 || this.movieRevenue > 0 || !!this.archiveBoxOffice;
     },
     productionCountries () {
       return (this.movie?.production_countries || [])
@@ -1302,6 +1354,32 @@ export default {
       if (open && this.cinemaScore.tmdbId !== this.movie?.id) this.loadCinemaScore();
     },
     cinemaScoreReading,
+    async loadArchiveBoxOffice (tmdbId) {
+      if (!tmdbId) return;
+      this.archive = { tmdbId, film: null, calendars: this.archive.calendars };
+      const film = await fetchArchiveFilm(tmdbId);
+      // MovieDetail is reused film to film; a slow answer for the last film
+      // must not land on this one.
+      if (this.movie?.id !== tmdbId) return;
+      this.archive = { ...this.archive, film };
+    },
+    async loadArchiveCalendars (years) {
+      for (const year of years || []) {
+        if (this.archive.calendars[year] !== undefined) continue;
+        this.archive = { ...this.archive, calendars: { ...this.archive.calendars, [year]: null } };
+        const calendar = await fetchArchiveCalendar(year);
+        this.archive = { ...this.archive, calendars: { ...this.archive.calendars, [year]: calendar } };
+      }
+    },
+    /** The archive's weekend chart a viewing falls in, or null while unknown. */
+    viewingWeekend (rating) {
+      const day = LetterboxdUrlService.toLocalISODate(rating?.date);
+      if (!day) return null;
+      return weekendForDate(this.archive.calendars[Number(day.slice(0, 4))], day);
+    },
+    weekendLine,
+    archiveWeekendUrl,
+    formatMoneyShort,
     async loadCinemaScore () {
       const movie = this.movie;
       if (!movie?.id) return;
@@ -3408,6 +3486,14 @@ export default {
     }
 
     .viewing-date { white-space: nowrap; }
+    .viewing-weekend {
+      display: block;
+      color: #ccc;
+      font-size: 0.72rem;
+      padding: 0 0.75rem 0.4rem;
+      text-decoration: none;
+      &:active { color: white; }
+    }
 
     .viewing-watch-number {
       color: #bbb;
@@ -3600,5 +3686,28 @@ export default {
 
 .backdrop-option {
   aspect-ratio: 16/9;
+}
+
+/* Box Office Archive facts: label on the left, figure and a quiet note on the right. */
+.box-office-archive {
+  margin: 0 0 0.5rem;
+  > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    &:last-child { border-bottom: 0; }
+  }
+  dt { color: #ccc; font-weight: 400; font-size: 0.82rem; margin: 0; white-space: nowrap; }
+  dd { margin: 0; text-align: right; color: white; font-size: 0.9rem; }
+  .box-office-note { display: block; color: #ccc; font-size: 0.72rem; }
+}
+.box-office-link {
+  display: inline-block;
+  color: #9fb8ff;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+  &:active { color: white; }
 }
 </style>

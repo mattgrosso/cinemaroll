@@ -22,6 +22,17 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
 
 ## MovieDetail
 
+- **Box office from Box Office Archive (2026-10-14).** The Box office tile reads the
+  film's domestic run from Matt's own archive (`src/utils/boxOfficeArchiveRequest.js`:
+  TMDB id → `lookup/tmdb/<id>.json` → `movies/<id>.json`, device-cached a month, own
+  10s timeout, never throws; pure helpers and the summary wording in
+  `src/assets/javascript/boxOfficeArchive.js`). TMDB's budget/revenue stay as the
+  fallback and the Budget line. Each viewing line gets "#1 that weekend: <film> ($X)"
+  from `calendar/<year>.json`, fetched per viewing year on the `viewingYears` watcher.
+  `ARCHIVE_ORIGIN` is the CloudFront address until boxofficehistory.com is wired; change
+  it in one place. "Today's dollars" there uses this app's CPI table (`inflation.js`),
+  not the archive's ticket-price method, so it matches the rest of Cinema Roll.
+
 - **The 2026-10-06 pass (Matt, scrolling the page out loud: "I'm not finding that the
   information that I want is readily available at my fingertips first")**: the order is
   now hero → facts strip → **credits band** (`.credits-band`: "Directed by <names>" in
