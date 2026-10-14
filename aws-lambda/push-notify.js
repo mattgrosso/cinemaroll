@@ -82,9 +82,19 @@ const OWNER_ACCOUNT_KEY = 'mattgrosso-gmail-com';
 // and returns [{ slug, title, firstShowTime, url }] via the pure parsers in
 // pushCadence.js. Adding a theater is adding an entry here. Alamo market
 // ids are numeric and sequential (0500 northern-virginia, 1100 dc-metro-area).
+// Every outbound request has a deadline (Sentry, 2026-10-14: "cinemaroll-push
+// is about to time out"). fetch has none of its own, so one stalled theater
+// page or Firebase call held the whole sweep until Lambda killed it. A page
+// that times out throws like any failed read - a theater's board counts as
+// unreadable that sweep (noteBoardFailures), a feed as unreachable.
+const FETCH_TIMEOUT_MS = 10000;
+const DB_TIMEOUT_MS = 15000;
+const timedFetch = (url, options = {}, ms = FETCH_TIMEOUT_MS) =>
+  fetch(url, { ...options, signal: options.signal || AbortSignal.timeout(ms) });
+
 const FETCH_HEADERS = { 'user-agent': 'Mozilla/5.0 (compatible; cinemaroll-push; mailto:mattgrosso@gmail.com)' };
 const fetchText = async (url, accept = 'text/html') => {
-  const res = await fetch(url, { cache: 'no-store', headers: { ...FETCH_HEADERS, accept } });
+  const res = await timedFetch(url, { cache: 'no-store', headers: { ...FETCH_HEADERS, accept } });
   if (!res.ok) throw new Error(`${url} -> ${res.status}`);
   return res.text();
 };
@@ -256,7 +266,7 @@ let certCache = { keys: null, expiresAt: 0 };
 
 const fetchCerts = async () => {
   if (certCache.keys && Date.now() < certCache.expiresAt) return certCache.keys;
-  const res = await fetch(FIREBASE_CERT_URL);
+  const res = await timedFetch(FIREBASE_CERT_URL);
   if (!res.ok) throw new Error(`Could not fetch Firebase certs: ${res.status}`);
   const keys = await res.json();
   const maxAge = Number((/max-age=(\d+)/.exec(res.headers.get('cache-control') || '') || [])[1] || 3600);
@@ -332,11 +342,11 @@ const getDbToken = async () => {
   })));
   const signature = toBase64Url(crypto.sign('RSA-SHA256', Buffer.from(`${header}.${claims}`), sa.private_key));
 
-  const res = await fetch('https://oauth2.googleapis.com/token', {
+  const res = await timedFetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `grant_type=${encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer')}&assertion=${header}.${claims}.${signature}`
-  });
+  }, DB_TIMEOUT_MS);
   if (!res.ok) throw new Error(`OAuth token exchange failed: ${res.status} ${await res.text()}`);
   const data = await res.json();
   dbTokenCache = { token: data.access_token, expiresAt: Date.now() + (data.expires_in || 3600) * 1000 };
@@ -345,9 +355,9 @@ const getDbToken = async () => {
 
 const dbGet = async (path, params = '') => {
   const token = await getDbToken();
-  const res = await fetch(`${DATABASE_URL}/${path}.json?${params}`, {
+  const res = await timedFetch(`${DATABASE_URL}/${path}.json?${params}`, {
     headers: { Authorization: `Bearer ${token}` }
-  });
+  }, DB_TIMEOUT_MS);
   if (!res.ok) throw new Error(`RTDB GET ${path} failed: ${res.status}`);
   return res.json();
 };
@@ -355,21 +365,21 @@ const dbGet = async (path, params = '') => {
 // One atomic multi-path update at the root (Film Club v2 publishes).
 const dbPatch = async (updates) => {
   const token = await getDbToken();
-  const res = await fetch(`${DATABASE_URL}/.json`, {
+  const res = await timedFetch(`${DATABASE_URL}/.json`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(updates)
-  });
+  }, DB_TIMEOUT_MS);
   if (!res.ok) throw new Error(`RTDB PATCH root failed: ${res.status}`);
 };
 
 const dbSet = async (path, value) => {
   const token = await getDbToken();
-  const res = await fetch(`${DATABASE_URL}/${path}.json`, {
+  const res = await timedFetch(`${DATABASE_URL}/${path}.json`, {
     method: value === null ? 'DELETE' : 'PUT',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: value === null ? undefined : JSON.stringify(value)
-  });
+  }, DB_TIMEOUT_MS);
   if (!res.ok) throw new Error(`RTDB ${value === null ? 'DELETE' : 'PUT'} ${path} failed: ${res.status}`);
 };
 
@@ -425,7 +435,7 @@ const sendToAccount = async (topKey, subscriptions, payload) => {
       await webpush.sendNotification(
         { endpoint: sub.endpoint, keys: sub.keys },
         payload,
-        { TTL: 24 * 3600, urgency: 'normal' }
+        { TTL: 24 * 3600, urgency: 'normal', timeout: FETCH_TIMEOUT_MS }
       );
       delivered += 1;
     } catch (error) {
@@ -897,7 +907,7 @@ const safeFeedUrl = (value) => {
 const readFeed = async (feedUrl, etag = null) => {
   const headers = { 'X-Firebase-ETag': 'true' };
   if (etag) headers['If-None-Match'] = etag;
-  const response = await fetch(feedUrl, { cache: 'no-store', headers });
+  const response = await timedFetch(feedUrl, { cache: 'no-store', headers });
   if (etag && response.status === 304) return { notModified: true, etag };
   if (!response.ok) throw new Error(`feed responded ${response.status}`);
   const text = await response.text();
@@ -914,7 +924,7 @@ const readFeed = async (feedUrl, etag = null) => {
 // reached at all (network, 5xx) is `reachable: false`: skip this sweep.
 const readRevision = async (feedUrl) => {
   try {
-    const response = await fetch(feedUrl.replace(/\.json(\?[^#]*)?$/, '/revision.json$1'), { cache: 'no-store' });
+    const response = await timedFetch(feedUrl.replace(/\.json(\?[^#]*)?$/, '/revision.json$1'), { cache: 'no-store' });
     if (response.status >= 500) return { revision: null, reachable: false };
     if (!response.ok) return { revision: null, reachable: true };
     const value = await response.json();
@@ -959,7 +969,7 @@ const sendDayNotices = async (owner, secret, revision) => {
   let sent = 0;
   for (const target of targets) {
     try {
-      const response = await fetch(target.inboxUrl, {
+      const response = await timedFetch(target.inboxUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildNotice({ feed: feedId, revision })),
@@ -1286,7 +1296,7 @@ const theatersNear = async ({ zip, city }) => {
   }
   const slug = cinemaclockCitySlug(place, state);
   if (!slug) return { found: false, reason: zip ? 'zip' : 'city' };
-  const res = await fetch(`https://www.cinemaclock.com/${slug}/movie-theaters`, { redirect: 'manual', headers: FETCH_HEADERS });
+  const res = await timedFetch(`https://www.cinemaclock.com/${slug}/movie-theaters`, { redirect: 'manual', headers: FETCH_HEADERS });
   if (res.status !== 200) return { found: false, reason: 'town', place: `${place}, ${state.toUpperCase()}` };
   const theaters = cinemaclockCityTheaters(await res.text()).map((t) => {
     // A theater with its own reader here (Matt's list) is offered under
