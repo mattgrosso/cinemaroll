@@ -30,8 +30,11 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
   fallback and the Budget line. Each viewing line gets "#1 that weekend: <film> ($X)"
   from `calendar/<year>.json`, fetched per viewing year on the `viewingYears` watcher.
   `ARCHIVE_ORIGIN` is the CloudFront address until boxofficehistory.com is wired; change
-  it in one place. "Today's dollars" there uses this app's CPI table (`inflation.js`),
-  not the archive's ticket-price method, so it matches the rest of Cinema Roll.
+  it in one place. **Money words and methods are shared with the archive (same day):**
+  `inflation.js` reads the bundled `inflation.json`; a gross goes by average ticket
+  price (`adjustGross`), a budget by CPI (`adjustForInflation`), and every screen says
+  `WORDING.inBaseYear` / `WORDING.asReported` ("In 2025 dollars" / "As reported"),
+  never "today's dollars" or "as released". Captions name the method.
 
 - **The 2026-10-06 pass (Matt, scrolling the page out loud: "I'm not finding that the
   information that I want is readily available at my fingertips first")**: the order is

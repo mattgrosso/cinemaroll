@@ -2,10 +2,10 @@
   <div class="box-office-years">
     <div class="box-office-card">
       <p class="box-office-title">Biggest box office years</p>
-      <p class="box-office-caption">Release years ranked by the worldwide gross of the films you've rated from them. Tap a year to see its films.</p>
+      <p class="box-office-caption">Release years ranked by the worldwide gross of the films you've rated from them. {{ wording.inBaseYear }}, each gross is restated by average ticket price. Tap a year to see its films.</p>
       <div class="dollar-toggle" role="group" aria-label="Which dollars to sum">
-        <button type="button" class="dollar-option" :class="{ active: adjusted }" :aria-pressed="adjusted" @click="setAdjusted(true)">Today's dollars</button>
-        <button type="button" class="dollar-option" :class="{ active: !adjusted }" :aria-pressed="!adjusted" @click="setAdjusted(false)">As released</button>
+        <button type="button" class="dollar-option" :class="{ active: adjusted }" :aria-pressed="adjusted" @click="setAdjusted(true)">{{ wording.inBaseYear }}</button>
+        <button type="button" class="dollar-option" :class="{ active: !adjusted }" :aria-pressed="!adjusted" @click="setAdjusted(false)">{{ wording.asReported }}</button>
       </div>
       <p v-if="!years.length" class="box-office-empty">No box office figures yet — the Settings panel's backfill fetches them.</p>
       <ul v-else>
@@ -28,9 +28,10 @@
 // what's in this library. Math in boxOfficeYears.js.
 import { boxOfficeByYear } from "../assets/javascript/boxOfficeYears.js";
 import { formatMoneyShort } from "../assets/javascript/formatMoney.js";
+import { WORDING } from "../assets/javascript/inflation.js";
 
 // Which dollars the list was last read in. Persists like the Insights tab
-// itself; today's dollars by default, because a sum across decades in
+// itself; the base year's dollars by default, because a sum across decades in
 // as-released dollars is the misleading one (inflation.js).
 const DOLLARS_KEY = 'cinemaRoll.insights.boxOfficeDollars';
 
@@ -55,6 +56,9 @@ export default {
     };
   },
   computed: {
+    wording () {
+      return WORDING;
+    },
     years () {
       return boxOfficeByYear(this.resultsWithRatings, { adjusted: this.adjusted });
     }

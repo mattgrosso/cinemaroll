@@ -11,7 +11,7 @@
 //
 // TMDB's `revenue` is worldwide gross (formatMoney.js), and 0 means "we
 // don't know" — a film without a figure adds nothing and isn't counted.
-import { releaseYear, adjustForInflation } from './inflation.js';
+import { releaseYear, adjustGross } from './inflation.js';
 
 /**
  * @param {Array} entries  library entries ({ movie: { revenue, release_date } })
@@ -27,7 +27,7 @@ export function boxOfficeByYear (entries, { adjusted = false } = {}) {
     if (!(raw > 0)) return;
     const year = releaseYear(movie.release_date);
     if (year == null) return;
-    const gross = adjusted ? adjustForInflation(raw, year) : raw;
+    const gross = adjusted ? adjustGross(raw, year) : raw;
     if (!(gross > 0)) return;
     if (!byYear.has(year)) byYear.set(year, []);
     byYear.get(year).push({ entry, gross });

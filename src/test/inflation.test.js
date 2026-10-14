@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  adjustForInflation, adjustedMovieMoney, releaseYear, BASE_YEAR, CPI
+  adjustForInflation, adjustGross, ticketsSold, adjustedMovieMoney, releaseYear, BASE_YEAR, CPI, TICKET_PRICES, WORDING
 } from '../assets/javascript/inflation.js';
 
 // Requested 2026-08-26: "I would also like to have a way to show boxoffice
@@ -71,10 +71,12 @@ describe('adjustForInflation', () => {
 describe('adjustedMovieMoney', () => {
   const movie = (overrides) => ({ release_date: '1993-06-11', budget: 63_000_000, revenue: 920_000_000, ...overrides });
 
-  it('adjusts either figure off the film\'s own release year', () => {
-    const factor = CPI[String(BASE_YEAR)] / CPI['1993'];
-    expect(adjustedMovieMoney(movie(), 'budget')).toBeCloseTo(63_000_000 * factor, 2);
-    expect(adjustedMovieMoney(movie(), 'revenue')).toBeCloseTo(920_000_000 * factor, 2);
+  it('adjusts either figure off the film\'s own release year: the budget by CPI, the gross by ticket price', () => {
+    const cpiFactor = CPI[String(BASE_YEAR)] / CPI['1993'];
+    const ticketFactor = TICKET_PRICES[String(BASE_YEAR)] / TICKET_PRICES['1993'];
+    expect(adjustedMovieMoney(movie(), 'budget')).toBeCloseTo(63_000_000 * cpiFactor, 2);
+    expect(adjustedMovieMoney(movie(), 'revenue')).toBeCloseTo(920_000_000 * ticketFactor, 2);
+    expect(ticketFactor).not.toBeCloseTo(cpiFactor, 1);
   });
 
   // TMDB's 0 means "we don't know", the same as everywhere else in the app —
@@ -100,5 +102,24 @@ describe('adjustedMovieMoney', () => {
     // Raw, Barbie is far ahead. Adjusted, they are much closer.
     expect(1_450_000_000 / 920_000_000).toBeGreaterThan(1.5);
     expect(barbie / jurassicPark).toBeLessThan(1.1);
+  });
+});
+
+describe('adjustGross — a gross is tickets (the table shared with Box Office Archive)', () => {
+  it('scales by the average ticket price between the two years', () => {
+    expect(adjustGross(920_000_000, 1993) / 920_000_000).toBeCloseTo(TICKET_PRICES[String(BASE_YEAR)] / TICKET_PRICES['1993'], 6);
+    expect(ticketsSold(920_000_000, 1993)).toBeCloseTo(920_000_000 / TICKET_PRICES['1993'], 3);
+  });
+  it('leaves the base year and later alone, and refuses what it cannot do honestly', () => {
+    expect(adjustGross(500, BASE_YEAR)).toBe(500);
+    expect(adjustGross(500, BASE_YEAR + 1)).toBe(500);
+    expect(adjustGross(500, 1850)).toBeNull();
+    expect(adjustGross(null, 1993)).toBeNull();
+  });
+  it('carries the shared wording', () => {
+    expect(WORDING.inBaseYear).toBe(`In ${BASE_YEAR} dollars`);
+    expect(WORDING.asReported).toBe('As reported');
+    expect(WORDING.grossMethod).toBe('by average ticket price');
+    expect(WORDING.budgetMethod).toBe('by CPI');
   });
 });

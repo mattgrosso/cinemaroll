@@ -6,7 +6,7 @@
 // unknown provenance. The archive has the domestic run weekend by weekend,
 // the opening, the theater count, how long it held #1, and links back to the
 // archived page each figure came from.
-import { adjustForInflation, BASE_YEAR } from './inflation.js';
+import { adjustGross, adjustForInflation, BASE_YEAR, WORDING } from './inflation.js';
 import { formatMoneyShort } from './formatMoney.js';
 
 // Switches to boxofficehistory.com once the domain lands.
@@ -37,7 +37,7 @@ export const archiveFacts = (film) => {
   const biggest = weekends.reduce((a, w) => (w.gross > (a?.gross ?? -1) ? w : a), null);
   const opening = film.opening?.gross ? film.opening : (weekends[0] || null);
   const year = film.year || (film.releaseDate ? Number(String(film.releaseDate).slice(0, 4)) : null);
-  const todays = year ? adjustForInflation(film.domestic, year) : null;
+  const todays = year ? adjustGross(film.domestic, year) : null;
   return {
     id: film.id,
     title: film.title,
@@ -93,5 +93,9 @@ export const weekendLine = (weekend) => {
   return `#1 that weekend: ${weekend.top}${gross}`;
 };
 
-/** "in 2024 dollars" — which year the CPI table expresses "today" as. */
-export const todaysDollarsLabel = () => `in ${BASE_YEAR} dollars`;
+/** "in 2025 dollars, by average ticket price" — the shared wording for a gross. */
+export const todaysDollarsLabel = () => `in ${BASE_YEAR} dollars, ${WORDING.grossMethod}`;
+/** "in 2025 dollars, by CPI" — the shared wording for a budget. */
+export const todaysBudgetLabel = () => `in ${BASE_YEAR} dollars, ${WORDING.budgetMethod}`;
+/** A budget in today's dollars, by CPI (null when it can't be done honestly). */
+export const budgetToday = (budget, year) => (budget > 0 && year ? adjustForInflation(budget, year) : null);

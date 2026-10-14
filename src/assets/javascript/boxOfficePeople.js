@@ -10,7 +10,7 @@
 // matches them: crew by JOB, never by position, and performers by TOP
 // BILLING only — the whole cast list would hand every big film's
 // twentieth-billed actor a billion dollars.
-import { releaseYear, adjustForInflation } from './inflation.js';
+import { releaseYear, adjustGross } from './inflation.js';
 
 export const TOP_BILLING = 5;
 
@@ -49,7 +49,7 @@ export function boxOfficeByPerson (entries, { role = 'director', adjusted = fals
     if (!(raw > 0)) return;
     const year = releaseYear(movie.release_date);
     if (year == null) return;
-    const gross = adjusted ? adjustForInflation(raw, year) : raw;
+    const gross = adjusted ? adjustGross(raw, year) : raw;
     if (!(gross > 0)) return;
 
     namesInRole(movie, role).forEach((name) => {

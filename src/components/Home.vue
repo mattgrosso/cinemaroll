@@ -545,7 +545,7 @@
               <li>
                 <button class="dropdown-item money-mode" :class="{active: moneyInTodaysDollars}" @click.stop="toggleMoneyInflation">
                   <i class="bi" :class="moneyInTodaysDollars ? 'bi-check-square' : 'bi-square'"></i>
-                  In today's dollars
+                  {{ todaysDollarsWording }}
                 </button>
               </li>
             </ul>
@@ -1693,6 +1693,7 @@
 
 <script>
 import { isShort, withoutShorts } from '../assets/javascript/shorts.js';
+import { WORDING } from '../assets/javascript/inflation.js';
 import { eventName, trackWhenOnline } from '../assets/javascript/usageEvents.js';
 import { publishDue } from '../assets/javascript/social.js';
 import axios from 'axios';
@@ -2682,6 +2683,10 @@ export default {
         { value: 'profit', label: 'Profit' },
         { value: 'returnPct', label: 'Return on budget' }
       ];
+    },
+    // The shared words for the money mode (inflation.js): "In 2025 dollars".
+    todaysDollarsWording () {
+      return WORDING.inBaseYear;
     },
     moneyInTodaysDollars () {
       return this.$store.state.moneyInTodaysDollars;

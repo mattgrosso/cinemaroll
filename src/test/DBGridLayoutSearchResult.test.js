@@ -242,14 +242,15 @@ describe('DBGridLayoutSearchResult — the caption follows the money mode', () =
   })
 
   it('shows bigger figures with the mode on', () => {
-    // 1993 money is worth ~2.23x today's, per the bundled CPI table.
-    expect(card('boxOffice', {}, true).vm.sortDetail).toBe('$2.1B')
+    // A gross is tickets: 1993's $4.14 average ticket against 2025's, per the
+    // bundled table from Box Office Archive (~2.75x). A budget goes by CPI (~2.23x).
+    expect(card('boxOffice', {}, true).vm.sortDetail).toBe('$2.5B')
     expect(card('budget', {}, true).vm.sortDetail).toBe('$141M')
   })
 
   it('adjusts profit too', () => {
     expect(card('profit', {}, false).vm.sortDetail).toBe('+$857M')
-    expect(card('profit', {}, true).vm.sortDetail).toBe('+$1.9B')
+    expect(card('profit', {}, true).vm.sortDetail).toBe('+$2.4B')
   })
 
   // A ratio of two same-year figures has no era to be adjusted out of.

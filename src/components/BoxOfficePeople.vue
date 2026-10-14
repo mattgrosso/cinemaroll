@@ -2,13 +2,13 @@
   <div class="box-office-people">
     <div class="box-office-card">
       <p class="box-office-title">Highest grossing people</p>
-      <p class="box-office-caption">People ranked by the worldwide gross of your films they made. Performers count their top-billed roles only. Tap a name to see their films.</p>
+      <p class="box-office-caption">People ranked by the worldwide gross of your films they made. {{ wording.inBaseYear }}, each gross is restated by average ticket price. Performers count their top-billed roles only. Tap a name to see their films.</p>
       <div class="role-row" role="group" aria-label="Which role to rank">
         <button v-for="option in roles" :key="option.key" type="button" class="role-option" :class="{ active: option.key === role }" :aria-pressed="option.key === role" @click="setRole(option.key)">{{ option.label }}</button>
       </div>
       <div class="dollar-toggle" role="group" aria-label="Which dollars to sum">
-        <button type="button" class="dollar-option" :class="{ active: adjusted }" :aria-pressed="adjusted" @click="setAdjusted(true)">Today's dollars</button>
-        <button type="button" class="dollar-option" :class="{ active: !adjusted }" :aria-pressed="!adjusted" @click="setAdjusted(false)">As released</button>
+        <button type="button" class="dollar-option" :class="{ active: adjusted }" :aria-pressed="adjusted" @click="setAdjusted(true)">{{ wording.inBaseYear }}</button>
+        <button type="button" class="dollar-option" :class="{ active: !adjusted }" :aria-pressed="!adjusted" @click="setAdjusted(false)">{{ wording.asReported }}</button>
       </div>
       <p v-if="!people.length" class="box-office-empty">No box office figures yet — the Settings panel's backfill fetches them.</p>
       <ul v-else>
@@ -31,6 +31,7 @@
 // and maybe even crew" (bug report, 2026-09-15). Math in boxOfficePeople.js.
 import { boxOfficeByPerson, ROLES } from "../assets/javascript/boxOfficePeople.js";
 import { formatMoneyShort } from "../assets/javascript/formatMoney.js";
+import { WORDING } from "../assets/javascript/inflation.js";
 
 // Same key BoxOfficeYears reads, so the two cards open in the same dollars.
 const DOLLARS_KEY = 'cinemaRoll.insights.boxOfficeDollars';
@@ -62,6 +63,9 @@ export default {
     };
   },
   computed: {
+    wording () {
+      return WORDING;
+    },
     people () {
       return boxOfficeByPerson(this.resultsWithRatings, { role: this.role, adjusted: this.adjusted })
         .slice(0, 25);

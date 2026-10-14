@@ -19,6 +19,7 @@
     "backup-db": "node scripts/backup-database.mjs",
     "restore-db": "node scripts/restore-database.mjs",
     "mint-test-token": "node scripts/mint-test-token.mjs",
+    "fetch-inflation": "node scripts/fetch-inflation.mjs",
     "letterboxd-status": "node scripts/letterboxd-status.mjs",
     "import-letterboxd": "node scripts/import-letterboxd-csv.mjs",
     "deploy:newsletter": "bash scripts/deploy-newsletter-lambda.sh",

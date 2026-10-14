@@ -520,7 +520,7 @@
             <div v-if="archiveBoxOffice.biggest"><dt>Biggest weekend</dt><dd>{{ formatCurrency(archiveBoxOffice.biggest.gross) }}<span v-if="archiveBoxOffice.biggest.week" class="box-office-note">week {{ archiveBoxOffice.biggest.week }}</span></dd></div>
             <div v-if="archiveBoxOffice.widest"><dt>Widest release</dt><dd>{{ archiveBoxOffice.widest.toLocaleString() }} theaters<span v-if="archiveBoxOffice.days" class="box-office-note">{{ archiveBoxOffice.days }} days in release</span></dd></div>
             <div v-if="archiveBoxOffice.worldwide || movieRevenue"><dt>Worldwide</dt><dd>{{ formatCurrency(archiveBoxOffice.worldwide || movieRevenue) }}<span v-if="!archiveBoxOffice.worldwide" class="box-office-note">TMDB</span></dd></div>
-            <div v-if="movieBudget"><dt>Budget</dt><dd>{{ formatCurrency(movieBudget) }}</dd></div>
+            <div v-if="movieBudget"><dt>Budget</dt><dd>{{ formatCurrency(movieBudget) }}<span v-if="archiveBudgetToday" class="box-office-note">{{ formatMoneyShort(archiveBudgetToday) }} {{ archiveBudgetLabel }}</span></dd></div>
           </dl>
           <p v-else class="long-list mb-0">
             <span v-if="movieBudget">Budget: {{ formatCurrency(movieBudget) }}</span>
@@ -747,7 +747,7 @@ import { fetchCriticReviews, criticErrorMessage } from '../utils/criticReviewsRe
 import { cinemaScoreReading, CINEMASCORE_SITE } from '../assets/javascript/cinemaScore.js';
 import { fetchCinemaScore } from '../utils/cinemaScoreRequest.js';
 import { fetchArchiveFilm, fetchArchiveCalendar } from '../utils/boxOfficeArchiveRequest.js';
-import { archiveFacts, archiveSummary, weekendForDate, weekendLine, archiveWeekendUrl, todaysDollarsLabel } from '../assets/javascript/boxOfficeArchive.js';
+import { archiveFacts, archiveSummary, weekendForDate, weekendLine, archiveWeekendUrl, todaysDollarsLabel, todaysBudgetLabel, budgetToday } from '../assets/javascript/boxOfficeArchive.js';
 import NameRow from './NameRow.vue';
 import { formatMoneyShort } from '../assets/javascript/formatMoney.js';
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
@@ -941,6 +941,13 @@ export default {
     },
     archiveTodaysDollars () {
       return todaysDollarsLabel();
+    },
+    archiveBudgetLabel () {
+      return todaysBudgetLabel();
+    },
+    archiveBudgetToday () {
+      const today = budgetToday(this.movieBudget, this.archiveBoxOffice?.year);
+      return today && Math.round(today) !== Math.round(this.movieBudget) ? today : null;
     },
     // The years of your viewings, for the archive's weekend calendars.
     viewingYears () {

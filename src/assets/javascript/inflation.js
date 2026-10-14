@@ -6,26 +6,36 @@
 // raw numbers suggest, and a library spanning eighty years makes every
 // unadjusted money comparison quietly wrong.
 //
-// A BUNDLED TABLE, not an API. This is an offline-capable PWA, and a figure
-// that silently becomes "—" on a plane is worse than one computed from a
-// hundred-odd numbers that only change once a year. Same call
-// `otherAwardsWinners.json` already makes.
+// ONE TABLE, SHARED WITH BOX OFFICE ARCHIVE (2026-10-14, Matt: "unify the
+// concepts of today's dollars"). `src/assets/data/inflation.json` is the
+// archive's /api/v1/inflation.json, refreshed with `yarn fetch-inflation`
+// and bundled because this PWA works offline. Two methods, by what the
+// money is:
 //
-// One thing worth knowing about the four money sorts: **return on budget is
-// already inflation-neutral**. A film's budget and its box office are in the
-// same year's dollars, so the ratio between them doesn't move when you
-// re-express both. Adjusting it would be a no-op, and this module
-// deliberately offers no way to.
+//   - a GROSS is tickets → average US ticket price of its year (the old
+//     Box Office Mojo method): `adjustGross`.
+//   - a BUDGET is not tickets → CPI: `adjustForInflation`.
+//
+// Ticket prices after 2019 are estimates (2019 carried forward by CPI) and
+// the table says which. Return on budget stays inflation-neutral: both sides
+// are the same year's dollars, so this module offers no way to adjust it.
 
-import cpiData from '../data/cpi.json';
+import table from '../data/inflation.json';
 
-export const CPI = cpiData.series;
+export const CPI = table.cpi;
+export const TICKET_PRICES = table.ticketPrices;
 
 // The year every adjusted figure is expressed in — the latest full year in
 // the table. When a newer annual average is added, this follows it.
-export const BASE_YEAR = cpiData.baseYear;
+export const BASE_YEAR = table.baseYear;
 
-const EARLIEST_YEAR = Math.min(...Object.keys(CPI).map(Number));
+// The words every screen uses, so the two apps never drift: "As reported" /
+// "In 2025 dollars", and the method each kind of money goes by.
+export const WORDING = table.wording || { asReported: 'As reported', inBaseYear: `In ${BASE_YEAR} dollars`, grossMethod: 'by average ticket price', budgetMethod: 'by CPI' };
+export const TICKET_PRICE_ESTIMATED_YEARS = table.ticketPricesEstimated || [];
+
+const EARLIEST_CPI_YEAR = Math.min(...Object.keys(CPI).map(Number));
+const EARLIEST_TICKET_YEAR = Math.min(...Object.keys(TICKET_PRICES).map(Number));
 
 /**
  * The release year a money figure belongs to, from a TMDB release date.
@@ -42,8 +52,14 @@ export const releaseYear = (releaseDate) => {
   return Number.isFinite(year) ? year : null;
 };
 
+const numeric = (amount) => {
+  const value = typeof amount === 'number' ? amount : parseFloat(amount);
+  return Number.isFinite(value) ? value : null;
+};
+
 /**
- * `amount` in `fromYear` dollars -> the same purchasing power in BASE_YEAR.
+ * `amount` in `fromYear` dollars -> the same purchasing power in BASE_YEAR,
+ * by CPI. For budgets (and anything that isn't tickets).
  *
  * Returns null when it cannot be done honestly: no amount, no year, or a year
  * the table doesn't cover. A year LATER than the table's last (a film
@@ -53,11 +69,11 @@ export const releaseYear = (releaseDate) => {
  * to be looked at.
  */
 export const adjustForInflation = (amount, fromYear) => {
-  const value = typeof amount === 'number' ? amount : parseFloat(amount);
-  if (!Number.isFinite(value)) return null;
+  const value = numeric(amount);
+  if (value === null) return null;
 
   const year = Number(fromYear);
-  if (!Number.isFinite(year) || year < EARLIEST_YEAR) return null;
+  if (!Number.isFinite(year) || year < EARLIEST_CPI_YEAR) return null;
 
   if (year >= BASE_YEAR) return value;
 
@@ -69,12 +85,40 @@ export const adjustForInflation = (amount, fromYear) => {
 };
 
 /**
+ * A gross from `fromYear` -> what the same number of tickets would take at
+ * BASE_YEAR's average ticket price. Same contract as adjustForInflation.
+ */
+export const adjustGross = (amount, fromYear) => {
+  const value = numeric(amount);
+  if (value === null) return null;
+
+  const year = Number(fromYear);
+  if (!Number.isFinite(year) || year < EARLIEST_TICKET_YEAR) return null;
+
+  if (year >= BASE_YEAR) return value;
+
+  const from = TICKET_PRICES[String(year)];
+  const to = TICKET_PRICES[String(BASE_YEAR)];
+  if (!from || !to) return null;
+
+  return value * (to / from);
+};
+
+/** Tickets a gross bought at its year's average price, or null. */
+export const ticketsSold = (amount, fromYear) => {
+  const value = numeric(amount);
+  const price = TICKET_PRICES[String(Number(fromYear))];
+  return value !== null && price ? value / price : null;
+};
+
+/**
  * The same, taking a whole movie — the shape every caller actually has.
- * `field` is 'budget' or 'revenue'.
+ * `field` is 'budget' (by CPI) or 'revenue' (a gross: by ticket price).
  */
 export const adjustedMovieMoney = (movie, field) => {
   const raw = movie?.[field] || 0;
   // TMDB's 0 means "we don't know", the same as everywhere else in the app.
   if (!(raw > 0)) return null;
-  return adjustForInflation(raw, releaseYear(movie?.release_date));
+  const year = releaseYear(movie?.release_date);
+  return field === 'revenue' ? adjustGross(raw, year) : adjustForInflation(raw, year);
 };
