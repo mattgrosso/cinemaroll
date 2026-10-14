@@ -396,3 +396,54 @@ describe('App - the push digest survives the app going away', () => {
     expect(digestPublishes(store)).toBe(1)
   })
 })
+
+// Bug report (Matt, 2026-10-14): "once again stuck seeing the Cinema Roll is
+// updating banner, but nothing seems to be happening." The automatic update
+// asked for a reload, iOS ignored it, and "Updating…" stayed up for 47
+// minutes with nothing to undo it. Still here after the stall window means
+// the reload never happened: drop "Updating" and try again, this time hard.
+describe('App - a reload that never happens', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+    window.localStorage.clear()
+    window.sessionStorage.clear()
+  })
+
+  it('hands the notice back and tries again with a hard reload', async () => {
+    vi.useFakeTimers()
+    window.localStorage.clear()
+    window.sessionStorage.clear()
+    const reloadSpy = vi.fn() // the reload iOS quietly ignored
+    const replaceSpy = vi.fn()
+    const originalLocation = window.location
+    delete window.location
+    window.location = { ...originalLocation, href: 'https://www.cinemaroll.org/#/', reload: reloadSpy, replace: replaceSpy }
+    global.fetch = vi.fn(() => Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) }))
+
+    vi.spyOn(document, 'addEventListener').mockImplementation(() => {})
+    vi.spyOn(window, 'addEventListener').mockImplementation(() => {})
+    const commit = vi.fn()
+    const wrapper = shallowMount(App, {
+      global: {
+        mocks: {
+          $store: { state: { updateAvailable: true }, commit, dispatch: vi.fn(), getters: {} },
+          $route: { path: '/' },
+          $router: { push: vi.fn() }
+        }
+      }
+    })
+    wrapper.vm.deployedBundleSeen = 'js/app.new.js'
+    wrapper.vm.armAutoUpdate()
+    await vi.waitFor(() => expect(reloadSpy).toHaveBeenCalledTimes(1))
+    expect(commit).toHaveBeenLastCalledWith('setUpdateApplying', true)
+
+    await vi.advanceTimersByTimeAsync(11000)
+    expect(commit).toHaveBeenCalledWith('setUpdateApplying', false)
+    await vi.waitFor(() => expect(replaceSpy).toHaveBeenCalledTimes(1))
+    expect(replaceSpy.mock.calls[0][0]).toMatch(/fresh=\d+/)
+
+    window.location = originalLocation
+    delete global.fetch
+  })
+})

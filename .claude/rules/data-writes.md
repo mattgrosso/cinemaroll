@@ -186,6 +186,13 @@ goes back to waiting for an 8-second quiet stretch. Showtimes dismissals and
 reminders go through `writeDurably` at `theaters/<dismissed|reminders>/<theater>/<slug>`;
 `applyDbPathLocally` knows those paths and `loadTheaterBoard` replays the queue.
 
+**Asking for a reload is not a reload (2026-10-14).** iOS can ignore
+`location.reload()` outright; the notice then sat on "Updating…" for 47
+minutes. After a `'reloaded'`/`'hard'` outcome, App.vue and the banner both
+run `watchForStalledReload` (wall-clock, so time in the background counts):
+a page still here after `RELOAD_STALL_MS` drops "Updating", and App.vue
+re-arms the automatic update, which is now a repeat and so goes hard.
+
 **A small deploy must stay a small download (2026-10-02).** `vite.config.mjs`'s
 `coreChunk` puts everything loaded up front in `js/core.<hash>.js`; only
 `main.js` and `router/index.js` (which names every screen file) stay in

@@ -229,6 +229,29 @@ async function runReloadForUpdate ({
   return 'reloaded';
 }
 
+// A reload that never happened. Bug report (Matt, 2026-10-14): "once again
+// stuck seeing the Cinema Roll is updating banner, but nothing seems to be
+// happening." The automatic update asked for a reload, iOS quietly ignored
+// it, and 47 minutes later the same page was still showing "Updating…" with
+// nothing left to undo it. A page that is still here this long after asking
+// to go has not reloaded: `onStall` hands the notice back, and the next try
+// for the same version counts as a repeat (the hard reload).
+//
+// Wall-clock, polled: a backgrounded PWA doesn't run timers, so a plain
+// 10-second timeout could sit paused for an hour. The first tick after the
+// app comes back to the front compares real elapsed time instead.
+export const RELOAD_STALL_MS = 10000;
+
+export function watchForStalledReload (onStall, { stallMs = RELOAD_STALL_MS, every = 1000, now = Date.now } = {}) {
+  const startedAt = now();
+  const timer = setInterval(() => {
+    if (now() - startedAt < stallMs) return;
+    clearInterval(timer);
+    onStall();
+  }, every);
+  return () => clearInterval(timer);
+}
+
 export const NEW_APP_FETCH_TIMEOUT_MS = 10000;
 
 /**

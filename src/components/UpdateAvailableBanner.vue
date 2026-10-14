@@ -18,7 +18,7 @@
 </template>
 
 <script>
-import { reloadForUpdate } from '../utils/appUpdate.js';
+import { reloadForUpdate, watchForStalledReload } from '../utils/appUpdate.js';
 import { trackEvent } from '../utils/usage.js';
 
 // Shows once App.vue's deploy check flags a new version. Since 2026-08-15
@@ -39,7 +39,8 @@ export default {
       updating: false,
       // The connection couldn't carry the new version (appUpdate.js), so
       // the page stayed on the working one; say so rather than spin.
-      deferred: false
+      deferred: false,
+      cancelStallWatch: null
     };
   },
   computed: {
@@ -64,10 +65,21 @@ export default {
       if (outcome === 'deferred') {
         this.updating = false;
         this.deferred = true;
+      } else if (outcome === 'reloaded' || outcome === 'hard') {
+        // The reload can be silently ignored (2026-10-14); don't leave the
+        // button greyed out for good. A second tap goes hard.
+        this.cancelStallWatch?.();
+        this.cancelStallWatch = watchForStalledReload(() => {
+          this.cancelStallWatch = null;
+          this.updating = false;
+        });
       }
     },
     // The wait-out-the-install logic lives in utils/appUpdate.js, shared
     // with App.vue's automatic update path.
+  },
+  beforeUnmount () {
+    this.cancelStallWatch?.();
   }
 }
 </script>

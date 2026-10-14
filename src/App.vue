@@ -41,7 +41,7 @@ import RouteProgress from "./components/RouteProgress.vue";
 import SavedFlash from "./components/SavedFlash.vue";
 import { pickFallbackBanner } from "./assets/javascript/bannerFallback.js";
 import { flushStashedBugReports } from "./utils/bugReports.js";
-import { reloadForUpdate, isSafeMomentForReload, shouldAutoAttempt, markUpdateLanded, recordWorkerState, checkWorkerOnce, isFreshMoment, runUpdateCheck, QUIET_MS } from "./utils/appUpdate.js";
+import { reloadForUpdate, watchForStalledReload, isSafeMomentForReload, shouldAutoAttempt, markUpdateLanded, recordWorkerState, checkWorkerOnce, isFreshMoment, runUpdateCheck, QUIET_MS } from "./utils/appUpdate.js";
 import { fetchWithTimeout } from "./utils/networkHealth.js";
 import { refreshSubscriptionIfGranted, closeDeliveredNotifications } from "./utils/push.js";
 
@@ -66,6 +66,7 @@ export default {
       lastBecameVisibleAt: Date.now(),
       deployedBundleSeen: null,
       autoUpdateTimer: null,
+      cancelStallWatch: null,
       pushDigestTimer: null
     };
   },
@@ -310,6 +311,16 @@ export default {
         // Back to the banner, and try again after a quiet stretch.
         this.$store.commit('setUpdateApplying', false);
         this.applyWhenQuiet();
+      } else if (outcome === 'reloaded' || outcome === 'hard') {
+        // Still here well after asking to go: the reload never happened
+        // (2026-10-14, stuck on "Updating…" for 47 minutes). Hand the notice
+        // back and try again - the same version again, so this time hard.
+        if (this.cancelStallWatch) this.cancelStallWatch();
+        this.cancelStallWatch = watchForStalledReload(() => {
+          this.cancelStallWatch = null;
+          this.$store.commit('setUpdateApplying', false);
+          this.armAutoUpdate();
+        });
       }
     },
     armAutoUpdate () {

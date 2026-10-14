@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { isSafeMomentForReload, shouldAutoAttempt, reloadForUpdate, hardReload, waitForNewWorker, markUpdateLanded, newAppIsReachable, isFreshMoment, runUpdateCheck, checkWorkerOnce, getUpdateTiming } from '@/utils/appUpdate.js'
+import { isSafeMomentForReload, shouldAutoAttempt, reloadForUpdate, hardReload, waitForNewWorker, markUpdateLanded, newAppIsReachable, isFreshMoment, runUpdateCheck, checkWorkerOnce, getUpdateTiming, watchForStalledReload } from '@/utils/appUpdate.js'
 
 // Auto-update ships reloads only at provably quiet moments (bug report:
 // "the user shouldn't have to take an action" — but the July lesson stands:
@@ -443,5 +443,42 @@ describe('reloadForUpdate when the user starts using the page during the wait', 
     expect(await reloadForUpdate({ target: 'js/app.new.js', stillQuiet: () => true, ...h })).toBe('reloaded')
     expect(h.reload).toHaveBeenCalledTimes(1)
     expect(h.hard).not.toHaveBeenCalled()
+  })
+})
+
+describe('watchForStalledReload', () => {
+  afterEach(() => { vi.useRealTimers() })
+
+  it('says so once the page is still here after the stall window', async () => {
+    vi.useFakeTimers()
+    const onStall = vi.fn()
+    watchForStalledReload(onStall, { stallMs: 10000 })
+    await vi.advanceTimersByTimeAsync(9000)
+    expect(onStall).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(onStall).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(20000)
+    expect(onStall).toHaveBeenCalledTimes(1)
+  })
+
+  // A backgrounded PWA's timers sit paused; the first tick back counts the
+  // real time that passed, not the ticks that ran.
+  it('measures by the clock, so time in the background counts', async () => {
+    vi.useFakeTimers()
+    let clock = 0
+    const onStall = vi.fn()
+    watchForStalledReload(onStall, { stallMs: 10000, now: () => clock })
+    clock = 60 * 60 * 1000
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(onStall).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops watching once cancelled', async () => {
+    vi.useFakeTimers()
+    const onStall = vi.fn()
+    const cancel = watchForStalledReload(onStall, { stallMs: 10000 })
+    cancel()
+    await vi.advanceTimersByTimeAsync(20000)
+    expect(onStall).not.toHaveBeenCalled()
   })
 })
