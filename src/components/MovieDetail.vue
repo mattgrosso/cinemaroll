@@ -925,9 +925,13 @@ export default {
     },
     boxOfficeSummary () {
       const parts = [];
-      if (this.archiveBoxOffice) parts.push(archiveSummary(this.archiveBoxOffice));
-      else if (this.movieRevenue) parts.push(`${formatMoneyShort(this.movieRevenue)} box office`);
+      if (this.archiveBoxOffice) {
+        parts.push(archiveSummary(this.archiveBoxOffice));
+        if (this.movieBudget) parts.push(`${formatMoneyShort(this.movieBudget)} budget`);
+        return parts.join(' · ');
+      }
       if (this.movieBudget) parts.push(`${formatMoneyShort(this.movieBudget)} budget`);
+      if (this.movieRevenue) parts.push(`${formatMoneyShort(this.movieRevenue)} box office`);
       return parts.join(' · ');
     },
     // What Box Office Archive knows about this film (null until it answers,
@@ -3489,7 +3493,7 @@ export default {
     .viewing-weekend {
       display: block;
       color: #ccc;
-      font-size: 0.72rem;
+      font-size: ds(0.72rem);
       padding: 0 0.75rem 0.4rem;
       text-decoration: none;
       &:active { color: white; }
@@ -3699,14 +3703,14 @@ export default {
     border-bottom: 1px solid rgba(255, 255, 255, 0.12);
     &:last-child { border-bottom: 0; }
   }
-  dt { color: #ccc; font-weight: 400; font-size: 0.82rem; margin: 0; white-space: nowrap; }
-  dd { margin: 0; text-align: right; color: white; font-size: 0.9rem; }
-  .box-office-note { display: block; color: #ccc; font-size: 0.72rem; }
+  dt { color: #ccc; font-weight: 400; font-size: ds(0.82rem); margin: 0; white-space: nowrap; }
+  dd { margin: 0; text-align: right; color: white; font-size: ds(0.9rem); }
+  .box-office-note { display: block; color: #ccc; font-size: ds(0.72rem); }
 }
 .box-office-link {
   display: inline-block;
   color: #9fb8ff;
-  font-size: 0.8rem;
+  font-size: ds(0.8rem);
   margin-top: 0.25rem;
   &:active { color: white; }
 }

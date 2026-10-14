@@ -88,3 +88,10 @@ global.testUtils = {
     global.console.info = console.info
   }
 }
+// No unit test may reach the network. A mount that triggers a lookup on its
+// own (MovieDetail asks Box Office Archive for every film) gets a refusal
+// here, never CloudFront. Tests that need fetch stub their own
+// (vi.stubGlobal('fetch', …) or global.fetch = …), as they already do.
+if (typeof globalThis.fetch === 'function') {
+  globalThis.fetch = () => Promise.reject(new Error('network disabled in tests'));
+}

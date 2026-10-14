@@ -89,7 +89,7 @@ describe('MovieDetail — Box Office Archive', () => {
   it('falls back to TMDB budget and revenue for a film the archive does not know', async () => {
     await mountFor(movie(999, 'Unknown'));
     const tile = wrapper.find('#boxoffice');
-    expect(tile.attributes('data-summary')).toBe('$1B box office · $185M budget');
+    expect(tile.attributes('data-summary')).toBe('$185M budget · $1B box office');
     expect(tile.find('.box-office-archive').exists()).toBe(false);
     expect(tile.find('.box-office-link').exists()).toBe(false);
   });
