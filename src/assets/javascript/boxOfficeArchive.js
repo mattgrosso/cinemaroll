@@ -115,6 +115,16 @@ export const grossTodayByRuns = (domestic, year, runs) => {
   return parts.reduce((s, v) => s + v, 0) + (rest ?? 0);
 };
 
+/**
+ * The explanation, for anywhere the restated figure needs one. The same
+ * words live in the archive's inflation.json (method.runs) and its About page.
+ */
+export const DOLLARS_EXPLANATION = {
+  gross: 'A gross is tickets: divide by the average US ticket price of the year it was earned (tickets sold), multiply by today\'s price.',
+  budget: 'A budget is not tickets: it is scaled by the Consumer Price Index.',
+  runs: 'A film released more than once earned its money in different years at different ticket prices, so each release is restated separately: the original run at its year\'s price, each re-issue at its own, and anything the known runs don\'t account for at the original year\'s.'
+};
+
 /** "in 2025 dollars, by average ticket price" — the shared wording for a gross. */
 export const todaysDollarsLabel = (byRuns = false) => `in ${BASE_YEAR} dollars, ${WORDING.grossMethod}${byRuns ? ', release by release' : ''}`;
 /** "in 2025 dollars, by CPI" — the shared wording for a budget. */

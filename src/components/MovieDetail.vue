@@ -514,19 +514,20 @@
                Office Archive (Matt's rescue of the old Box Office Mojo,
                2026-10-14), ahead of TMDB's one worldwide number. -->
           <dl v-if="archiveBoxOffice" class="box-office-archive">
-            <div><dt>Domestic</dt><dd>{{ formatCurrency(archiveBoxOffice.domestic) }}<span v-if="archiveBoxOffice.domesticToday" class="box-office-note">{{ formatMoneyShort(archiveBoxOffice.domesticToday) }} {{ archiveTodaysDollars }}</span></dd></div>
+            <div><dt>Domestic</dt><dd>{{ formatCurrency(archiveBoxOffice.domestic) }}<span v-if="archiveBoxOffice.domesticToday" class="box-office-note" :title="archiveBoxOffice.domesticTodayByRuns ? dollarsExplanation.runs : dollarsExplanation.gross">{{ formatMoneyShort(archiveBoxOffice.domesticToday) }} {{ archiveTodaysDollars }}</span></dd></div>
             <div v-if="archiveBoxOffice.opening"><dt>Opening weekend</dt><dd>{{ formatCurrency(archiveBoxOffice.opening.gross) }}<span class="box-office-note"><template v-if="archiveBoxOffice.opening.rank">#{{ archiveBoxOffice.opening.rank }}</template><template v-if="archiveBoxOffice.opening.theaters"> · {{ archiveBoxOffice.opening.theaters.toLocaleString() }} theaters</template><template v-if="archiveBoxOffice.opening.average"> · {{ formatMoneyShort(archiveBoxOffice.opening.average) }} each</template></span></dd></div>
             <div v-if="archiveBoxOffice.weekends"><dt>Weekends</dt><dd>{{ archiveBoxOffice.atOne }} at #1<span class="box-office-note">{{ archiveBoxOffice.inTopTen }} in the top ten · {{ archiveBoxOffice.weekends }} charted</span></dd></div>
             <div v-if="archiveBoxOffice.biggest"><dt>Biggest weekend</dt><dd>{{ formatCurrency(archiveBoxOffice.biggest.gross) }}<span v-if="archiveBoxOffice.biggest.week" class="box-office-note">week {{ archiveBoxOffice.biggest.week }}</span></dd></div>
             <div v-if="archiveBoxOffice.widest"><dt>Widest release</dt><dd>{{ archiveBoxOffice.widest.toLocaleString() }} theaters<span v-if="archiveBoxOffice.days" class="box-office-note">{{ archiveBoxOffice.days }} days in release</span></dd></div>
             <div v-if="archiveBoxOffice.worldwide || movieRevenue"><dt>Worldwide</dt><dd>{{ formatCurrency(archiveBoxOffice.worldwide || movieRevenue) }}<span v-if="!archiveBoxOffice.worldwide" class="box-office-note">TMDB</span></dd></div>
-            <div v-if="movieBudget"><dt>Budget</dt><dd>{{ formatCurrency(movieBudget) }}<span v-if="archiveBudgetToday" class="box-office-note">{{ formatMoneyShort(archiveBudgetToday) }} {{ archiveBudgetLabel }}</span></dd></div>
+            <div v-if="movieBudget"><dt>Budget</dt><dd>{{ formatCurrency(movieBudget) }}<span v-if="archiveBudgetToday" class="box-office-note" :title="dollarsExplanation.budget">{{ formatMoneyShort(archiveBudgetToday) }} {{ archiveBudgetLabel }}</span></dd></div>
           </dl>
           <p v-else class="long-list mb-0">
             <span v-if="movieBudget">Budget: {{ formatCurrency(movieBudget) }}</span>
             <br v-if="movieBudget && movieRevenue">
             <span v-if="movieRevenue">Box Office: {{ formatCurrency(movieRevenue) }}</span>
           </p>
+          <p v-if="archiveBoxOffice?.domesticTodayByRuns" class="box-office-footnote">Released {{ archiveBoxOffice.runs.length }} times ({{ archiveBoxOffice.runs.map((r) => r.year).join(', ') }}): each release is restated at its own year's ticket price.</p>
           <a v-if="archiveBoxOffice" class="box-office-link" :href="archiveBoxOffice.url" target="_blank" rel="noopener">Weekend by weekend at Box Office Archive <i class="bi bi-box-arrow-up-right"></i></a>
         </div>
         </DetailSection>
@@ -747,7 +748,7 @@ import { fetchCriticReviews, criticErrorMessage } from '../utils/criticReviewsRe
 import { cinemaScoreReading, CINEMASCORE_SITE } from '../assets/javascript/cinemaScore.js';
 import { fetchCinemaScore } from '../utils/cinemaScoreRequest.js';
 import { fetchArchiveFilm, fetchArchiveCalendar } from '../utils/boxOfficeArchiveRequest.js';
-import { archiveFacts, archiveSummary, weekendForDate, weekendLine, archiveWeekendUrl, todaysDollarsLabel, todaysBudgetLabel, budgetToday } from '../assets/javascript/boxOfficeArchive.js';
+import { archiveFacts, archiveSummary, weekendForDate, weekendLine, archiveWeekendUrl, todaysDollarsLabel, todaysBudgetLabel, budgetToday, DOLLARS_EXPLANATION } from '../assets/javascript/boxOfficeArchive.js';
 import NameRow from './NameRow.vue';
 import { formatMoneyShort } from '../assets/javascript/formatMoney.js';
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
@@ -944,6 +945,9 @@ export default {
     },
     archiveBudgetLabel () {
       return todaysBudgetLabel();
+    },
+    dollarsExplanation () {
+      return DOLLARS_EXPLANATION;
     },
     archiveBudgetToday () {
       const today = budgetToday(this.movieBudget, this.archiveBoxOffice?.year);
@@ -3714,6 +3718,7 @@ export default {
   dd { margin: 0; text-align: right; color: white; font-size: ds(0.9rem); }
   .box-office-note { display: block; color: #ccc; font-size: ds(0.72rem); }
 }
+.box-office-footnote { color: #ccc; font-size: ds(0.74rem); margin: 0.25rem 0 0; }
 .box-office-link {
   display: inline-block;
   color: #9fb8ff;
