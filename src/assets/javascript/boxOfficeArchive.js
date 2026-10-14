@@ -6,7 +6,7 @@
 // unknown provenance. The archive has the domestic run weekend by weekend,
 // the opening, the theater count, how long it held #1, and links back to the
 // archived page each figure came from.
-import { adjustGross, adjustForInflation, BASE_YEAR, WORDING } from './inflation.js';
+import { adjustGross, adjustForInflation, BASE_YEAR, WORDING, TICKET_PRICES } from './inflation.js';
 import { formatMoneyShort } from './formatMoney.js';
 
 // Switches to boxofficehistory.com once the domain lands.
@@ -37,8 +37,8 @@ export const archiveFacts = (film) => {
   const biggest = weekends.reduce((a, w) => (w.gross > (a?.gross ?? -1) ? w : a), null);
   const opening = film.opening?.gross ? film.opening : (weekends[0] || null);
   const year = film.year || (film.releaseDate ? Number(String(film.releaseDate).slice(0, 4)) : null);
-  const todays = year ? grossTodayByRuns(film.domestic, year, film.runs) : null;
-  const byRuns = Array.isArray(film.runs) && film.runs.filter((r) => r?.gross > 0 && r.year).length > 1;
+  const todays = year ? grossTodayByRuns(film.domestic, year, film.runs, film.tickets) : null;
+  const byRuns = (Array.isArray(film.runs) && film.runs.filter((r) => r?.gross > 0 && r.year).length > 1) || film.tickets > 0;
   return {
     id: film.id,
     title: film.title,
@@ -48,7 +48,8 @@ export const archiveFacts = (film) => {
     // True when the lifetime figure was restated release by release (a
     // re-issued film), so the label can say so.
     domesticTodayByRuns: byRuns,
-    runs: byRuns ? film.runs.map((r) => ({ year: r.year, gross: r.gross, title: r.title || null })) : null,
+    runs: Array.isArray(film.runs) && film.runs.length > 1 ? film.runs.map((r) => ({ year: r.year, gross: r.gross, title: r.title || null })) : null,
+    tickets: film.tickets > 0 ? film.tickets : null,
     worldwide: film.worldwide || null,
     opening: opening ? { gross: opening.gross, theaters: opening.theaters ?? null, rank: opening.rank ?? null, average: opening.average ?? null, weekendKey: opening.weekendKey ?? null } : null,
     widest: film.widest || null,
@@ -104,7 +105,10 @@ export const weekendLine = (weekend) => {
  * whatever the runs don't account for at the original year's. Without runs
  * it is the plain one-year adjustment.
  */
-export const grossTodayByRuns = (domestic, year, runs) => {
+export const grossTodayByRuns = (domestic, year, runs, ticketsSold = null) => {
+  // The old site's own tickets-sold estimate, where it made one, wins: it
+  // splits re-issues the run data lumps together.
+  if (ticketsSold > 0 && TICKET_PRICES[String(BASE_YEAR)]) return ticketsSold * TICKET_PRICES[String(BASE_YEAR)];
   const list = (runs || []).filter((r) => r?.gross > 0 && r.year);
   if (!list.length) return adjustGross(domestic, year);
   const accounted = list.reduce((s, r) => s + r.gross, 0);
@@ -122,7 +126,7 @@ export const grossTodayByRuns = (domestic, year, runs) => {
 export const DOLLARS_EXPLANATION = {
   gross: 'A gross is tickets: divide by the average US ticket price of the year it was earned (tickets sold), multiply by today\'s price.',
   budget: 'A budget is not tickets: it is scaled by the Consumer Price Index.',
-  runs: 'A film released more than once earned its money in different years at different ticket prices, so each release is restated separately: the original run at its year\'s price, each re-issue at its own, and anything the known runs don\'t account for at the original year\'s.'
+  runs: 'A film released more than once earned its money in different years at different ticket prices, so each release is restated separately: the original run at its year\'s price, each re-issue at its own, and anything the known runs don\'t account for at the original year\'s. For the 300 films on the old Box Office Mojo\'s adjusted chart, its own estimate of tickets sold is used instead.'
 };
 
 /** "in 2025 dollars, by average ticket price" — the shared wording for a gross. */

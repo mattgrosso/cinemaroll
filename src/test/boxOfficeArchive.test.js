@@ -119,7 +119,7 @@ describe('boxOfficeArchiveRequest — two hops, cached, never throws', () => {
 });
 
 import { grossTodayByRuns, todaysDollarsLabel } from '@/assets/javascript/boxOfficeArchive.js';
-import { adjustGross, BASE_YEAR } from '@/assets/javascript/inflation.js';
+import { adjustGross, BASE_YEAR, TICKET_PRICES } from '@/assets/javascript/inflation.js';
 
 // Matt, 2026-10-14: a lifetime total adjusted at the original year's price
 // overstates films with re-releases; do it release by release.
@@ -139,5 +139,14 @@ describe('boxOfficeArchive — a lifetime gross restated release by release', ()
     expect(todaysDollarsLabel(true)).toBe(`in ${BASE_YEAR} dollars, by average ticket price, release by release`);
     expect(archiveFacts({ ...darkKnight, runs }).domesticTodayByRuns).toBe(true);
     expect(archiveFacts(darkKnight).domesticTodayByRuns).toBe(false);
+  });
+});
+
+describe('boxOfficeArchive — the old site\'s tickets estimate wins', () => {
+  it('restates from tickets sold when the archive carries them', () => {
+    const facts = archiveFacts({ ...darkKnight, runs: [{ year: 1939, gross: 189523031 }, { year: 1989, gross: 2403316 }], tickets: 202286200 });
+    expect(facts.domesticToday).toBeCloseTo(202286200 * TICKET_PRICES[String(BASE_YEAR)], 0);
+    expect(facts.domesticTodayByRuns).toBe(true);
+    expect(facts.tickets).toBe(202286200);
   });
 });
