@@ -691,6 +691,12 @@ aws lambda update-function-code --function-name cinemaroll-push \
 Run `aws` from the repo root — `.tool-versions` pins the awscli version there and a
 scratch directory has none.
 
+**Every outbound request goes through `timedFetch`** (Sentry, 2026-10-14: "cinemaroll-push
+is about to time out" — a sweep logged nothing for its whole 60s, one request hanging).
+fetch has no deadline of its own: theater pages and feeds get 10s, Firebase 15s, web push
+sends `timeout: 10s`. A timed-out theater is an ordinary failed board read.
+`pushLambdaDeadlines.test.js` fails on any bare `fetch(` in push-notify.js.
+
 Client pieces: `public/push-sw.js` (declarative-payload fallback renderer, pulled in via
 `workboxOptions.importScripts`), `src/utils/push.js` (subscribe from a USER TAP only —
 see the parallax lesson in vue-ui.md; self-heal refresh on app open), store actions
