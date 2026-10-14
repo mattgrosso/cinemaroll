@@ -115,6 +115,11 @@ export function alreadyInHat (hatMovies, tmdbId) {
  * A Cinema Roll library entry (or a raw TMDB result) → the payload Movie Hat
  * stores. It renders `title`, `poster_path`, `addedBy` and `note`, so those
  * have to be right; the rest rides along the way its own search results do.
+ *
+ * No overview or backdrop_path (2026-10-14): Movie Hat's home page downloads
+ * the whole hat, and Sentry flagged it as too large; those two were most of
+ * what was left and nothing shows them from a hat (MoviePreview fetches its
+ * own overview). Movie Hat stopped saving them and stripped the old ones.
  */
 export function toHatMovie (source, { addedBy = null, note = null, now = Date.now() } = {}) {
   const movie = source?.movie || source;
@@ -124,9 +129,7 @@ export function toHatMovie (source, { addedBy = null, note = null, now = Date.no
     id: movie.id,
     title: movie.title || '',
     poster_path: movie.poster_path || null,
-    backdrop_path: movie.backdrop_path || null,
     release_date: movie.release_date || '',
-    overview: movie.overview || '',
     vote_average: Number.isFinite(movie.vote_average) ? movie.vote_average : null,
     timeStamp: now,
     // Movie Hat shows this on the drawn-movie screen and in the share sheet.

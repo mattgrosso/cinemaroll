@@ -140,6 +140,13 @@ describe('toHatMovie', () => {
     expect(payload.timeStamp).toBe(1000);
   });
 
+  // Movie Hat's whole-hat download was too big for Sentry (2026-10-14).
+  it('leaves out the plot summary and backdrop, which no hat screen shows', () => {
+    const payload = toHatMovie({ ...entry.movie, backdrop_path: '/b.jpg' });
+    expect('overview' in payload).toBe(false);
+    expect('backdrop_path' in payload).toBe(false);
+  });
+
   it('says where it came from when nobody is named', () => {
     expect(toHatMovie(entry).addedBy).toBe('Cinema Roll');
   });
