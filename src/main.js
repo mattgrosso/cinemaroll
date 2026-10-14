@@ -25,7 +25,7 @@ import * as Sentry from "@sentry/vue";
 import { BrowserTracing } from "@sentry/tracing";
 import { CaptureConsole } from "@sentry/integrations";
 import { scrubEvent, scrubBreadcrumb } from "./utils/scrubUrl.js";
-import { beforeSendError } from "./utils/sentryBeforeSend.js";
+import { beforeSendError, isTestBrowser } from "./utils/sentryBeforeSend.js";
 import { handledErrorFilter } from "./utils/sentryHandled.js";
 import VueLazyLoad from 'vue3-lazyload';
 import './registerServiceWorker'
@@ -79,13 +79,10 @@ app.use(router);
 
 const allowDevSentry = false;
 
-// A production build served from this machine — scripts/perf-tour.mjs on
-// :8089, `vite preview`, a screenshot run — is a test, not a user. Its
-// errors reached Sentry (and Bug Desk) as if from the live site (2026-10-08:
-// a stale-chunk error from HeadlessChrome at localhost).
-const servedLocally = typeof window !== "undefined" && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname);
-
-if (allowDevSentry || (process.env.NODE_ENV !== "development" && !servedLocally)) {
+// A test is not a user: a production build served from this machine, or any
+// automated browser (Playwright etc.), even against the live site. See
+// isTestBrowser in utils/sentryBeforeSend.js.
+if (allowDevSentry || (process.env.NODE_ENV !== "development" && !isTestBrowser())) {
   Sentry.init({
     app,
     dsn: "https://25a3dc0387f04fd5923f226394a41e7d@o4504483013525504.ingest.sentry.io/4504642713944064",

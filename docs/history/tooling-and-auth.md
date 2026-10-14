@@ -366,3 +366,10 @@ install wait wakes on the worker's `statechange` instead of a 250ms poll. The gu
 test, where the phone's second check hangs, was confirmed to fail against the old code
 while still waiting at 600ms. Bug reports now carry `update.lastUpdate` timings so
 the next "slow" report comes with numbers.
+
+**Sentry ignores automated browsers (2026-10-14).** A tester Playwright run against the
+live site blocked the service worker, and `register-service-worker` crashed reading
+`.waiting` off the empty registration — three Sentry events from no real user. Sentry
+already skipped production builds served from localhost; `isTestBrowser`
+(`src/utils/sentryBeforeSend.js`) now also skips any page with `navigator.webdriver`,
+which Playwright, Puppeteer and Selenium always set.

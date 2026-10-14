@@ -20,3 +20,19 @@ export function beforeSendError (event, hint) {
   if (staleChunkReloadTriggered() && isStaleChunkError({ message: describes(event, hint) })) return null;
   return scrubEvent(event);
 }
+
+/**
+ * A page Sentry should stay out of entirely: a production build served from
+ * this machine (scripts/perf-tour.mjs, `vite preview`, a screenshot run), or
+ * any automated browser — Playwright, Puppeteer and Selenium all set
+ * `navigator.webdriver`. Those are tests, not users, and their errors reached
+ * Sentry as if from the live site (2026-10-08: a stale-chunk error from
+ * HeadlessChrome at localhost; 2026-10-14: a tester run against
+ * cinemaroll.org whose Playwright blocked the service worker, so
+ * register-service-worker crashed reading `.waiting` off nothing).
+ */
+export function isTestBrowser (win = typeof window !== 'undefined' ? window : undefined) {
+  if (!win) return false;
+  if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(win.location?.hostname || '')) return true;
+  return win.navigator?.webdriver === true;
+}
