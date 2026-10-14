@@ -453,6 +453,8 @@ import BackLink from './games/BackLink.vue';
 import { followNavigationTarget } from '../utils/navigationTarget.js';
 import { correlation, describeCorrelation } from '../assets/javascript/axisCorrelation.js';
 import uniq from 'lodash/uniq';
+import { trackEvent } from '../utils/usage.js';
+import { eventName } from '../assets/javascript/usageEvents.js';
 
 Chart.register(...registerables);
 
@@ -1356,6 +1358,7 @@ export default {
     activeTab: {
       immediate: true,
       handler (key) {
+        trackEvent(eventName('insights', key));
         if (key === 'places') this.loadWorld();
         afterFrame(() => { if (this.activeTab === key) this.renderedTab = key; });
       }

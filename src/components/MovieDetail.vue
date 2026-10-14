@@ -196,7 +196,7 @@
         <div class="detail-tiles">
         <DetailSection v-if="letterboxdWrittenReviews.length || letterboxdFilmLine" id="letterboxd" tile label="Letterboxd" tone="you" :summary="letterboxdSummary" class="letterboxd-section">
           <p v-if="letterboxdFilmLine" class="letterboxd-film mb-1">
-            <a :href="letterboxdFilmUrl" target="_blank" rel="noopener">{{ letterboxdFilmLine }}</a>
+            <a :href="letterboxdFilmUrl" target="_blank" rel="noopener" @click="trackLetterboxdOpen">{{ letterboxdFilmLine }}</a>
           </p>
           <div class="letterboxd-reviews">
             <div v-for="review in letterboxdWrittenReviews" :key="review.id" class="letterboxd-review">
@@ -752,6 +752,7 @@ import { placeNames, PLACE_TYPES } from '../assets/javascript/places.js';
 import { genreIdFor } from '../assets/javascript/tmdbGenres.js';
 import { WRITER_JOBS } from '../assets/javascript/personRoleGroups.js';
 import CountMark from './CountMark.vue';
+import { trackEvent } from '../utils/usage.js';
 
 export default {
   name: 'MovieDetail',
@@ -1281,6 +1282,9 @@ export default {
     },
   },
   methods: {
+    trackLetterboxdOpen () {
+      trackEvent('letterboxd-open');
+    },
     // "812th watch" — this viewing's place among every dated viewing you've
     // logged (watchNumbers.js). getAllRatings keeps the stored order, so the
     // row index is the rating's index.

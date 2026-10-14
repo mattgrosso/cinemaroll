@@ -1,6 +1,7 @@
 import { getRating } from '../assets/javascript/GetRating.js';
 import { getEligibleEntries, ratingFor } from '../assets/javascript/games/gameUtils.js';
 import { appendRound } from '../assets/javascript/games/gameHistory.js';
+import { eventName, trackWhenOnline } from '../assets/javascript/usageEvents.js';
 
 // localStorage key recording whichever individual game route was last
 // visited (NOT the hub itself — see created() below) — Home.vue's
@@ -177,6 +178,7 @@ export default {
     recordGameRound (metrics) {
       const key = gameWinKey(this.$route?.path);
       if (!key) return;
+      trackWhenOnline(eventName('game-round', key));
       this.whenSettingsReady(() => {
         const existing = this.$store.state?.settings?.games?.history?.[key];
         const history = appendRound(existing, { at: Date.now(), ...metrics });

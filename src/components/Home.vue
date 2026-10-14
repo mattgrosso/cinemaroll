@@ -1693,6 +1693,7 @@
 
 <script>
 import { isShort, withoutShorts } from '../assets/javascript/shorts.js';
+import { eventName, trackWhenOnline } from '../assets/javascript/usageEvents.js';
 import { publishDue } from '../assets/javascript/social.js';
 import axios from 'axios';
 import { scrollWindowTo } from '../utils/scrollWindowTo.js';
@@ -5058,6 +5059,7 @@ export default {
       }
     },
     toggleQuickLinksList (value) {
+      if (value) trackWhenOnline(eventName('quick-link', this.tags?.includes(value) ? 'tag' : value));
       // A curated list is a chip now — route it through the chip toggle so
       // this entry point and the dedicated handlers cannot disagree.
       const listSorts = {
@@ -6076,6 +6078,7 @@ export default {
         ...this.resolveChipIdentity(searchType),
         id: `${searchType.type}-${Date.now()}`
       });
+      if (!isAutoRandom) trackWhenOnline(eventName('chip', searchType.type));
 
       this.clearInput();
 

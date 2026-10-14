@@ -185,6 +185,13 @@ means you watched something that day), and per-film tools (rating, Stickiness, F
 award lookups). New library-wide stats go through `withoutShorts`. Tiebreaks follow
 the setting too (2026-10-01).
 
+**Usage counts (2026-10-14).** `src/utils/usage.js` is the house module (one anonymous
+ping per open, shared across Matt's apps; don't fork it). What Cinema Roll counts beyond
+that lives in `src/assets/javascript/usageEvents.js`: a `screen-*` count on every route
+change (the open ping's path is always `/` under hash routing) plus named actions at
+their call sites. Anything that can happen offline goes through `trackWhenOnline`, or
+sendBeacon silently drops it. `usageEvents.test.js` lists the hooks.
+
 **Preference: extract pure logic into `src/assets/javascript/` and unit-test it directly**
 rather than only through component mounts. That's why `searchFiltering.js`,
 `entityCounts.js`, `tieBreakTournament.js`, `awardStats.js`, `storedEntry.js`,

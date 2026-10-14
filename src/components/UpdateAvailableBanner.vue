@@ -19,6 +19,7 @@
 
 <script>
 import { reloadForUpdate } from '../utils/appUpdate.js';
+import { trackEvent } from '../utils/usage.js';
 
 // Shows once App.vue's deploy check flags a new version. Since 2026-08-15
 // updates normally apply THEMSELVES at a quiet moment (App.vue's
@@ -54,6 +55,7 @@ export default {
   },
   methods: {
     async reload () {
+      trackEvent('update-tapped');
       if (this.isUpdating) return;
       this.updating = true;
       // The target lets a second tap for the SAME update escalate to a hard

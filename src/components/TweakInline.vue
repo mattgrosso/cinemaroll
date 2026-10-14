@@ -162,6 +162,7 @@
 
 <script>
 import { getRating } from "../assets/javascript/GetRating.js";
+import { trackWhenOnline } from '../assets/javascript/usageEvents.js';
 import { sortResultsFast } from "../assets/javascript/searchFiltering.js";
 import { withoutShorts, includeShortsSetting } from "../assets/javascript/shorts.js";
 import {
@@ -548,6 +549,7 @@ export default {
 
       if (isComplete(updatedTournament)) {
         resultsSaved = this.applyTournamentResults(updatedTournament);
+        trackWhenOnline('tiebreak-finished');
 
         // A 2-way tie completes in exactly one match — showing the
         // "Tournament Complete!" standings screen (which needs an explicit

@@ -72,6 +72,7 @@
 import axios from 'axios';
 import { normalizeWatchProviders, PROVIDER_REGION } from '../assets/javascript/watchProviders';
 import backgroundScrollLock from '../mixins/backgroundScrollLock.js';
+import { trackEvent } from '../utils/usage.js';
 
 // Availability changes on the order of days, and a hat's history strip invites
 // tapping several posters in a row (and often the same one twice). Cached for
@@ -101,6 +102,7 @@ export default {
       handler (movie) {
         this.lockBackgroundScroll(Boolean(movie));
         if (!movie) return;
+        trackEvent('where-to-watch');
         this.load(movie);
       }
     }

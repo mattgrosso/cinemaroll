@@ -334,6 +334,7 @@
 import { formatScore } from '../assets/javascript/formatScore.js';
 import addRating from "../assets/javascript/AddRating.js";
 import { trackEvent } from "../utils/usage.js";
+import { trackWhenOnline } from "../assets/javascript/usageEvents.js";
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import { ratingBreakdown } from "../assets/javascript/ratingMath.js";
 import ErrorLogService from "../services/ErrorLogService.js";
@@ -948,6 +949,7 @@ export default {
       try {
         dbEntry = await addRating(ratings);
         trackEvent('rating-logged');
+        if (this.$store.state.isOnline === false) trackWhenOnline('rating-logged-offline');
       } catch (error) {
         console.error('Failed to save rating:', error);
         ErrorLogService.error('Failed to save rating:', error);

@@ -129,6 +129,7 @@ import ErrorLogService from '../services/ErrorLogService.js';
 import { timeAgo } from '../assets/javascript/timeAgo.js';
 import { isSignInDismissal, movieHatSignInMessage } from '../assets/javascript/movieHatSignIn.js';
 import WhereToWatch from './WhereToWatch.vue';
+import { trackEvent } from '../utils/usage.js';
 
 // When a hat was last drawn from, or 0 for never (and for a hat whose
 // summary hasn't loaded or couldn't). History arrives newest-first from the
@@ -256,6 +257,7 @@ export default {
           return;
         }
         this.drawn = result;
+        trackEvent('hat-draw');
         // The card's count and last-drawn are now stale by definition.
         this.$store.dispatch('loadMovieHatSummaries');
       } catch (error) {

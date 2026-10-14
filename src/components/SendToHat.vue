@@ -85,6 +85,7 @@
 // still the authority, and still reports "already in there" if the cache
 // was stale or a hat could not be read.
 import ErrorLogService from '../services/ErrorLogService.js';
+import { trackEvent } from '../utils/usage.js';
 
 export default {
   name: 'SendToHat',
@@ -175,6 +176,7 @@ export default {
           note: this.note
         });
         this.report({ message: this.summarize(added, skipped, hat.title) });
+        if (added?.length) trackEvent('hat-send');
         // Everything the hat now holds — freshly added, or skipped because
         // it was already there — so the button disappears straight away
         // rather than waiting for the cache to age out.

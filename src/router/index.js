@@ -5,6 +5,7 @@ import { handleRouterChunkError, lazyScreen } from "../utils/staleChunkReload.js
 import { nextFrame } from "../utils/nextFrame.js";
 import { setAppRouter } from "./appRouter.js";
 import { rateMovieRedirect } from "./rateMovieGuard.js";
+import { trackScreen } from "../assets/javascript/usageEvents.js";
 
 const Home = lazyScreen(() => import(/* webpackChunkName: "home" */ "../components/Home.vue"));
 const Login = lazyScreen(() => import(/* webpackChunkName: "login" */ "../components/Login.vue"));
@@ -754,8 +755,9 @@ router.beforeEach(async (to, from) => {
   return true;
 })
 
-router.afterEach(() => {
+router.afterEach((to, from) => {
   store.commit('setRoutePending', false);
+  trackScreen(to, from);
 })
 
 // Safety net for scroll-lock leaks. Modals/overlays across the app lock body
