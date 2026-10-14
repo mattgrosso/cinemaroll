@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import RateMovie from '@/components/RateMovie.vue'
-import { getAllRatings } from '@/assets/javascript/GetRating.js'
+import { getRating, getAllRatings } from '@/assets/javascript/GetRating.js'
 
 // The 2026-09-30 restyle in the film page's language: a top row of watch
 // date / Medium / More context, the score card at the bottom of the form
@@ -126,6 +126,44 @@ describe('RateMovie score card', () => {
   it('shows no change line for a first rating', () => {
     const w = mountWith(film)
     expect(w.find('.score-card-change').exists()).toBe(false)
+  })
+
+  // Bug report 2026-10-14: "I would like it if I could tap it just like we do
+  // other places to also show my ... normalized score."
+  it('tapping the score cycles score, normalized, stars, like the film page', async () => {
+    const w = mountWith(film, [entry(1, 'Nine', 9)])
+    await w.setData({ overall: '7' })
+    const value = w.find('.score-card-value')
+    const toggle = value.find('.toggleable-rating')
+    expect(toggle.exists()).toBe(true)
+    expect(value.text()).toBe('7.00')
+    await toggle.trigger('click')
+    expect(value.find('.normalized-rating h3').text()).toBe('7')
+    expect(value.text()).toContain('(normalized rating)')
+    await toggle.trigger('click')
+    expect(value.findAll('.stars .bi-star-fill')).toHaveLength(3)
+    expect(value.find('.stars .bi-star-half').exists()).toBe(true)
+    await toggle.trigger('click')
+    expect(value.text()).toBe('7.00')
+  })
+
+  it('a blank form is a dash, with nothing to tap', () => {
+    const w = mountWith(film)
+    expect(w.find('.score-card-value').text()).toBe('–')
+    expect(w.find('.score-card .toggleable-rating').exists()).toBe(false)
+  })
+
+  it('with no normalized score yet, the plain number stays', async () => {
+    const real = getRating.getMockImplementation()
+    getRating.mockImplementation((media) => ({ ...real(media), normalizedRating: null }))
+    try {
+      const w = mountWith(film)
+      await w.setData({ overall: '7' })
+      expect(w.find('.score-card .toggleable-rating').exists()).toBe(false)
+      expect(w.find('.score-card-value').text()).toBe('7.00')
+    } finally {
+      getRating.mockImplementation(real)
+    }
   })
 })
 

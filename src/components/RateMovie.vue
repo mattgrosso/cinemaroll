@@ -115,7 +115,20 @@
            yet"). -->
       <div class="score-card" :class="{ 'score-card-empty': !hasPicks }">
         <span class="score-card-label">Your score</span>
-        <span class="score-card-value">{{ hasPicks ? formatScore(rating.calculatedTotal) : '–' }}</span>
+        <!-- Tap to cycle score, normalized, stars, the same control as the
+             film page's score tile (bug report 2026-10-14: "I would like it if
+             I could tap it just like we do other places"). The plain number
+             stays for a blank form and for a library too small to have a
+             normalized score. -->
+        <span class="score-card-value">
+          <ToggleableRating
+            v-if="hasPicks && rating.normalizedRating != null"
+            :rating="rating.calculatedTotal"
+            :normalizedRating="rating.normalizedRating"
+            stacked
+          />
+          <template v-else>{{ hasPicks ? formatScore(rating.calculatedTotal) : '–' }}</template>
+        </span>
         <span v-if="!hasPicks" class="score-card-waiting">Not rated yet</span>
         <span v-if="hasPicks && scoreChange" class="score-card-change" :class="scoreChange.direction">
           <i class="bi" :class="scoreChange.icon"></i>{{ scoreChange.text }}
@@ -332,6 +345,7 @@
 
 <script>
 import { formatScore } from '../assets/javascript/formatScore.js';
+import ToggleableRating from './ToggleableRating.vue';
 import addRating from "../assets/javascript/AddRating.js";
 import { trackEvent } from "../utils/usage.js";
 import { trackWhenOnline } from "../assets/javascript/usageEvents.js";
@@ -416,7 +430,7 @@ const PREVIOUS_CRITERIA = [
 ];
 
 export default {
-  components: { RatingSelect, DetailSection },
+  components: { RatingSelect, DetailSection, ToggleableRating },
   data () {
     return {
       // Whether the neighbours strip is pinned to the bottom of the screen.
@@ -1405,6 +1419,34 @@ export default {
       font-variant-numeric: tabular-nums;
       font-weight: 700;
       line-height: 1;
+    }
+
+    /* The tap-to-cycle control, at the card's size and colour rather than
+       its own small one (it was built for the results list). The stars run
+       at 80% so five fit, with the line-height making up the difference so
+       the row stays the number's height and nothing jumps while tapping. */
+    .score-card-value .toggleable-rating {
+      font-size: inherit;
+      height: auto;
+      justify-content: center;
+      line-height: 1;
+      min-width: 0;
+
+      h3 { color: inherit; font-size: inherit; font-weight: 700; line-height: 1; }
+
+      label,
+      .sub-line-spacer {
+        color: #ccc;
+        font-size: ds(0.62rem);
+        font-weight: 400;
+      }
+
+      .has-stars,
+      .no-stars {
+        font-size: 0.8em;
+        line-height: 1.25;
+        white-space: nowrap;
+      }
     }
 
     /* No picks yet: a grey dash, not a green number. */
