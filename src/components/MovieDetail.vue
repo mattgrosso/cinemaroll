@@ -940,7 +940,7 @@ export default {
       return this.archive.tmdbId === this.movie?.id ? archiveFacts(this.archive.film) : null;
     },
     archiveTodaysDollars () {
-      return todaysDollarsLabel();
+      return todaysDollarsLabel(!!this.archiveBoxOffice?.domesticTodayByRuns);
     },
     archiveBudgetLabel () {
       return todaysBudgetLabel();

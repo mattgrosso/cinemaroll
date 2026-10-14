@@ -37,13 +37,18 @@ export const archiveFacts = (film) => {
   const biggest = weekends.reduce((a, w) => (w.gross > (a?.gross ?? -1) ? w : a), null);
   const opening = film.opening?.gross ? film.opening : (weekends[0] || null);
   const year = film.year || (film.releaseDate ? Number(String(film.releaseDate).slice(0, 4)) : null);
-  const todays = year ? adjustGross(film.domestic, year) : null;
+  const todays = year ? grossTodayByRuns(film.domestic, year, film.runs) : null;
+  const byRuns = Array.isArray(film.runs) && film.runs.filter((r) => r?.gross > 0 && r.year).length > 1;
   return {
     id: film.id,
     title: film.title,
     year,
     domestic: film.domestic,
     domesticToday: todays && Math.round(todays) !== Math.round(film.domestic) ? todays : null,
+    // True when the lifetime figure was restated release by release (a
+    // re-issued film), so the label can say so.
+    domesticTodayByRuns: byRuns,
+    runs: byRuns ? film.runs.map((r) => ({ year: r.year, gross: r.gross, title: r.title || null })) : null,
     worldwide: film.worldwide || null,
     opening: opening ? { gross: opening.gross, theaters: opening.theaters ?? null, rank: opening.rank ?? null, average: opening.average ?? null, weekendKey: opening.weekendKey ?? null } : null,
     widest: film.widest || null,
@@ -93,8 +98,25 @@ export const weekendLine = (weekend) => {
   return `#1 that weekend: ${weekend.top}${gross}`;
 };
 
+/**
+ * A lifetime gross in today's dollars, release by release: each run (the
+ * original, re-issues, anniversaries) at its own year's ticket price, and
+ * whatever the runs don't account for at the original year's. Without runs
+ * it is the plain one-year adjustment.
+ */
+export const grossTodayByRuns = (domestic, year, runs) => {
+  const list = (runs || []).filter((r) => r?.gross > 0 && r.year);
+  if (!list.length) return adjustGross(domestic, year);
+  const accounted = list.reduce((s, r) => s + r.gross, 0);
+  const remainder = Math.max(0, domestic - accounted);
+  const parts = list.map((r) => adjustGross(r.gross, r.year));
+  if (parts.some((v) => v === null)) return adjustGross(domestic, year);
+  const rest = remainder > 0 ? adjustGross(remainder, year) : 0;
+  return parts.reduce((s, v) => s + v, 0) + (rest ?? 0);
+};
+
 /** "in 2025 dollars, by average ticket price" — the shared wording for a gross. */
-export const todaysDollarsLabel = () => `in ${BASE_YEAR} dollars, ${WORDING.grossMethod}`;
+export const todaysDollarsLabel = (byRuns = false) => `in ${BASE_YEAR} dollars, ${WORDING.grossMethod}${byRuns ? ', release by release' : ''}`;
 /** "in 2025 dollars, by CPI" — the shared wording for a budget. */
 export const todaysBudgetLabel = () => `in ${BASE_YEAR} dollars, ${WORDING.budgetMethod}`;
 /** A budget in today's dollars, by CPI (null when it can't be done honestly). */

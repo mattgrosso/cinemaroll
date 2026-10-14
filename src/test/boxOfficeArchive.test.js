@@ -117,3 +117,27 @@ describe('boxOfficeArchiveRequest — two hops, cached, never throws', () => {
     expect(await fetchArchiveCalendar('not a year')).toBeNull();
   });
 });
+
+import { grossTodayByRuns, todaysDollarsLabel } from '@/assets/javascript/boxOfficeArchive.js';
+import { adjustGross, BASE_YEAR } from '@/assets/javascript/inflation.js';
+
+// Matt, 2026-10-14: a lifetime total adjusted at the original year's price
+// overstates films with re-releases; do it release by release.
+describe('boxOfficeArchive — a lifetime gross restated release by release', () => {
+  const runs = [{ year: 1982, gross: 359197037 }, { year: 1985, gross: 40586054 }, { year: 2002, gross: 35306015 }];
+  it('adjusts each run at its own year and the remainder at the original year', () => {
+    const lifetime = 435110554;
+    const expected = adjustGross(359197037, 1982) + adjustGross(40586054, 1985) + adjustGross(35306015, 2002) + adjustGross(lifetime - 359197037 - 40586054 - 35306015, 1982);
+    expect(grossTodayByRuns(lifetime, 1982, runs)).toBeCloseTo(expected, 2);
+    expect(grossTodayByRuns(lifetime, 1982, runs)).toBeLessThan(adjustGross(lifetime, 1982));
+  });
+  it('falls back to the one-year adjustment without runs', () => {
+    expect(grossTodayByRuns(100, 1993, null)).toBe(adjustGross(100, 1993));
+    expect(grossTodayByRuns(100, 1993, [])).toBe(adjustGross(100, 1993));
+  });
+  it('says so in the label, and marks the facts', () => {
+    expect(todaysDollarsLabel(true)).toBe(`in ${BASE_YEAR} dollars, by average ticket price, release by release`);
+    expect(archiveFacts({ ...darkKnight, runs }).domesticTodayByRuns).toBe(true);
+    expect(archiveFacts(darkKnight).domesticTodayByRuns).toBe(false);
+  });
+});
