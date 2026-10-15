@@ -258,3 +258,12 @@ the daily hat read; nothing on the screen changed. If a future event's spans
 are TMDB `search/movie` calls instead, that's the Search tab's "ask" box
 resolving each AI suggestion separately; cache those per title+year on the
 device (`deviceCache.js`), the way the other Watchlist lookups are cached.
+
+## A one-off read nobody catches must classify its refusal (2026-10-15)
+
+Sentry: on an expired sign-in every listener and the newsletter read were
+quiet warnings, but the launch push-settings read (`loadPushState`, from
+App.vue's `initializePush`) had no catch and escaped as an unhandled
+rejection. It and `fetchSocialDirectory` now go through `reportRefusedRead`:
+warn with nobody signed in, error while signed in. Any new `get()` whose
+caller doesn't catch should do the same.

@@ -143,3 +143,38 @@ describe('a refused newsletter read and the sign-in', () => {
     expect(newsletterErrors()).toHaveLength(1)
   })
 })
+
+// Sentry, 2026-10-15: on the same lapsed session, the launch push-settings
+// read (App.vue's initializePush) had no catch, so its refusal escaped as an
+// unhandled rejection. The Film Club directory read had the same gap.
+describe('refused one-off reads and the sign-in', () => {
+  let errorSpy, warnSpy
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    fakeAuth.currentUser = null
+    store.commit('setDatabaseTopKey', ME)
+    const { get } = await import('firebase/database')
+    get.mockImplementation(() => Promise.reject(new Error('Permission denied')))
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+  afterEach(async () => {
+    const { get } = await import('firebase/database')
+    get.mockImplementation(() => Promise.resolve({ val: () => null }))
+    vi.restoreAllMocks()
+  })
+
+  for (const [action, label] of [['loadPushState', 'push settings'], ['fetchSocialDirectory', 'Film Club directory']]) {
+    it(`${action}: a warning and no rejection when nobody is signed in`, async () => {
+      await expect(store.dispatch(action)).resolves.toBeUndefined()
+      expect(errorSpy).not.toHaveBeenCalled()
+      expect(warnSpy.mock.calls.some(([msg]) => String(msg).includes(label))).toBe(true)
+    })
+
+    it(`${action}: still an error while someone is signed in`, async () => {
+      fakeAuth.currentUser = { email: 'matt@example.com' }
+      await expect(store.dispatch(action)).resolves.toBeUndefined()
+      expect(errorSpy.mock.calls.some(([msg]) => String(msg).includes(label))).toBe(true)
+    })
+  }
+})

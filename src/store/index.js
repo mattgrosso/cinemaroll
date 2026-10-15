@@ -244,6 +244,12 @@ function reportRefusedListener (label, error) {
     ErrorLogService.warn(`${label} listener cancelled with no sign-in:`, error);
   }
 }
+// The same split for a one-off read nobody else catches (Sentry, 2026-10-15:
+// the launch push-settings read rejected unhandled on an expired session).
+function reportRefusedRead (label, error) {
+  if (auth.currentUser) console.error(`Failed to load ${label}:`, error);
+  else console.warn(`Failed to load ${label} with no sign-in:`, error?.message);
+}
 let letterboxdLoadInFlight = null;
 // One external friend's feed, v2 first. True when the feed answered (changed
 // or not), false when it could not be read — a caller holding a pending
@@ -3227,8 +3233,12 @@ export default createStore({
       ]);
     },
     async fetchSocialDirectory (context) {
-      const snapshot = await get(ref(db, 'social/directory'));
-      context.commit('setSocialDirectory', snapshot.val());
+      try {
+        const snapshot = await get(ref(db, 'social/directory'));
+        context.commit('setSocialDirectory', snapshot.val());
+      } catch (error) {
+        reportRefusedRead('the Film Club directory', error);
+      }
     },
     // ---- Push notifications ------------------------------------------
     //
@@ -3238,12 +3248,18 @@ export default createStore({
     async loadPushState (context) {
       const root = context.getters.databaseTopKey;
       if (!root) return;
-      const [prefsSnap, subsSnap] = await Promise.all([
-        get(ref(db, `${root}/push/prefs`)),
-        get(ref(db, `${root}/push/subscriptions`))
-      ]);
-      context.commit('setPushPrefs', prefsSnap.val());
-      context.commit('setPushSubscribed', subsSnap.exists());
+      // Runs on every launch (App.vue's initializePush), so a refusal must
+      // not escape as an unhandled rejection; state stays as it was.
+      try {
+        const [prefsSnap, subsSnap] = await Promise.all([
+          get(ref(db, `${root}/push/prefs`)),
+          get(ref(db, `${root}/push/subscriptions`))
+        ]);
+        context.commit('setPushPrefs', prefsSnap.val());
+        context.commit('setPushSubscribed', subsSnap.exists());
+      } catch (error) {
+        reportRefusedRead('push settings', error);
+      }
     },
     async savePushSubscription (context, record) {
       const root = context.getters.databaseTopKey;
