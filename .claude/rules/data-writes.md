@@ -259,6 +259,17 @@ are TMDB `search/movie` calls instead, that's the Search tab's "ask" box
 resolving each AI suggestion separately; cache those per title+year on the
 device (`deviceCache.js`), the way the other Watchlist lookups are cached.
 
+**The PersonalAwardsScreen variant was real (2026-10-15), not the hat.** The
+Awards screen has no hat buttons. Its acting categories ask TMDB
+`/search/person` per cast member for gender, and kept the answers 24 hours
+per name per awards year (`person_<name>_<year>` in localStorage), so year
+switches and next-day opens re-asked the whole cast at once. The picker now
+reads and writes `personIdCache.js` (shared with the Watchlist; entries keep
+the photo too, 2000 names, 90 days) and deletes the old `person_` keys on open.
+A first open of a category can still burst once per new name — that's expected.
+`AwardsPersonLookups.test.js` guards it. Before calling any N+1 "the hat read",
+check the screen actually has a `SendToHat` on it.
+
 ## A one-off read nobody catches must classify its refusal (2026-10-15)
 
 Sentry: on an expired sign-in every listener and the newsletter read were

@@ -514,6 +514,7 @@ import { pickEligibleAwardsYear } from '../utils/awards.js';
 import { yearsMeetingAwardsThreshold, awardsPromptCopy, distinctNomineeCount } from '../assets/javascript/personalAwards.js';
 import { PERSONAL_AWARD_CATEGORIES, categoriesForYear, customAwardKey, isCustomAwardKey } from '../assets/javascript/personalAwardsCategories.js';
 import { isEligibleForActingCategory } from '../assets/javascript/genderEligibility.js';
+import { rememberedPerson, rememberPerson } from '../utils/personIdCache.js';
 import { entriesEligibleFor, disabledReasonFor, GATED_CATEGORIES, countriesKnown } from '../assets/javascript/awardEligibility.js';
 import { backfillProductionCountries } from '../assets/javascript/backfillProductionCountries.js';
 import { expandNomineeFromMinimal as expandNomineeFromMinimalShared, actingSiblingConflict, samePersonNominee, personNomineeKey } from '../assets/javascript/personalAwards.js';
@@ -1139,7 +1140,7 @@ export default {
         this.optionsCache = {};
         this.personDetailsCache = {};
 
-        // Clean up old localStorage entries (24+ hours old)
+        // Clear the retired per-year person entries (see cleanupLocalStorageCache)
         this.cleanupLocalStorageCache();
       } catch (error) {
         console.error('🚨 MODAL OPEN FAILED:', error.message);
@@ -1942,8 +1943,9 @@ export default {
       return people;
     },
     async getDetailsForCastMember (actorName) {
-      // Check in-memory cache first
-      if (this.personDetailsCache[actorName]) {
+      // In-memory first — a name TMDB didn't know (null) counts as answered
+      // for this session, since misses aren't kept on the device.
+      if (actorName in this.personDetailsCache) {
         return this.personDetailsCache[actorName];
       }
 
@@ -1957,25 +1959,19 @@ export default {
       return this.personDetailsInFlight[actorName];
     },
     async fetchDetailsForCastMember (actorName) {
-      // Check localStorage fallback (helpful for iOS PWAs with memory pressure)
-      try {
-        const cacheKey = `person_${actorName}_${this.currentYear}`;
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-          const parsedData = JSON.parse(cached);
-          const isExpired = Date.now() - parsedData.timestamp > (24 * 60 * 60 * 1000); // 24 hours
-          if (!isExpired) {
-            this.personDetailsCache[actorName] = parsedData.data;
-            return parsedData.data;
-          } else {
-            localStorage.removeItem(cacheKey);
-          }
-        }
-      } catch (error) {
-        console.warn('LocalStorage cache read failed:', error);
+      // A name kept on this device by an earlier visit (or the Watchlist) is
+      // still that person. This used to be a 24-hour localStorage entry per
+      // name AND per awards year, so every year switch and every next-day
+      // open re-asked TMDB for the whole cast at once — Sentry's N+1 on
+      // PersonalAwardsScreen (2026-10-15). An entry without a kept photo
+      // (written before photos were kept) is looked up once more.
+      const known = rememberedPerson(actorName);
+      if (known && known.profile_path !== undefined) {
+        const details = { ...known, name: actorName };
+        this.personDetailsCache[actorName] = details;
+        return details;
       }
 
-      // Fetch from TMDb API
       const query = encodeURIComponent(actorName);
       const url = `https://api.themoviedb.org/3/search/person?api_key=${process.env.VUE_APP_TMDB_API_KEY}&query=${query}`;
       try {
@@ -1985,67 +1981,27 @@ export default {
         }
         const data = await response.json();
         const personDetails = data.results && data.results.length > 0 ? data.results[0] : null;
-
-        // Cache the result in memory
         this.personDetailsCache[actorName] = personDetails;
-
-        // Also cache in localStorage for persistence (especially helpful on iOS PWAs)
-        try {
-          const cacheKey = `person_${actorName}_${this.currentYear}`;
-          const cacheData = {
-            data: personDetails,
-            timestamp: Date.now()
-          };
-          localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-        } catch (error) {
-          console.warn('LocalStorage cache write failed:', error);
-        }
-
+        // Misses aren't kept on the device: an unknown name is retried next visit.
+        rememberPerson(actorName, personDetails);
         return personDetails;
       } catch (error) {
         console.error('Error fetching TMDB person:', error);
         ErrorLogService.error('Error fetching TMDB person:', error);
-        // Cache the null result to avoid retrying failed requests
+        // Don't retry a failed name for the rest of this session.
         this.personDetailsCache[actorName] = null;
-
-        // Also cache the failure in localStorage
-        try {
-          const cacheKey = `person_${actorName}_${this.currentYear}`;
-          const cacheData = {
-            data: null,
-            timestamp: Date.now()
-          };
-          localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-        } catch (localStorageError) {
-          console.warn('LocalStorage cache write failed:', localStorageError);
-        }
-
         return null;
       }
     },
     cleanupLocalStorageCache () {
-      // Clean up old person cache entries from localStorage
+      // The old per-year `person_<name>_<year>` entries are replaced by
+      // personIdCache.js; clear any a device still carries.
       try {
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
-          if (key && key.startsWith('person_')) {
-            try {
-              const cached = localStorage.getItem(key);
-              if (cached) {
-                const parsedData = JSON.parse(cached);
-                const isExpired = Date.now() - parsedData.timestamp > (24 * 60 * 60 * 1000); // 24 hours
-                if (isExpired) {
-                  keysToRemove.push(key);
-                }
-              }
-            } catch {
-              // Invalid entry, mark for removal
-              keysToRemove.push(key);
-            }
-          }
+          if (key && key.startsWith('person_')) keysToRemove.push(key);
         }
-
         keysToRemove.forEach(key => localStorage.removeItem(key));
       } catch (error) {
         console.warn('LocalStorage cleanup failed:', error);
