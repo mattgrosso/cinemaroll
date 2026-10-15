@@ -252,3 +252,9 @@ already device-cached (`watchlistLookups.js` a week, runtimes 180 days), so the
 only burst left there is the same hat read. Archived as expected; no code change.
 Raising or disabling N+1 detection in the Sentry project settings is the way to
 stop these reopening.
+
+**Reopened again on v1.127.4 (2026-10-14), same call.** Still one user, still
+the daily hat read; nothing on the screen changed. If a future event's spans
+are TMDB `search/movie` calls instead, that's the Search tab's "ask" box
+resolving each AI suggestion separately; cache those per title+year on the
+device (`deviceCache.js`), the way the other Watchlist lookups are cached.
