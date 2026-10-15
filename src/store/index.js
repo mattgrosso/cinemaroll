@@ -233,6 +233,8 @@ const auth = getAuth();
 
 const db = getDatabase();
 
+ErrorLogService.setSignedInCheck(() => Boolean(auth.currentUser));
+
 // A library or settings listener refused with nobody signed in is an expired
 // session the sign-out already handles (verifyRestoredSession), so it's a
 // warning — captureConsole files every console.error in Sentry (2026-10-11).

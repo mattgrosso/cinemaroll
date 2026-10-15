@@ -11,7 +11,7 @@ vi.mock('@/utils/aiRequest.js', async (importOriginal) => ({
   postToAi: (...args) => postToAi(...args)
 }))
 
-const errorLog = { error: vi.fn(), warn: vi.fn() }
+const errorLog = { error: vi.fn(), warn: vi.fn(), setSignedInCheck: vi.fn() }
 vi.mock('@/services/ErrorLogService.js', () => ({ default: errorLog }))
 
 const { default: RateMovie } = await import('@/components/RateMovie.vue')

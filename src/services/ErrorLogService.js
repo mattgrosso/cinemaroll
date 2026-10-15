@@ -8,7 +8,13 @@ class ErrorLogService {
     this.logs = [];
     this.maxLogs = 500; // Limit to prevent memory issues
     this.storageKey = 'cinema_roll_error_logs';
+    // Set by the store (setSignedInCheck); this file can't import Firebase.
+    this.isSignedIn = null;
     this.loadLogsFromStorage();
+  }
+
+  setSignedInCheck (check) {
+    this.isSignedIn = check;
   }
 
   /**
@@ -169,8 +175,18 @@ window.addEventListener('error', (event) => {
 });
 
 // Global unhandled promise rejection handler
+// A database refusal with nobody signed in is the expired session the app
+// already signs out of (verifyRestoredSession), so any read still missing its
+// own catch is a warning, not a Sentry issue (Sentry, 2026-10-15). Refused
+// while signed in stays an error: that's a real rules problem.
+export function isRefusedWithNoSignIn (reason, isSignedIn) {
+  if (!isSignedIn || isSignedIn()) return false;
+  return /permission[ _]denied/i.test(String(reason?.message ?? reason ?? ''));
+}
+
 window.addEventListener('unhandledrejection', (event) => {
-  errorLogService.error(`Unhandled Promise Rejection: ${event.reason}`, {
+  const level = isRefusedWithNoSignIn(event.reason, errorLogService.isSignedIn) ? 'warn' : 'error';
+  errorLogService[level](`Unhandled Promise Rejection: ${event.reason}`, {
     promise: event.promise?.toString(),
     reason: event.reason?.toString(),
     stack: event.reason?.stack

@@ -278,3 +278,10 @@ App.vue's `initializePush`) had no catch and escaped as an unhandled
 rejection. It and `fetchSocialDirectory` now go through `reportRefusedRead`:
 warn with nobody signed in, error while signed in. Any new `get()` whose
 caller doesn't catch should do the same.
+
+**The global handler is the backstop, not the fix.** `ErrorLogService`'s
+`unhandledrejection` handler logs a "permission denied" rejection as a warning
+when nobody is signed in (`isRefusedWithNoSignIn`; the store registers the
+sign-in check via `setSignedInCheck`, since that file can't import Firebase).
+Signed in, or any other rejection, stays an error. A test that mocks
+`ErrorLogService` and loads the store needs `setSignedInCheck` in the mock.
