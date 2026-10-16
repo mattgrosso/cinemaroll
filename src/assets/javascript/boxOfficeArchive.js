@@ -10,7 +10,7 @@ import { adjustGross, adjustForInflation, BASE_YEAR, WORDING, TICKET_PRICES } fr
 import { formatMoneyShort } from './formatMoney.js';
 
 // Switches to boxofficehistory.com once the domain lands.
-export const ARCHIVE_ORIGIN = 'https://d2wyrtlfw5ttqz.cloudfront.net';
+export const ARCHIVE_ORIGIN = 'https://boxofficehistory.com';
 export const ARCHIVE_API = `${ARCHIVE_ORIGIN}/api/v1`;
 
 export const archiveMovieUrl = (id) => `${ARCHIVE_ORIGIN}/movie/${encodeURIComponent(id)}`;

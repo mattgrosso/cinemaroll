@@ -5,7 +5,7 @@
 //   yarn fetch-inflation
 import { writeFileSync } from 'node:fs';
 
-const URL = 'https://d2wyrtlfw5ttqz.cloudfront.net/api/v1/inflation.json';
+const URL = 'https://boxofficehistory.com/api/v1/inflation.json';
 const res = await fetch(URL);
 if (!res.ok) throw new Error(`${res.status} fetching ${URL}`);
 const table = await res.json();
