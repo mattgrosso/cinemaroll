@@ -270,6 +270,17 @@ A first open of a category can still burst once per new name — that's expected
 `AwardsPersonLookups.test.js` guards it. Before calling any N+1 "the hat read",
 check the screen actually has a `SendToHat` on it.
 
+**The Home variant (reopened 2026-10-17 on v1.127.9), same call.** Two users,
+32 events since 2026-10-06. Home has both known bursts and nothing new: the
+"More from" row's `SendToHat` buttons trigger the six-hour hat read, and
+`PersonalAwardsModal` (opened from Home) asks `/search/person` once per name it
+has never seen, via `personIdCache.js`. Archived as expected; no code change.
+Everything else Home fetches is sequential (`discoverMovies` pages, the keyword
+path) or memoized (`resolveTmdbId`, `moreFromCache`). If an event's spans are a
+parallel run of `/search/person`, `/search/company` or `/search/keyword` from
+the More from row's `Promise.all` over chips, that's `tmdbIdCache` being
+in-memory only — keep those ids in `deviceCache.js`.
+
 ## A one-off read nobody catches must classify its refusal (2026-10-15)
 
 Sentry: on an expired sign-in every listener and the newsletter read were
