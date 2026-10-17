@@ -669,27 +669,22 @@ Infra (all `--profile personal`, us-east-1): Lambda `cinemaroll-push` (nodejs22.
 role `cinemaroll-push-role`), HTTP API `8rptihkn0l` ($default → Lambda, throttle 5/10),
 env vars `FIREBASE_SA`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. The
 VAPID private key's only copies are the Lambda env and `.env.local`; the public half is
-committed in `.env` (`VUE_APP_VAPID_PUBLIC_KEY`, with `VUE_APP_PUSH_API_URL`). Redeploy:
+committed in `.env` (`VUE_APP_VAPID_PUBLIC_KEY`, with `VUE_APP_PUSH_API_URL`).
 
-```
-# The bundle is index.js (= push-notify.js) + pushCadence.js + feedRevision.js (the
-# Film Club feed's revision token, CommonJS twin of src/assets/javascript/feedRevision.js)
-# + filmClubSync.js + filmClubSyncPublisher.js + clubNotices.js (GENERATED twins — run
-# scripts/sync-lambda-twins.mjs after editing the ESM sources) + sentryLambda.js (the
-# house Sentry reporter, 2026-10-08) + node_modules (web-push and its deps — NOT the aws-lambda/node_modules on disk, which
-# is the AI Lambda's). Start from the deployed bundle so the dependencies stay exactly as
-# they are:
-URL=$(aws lambda get-function --function-name cinemaroll-push --profile personal \
-  --region us-east-1 --query 'Code.Location' --output text)
-curl -s -o current.zip "$URL" && mkdir -p bundle && (cd bundle && unzip -q -o ../current.zip)
-cp aws-lambda/push-notify.js bundle/index.js && cp aws-lambda/pushCadence.js aws-lambda/feedRevision.js aws-lambda/filmClubSync.js aws-lambda/filmClubSyncPublisher.js aws-lambda/clubNotices.js aws-lambda/sentryLambda.js bundle/
-(cd bundle && zip -q -r ../function.zip .)
-aws lambda update-function-code --function-name cinemaroll-push \
-  --zip-file fileb://function.zip --profile personal --region us-east-1
-```
-
-Run `aws` from the repo root — `.tool-versions` pins the awscli version there and a
-scratch directory has none.
+**Redeploy with `yarn deploy:push`** (and the AI Lambda with `yarn deploy:ai`; both are
+`scripts/deploy-lambda.mjs`, 2026-10-17 — this used to be a recipe pasted from here,
+with no checks). Add `--dry` (`node scripts/deploy-lambda.mjs push --dry`) to build and
+check without uploading. It starts from the DEPLOYED zip, so node_modules stay exactly
+what is running (web-push for push; the Anthropic and AWS SDKs for ai — the
+aws-lambda/node_modules on disk is never used). It refuses, in order: a source the entry
+requires that isn't in `LAMBDAS.<name>.files` (also `deployLambda.test.js`); a twin that
+`sync-lambda-twins.mjs` had to regenerate, or any shipped source uncommitted; a file that
+fails `node --check`; a bundle whose entry doesn't load or export `handler` (push loads
+with a throwaway VAPID pair — web-push throws on a missing key at load); a zip under the
+healthy size (push ~260 KB, ai ~5 MB). Then it uploads and waits for `Successful`. A new
+local module in either Lambda: add it to `files`, or the test fails. The push bundle is
+index.js (= push-notify.js) + pushCadence, feedRevision, the generated twins
+filmClubSync / filmClubSyncPublisher / clubNotices, and sentryLambda.
 
 **Every outbound request goes through `timedFetch`** (Sentry, 2026-10-14: "cinemaroll-push
 is about to time out" — a sweep logged nothing for its whole 60s, one request hanging).
@@ -932,9 +927,7 @@ Infra (all `--profile personal`, us-east-1): Lambda `cinemaroll-newsletter`
 `cinemaroll-newsletter-self-invoke`), HTTP API `lpou4xxxng` ($default, throttle
 2/5), EventBridge rule `cinemaroll-newsletter-friday` at
 `cron(0 13 ? * FRI *)`. Env: `FIREBASE_SA`, `TMDB_API_KEY`, `OMDB_API_KEY`,
-`ANTHROPIC_API_KEY`, `VAPID_*`. Redeploy is the push Lambda's recipe with
-`index.js` = `newsletter.js` plus `newsletterCompose.js` and
-`newsletterSources.js`.
+`ANTHROPIC_API_KEY`, `VAPID_*`. Redeploy with `yarn deploy:newsletter` (its own script, below; `yarn deploy:push` is the push Lambda's).
 
 **`.env` must end with a newline.** Appending a line to it with `>>` when it
 did not glued `VUE_APP_NEWSLETTER_API_URL` onto the end of

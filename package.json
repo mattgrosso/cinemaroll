@@ -23,6 +23,8 @@
     "letterboxd-status": "node scripts/letterboxd-status.mjs",
     "import-letterboxd": "node scripts/import-letterboxd-csv.mjs",
     "deploy:newsletter": "bash scripts/deploy-newsletter-lambda.sh",
+    "deploy:push": "node scripts/deploy-lambda.mjs push",
+    "deploy:ai": "node scripts/deploy-lambda.mjs ai",
     "newsletter-e2e": "node scripts/newsletter-e2e.mjs",
     "newsletter-dry-run": "node scripts/newsletter-dry-run.mjs",
     "fetch-bug-reports": "node scripts/fetch-bug-reports.mjs",

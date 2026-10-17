@@ -212,6 +212,7 @@ rather than only through component mounts. That's why `searchFiltering.js`,
 | `yarn build` / `yarn deploy` | build (Vite) / deploy to AWS S3 + CloudFront |
 | `yarn preview` | serve the built `dist/` locally — how a production build gets eyeballed |
 | `yarn generate-db-rules` | regenerate `database.rules.json` — never hand-edit it |
+| `yarn deploy:push` / `yarn deploy:ai` | ship the push / AI Lambda, checked (`--dry` via `node scripts/deploy-lambda.mjs <name> --dry`) |
 | `yarn newsletter-dry-run` | build this week's newsletter BRIEF from live data — no keys, no writes, no model call |
 | `yarn newsletter-e2e` | build a REAL issue end to end (model included) against the tester account |
 | `yarn fetch-bug-reports` | unresolved in-app bug reports, newest first |
