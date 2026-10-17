@@ -1,4 +1,6 @@
 import otherAwardsWinners from '../data/otherAwardsWinners.json';
+import { houseCategoryRank } from './awardsShare.js';
+import { OTHER_CEREMONIES } from './ceremonies.js';
 
 // Static dataset of major-ceremony wins/nominations (Golden Globes, BAFTA,
 // Cannes, Venice — see CLAUDE.md's "Other Ceremonies" section for how it was
@@ -35,6 +37,8 @@ otherAwardsWinners.forEach((entry) => {
 // release year (international rollouts, year-of-eligibility vs year-of-
 // ceremony labeling quirks across sources) — allow a 1-year slop either way.
 const YEAR_TOLERANCE = 1;
+
+const CEREMONY_ORDER = OTHER_CEREMONIES.map((c) => c.ceremony);
 
 // The Golden Globes have run every year since their 1943 debut with no gaps,
 // so the ordinal ("Nth Golden Globe Awards" — Wikipedia's actual article
@@ -83,7 +87,20 @@ export function findOtherAwardsForMovie (movie) {
   const wins = [];
   const nominations = [];
 
-  matches.forEach((entry, index) => {
+  // The awards page's order: ceremonies as its tabs run (Globes, BAFTA,
+  // Cannes, Venice), newest year first, top prize first within a year —
+  // not the order the dataset happens to list them in.
+  const ceremonyRank = (name) => {
+    const index = CEREMONY_ORDER.indexOf(name);
+    return index === -1 ? CEREMONY_ORDER.length : index;
+  };
+  const ordered = [...matches].sort((a, b) =>
+    (ceremonyRank(a.ceremony) - ceremonyRank(b.ceremony)) ||
+    a.ceremony.localeCompare(b.ceremony) ||
+    (b.year - a.year) ||
+    (houseCategoryRank(a.category) - houseCategoryRank(b.category)));
+
+  ordered.forEach((entry, index) => {
     const record = {
       id: `${entry.ceremony}-${entry.category}-${entry.year}-${index}`,
       ceremony: entry.ceremony,

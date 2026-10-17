@@ -141,6 +141,21 @@ describe("a film page's club awards", () => {
     expect(friendAwardsForMovie(friends, 999)).toEqual([]);
     expect(friendAwardsForMovie(friends, null)).toEqual([]);
   });
+  // Report 2026-10-16: the movie page should read in the awards page's order,
+  // Best Picture on top, whatever order the friend's app published in.
+  it('lists each group newest year first, Best Picture leading within a year', () => {
+    const a = [
+      { year: 2015, category: 'bestScore', label: 'Best Score or Music', result: 'won' },
+      { year: 2015, category: 'bestActor', label: 'Best Actor', result: 'won', name: 'Someone' },
+      { year: 2014, category: 'bestPicture', label: 'Best Picture', result: 'won' },
+      { year: 2015, category: 'bestPicture', label: 'Best Picture', result: 'won' },
+      { year: 2015, category: 'bestDirector', label: 'Best Director', result: 'nominated', name: 'Someone' },
+      { year: 2015, category: 'bestEditing', label: 'Best Editing', result: 'nominated' }
+    ];
+    const [group] = friendAwardsForMovie([{ name: 'Seth', profile: { awardsName: 'The Smithies', ratings: { 550: { a } } } }], 550);
+    expect(group.won.map((w) => `${w.year} ${w.label}`)).toEqual(['2015 Best Picture', '2015 Best Actor', '2015 Best Score or Music', '2014 Best Picture']);
+    expect(group.nominated.map((w) => w.label)).toEqual(['Best Director', 'Best Editing']);
+  });
 });
 
 import { clubAwardsByYear, memberFromProfile } from '@/assets/javascript/awardsShare.js';

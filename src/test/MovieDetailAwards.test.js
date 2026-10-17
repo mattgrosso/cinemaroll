@@ -120,6 +120,43 @@ describe('MovieDetail - awards sections', () => {
     })
   })
 
+  // Report 2026-10-16: "best picture is always at the top and then it works
+  // its way down from there" — the awards page's order, not Firebase's
+  // alphabetical keys (which put bestActor ahead of bestPicture).
+  describe('personal awards read in the awards page\'s order', () => {
+    it('newest year first, and within a year the standard categories in order, then custom awards oldest first', async () => {
+      const win = { winner: { type: 'movie', movieId: 42 }, nominees: [{ type: 'movie', movieId: 42 }] }
+      wrapper = mountWithSettings({
+        tags: { 'viewing-tags': {} },
+        personalAwards: {
+          2022: { categories: { bestPicture: win } },
+          2023: {
+            customCategories: { 'custom-zebra': { name: 'Zebra Prize', createdAt: 1 }, 'custom-apple': { name: 'Apple Prize', createdAt: 2 } },
+            categories: {
+              'custom-apple': win,
+              'custom-zebra': win,
+              bestActor: { winner: { type: 'person', name: 'Cillian Murphy', movieId: 42 }, nominees: [{ type: 'person', name: 'Cillian Murphy', movieId: 42 }] },
+              bestCinematography: win,
+              bestDirector: win,
+              bestPicture: win
+            }
+          }
+        }
+      })
+      await wrapper.setData({ result: makeResult(), movie: makeResult().movie })
+
+      expect(wrapper.vm.personalAwardWins.map((a) => `${a.year} ${a.category}`)).toEqual([
+        '2023 Best Picture',
+        '2023 Best Director',
+        '2023 Best Actor',
+        '2023 Best Cinematography',
+        '2023 Zebra Prize',
+        '2023 Apple Prize',
+        '2022 Best Picture'
+      ])
+    })
+  })
+
   describe('other-ceremony awards (assets/javascript/otherAwards.js)', () => {
     beforeEach(async () => {
       wrapper = mountWithSettings({ tags: { 'viewing-tags': {} } })

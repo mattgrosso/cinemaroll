@@ -761,7 +761,7 @@ import { myLetterboxdReviews, letterboxdFilm } from '../utils/letterboxdData.js'
 import { starsFor, compactCount, watchedDateLabel, letterboxdTileState, relogStarsChange } from '../assets/javascript/letterboxdFormat.js';
 import { computeFlatKeywords } from '../utils/keywords.js';
 import { buildTagSuggestions, canCreateNewTag } from '../utils/tags.js';
-import { awardCategoryNameMap } from '../assets/javascript/personalAwardsCategories.js';
+import { awardCategoryNameMap, categoriesForYear } from '../assets/javascript/personalAwardsCategories.js';
 import { friendAwardsForMovie, friendAwardsSummary } from '../assets/javascript/awardsShare.js';
 import { findOtherAwardsForMovie } from '../assets/javascript/otherAwards.js';
 import { sortByAcademyCategoryOrder } from '../assets/javascript/academyAwards.js';
@@ -1082,7 +1082,15 @@ export default {
         .sort((a, b) => Number(b) - Number(a))
         .forEach((year) => {
           const categories = personalAwards[year]?.categories || {};
-          Object.keys(categories).forEach((categoryKey) => {
+          // The awards page's order (report, 2026-10-16: "best picture is
+          // always at the top"), not Firebase's alphabetical key order, which
+          // put Best Actor first. A key nothing lists any more goes last.
+          const listed = categoriesForYear(personalAwards[year]).map((category) => category.key);
+          const ordered = [
+            ...listed.filter((key) => key in categories),
+            ...Object.keys(categories).filter((key) => !listed.includes(key))
+          ];
+          ordered.forEach((categoryKey) => {
             const categoryData = categories[categoryKey];
             if (!categoryData) return;
 

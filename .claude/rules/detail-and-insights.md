@@ -160,6 +160,12 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
   holds two credits and is one writer.
 - TMDB's `0` means "not available" and is indistinguishable from a genuinely free
   production — treat `0` and `undefined` identically as unknown.
+- **Every awards list on the page reads in the awards page's order** (report,
+  2026-10-16: "best picture is always at the top"). Oscars by `sortByAcademyCategoryOrder`;
+  your own by `categoriesForYear` within each year (newest year first) — never
+  `Object.keys`, which is Firebase's alphabetical order and put Best Actor first;
+  friends' (`friendAwardsForMovie`) and the other ceremonies (`findOtherAwardsForMovie`,
+  ceremonies in `OTHER_CEREMONIES` tab order) by `houseCategoryRank`.
 - Awards content scrolls internally (`.awards-body`, `max-height: 150px`), matching the
   `.long-list` treatment on Cast/Genres/Directors. Don't collapse it behind a toggle.
 - `formatTimeDifference`'s months branch runs to 730 days, so `'1 year'` is effectively

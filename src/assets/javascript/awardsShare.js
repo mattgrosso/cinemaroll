@@ -238,14 +238,19 @@ export function friendAwardsForMovie (friends, tmdbId) {
       list.push({ ...a, label: awardLabel(a, feed) });
       groups.set(ceremony, list);
     });
-    return [...groups].map(([ceremony, awards]) => ({
-      friend: friend.name,
-      key: friend.key ?? null,
-      tabId: friend.key == null ? null : friendCeremonyTabId(friend.key, ceremony, feed),
-      ceremony,
-      won: awards.filter((a) => a.result === 'won'),
-      nominated: awards.filter((a) => a.result === 'nominated')
-    }));
+    return [...groups].map(([ceremony, list]) => {
+      // Newest year first, then the awards page's category order, so Best
+      // Picture leads whatever order the friend's app published in.
+      const awards = [...list].sort((a, b) => (b.year - a.year) || (houseCategoryRank(a.label) - houseCategoryRank(b.label)) || a.label.localeCompare(b.label));
+      return {
+        friend: friend.name,
+        key: friend.key ?? null,
+        tabId: friend.key == null ? null : friendCeremonyTabId(friend.key, ceremony, feed),
+        ceremony,
+        won: awards.filter((a) => a.result === 'won'),
+        nominated: awards.filter((a) => a.result === 'nominated')
+      };
+    });
   }).sort((a, b) => a.friend.localeCompare(b.friend) || (a.tabId === `friend:${a.key}` ? -1 : b.tabId === `friend:${b.key}` ? 1 : a.ceremony.localeCompare(b.ceremony)));
 }
 
