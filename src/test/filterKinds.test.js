@@ -23,7 +23,7 @@ describe('the registry contract', () => {
   it('covers every chip type the app creates', () => {
     // Home.vue's filterTypes list, plus the specific crew types MovieDetail
     // links create. A type missing here silently matches nothing.
-    ['general', 'person', 'year', 'yearRange', 'genre', 'company', 'keyword', 'place', 'tag',
+    ['general', 'person', 'year', 'yearRange', 'genre', 'company', 'keyword', 'place', 'tag', 'medium',
       'title', 'director', 'producer', 'cast', 'list'].forEach((type) => {
       expect(kindFor(type), type).not.toBeNull();
     });
@@ -65,6 +65,20 @@ describe('consumers read the registry', () => {
     expect(applyFilter(placed, { type: 'general', value: 'New York City' })).toBe(true);
     expect(applyFilter(result, { type: 'place', value: 'New York City' })).toBe(false);
     expect(FILTER_KINDS.place.discoverGroup).toBe('local');
+  });
+
+  // Report 2026-10-17: "all the movies I've seen in theaters". A medium lives
+  // on the viewing, so ANY viewing counts — a rewatch in a theater makes it a
+  // theater film — and the match ignores case like a tag's.
+  it('a medium chip matches any viewing with that medium', () => {
+    const chip = { type: 'medium', value: 'Theater' };
+    const rewatched = { movie: { title: 'A' }, ratings: [{ medium: 'Streaming' }, { medium: 'theater' }] };
+    const streamed = { movie: { title: 'Theater of Blood' }, ratings: [{ medium: 'Streaming' }] };
+    const unknown = { movie: { title: 'B' }, ratings: [{}] };
+    expect(applyFilter(rewatched, chip)).toBe(true);
+    expect(applyFilter(streamed, chip)).toBe(false);
+    expect(applyFilter(unknown, chip)).toBe(false);
+    expect(FILTER_KINDS.medium.discoverGroup).toBe('local');
   });
 
   it('applyFilter delegates to the kind matcher', () => {

@@ -144,7 +144,12 @@
                          look that great"). -->
                     <span class="medium-and-date">
                       <span class="viewing-date">{{ viewingDateLabel(rating.date) }}</span>
-                      <span v-if="rating.medium" class="viewing-medium">{{ rating.medium }}</span>
+                      <!-- Tap the medium for every film watched that way
+                           (report, 2026-10-17). It sits inside the collapse
+                           button, whose Bootstrap handler runs in the capture
+                           phase and still toggles — harmless, the page is
+                           leaving for Home. -->
+                      <span v-if="rating.medium" class="viewing-medium" role="link" :aria-label="`Every film watched: ${rating.medium}`" @click.stop="searchForMedium(rating.medium)">{{ rating.medium }}</span>
                       <span v-if="watchNumberLabel(index)" class="viewing-watch-number">{{ watchNumberLabel(index) }}</span>
                     </span>
                     <span class="viewing-score">{{formatScore(rating.calculatedTotal)}}</span>
@@ -1617,6 +1622,23 @@ export default {
         photo: 'cinematographer'
       };
       return map[type] || null;
+    },
+
+    // Every film with a viewing in this medium: a `medium` chip, the
+    // searchForTag way (a medium lives on the viewing, like a tag).
+    searchForMedium (medium) {
+      const value = String(medium || '').trim();
+      if (!value) return;
+      this.$store.commit('setHomePageNavigationIntent', 'search');
+      this.$store.commit('setHomePageSearchValue', '');
+      this.$store.commit('setHomePageSearchChips', [{
+        id: `medium-${Date.now()}`,
+        type: 'medium',
+        value,
+        display: `Watched: ${value}`
+      }]);
+      this.$store.commit('setHomePageScrollPosition', 0);
+      this.$router.push('/');
     },
 
     searchForTag (tag) {
@@ -3527,14 +3549,20 @@ export default {
 
     .viewing-medium {
       background: rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+      // A small chip, so the tap area reaches past it (40px tall) without
+      // moving the line.
+      position: relative;
+      &::before { content: ''; inset: -12px -6px; position: absolute; }
+      &:active { background: rgba(255, 255, 255, 0.25); color: #fff; }
       border-radius: 999px;
       color: #ddd;
       font-size: ds(0.62rem);
       letter-spacing: 0.04em;
       line-height: 1.6;
-      overflow: hidden;
+      // No overflow: hidden — it would clip the ::before tap area. The
+      // mediums are a short fixed list, so nothing needs an ellipsis.
       padding: 0 8px;
-      text-overflow: ellipsis;
       text-transform: uppercase;
       white-space: nowrap;
     }

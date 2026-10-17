@@ -56,6 +56,7 @@ describe('Quick Links Filtering System', () => {
         },
         ratings: [{
           calculatedTotal: 9.5,
+          medium: 'Theater',
           date: `${Date.now()}` // This year, this month
         }],
         dbKey: 'movie-1'
@@ -90,6 +91,7 @@ describe('Quick Links Filtering System', () => {
         },
         ratings: [{
           calculatedTotal: 7.8,
+          medium: 'Streaming',
           date: `${new Date(2022, 5, 10).getTime()}` // 2022 date - different from current year
         }],
         dbKey: 'movie-3'
@@ -536,6 +538,24 @@ describe('Quick Links Filtering System', () => {
       // Should have movies from this year AND with Drama genre
       expect(result).toHaveLength(1) // Only "Best Movie 2024" matches both criteria
       expect(result[0].movie.title).toBe('Best Movie 2024')
+    })
+  })
+
+  // Report 2026-10-17: "all the movies I've seen in the theater ... with the
+  // lightning bolt searches". Mediums had a list nobody could open; a tapped
+  // row has to be a medium chip, since typed "Theater" only searches titles.
+  describe('Mediums', () => {
+    it('opens from its badge, counts films, and a row filters by medium', async () => {
+      const badge = wrapper.findAll('.quick-links-badges .badge').find((b) => b.text() === 'Mediums')
+      expect(badge, 'Mediums badge').toBeTruthy()
+      await badge.trigger('click')
+      const rows = wrapper.findAll('.quick-link-list li')
+      expect(rows.map((r) => r.text().replace(/\s+/g, ' '))).toContain('Theater (1)')
+      await rows.find((r) => r.text().startsWith('Theater')).trigger('click')
+      await wrapper.vm.$nextTick()
+      expect(wrapper.vm.activeFilters).toEqual([expect.objectContaining({ type: 'medium', value: 'Theater' })])
+      const titles = wrapper.findAll('[data-testid="db-grid-result"]').map((n) => n.text())
+      expect(titles).toEqual(['Best Movie 2024'])
     })
   })
 })

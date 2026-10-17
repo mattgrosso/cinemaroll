@@ -54,7 +54,7 @@ const SUBJECT = {
     keywords: [{ name: 'heist' }],
     locations: [{ name: 'Kyoto', type: 'narrative', lat: 35.01, lon: 135.77, id: 'Q34600' }]
   },
-  ratings: [{ calculatedTotal: 8.5, date: '2023-01-01', tags: [{ title: 'DARK' }] }]
+  ratings: [{ calculatedTotal: 8.5, date: '2023-01-01', medium: 'Theater', tags: [{ title: 'DARK' }] }]
 };
 
 // A genuine sibling: shares every dimension with SUBJECT, shares no words with
@@ -79,7 +79,10 @@ const SIBLING = {
     keywords: [{ name: 'heist' }],
     locations: [{ name: 'Kyoto', type: 'filming', lat: 35.01, lon: 135.77, id: 'Q34600' }]
   },
-  ratings: [{ calculatedTotal: 7.5, date: '2023-02-01', tags: [{ title: 'DARK' }] }]
+  ratings: [
+    { calculatedTotal: 7.5, date: '2023-02-01', medium: 'Streaming', tags: [{ title: 'DARK' }] },
+    { calculatedTotal: 7.6, date: '2023-06-01', medium: 'Theater', tags: [] }
+  ]
 };
 
 // Shares NOTHING but words in its title. Must never come back for any link.
@@ -95,7 +98,7 @@ const DECOY = {
     production_companies: [{ name: 'Other Studio' }],
     keywords: [{ name: 'unrelated' }]
   },
-  ratings: [{ calculatedTotal: 6, date: '2023-03-01', tags: [] }]
+  ratings: [{ calculatedTotal: 6, date: '2023-03-01', medium: 'Streaming', tags: [] }]
 };
 
 const LIBRARY = [SUBJECT, SIBLING, DECOY];
@@ -191,7 +194,11 @@ const LINKS = [
   ['tag', (vm) => vm.searchForTag('DARK')],
   // Set In / Filmed In (2026-09-08): a place chip, exact match — the decoy
   // has "Kyoto" in its title and must stay out.
-  ['place', (vm) => vm.searchFor('Kyoto', 'place')]
+  ['place', (vm) => vm.searchFor('Kyoto', 'place')],
+  // The medium on a viewing line (report, 2026-10-17: "all the movies I've
+  // seen in theaters"). The sibling's theater viewing is its SECOND — any
+  // viewing counts. The decoy was streamed and must stay out.
+  ['medium', (vm) => vm.searchForMedium('Theater')]
 ];
 
 describe('every search link on a movie detail page', () => {
@@ -240,6 +247,12 @@ describe('every search link on a movie detail page', () => {
     ]);
     expect(tag.setHomePageSearchValue).toBe('');
 
+    const medium = commitsFor((vm) => vm.searchForMedium('Theater'));
+    expect(medium.setHomePageSearchChips).toEqual([
+      expect.objectContaining({ type: 'medium', value: 'Theater' })
+    ]);
+    expect(medium.setHomePageSearchValue).toBe('');
+
     const genre = commitsFor((vm) => vm.searchFor('Thriller', 'genre'));
     expect(genre.setHomePageSearchChips).toEqual([
       expect.objectContaining({ type: 'genre', value: 'Thriller', genreId: 53 })
@@ -282,5 +295,26 @@ describe('every search link on a movie detail page', () => {
     const commits = Object.fromEntries(page.commits);
     expect(commits.setHomePageSearchChips).toEqual([]);
     expect(commits.setHomePageSearchValue).toBe('Nightfall Over Kyoto');
+  });
+});
+
+describe('the medium on a viewing line', () => {
+  it('is tappable and hands Home a medium chip', async () => {
+    const { getAllRatings } = await import('@/assets/javascript/GetRating.js');
+    getAllRatings.mockImplementation((entry) => entry?.ratings || null);
+    try {
+      const page = detailPage();
+      await page.wrapper.setData({ result: SUBJECT, movie: SUBJECT.movie, previousEntry: SUBJECT });
+      const chip = page.wrapper.find('.you-panel .viewing-medium');
+      expect(chip.text()).toBe('Theater');
+      await chip.trigger('click');
+      const commits = Object.fromEntries(page.commits);
+      expect(commits.setHomePageSearchChips).toEqual([
+        expect.objectContaining({ type: 'medium', value: 'Theater' })
+      ]);
+      expect(page.wrapper.vm.$router.push).toHaveBeenCalledWith('/');
+    } finally {
+      getAllRatings.mockImplementation(() => []);
+    }
   });
 });

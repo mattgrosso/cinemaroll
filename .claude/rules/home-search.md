@@ -204,6 +204,18 @@ whose inline condition mirrors `FILTER_KINDS.place` exactly, like every other bu
 `countPlaces` feeds the catalog/typeahead, the Add Filter picker and MovieDetail's (N)
 badges. Tests: `PlaceSearch.test.js`, `filterKinds.test.js`, `catalog.test.js`.
 
+## Mediums are a chip kind (2026-10-17)
+
+How a film was watched (Theater, Streaming, Physical Media…) lives on the VIEWING,
+like a tag, so `FILTER_KINDS.medium` matches if ANY viewing has it — a theater rewatch
+makes it a theater film. Exact, case-insensitive, local-only. Two ways in: the
+"Mediums" quick link (`allMediums` counts FILMS, shorts by the setting, so the number
+is what a tap shows; a row goes through `pickQuickLinkValue`, the only quick-link list
+that builds a typed chip) and the medium pill on each MovieDetail viewing line
+(`searchForMedium`). Typed "Theater" stays a plain search. Report: "pull up all the
+movies I've seen in theaters". Guarded in `filterKinds`, `QuickLinksFiltering` and
+`MovieDetailSearchLinks` tests.
+
 ## Year chips get a scroller, not a chip
 
 Any active `type === 'year'` chip (not `yearRange`/decades) swaps the chip row for

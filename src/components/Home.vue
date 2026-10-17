@@ -208,6 +208,13 @@
             >
               Studios
             </span>
+            <span
+              class="badge mx-1 tap-feedback"
+              :class="activeQuickLinkList === 'mediums' ? 'text-bg-success' : 'text-bg-secondary'"
+              @click="toggleQuickLinksList('mediums')"
+            >
+              Mediums
+            </span>
             <!-- Tags used to sit behind their own "Tags ▸" collapse below an
                  <hr>. They're in the same flow now: "at some point in the past
                  I separated out quick links from tags. I think I must've done
@@ -236,7 +243,7 @@
                 {{quickLinksSortType}}
               </button>
               <ul class="quick-link-list p-0 col-12">
-                <li v-for="(value, index) in sortedDataForActiveQuickLinkList" :key="index" @click="updateSearchValue(value.name)">
+                <li v-for="(value, index) in sortedDataForActiveQuickLinkList" :key="index" @click="pickQuickLinkValue(value.name)">
                   <span class="badge mx-1 tap-feedback" :class="darkOrLight">
                     {{ value.name }}<span v-if="quickLinksSortType === 'count' && value.count">&nbsp;({{value.count}})</span>
                   </span>
@@ -3020,17 +3027,15 @@ export default {
       });
     },
     allMediums () {
+      // FILMS per medium, not viewings, so the count beside "Theater" is the
+      // number of results tapping it shows (a film matches the medium chip
+      // if any viewing was that way — filterKinds.js). Shorts by the setting,
+      // like every other count.
       const mediums = {};
 
-      this.allEntriesWithFlatKeywordsAdded.forEach((result) => {
-        result.ratings.forEach((rating) => {
-          if (!rating.medium) {
-            return;
-          } else if (mediums[rating.medium]) {
-            mediums[rating.medium]++;
-          } else {
-            mediums[rating.medium] = 1;
-          }
+      withoutShorts(this.allEntriesWithFlatKeywordsAdded, this.showShorts).forEach((result) => {
+        new Set((result.ratings || []).map((rating) => rating?.medium).filter(Boolean)).forEach((medium) => {
+          mediums[medium] = (mediums[medium] || 0) + 1;
         });
       });
 
@@ -5050,6 +5055,12 @@ export default {
       this.inputValue = '';
       this.hasAutoRandomChip = isAutoRandom;
     },
+    // A row in an open quick-link list. Mediums build a typed chip — typed
+    // "Theater" is a plain search and would only find titles and keywords
+    // (report, 2026-10-17). The other lists keep their plain search.
+    pickQuickLinkValue (name) {
+      this.updateSearchValue(name, false, this.activeQuickLinkList === 'mediums' ? 'medium' : null);
+    },
     toggleQuickLinksSort () {
       if (this.quickLinksSortType === "a-z") {
         this.quickLinksSortType = "count";
@@ -6260,6 +6271,8 @@ export default {
           return { type: 'company', value: trimmed, display: trimmed };
         case "place":
           return { type: 'place', value: trimmed, display: trimmed };
+        case "medium":
+          return { type: 'medium', value: trimmed, display: `Watched: ${trimmed}` };
         default:
           // Fall back to detection if unknown type
           return this.detectFilterType(trimmed);

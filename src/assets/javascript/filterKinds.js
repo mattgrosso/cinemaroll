@@ -143,6 +143,21 @@ export const FILTER_KINDS = {
     }
   },
 
+  // How you watched it — Theater, Streaming, Physical Media… Like a tag it
+  // lives on the VIEWING, so a film matches if ANY viewing was that way: a
+  // film first seen at home and rewatched in a theater is a theater film
+  // (report, 2026-10-17: "pull up all the movies I've seen in theaters").
+  // Local: TMDB has no idea how you watched anything.
+  medium: {
+    discoverGroup: 'local',
+    matchLocal (result, filter) {
+      const mediumValue = normalizeSearchText(filter.value);
+      return Boolean(result.ratings) && result.ratings.some(rating =>
+        Boolean(rating?.medium) && normalizeSearchText(rating.medium) === mediumValue
+      );
+    }
+  },
+
   title: {
     discoverGroup: 'local',
     matchLocal (result, filter, s) {
