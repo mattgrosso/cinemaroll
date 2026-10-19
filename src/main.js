@@ -24,8 +24,8 @@ import VueClickAway from "vue3-click-away";
 import * as Sentry from "@sentry/vue";
 import { BrowserTracing } from "@sentry/tracing";
 import { CaptureConsole } from "@sentry/integrations";
-import { scrubEvent, scrubBreadcrumb } from "./utils/scrubUrl.js";
-import { beforeSendError, isTestBrowser } from "./utils/sentryBeforeSend.js";
+import { scrubBreadcrumb } from "./utils/scrubUrl.js";
+import { beforeSendError, beforeSendTransaction, isTestBrowser } from "./utils/sentryBeforeSend.js";
 import { handledErrorFilter } from "./utils/sentryHandled.js";
 import VueLazyLoad from 'vue3-lazyload';
 import './registerServiceWorker'
@@ -113,9 +113,10 @@ if (allowDevSentry || (process.env.NODE_ENV !== "development" && !isTestBrowser(
     maxValueLength: 8000,
     // No credentials leave for Sentry: Firebase and TMDB take theirs in the
     // query string, and traced fetches and breadcrumbs carried them in full
-    // (see utils/scrubUrl.js, 2026-10-06).
+    // (see utils/scrubUrl.js, 2026-10-06). Transactions are also tagged with
+    // the cause of any request burst (utils/burstLabel.js, 2026-10-19).
     beforeSend: handledErrorFilter(beforeSendError),
-    beforeSendTransaction: scrubEvent,
+    beforeSendTransaction,
     beforeBreadcrumb: scrubBreadcrumb
   });
 }

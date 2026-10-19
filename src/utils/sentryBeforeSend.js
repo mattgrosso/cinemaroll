@@ -1,5 +1,6 @@
 // What leaves for Sentry, and what doesn't.
 import { scrubEvent } from './scrubUrl.js';
+import { labelBurst } from './burstLabel.js';
 import { isStaleChunkError, staleChunkReloadTriggered } from './staleChunkReload.js';
 
 function describes (event, hint) {
@@ -19,6 +20,15 @@ function describes (event, hint) {
 export function beforeSendError (event, hint) {
   if (staleChunkReloadTriggered() && isStaleChunkError({ message: describes(event, hint) })) return null;
   return scrubEvent(event);
+}
+
+/**
+ * A performance transaction: credentials out, then tagged with the burst
+ * that would make Sentry call it an "N+1 API Call" (utils/burstLabel.js), so
+ * the alert names its cause.
+ */
+export function beforeSendTransaction (event) {
+  return labelBurst(scrubEvent(event));
 }
 
 /**

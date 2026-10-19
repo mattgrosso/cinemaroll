@@ -281,6 +281,21 @@ parallel run of `/search/person`, `/search/company` or `/search/keyword` from
 the More from row's `Promise.all` over chips, that's `tmdbIdCache` being
 in-memory only — keep those ids in `deviceCache.js`.
 
+**Every N+1 now names its cause (2026-10-19).** Reopened again on v1.127.10
+(Home, 33 events, two users). Rather than guess each time, `beforeSendTransaction`
+(`utils/sentryBeforeSend.js`) runs `labelBurst` (`utils/burstLabel.js`) after the
+scrubber: the largest group of five or more same-shaped requests in a transaction
+tags it `burst_cause`, `burst_count` and `burst_pattern` (host + path, query
+dropped, ids starred). Expected causes: `movie-hat-read` (about once per six hours
+per device on any screen with a `SendToHat`) and `tmdb-person-lookups` (Awards /
+`PersonalAwardsModal`, first sight of a name). `tmdb-company-lookups`,
+`tmdb-keyword-lookups` (Home's More from chips) and `tmdb-movie-search` (the
+Search "ask" box) are named because they have known fixes (above) — seeing them
+means do the fix. `unknown` means a new burst: read its pattern and find the
+caller. Open an N+1 issue's tags before anything else; archive expected ones
+Forever, never Resolve (resolving is what makes Sentry reopen them).
+`burstLabel.test.js` guards it. A new known burst gets a `KNOWN_BURSTS` entry.
+
 ## A one-off read nobody catches must classify its refusal (2026-10-15)
 
 Sentry: on an expired sign-in every listener and the newsletter read were
