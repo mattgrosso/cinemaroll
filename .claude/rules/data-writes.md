@@ -323,3 +323,12 @@ when nobody is signed in (`isRefusedWithNoSignIn`; the store registers the
 sign-in check via `setSignedInCheck`, since that file can't import Firebase).
 Signed in, or any other rejection, stays an error. A test that mocks
 `ErrorLogService` and loads the store needs `setSignedInCheck` in the mock.
+
+**An opaque "Script error." is a warning (Sentry, 2026-10-20).** It's all the
+browser reports for an error in code from another origin (on iOS, usually
+something Safari added to the page): no file, no line, nothing to trace. Sentry
+drops that message on its own, but `ErrorLogService`'s `error` handler re-said
+it through `console.error`, which CaptureConsole sends. `isOpaqueScriptError`
+(exactly "Script error." with no filename or line) logs it as a warning: it
+stays in the in-app log and never reaches Sentry. Anything with a file or line
+stays an error. `opaqueScriptError.test.js` guards it.

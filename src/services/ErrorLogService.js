@@ -165,8 +165,18 @@ class ErrorLogService {
 const errorLogService = new ErrorLogService();
 
 // Global error handler to catch unhandled errors
+// "Script error." with no file or line is all the browser tells us about an
+// error in code from another origin (on iOS, usually something Safari put in
+// the page). Sentry ignores it by default, but this handler re-said it through
+// console.error, which CaptureConsole sends on (Sentry, 2026-10-20). Nothing
+// in it can be traced, so it's a warning: kept in the in-app log, not sent.
+export function isOpaqueScriptError (event) {
+  return event?.message === 'Script error.' && !event.filename && !event.lineno;
+}
+
 window.addEventListener('error', (event) => {
-  errorLogService.error(`Unhandled Error: ${event.message}`, {
+  const level = isOpaqueScriptError(event) ? 'warn' : 'error';
+  errorLogService[level](`Unhandled Error: ${event.message}`, {
     filename: event.filename,
     lineno: event.lineno,
     colno: event.colno,
