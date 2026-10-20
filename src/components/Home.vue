@@ -922,7 +922,7 @@
                 <template v-else>
                   <div v-if="!pushDeviceSubscribed" class="mb-2">
                     <button class="btn btn-primary" :disabled="pushBusy" @click="enablePushOnThisDevice">
-                      <i class="bi bi-bell me-1"></i>Turn on notifications on this device
+                      <i class="bi bi-bell me-1"></i>{{ pushFinishingSetup ? 'Finishing setup…' : 'Turn on notifications on this device' }}
                     </button>
                     <small class="form-text text-white d-block mt-2">
                       A daily nudge when films are waiting on stickiness, a tiebreak, or
@@ -1927,6 +1927,7 @@ export default {
       // is refreshed by checkPushDevice(), not computed.
       pushDeviceSubscribed: false,
       pushBusy: false,
+      pushFinishingSetup: false,
       pushError: null,
       pushTestSent: false,
       activeFilters: [], // New multi-filter system
@@ -4639,13 +4640,16 @@ export default {
       this.pushBusy = true;
       this.pushError = null;
       try {
-        await subscribeThisDevice(this.$store);
+        await subscribeThisDevice(this.$store, {
+          onWaiting: () => { this.pushFinishingSetup = true; }
+        });
         this.pushDeviceSubscribed = true;
       } catch (error) {
         // subscribeThisDevice throws human-readable messages by contract.
         this.pushError = error.message;
       } finally {
         this.pushBusy = false;
+        this.pushFinishingSetup = false;
       }
     },
     async disablePushOnThisDevice () {

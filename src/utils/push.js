@@ -68,12 +68,23 @@ export function subscriptionRecord (subscription, now = Date.now()) {
   };
 }
 
+// How long the Turn on button waits for a freshly installed worker.
+export const WORKER_ACTIVATION_WAIT_MS = 30000;
+
+// `.ready` is safe here (unlike in the dev server) because a registration is
+// known to exist; it resolves once that registration has an active worker.
+function activeRegistration (timeoutMs) {
+  let timer;
+  const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve(null), timeoutMs); });
+  return Promise.race([navigator.serviceWorker.ready, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Subscribe this device. MUST be called from a user tap. Returns the record
  * that was persisted, or throws with a human-readable message the settings
  * UI shows verbatim.
  */
-export async function subscribeThisDevice (store) {
+export async function subscribeThisDevice (store, { onWaiting = () => {}, timeoutMs = WORKER_ACTIVATION_WAIT_MS } = {}) {
   const support = pushSupport();
   if (!support.supported) {
     throw new Error(support.needsInstall
@@ -89,9 +100,20 @@ export async function subscribeThisDevice (store) {
   // getRegistration, not .ready — .ready never resolves when no service
   // worker is registered at all (the dev server), which would hang the
   // settings button silently instead of explaining itself.
-  const registration = await navigator.serviceWorker.getRegistration();
+  let registration = await navigator.serviceWorker.getRegistration();
   if (!registration) {
     throw new Error('No service worker registered — push only works on the deployed app.');
+  }
+  // Bug report (Matt, 2026-10-20): right after re-adding Cinema Roll to the
+  // Home Screen, the worker was still installing (downloading the whole app)
+  // and iOS refused with its raw "requires an active service worker". A
+  // registration existing isn't enough; wait for it to go active.
+  if (!registration.active) {
+    onWaiting();
+    registration = await activeRegistration(timeoutMs);
+    if (!registration?.active) {
+      throw new Error('Cinema Roll is still setting up on this device. Try again in a minute.');
+    }
   }
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,

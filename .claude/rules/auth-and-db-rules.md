@@ -944,3 +944,14 @@ errors (captureConsole makes every error a Sentry event), and logs no context �
 the stored key is the person's email. It sets a one-shot sessionStorage flag
 (`utils/sessionExpiredNotice.js`) so the login screen says "You were signed out.
 Please sign in again." instead of looking like a crash.
+
+## Turning on push needs an ACTIVE worker (2026-10-20)
+
+A fresh Home Screen install (iOS treats a re-added icon as a new app: new
+storage, new permission, notifications off) has a registered worker that is
+still installing — downloading the whole app — for a while. `subscribeThisDevice`
+(`utils/push.js`) waits up to 30s for `.ready` when `registration.active` is
+empty (the button reads "Finishing setup…"), then gives a plain "still setting
+up" message instead of iOS's raw "requires an active service worker".
+`pushSubscribeWaitsForWorker.test.js` guards it. The old icon's subscription is
+dead and gets pruned by the push Lambda's 404/410 handling on the next send.
