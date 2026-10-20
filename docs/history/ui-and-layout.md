@@ -739,3 +739,16 @@ Never reproduced, so it's instrumented: bug reports carry `headerTouches`, the
 last five header touches — landed, lifted as tap / drag / cancelled by iOS,
 whether the click came, how the trip home started, and whether it arrived,
 stalled (3s), or was cancelled. If it recurs, that field says which step broke.
+
+## Launch splash (2026-10-20)
+
+Matt reported the home-screen app opening to a plain white page for several seconds
+before Cinema Roll appeared. Three causes: the manifest's `background_color` was the
+old PWA plugin's `#ffffff`; iOS had no `apple-touch-startup-image` to show, so it
+showed white; and the page's dark background came from the bundled Bootstrap CSS
+(`body.bg-dark`), so the page itself stayed white until that loaded. Fix: manifest
+colours to `#212529`, an inline `<style>` and splash markup inside `#app` (Vue's mount
+replaces it, so it can't get stuck), and eleven launch images covering every iPhone
+screen iOS 18+ runs on. The same treatment then went to Matt's other home-screen apps.
+iOS caches launch images per home-screen icon, so an existing install may need
+re-adding once to pick them up.

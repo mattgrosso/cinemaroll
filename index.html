@@ -50,12 +50,49 @@
     <link rel="mask-icon" href="/img/icons/safari-pinned-tab.svg" color="#ffffff">
     <meta name="msapplication-TileImage" content="/img/icons/msapplication-icon-144x144.png">
     <meta name="msapplication-TileColor" content="#ffffff">
+    <!--
+      Launch splash (2026-10-20). Until main.js mounts, the page used to be
+      plain white (the dark background is in the bundled CSS, and iOS shows
+      white while a home-screen app starts). The inline style below paints
+      the page dark from the first byte, and the .launch-splash inside #app
+      shows the icon and name until Vue's mount replaces #app's contents —
+      no script hides it, so it can never get stuck or flash early. The
+      apple-touch-startup-image links give iOS the same picture to show
+      before the page exists at all; scripts/generate-launch-images.mjs
+      draws them to this exact layout and prints these tags.
+    -->
+    <style>
+      html, body { background-color: #212529; }
+      .launch-splash {
+        position: fixed; inset: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background-color: #212529; color: #f8f9fa;
+        font: 26px/1.2 system-ui, -apple-system, sans-serif;
+      }
+      .launch-splash img { width: 120px; height: 120px; margin-bottom: 14px; }
+    </style>
+    <link rel="apple-touch-startup-image" href="/img/launch/launch-1320x2868.png" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/img/launch/launch-1260x2736.png" media="(device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/img/launch/launch-1206x2622.png" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/img/launch/launch-1290x2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/img/launch/launch-1179x2556.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/img/launch/launch-1284x2778.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/img/launch/launch-1170x2532.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/img/launch/launch-1125x2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/img/launch/launch-1242x2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/img/launch/launch-828x1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/img/launch/launch-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
   </head>
   <body class="bg-dark">
     <noscript>
       <strong>We're sorry but cinema-roll doesn't work properly without JavaScript enabled. Please enable it to continue.</strong>
     </noscript>
-    <div id="app"></div>
+    <div id="app">
+      <div class="launch-splash">
+        <img src="/img/splash-icon.png" alt="">
+        <div>Cinema Roll</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

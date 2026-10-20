@@ -197,3 +197,11 @@ never array indices, or insertion makes Vue reuse the wrong DOM nodes.
 `.random-banner` is `display: none` above 600px. A desktop-width measurement is of a
 layout no phone ever sees — this produced a confident "it fits" that was wrong by 240px.
 Force the mobile header and a ~390px container when checking fit.
+
+## Launch splash (2026-10-20)
+
+`index.html` paints `#212529` inline and shows a `.launch-splash` (icon + name) inside
+`#app`, which Vue's mount replaces — nothing hides it by script. iOS launch images live
+in `public/img/launch/` (not precached), drawn by `scripts/generate-launch-images.mjs`
+to the same layout; re-run it (it prints the `<link>` tags) if the icon, name or
+background ever changes. `launchSplash.test.js` guards it.

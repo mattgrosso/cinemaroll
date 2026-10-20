@@ -231,9 +231,11 @@ export default defineConfig(({ mode }) => {
           // index.html and manifest.json included (App.vue's update check
           // relies on index.html being precached and side-steps it with a
           // query param) - except the plugin's own defaults: source maps,
-          // img/icons/, favicon.ico.
+          // img/icons/, favicon.ico. img/launch/ (the iOS launch images) is
+          // fetched by iOS itself when the app is added to the home screen;
+          // precaching 1.4MB of them on every phone would buy nothing.
           globPatterns: ['**/*'],
-          globIgnores: ['**/*.map', 'img/icons/**', 'favicon.ico', '**/.DS_Store', 'data/**'],
+          globIgnores: ['**/*.map', 'img/icons/**', 'img/launch/**', 'favicon.ico', '**/.DS_Store', 'data/**'],
           // data/academy-awards.json (~5.5MB) is fetched once and kept in
           // IndexedDB by the store; precaching it would double-store it.
           // Content-hashed bundles are immutable by name (revision: null,
