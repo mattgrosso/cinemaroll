@@ -66,4 +66,18 @@ describe('summarize', () => {
 
     expect(summary.count).toBe(1);
   });
+
+  // Sentry, 2026-10-20: a save landing between the two reads is not the
+  // delta path being wrong, and must not make the report say "NOT safe".
+  it('counts a write race apart from divergences, without breaking the streak', () => {
+    const summary = summarize({
+      a: reading(3),
+      b: reading(2, false, { stale: 1, race: true }),
+      c: reading(1)
+    }, NOW);
+
+    expect(summary.diverged).toHaveLength(0);
+    expect(summary.races).toHaveLength(1);
+    expect(summary.streak).toBe(3);
+  });
 });

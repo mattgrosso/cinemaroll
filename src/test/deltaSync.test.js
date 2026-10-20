@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { maxUpdatedAt, reconstructFromDelta, diffLibraries, describeStaleEntry, launchPlan, FULL_RESYNC_INTERVAL_MS } from '@/assets/javascript/deltaSync.js';
+import { maxUpdatedAt, reconstructFromDelta, diffLibraries, describeStaleEntry, launchPlan, FULL_RESYNC_INTERVAL_MS, isWriteRaceOnly, summarizeShadowReport } from '@/assets/javascript/deltaSync.js';
 
 function entry (title, updatedAt) {
   return { movie: { id: title, title }, ratings: [{ calculatedTotal: 7 }], updatedAt };
@@ -193,5 +193,55 @@ describe('launchPlan (phase 2: which listener a launch attaches)', () => {
   it('a full sync exactly at the interval edge still counts as fresh', () => {
     expect(launchPlan(meta({ lastFullSyncAt: NOW - FULL_RESYNC_INTERVAL_MS }), snapshot, NOW))
       .toEqual({ mode: 'delta' });
+  });
+});
+
+// Sentry, 2026-10-20: a resync-due launch logged "diverged from full
+// download: [object Object]" — the report was in the context argument, which
+// Sentry flattens, and a save landing between the two reads was an error.
+describe('shadow reports that explain themselves', () => {
+  // The full download is read first; the delta query a moment later picks up
+  // a save that reached the server in between.
+  const raceReport = () => {
+    const fresh = { a: { movie: { id: 1 }, ratings: [{ love: 8 }], updatedAt: 100 } };
+    const delta = { a: { movie: { id: 1 }, ratings: [{ love: 9 }], updatedAt: 150 } };
+    const reconstructed = reconstructFromDelta(fresh, delta, {});
+    const report = { ...diffLibraries(fresh, reconstructed), deltaEntryCount: 1, lastSyncUsed: 90 };
+    report.staleDetail = report.stale.map((key) => describeStaleEntry(fresh[key], reconstructed[key], delta, key));
+    return report;
+  };
+
+  it('calls a save between the two reads a race, not a divergence', () => {
+    expect(isWriteRaceOnly(raceReport())).toBe(true);
+  });
+
+  it('keeps anything else a real divergence', () => {
+    expect(isWriteRaceOnly({ identical: true })).toBe(false);
+    expect(isWriteRaceOnly({ ...raceReport(), missing: ['b'] })).toBe(false);
+    expect(isWriteRaceOnly({ ...raceReport(), extra: ['b'] })).toBe(false);
+
+    const older = raceReport();
+    older.staleDetail[0].reconstructedStamp = 100; // same stamp, different content: the Dune class
+    expect(isWriteRaceOnly(older)).toBe(false);
+
+    const notInDelta = raceReport();
+    notInDelta.staleDetail[0].inDelta = false;
+    expect(isWriteRaceOnly(notInDelta)).toBe(false);
+
+    const capped = raceReport();
+    capped.stale = Array.from({ length: 20 }, (_, i) => `k${i}`);
+    capped.staleDetail = capped.stale.map((dbKey) => ({ ...capped.staleDetail[0], dbKey }));
+    expect(isWriteRaceOnly(capped)).toBe(false);
+  });
+
+  it('puts counts, stamps, coverage and fields into one line of text', () => {
+    const summary = summarizeShadowReport(raceReport());
+
+    expect(summary).not.toContain('[object Object]');
+    expect(summary).toContain('1 compared');
+    expect(summary).toContain('stale 1');
+    expect(summary).toContain('lastSync 90');
+    expect(summary).toContain('a: full 100 vs delta 150, in delta');
+    expect(summary).toContain('ratings');
   });
 });

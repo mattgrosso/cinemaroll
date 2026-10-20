@@ -167,3 +167,41 @@ export function describeStaleEntry (freshEntry, reconstructedEntry, deltaEntries
     diffPaths
   };
 }
+
+// A divergence that is only a save landing between the full download and the
+// delta query a moment later (Sentry, 2026-10-20: one launch, a "resync-due"
+// full download, logged as an error). The full download is read first, so a
+// write that reached the server in between is in the delta with a NEWER stamp
+// than the full download's copy — the delta path is ahead, not wrong, and the
+// full download replaces the device's copy anyway. Only stale entries qualify:
+// anything missing or extra, an uncapped-for list, or a stale entry whose
+// reconstruction is not strictly newer stays a real divergence.
+export function isWriteRaceOnly (report) {
+  if (!report || report.identical) return false;
+  if (report.missing?.length || report.extra?.length) return false;
+  const stale = report.stale || [];
+  const details = report.staleDetail || [];
+  if (!stale.length || stale.length >= EXAMPLE_CAP || details.length !== stale.length) return false;
+  return details.every((detail) => detail.inDelta &&
+    Number.isFinite(detail.reconstructedStamp) &&
+    (!Number.isFinite(detail.freshStamp) || detail.reconstructedStamp > detail.freshStamp));
+}
+
+// One line for the error text itself. ErrorLogService puts the report in its
+// context argument, which Sentry shows as "[object Object]" — so before this
+// the event said a divergence happened and nothing about which or why.
+export function summarizeShadowReport (report) {
+  if (!report) return 'no report';
+  const parts = [
+    `${report.compared ?? '?'} compared`,
+    `${report.deltaEntryCount ?? '?'} via delta`,
+    `missing ${report.missing?.length || 0}`,
+    `stale ${report.stale?.length || 0}`,
+    `extra ${report.extra?.length || 0}`,
+    `lastSync ${report.lastSyncUsed ?? 'none'}`
+  ];
+  const details = (report.staleDetail || []).slice(0, 3).map((detail) =>
+    `${detail.dbKey}: full ${detail.freshStamp ?? 'none'} vs delta ${detail.reconstructedStamp ?? 'none'}` +
+    `, ${detail.inDelta ? 'in' : 'not in'} delta, fields ${(detail.diffPaths || []).join('|') || 'none'}`);
+  return [parts.join(', '), ...details].join('; ');
+}

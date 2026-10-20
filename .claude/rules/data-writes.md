@@ -102,6 +102,18 @@ The "Refresh library from server" button (Settings → Maintenance) and
 `docs/history/data-and-offline.md` (tombstones compared by time, `lastSync` as max
 received stamp, snapshot + lastSync persisted together).
 
+**A shadow divergence explains itself in its own text (Sentry, 2026-10-20).** The
+first one on a phase-2 build reached Sentry as "diverged from full download:
+[object Object]" — the report rode in the context argument, which Sentry flattens.
+`summarizeShadowReport` (`deltaSync.js`) puts counts, `lastSync`, and per stale
+entry both stamps, whether the delta returned it and the differing fields into the
+message, and into the recorded reading (`summary`). The full download is read
+BEFORE the delta query, so a save landing in between makes the delta's copy newer
+than the full download's: `isWriteRaceOnly` (only stale entries, every one in the
+delta with a strictly newer stamp, list not capped) logs that at info, records
+`race: true`, and `yarn delta-shadow-report` counts it apart without breaking the
+streak. Same-stamp-different-content (the Dune class) stays an error.
+
 ## Stored-entry shape
 
 `storedEntry.js` is the single definition of "trimmed". `KEPT_CREW_JOBS` uses substring

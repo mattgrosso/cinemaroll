@@ -25,7 +25,7 @@ import { placeholdersReadyToFinish, finalizePlaceholder } from '../assets/javasc
 
 let autoReconcileRunning = false;
 import { saveSnapshot, loadSnapshot } from "../utils/offlineStore.js";
-import { maxUpdatedAt, reconstructFromDelta, diffLibraries, describeStaleEntry, launchPlan } from "../assets/javascript/deltaSync.js";
+import { maxUpdatedAt, reconstructFromDelta, diffLibraries, describeStaleEntry, launchPlan, isWriteRaceOnly, summarizeShadowReport } from "../assets/javascript/deltaSync.js";
 import { enqueueWrite, listPendingWrites, removePendingWrite, updatePendingWrite } from "../utils/pendingWriteQueue.js";
 import { setValueAtPath } from "../utils/statePath.js";
 import { stampPlanForWrite, stampUpdatesForBatch } from "../assets/javascript/syncStamp.js";
@@ -1976,14 +1976,21 @@ export default createStore({
             report.staleDetail = report.stale.map((dbKey) =>
               describeStaleEntry(fresh[dbKey], reconstructed[dbKey], deltaEntries, dbKey));
           }
+          // A save that landed between the two reads is the delta being
+          // ahead, not wrong (isWriteRaceOnly) — quiet, not a Sentry event.
+          report.race = isWriteRaceOnly(report);
+          report.summary = summarizeShadowReport(report);
           context.commit('setDeltaShadowReport', report);
 
           if (report.identical) {
             console.info(`[delta-shadow] identical: ${report.compared} entries reconstructed from snapshot + ${report.deltaEntryCount} delta entries`);
             ErrorLogService.info?.(`[delta-shadow] identical (${report.compared} entries, ${report.deltaEntryCount} via delta)`);
+          } else if (report.race) {
+            console.info(`[delta-shadow] a save landed between the two reads: ${report.summary}`);
+            ErrorLogService.info?.(`[delta-shadow] write race, not a divergence: ${report.summary}`, report);
           } else {
-            console.warn('[delta-shadow] DIVERGENCE:', report);
-            ErrorLogService.error('[delta-shadow] delta reconstruction diverged from full download:', report);
+            console.warn(`[delta-shadow] DIVERGENCE: ${report.summary}`, report);
+            ErrorLogService.error(`[delta-shadow] delta reconstruction diverged from full download: ${report.summary}`, report);
           }
 
           // Shadow mode existed to answer "is delta reconstruction safe to
@@ -2026,7 +2033,9 @@ export default createStore({
           // this should stay small.
           missing: report.missing?.length || 0,
           stale: report.stale?.length || 0,
-          extra: report.extra?.length || 0
+          extra: report.extra?.length || 0,
+          race: Boolean(report.race),
+          summary: report.summary || null
         };
 
         const readings = context.state.settings?.deltaShadowReadings || {};

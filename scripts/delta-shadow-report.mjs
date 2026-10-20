@@ -30,16 +30,22 @@ export function summarize (readings, now = Date.now()) {
 
   if (!list.length) return { count: 0 };
 
-  const diverged = list.filter((reading) => !reading.identical);
+  // A write race (a save landing between the full download and the delta
+  // query, isWriteRaceOnly) is the delta path being ahead, not wrong: it
+  // neither counts as a divergence nor breaks the streak.
+  const clean = (reading) => reading.identical || reading.race;
+  const diverged = list.filter((reading) => !clean(reading));
+  const races = list.filter((reading) => !reading.identical && reading.race);
   // The streak that matters is the CURRENT one: a divergence three weeks ago
   // that has not recurred is a different story from one yesterday.
   let streak = 0;
-  for (let i = list.length - 1; i >= 0 && list[i].identical; i--) streak += 1;
+  for (let i = list.length - 1; i >= 0 && clean(list[i]); i--) streak += 1;
 
   const DAY = 24 * 60 * 60 * 1000;
   return {
     count: list.length,
     diverged,
+    races,
     streak,
     first: list[0].at,
     last: list[list.length - 1].at,
@@ -86,12 +92,13 @@ async function main () {
   console.log(`  spanning       : ${summary.spanDays} day(s), most recent ${summary.sinceLastDays} day(s) ago`);
   console.log(`  library size   : ${summary.entries} entries, ${summary.deltaEntries} arriving via the delta query`);
   console.log(`  divergences    : ${summary.diverged.length}`);
+  console.log(`  write races    : ${summary.races.length} (a save between the two reads; not a divergence)`);
   console.log(`  clean streak   : ${summary.streak} consecutive`);
 
   if (summary.diverged.length) {
     console.log('\nDivergences (these are what phase 2 would get wrong):');
     summary.diverged.slice(-5).forEach((reading) => {
-      console.log(`  ${new Date(reading.at).toISOString()}  missing ${reading.missing}, stale ${reading.stale}, extra ${reading.extra}`);
+      console.log(`  ${new Date(reading.at).toISOString()}  ${reading.summary || `missing ${reading.missing}, stale ${reading.stale}, extra ${reading.extra}`}`);
     });
   }
 
