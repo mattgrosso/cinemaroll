@@ -46,6 +46,7 @@ const {
 } = require('./pushCadence');
 const { publishFeedV2 } = require('./filmClubSyncPublisher.js');
 const { pushId } = require('./filmClubSync.js');
+const { mapLimit, rotate, requestDeadline, createSweepClock } = require('./sweepClock.js');
 const { planInbox, coalesceNotices, currentFeedId, isNegotiated, noticeTargets, buildNotice, INBOX_PAGE } = require('./clubNotices.js');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
@@ -87,10 +88,14 @@ const OWNER_ACCOUNT_KEY = 'mattgrosso-gmail-com';
 // page or Firebase call held the whole sweep until Lambda killed it. A page
 // that times out throws like any failed read - a theater's board counts as
 // unreadable that sweep (noteBoardFailures), a feed as unreachable.
+// And no request outlives the invocation (2026-10-21): the handler records
+// when Lambda will kill it, and every deadline is cut to end before that
+// (sweepClock.js), so a slow morning ends in logged failures, not a timeout.
 const FETCH_TIMEOUT_MS = 10000;
 const DB_TIMEOUT_MS = 15000;
+let invocationDeadlineAt = null;
 const timedFetch = (url, options = {}, ms = FETCH_TIMEOUT_MS) =>
-  fetch(url, { ...options, signal: options.signal || AbortSignal.timeout(ms) });
+  fetch(url, { ...options, signal: options.signal || AbortSignal.timeout(requestDeadline(ms, invocationDeadlineAt, Date.now())) });
 
 const FETCH_HEADERS = { 'user-agent': 'Mozilla/5.0 (compatible; cinemaroll-push; mailto:mattgrosso@gmail.com)' };
 const fetchText = async (url, accept = 'text/html') => {
@@ -435,7 +440,7 @@ const sendToAccount = async (topKey, subscriptions, payload) => {
       await webpush.sendNotification(
         { endpoint: sub.endpoint, keys: sub.keys },
         payload,
-        { TTL: 24 * 3600, urgency: 'normal', timeout: FETCH_TIMEOUT_MS }
+        { TTL: 24 * 3600, urgency: 'normal', timeout: requestDeadline(FETCH_TIMEOUT_MS, invocationDeadlineAt, Date.now()) }
       );
       delivered += 1;
     } catch (error) {
@@ -468,121 +473,145 @@ const localHour = (tz, at = new Date()) => {
  * how a finished chore re-arms, so doing all your stickiness ratings means
  * the next film to mature is news again.
  */
-const runSweep = async () => {
+// Accounts worked at once. Each one is a handful of sequential Firebase
+// reads; a few in flight keeps a slow morning inside the time limit without
+// piling on a database that is already struggling.
+const SWEEP_CONCURRENCY = 4;
+const SWEEP_SLOT_MS = 15 * 60 * 1000;
+
+const runSweep = async (clock = createSweepClock()) => {
   const now = Date.now();
-  const roots = await dbGet('', 'shallow=true');
-  const accounts = Object.keys(roots || {})
-    .filter((key) => !NON_ACCOUNT_ROOTS.has(key) && !QA_ACCOUNT_KEYS.has(key));
+  const roots = await clock.stage('accounts', () => dbGet('', 'shallow=true'));
+  // A different starting account each sweep, so if time runs out it isn't
+  // always the same people who wait.
+  const accounts = rotate(Object.keys(roots || {})
+    .filter((key) => !NON_ACCOUNT_ROOTS.has(key) && !QA_ACCOUNT_KEYS.has(key)), Math.floor(now / SWEEP_SLOT_MS));
 
   const results = [];
-  try {
-    const signups = await notifySignups(accounts, now);
-    if (signups) results.push({ topKey: OWNER_ACCOUNT_KEY, delivered: signups, reason: 'signup' });
-  } catch (error) {
-    console.error('Sign-up check failed:', error.message);
-  }
+  await clock.stage('signups', async () => {
+    try {
+      const signups = await notifySignups(accounts, now);
+      if (signups) results.push({ topKey: OWNER_ACCOUNT_KEY, delivered: signups, reason: 'signup' });
+    } catch (error) {
+      console.error('Sign-up check failed:', error.message);
+    }
+  });
   let followers = [];
-  try {
-    const listings = await notifyTheaterListings(accounts, now);
-    followers = listings.followers;
-    results.push(...listings.results);
-  } catch (error) {
-    console.error('Listings check failed:', error.message);
-  }
-  for (const { topKey } of followers) {
+  await clock.stage('listings', async () => {
+    try {
+      const listings = await notifyTheaterListings(accounts, now, clock);
+      followers = listings.followers;
+      results.push(...listings.results);
+    } catch (error) {
+      console.error('Listings check failed:', error.message);
+    }
+  });
+  await clock.stage('reminders', () => mapLimit(followers, SWEEP_CONCURRENCY, async ({ topKey }) => {
+    if (clock.outOfTime()) return clock.skip('reminders');
     try {
       const delivered = await notifyReminders(topKey, now);
       if (delivered) results.push({ topKey, delivered, reason: 'reminders' });
     } catch (error) {
       console.error(`Reminders check for ${topKey} failed:`, error.message);
     }
-  }
+  }));
 
-  try {
-    results.push(...await releaseDayProfiles(now));
-  } catch (error) {
-    console.error('End-of-day copies failed:', error.message);
-  }
-  try {
-    await releaseDayFeeds(now);
-  } catch (error) {
-    console.error('End-of-day feeds failed:', error.message);
-  }
-
-  for (const topKey of accounts) {
+  await clock.stage('day-profiles', async () => {
     try {
-      const push = await dbGet(`${topKey}/push`);
-      if (!push || !push.subscriptions || !push.digest) continue;
+      results.push(...await releaseDayProfiles(now));
+    } catch (error) {
+      console.error('End-of-day copies failed:', error.message);
+    }
+  });
+  await clock.stage('day-feeds', async () => {
+    try {
+      await releaseDayFeeds(now);
+    } catch (error) {
+      console.error('End-of-day feeds failed:', error.message);
+    }
+  });
 
-      const prefs = push.prefs || {};
-      const tz = prefs.tz || 'America/New_York';
-      const hourNow = localHour(tz);
-      const digestUpdatedAt = Number(push.digest.updatedAt) || 0;
-      const baseline = push.state?.baseline || EMPTY_BASELINE;
-      const due = dueFromDigest(push.digest, prefs, now);
-
-      const decision = shouldSend({
-        due,
-        prefs,
-        baseline,
-        now,
-        localHour: hourNow,
-        lastSentAt: Number(push.state?.lastSentAt) || 0,
-        digestUpdatedAt
-      });
-
-      let delivered = 0;
-      if (decision.send) {
-        const message = composeMessage(due, push.digest, decision.news, now);
-        if (message) {
-          const appBadge = await accountBadge(topKey, push, now);
-          // `?open=<chore>` lands on Home with that prompt already expanded
-          // (Home.vue reads it once and strips it from the URL).
-          const navigate = message.open ? `/?open=${message.open}` : '/';
-          const payload = buildPayload({ ...message, navigate, tag: 'chores', appBadge });
-          delivered = await sendToAccount(topKey, push.subscriptions, payload);
-        }
-      }
-
-      // Record what we've now said (or ratchet the baseline down) regardless
-      // of the outcome — see nextBaseline.
-      const sent = delivered > 0;
-      await dbSet(`${topKey}/push/state/baseline`, nextBaseline(due, baseline, sent));
-      if (sent) await dbSet(`${topKey}/push/state/lastSentAt`, now);
-
-      if (sent || decision.send) results.push({ topKey, delivered, reason: decision.reason });
-
-      // The games reminder: its own stream, its own once-a-day stamp, its own
-      // tag (so it never replaces a chores notification on the lock screen),
-      // and no badge — the badge counts chores, and a game isn't one.
-      const games = shouldSendGames({
-        prefs,
-        now,
-        localHour: hourNow,
-        lastGamesSentAt: Number(push.state?.gamesSentAt) || 0,
-        digestUpdatedAt
-      });
-      if (games.send) {
-        const message = composeGamesMessage(gamesDue(push.digest, prefs, now, tz), (push.digest.games?.list || []).length);
-        if (message) {
-          const gamesDelivered = await sendToAccount(topKey, push.subscriptions, buildPayload({ ...message, tag: 'games' }));
-          if (gamesDelivered > 0) await dbSet(`${topKey}/push/state/gamesSentAt`, now);
-          results.push({ topKey, delivered: gamesDelivered, reason: games.reason });
-        }
-      }
-
-      // Friends on other apps: same opt-outs as the native friend-log push,
-      // because to the recipient it is the same notification.
-      if (prefs.enabled !== false && prefs.friendLogs !== false) {
-        const extDelivered = await notifyExternalLogs(topKey, push, prefs);
-        if (extDelivered > 0) results.push({ topKey, delivered: extDelivered, reason: "external-friend-log" });
-      }
+  await clock.stage('chores', () => mapLimit(accounts, SWEEP_CONCURRENCY, async (topKey) => {
+    if (clock.outOfTime()) return clock.skip('chores');
+    try {
+      await sweepAccount(topKey, now, results);
     } catch (error) {
       console.error(`Sweep failed for ${topKey}:`, error.message);
     }
-  }
+  }));
   console.log('Sweep:', JSON.stringify(results));
+  console.log(clock.summary());
   return results;
+};
+
+// One account's chores, games reminder and friends-on-other-apps check.
+const sweepAccount = async (topKey, now, results) => {
+  const push = await dbGet(`${topKey}/push`);
+  if (!push || !push.subscriptions || !push.digest) return;
+
+  const prefs = push.prefs || {};
+  const tz = prefs.tz || 'America/New_York';
+  const hourNow = localHour(tz);
+  const digestUpdatedAt = Number(push.digest.updatedAt) || 0;
+  const baseline = push.state?.baseline || EMPTY_BASELINE;
+  const due = dueFromDigest(push.digest, prefs, now);
+
+  const decision = shouldSend({
+    due,
+    prefs,
+    baseline,
+    now,
+    localHour: hourNow,
+    lastSentAt: Number(push.state?.lastSentAt) || 0,
+    digestUpdatedAt
+  });
+
+  let delivered = 0;
+  if (decision.send) {
+    const message = composeMessage(due, push.digest, decision.news, now);
+    if (message) {
+      const appBadge = await accountBadge(topKey, push, now);
+      // `?open=<chore>` lands on Home with that prompt already expanded
+      // (Home.vue reads it once and strips it from the URL).
+      const navigate = message.open ? `/?open=${message.open}` : '/';
+      const payload = buildPayload({ ...message, navigate, tag: 'chores', appBadge });
+      delivered = await sendToAccount(topKey, push.subscriptions, payload);
+    }
+  }
+
+  // Record what we've now said (or ratchet the baseline down) regardless
+  // of the outcome — see nextBaseline.
+  const sent = delivered > 0;
+  await dbSet(`${topKey}/push/state/baseline`, nextBaseline(due, baseline, sent));
+  if (sent) await dbSet(`${topKey}/push/state/lastSentAt`, now);
+
+  if (sent || decision.send) results.push({ topKey, delivered, reason: decision.reason });
+
+  // The games reminder: its own stream, its own once-a-day stamp, its own
+  // tag (so it never replaces a chores notification on the lock screen),
+  // and no badge — the badge counts chores, and a game isn't one.
+  const games = shouldSendGames({
+    prefs,
+    now,
+    localHour: hourNow,
+    lastGamesSentAt: Number(push.state?.gamesSentAt) || 0,
+    digestUpdatedAt
+  });
+  if (games.send) {
+    const message = composeGamesMessage(gamesDue(push.digest, prefs, now, tz), (push.digest.games?.list || []).length);
+    if (message) {
+      const gamesDelivered = await sendToAccount(topKey, push.subscriptions, buildPayload({ ...message, tag: 'games' }));
+      if (gamesDelivered > 0) await dbSet(`${topKey}/push/state/gamesSentAt`, now);
+      results.push({ topKey, delivered: gamesDelivered, reason: games.reason });
+    }
+  }
+
+  // Friends on other apps: same opt-outs as the native friend-log push,
+  // because to the recipient it is the same notification.
+  if (prefs.enabled !== false && prefs.friendLogs !== false) {
+    const extDelivered = await notifyExternalLogs(topKey, push, prefs);
+    if (extDelivered > 0) results.push({ topKey, delivered: extDelivered, reason: "external-friend-log" });
+  }
 };
 
 // --- New sign-ups -----------------------------------------------------------
@@ -688,7 +717,7 @@ const theaterFollowers = async (accounts) => {
 };
 
 // Every followed theater is fetched once a sweep, however many follow it.
-const notifyTheaterListings = async (accounts, now) => {
+const notifyTheaterListings = async (accounts, now, clock = createSweepClock()) => {
   const followers = await theaterFollowers(accounts);
   const unique = new Map();
   followers.forEach((f) => f.theaters.forEach((t) => { if (!unique.has(t.key)) unique.set(t.key, t); }));
@@ -696,7 +725,8 @@ const notifyTheaterListings = async (accounts, now) => {
   await noteBoardFailures(fetched, now);
   const boardByKey = new Map(fetched.map((b) => [b.theater.key, b.listings]));
   const results = [];
-  for (const { topKey, theaters } of followers) {
+  await mapLimit(followers, SWEEP_CONCURRENCY, async ({ topKey, theaters }) => {
+    if (clock.outOfTime()) return clock.skip('listings');
     try {
       const boards = theaters.map((theater) => ({ theater, listings: boardByKey.get(theater.key) || null }));
       const delivered = await notifyAccountListings(topKey, boards, now);
@@ -704,7 +734,7 @@ const notifyTheaterListings = async (accounts, now) => {
     } catch (error) {
       console.error(`Listings for ${topKey} failed:`, error.message);
     }
-  }
+  });
   return { results, followers };
 };
 
@@ -1309,10 +1339,12 @@ const theatersNear = async ({ zip, city }) => {
 
 // --- Handler ----------------------------------------------------------------
 
-exports.handler = async (event) => {
+exports.handler = async (event, context) => {
+  const remaining = context?.getRemainingTimeInMillis?.();
+  invocationDeadlineAt = Number.isFinite(remaining) ? Date.now() + remaining : null;
   // EventBridge schedule - no HTTP context at all.
   if (event.source === 'aws.events') {
-    await runSweep();
+    await runSweep(createSweepClock({ deadlineAt: invocationDeadlineAt }));
     return { ok: true };
   }
 

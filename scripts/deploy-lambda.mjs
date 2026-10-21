@@ -42,6 +42,7 @@ export const LAMBDAS = {
       'aws-lambda/filmClubSync.js': 'filmClubSync.js',
       'aws-lambda/filmClubSyncPublisher.js': 'filmClubSyncPublisher.js',
       'aws-lambda/clubNotices.js': 'clubNotices.js',
+      'aws-lambda/sweepClock.js': 'sweepClock.js',
       'aws-lambda/sentryLambda.js': 'sentryLambda.js'
     },
     dependencies: ['web-push'],

@@ -692,6 +692,19 @@ fetch has no deadline of its own: theater pages and feeds get 10s, Firebase 15s,
 sends `timeout: 10s`. A timed-out theater is an ordinary failed board read.
 `pushLambdaDeadlines.test.js` fails on any bare `fetch(` in push-notify.js.
 
+**The sweep runs on a clock (2026-10-21, the same Sentry issue back).** Per-request
+deadlines weren't enough: on a slow Firebase morning (reads taking seconds, some 500s)
+sweeps that take ~14s on a good evening ran 40-60s+, most of them timing out silently, and
+Lambda's two async retries re-ran each dead sweep on the struggling database.
+`aws-lambda/sweepClock.js` (pure, `sweepClock.test.js`): every stage is timed and logged
+as it ends (`Sweep stage chores: 12.3s`) plus a `Sweep took …` summary, so a slow run
+names its stage in CloudWatch; accounts, followers and reminders run four at a time
+(`SWEEP_CONCURRENCY`); no new account starts with under 10s left (skips are counted in
+the summary, and the account list rotates each 15-minute slot so the same people don't
+always wait); and `timedFetch` / web push cut every deadline to end 2s before the
+invocation does. Function config (not in the zip, set by hand): timeout **120s**, async
+retries **0** (`put-function-event-invoke-config`) — the next sweep is the retry.
+
 Client pieces: `public/push-sw.js` (declarative-payload fallback renderer, pulled in via
 `workboxOptions.importScripts`), `src/utils/push.js` (subscribe from a USER TAP only —
 see the parallax lesson in vue-ui.md; self-heal refresh on app open), store actions
