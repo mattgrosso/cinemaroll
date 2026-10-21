@@ -105,7 +105,7 @@ describe('adjustedMovieMoney', () => {
   });
 });
 
-describe('adjustGross — a gross is tickets (the table shared with Box Office Archive)', () => {
+describe('adjustGross — a gross is tickets (the table shared with Box Office History)', () => {
   it('scales by the average ticket price between the two years', () => {
     expect(adjustGross(920_000_000, 1993) / 920_000_000).toBeCloseTo(TICKET_PRICES[String(BASE_YEAR)] / TICKET_PRICES['1993'], 6);
     expect(ticketsSold(920_000_000, 1993)).toBeCloseTo(920_000_000 / TICKET_PRICES['1993'], 3);

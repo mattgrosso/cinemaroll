@@ -89,7 +89,7 @@ global.testUtils = {
   }
 }
 // No unit test may reach the network. A mount that triggers a lookup on its
-// own (MovieDetail asks Box Office Archive for every film) gets a refusal
+// own (MovieDetail asks Box Office History for every film) gets a refusal
 // here, never CloudFront. Tests that need fetch stub their own
 // (vi.stubGlobal('fetch', …) or global.fetch = …), as they already do.
 if (typeof globalThis.fetch === 'function') {

@@ -534,7 +534,7 @@
           </p>
           <p v-if="archiveBoxOffice?.tickets" class="box-office-footnote">Restated from the old site's estimate of {{ archiveBoxOffice.tickets.toLocaleString() }} tickets sold<template v-if="archiveBoxOffice.runs">, across {{ archiveBoxOffice.runs.length }} releases ({{ archiveBoxOffice.runs.map((r) => r.year).join(', ') }})</template>.</p>
           <p v-else-if="archiveBoxOffice?.domesticTodayByRuns" class="box-office-footnote">Released {{ archiveBoxOffice.runs.length }} times ({{ archiveBoxOffice.runs.map((r) => r.year).join(', ') }}): each release is restated at its own year's ticket price.</p>
-          <a v-if="archiveBoxOffice" class="box-office-link" :href="archiveBoxOffice.url" target="_blank" rel="noopener">Weekend by weekend at Box Office Archive <i class="bi bi-box-arrow-up-right"></i></a>
+          <a v-if="archiveBoxOffice" class="box-office-link" :href="archiveBoxOffice.url" target="_blank" rel="noopener">Weekend by weekend at Box Office History <i class="bi bi-box-arrow-up-right"></i></a>
         </div>
         </DetailSection>
         <DetailSection v-if="productionCountries.length || narrativePlaces.length || filmingPlaces.length" id="places" tile label="Places" tone="plain" :summary="placesSummary">

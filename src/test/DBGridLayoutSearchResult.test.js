@@ -243,7 +243,7 @@ describe('DBGridLayoutSearchResult — the caption follows the money mode', () =
 
   it('shows bigger figures with the mode on', () => {
     // A gross is tickets: 1993's $4.14 average ticket against 2025's, per the
-    // bundled table from Box Office Archive (~2.75x). A budget goes by CPI (~2.23x).
+    // bundled table from Box Office History (~2.75x). A budget goes by CPI (~2.23x).
     expect(card('boxOffice', {}, true).vm.sortDetail).toBe('$2.5B')
     expect(card('budget', {}, true).vm.sortDetail).toBe('$141M')
   })

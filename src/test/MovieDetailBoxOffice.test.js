@@ -41,7 +41,7 @@ const movie = (id, title) => ({ id, title, release_date: '2008-07-18', genres: [
 // Matt, 2026-10-14: "get some interesting things into Cinema Roll" from Box
 // Office Archive. The Box office tile reads the domestic run from the
 // archive; each viewing says what was #1 that weekend.
-describe('MovieDetail — Box Office Archive', () => {
+describe('MovieDetail — Box Office History', () => {
   let wrapper;
 
   const mountFor = async (m, viewings = []) => {
