@@ -518,7 +518,7 @@
           <!-- The domestic run as it was reported at the time, from Box
                Office Archive (Matt's rescue of the old Box Office Mojo,
                2026-10-14), ahead of TMDB's one worldwide number. -->
-          <dl v-if="archiveBoxOffice" class="box-office-archive">
+          <dl v-if="archiveBoxOffice" class="box-office-history">
             <div><dt>Domestic</dt><dd>{{ formatCurrency(archiveBoxOffice.domestic) }}<span v-if="archiveBoxOffice.domesticToday" class="box-office-note" :title="archiveBoxOffice.domesticTodayByRuns ? dollarsExplanation.runs : dollarsExplanation.gross">{{ formatMoneyShort(archiveBoxOffice.domesticToday) }} {{ archiveTodaysDollars }}</span></dd></div>
             <div v-if="archiveBoxOffice.opening"><dt>Opening weekend</dt><dd>{{ formatCurrency(archiveBoxOffice.opening.gross) }}<span class="box-office-note"><template v-if="archiveBoxOffice.opening.rank">#{{ archiveBoxOffice.opening.rank }}</template><template v-if="archiveBoxOffice.opening.theaters"> · {{ archiveBoxOffice.opening.theaters.toLocaleString() }} theaters</template><template v-if="archiveBoxOffice.opening.average"> · {{ formatMoneyShort(archiveBoxOffice.opening.average) }} each</template></span></dd></div>
             <div v-if="archiveBoxOffice.weekends"><dt>Weekends</dt><dd>{{ archiveBoxOffice.atOne }} at #1<span class="box-office-note">{{ archiveBoxOffice.inTopTen }} in the top ten · {{ archiveBoxOffice.weekends }} charted</span></dd></div>
@@ -753,8 +753,8 @@ import { criticRoleLabel, criticByline, criticsSummary } from '../assets/javascr
 import { fetchCriticReviews, criticErrorMessage } from '../utils/criticReviewsRequest.js';
 import { cinemaScoreReading, CINEMASCORE_SITE } from '../assets/javascript/cinemaScore.js';
 import { fetchCinemaScore } from '../utils/cinemaScoreRequest.js';
-import { fetchArchiveFilm, fetchArchiveCalendar } from '../utils/boxOfficeArchiveRequest.js';
-import { archiveFacts, archiveSummary, weekendForDate, weekendLine, archiveWeekendUrl, todaysDollarsLabel, todaysBudgetLabel, budgetToday, DOLLARS_EXPLANATION } from '../assets/javascript/boxOfficeArchive.js';
+import { fetchArchiveFilm, fetchArchiveCalendar } from '../utils/boxOfficeHistoryRequest.js';
+import { archiveFacts, archiveSummary, weekendForDate, weekendLine, archiveWeekendUrl, todaysDollarsLabel, todaysBudgetLabel, budgetToday, DOLLARS_EXPLANATION } from '../assets/javascript/boxOfficeHistory.js';
 import NameRow from './NameRow.vue';
 import { formatMoneyShort } from '../assets/javascript/formatMoney.js';
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
@@ -813,7 +813,7 @@ export default {
       critics: { tmdbId: null, state: 'idle', reviews: [], message: '' },
       // CinemaScore, looked up alongside the critics: null until known.
       cinemaScore: { tmdbId: null, score: null },
-      // Box Office Archive: the film's domestic run, and the weekend charts
+      // Box Office History: the film's domestic run, and the weekend charts
       // of the years you saw it (for "#1 that weekend" on each viewing).
       archive: { tmdbId: null, film: null, calendars: {} },
       cinemaScoreSite: CINEMASCORE_SITE,
@@ -941,7 +941,7 @@ export default {
       if (this.movieRevenue) parts.push(`${formatMoneyShort(this.movieRevenue)} box office`);
       return parts.join(' · ');
     },
-    // What Box Office Archive knows about this film (null until it answers,
+    // What Box Office History knows about this film (null until it answers,
     // or when it has nothing): the domestic run as reported at the time.
     archiveBoxOffice () {
       return this.archive.tmdbId === this.movie?.id ? archiveFacts(this.archive.film) : null;
@@ -3740,8 +3740,8 @@ export default {
   aspect-ratio: 16/9;
 }
 
-/* Box Office Archive facts: label on the left, figure and a quiet note on the right. */
-.box-office-archive {
+/* Box Office History facts: label on the left, figure and a quiet note on the right. */
+.box-office-history {
   margin: 0 0 0.5rem;
   > div {
     display: flex;

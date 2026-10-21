@@ -1,9 +1,9 @@
-// Box Office Archive lookups, client-side: static JSON behind CloudFront with
+// Box Office History lookups, client-side: static JSON behind CloudFront with
 // CORS open, so the page fetches it directly. Two small requests per film
 // (TMDB id → archive id, then the film), cached on the device for a month —
 // the archive's data changes a few times a year. Never throws: a film page
 // must not break over box office history.
-import { ARCHIVE_API } from '../assets/javascript/boxOfficeArchive.js';
+import { ARCHIVE_API } from '../assets/javascript/boxOfficeHistory.js';
 
 const FOUND_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MISSING_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -43,7 +43,7 @@ const getJson = async (path) => {
     if (!/json/i.test(response.headers.get('content-type') || '')) return null;
     return await response.json();
   } catch (error) {
-    console.warn('Box Office Archive lookup failed:', error?.message);
+    console.warn('Box Office History lookup failed:', error?.message);
     return null;
   }
 };
@@ -73,7 +73,7 @@ const cached = (key, now, load) => {
 export function fetchArchiveFilm (tmdbId, { now = Date.now() } = {}) {
   const id = Number(tmdbId);
   if (!Number.isInteger(id) || id <= 0) return Promise.resolve(null);
-  return cached(`boxOfficeArchive:film:${id}`, now, async () => {
+  return cached(`boxOfficeHistory:film:${id}`, now, async () => {
     const hit = await getJson(`lookup/tmdb/${id}.json`);
     if (!hit?.id) return null;
     return getJson(`movies/${encodeURIComponent(hit.id)}.json`);
@@ -84,5 +84,5 @@ export function fetchArchiveFilm (tmdbId, { now = Date.now() } = {}) {
 export function fetchArchiveCalendar (year, { now = Date.now() } = {}) {
   const y = Number(year);
   if (!Number.isInteger(y) || y < 1970 || y > 2100) return Promise.resolve(null);
-  return cached(`boxOfficeArchive:calendar:${y}`, now, () => getJson(`calendar/${y}.json`));
+  return cached(`boxOfficeHistory:calendar:${y}`, now, () => getJson(`calendar/${y}.json`));
 }

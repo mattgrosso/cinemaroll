@@ -1,6 +1,6 @@
-// Box Office Archive (Matt's rescue of the old Box Office Mojo, 2026-10-14):
+// Box Office History (Matt's rescue of the old Box Office Mojo, 2026-10-14):
 // the numbers as they were reported at the time, with a source for every
-// one. Pure helpers here; the network side is utils/boxOfficeArchiveRequest.js.
+// one. Pure helpers here; the network side is utils/boxOfficeHistoryRequest.js.
 //
 // Why this and not TMDB's `revenue`: TMDB has one worldwide lifetime number of
 // unknown provenance. The archive has the domestic run weekend by weekend,
@@ -10,11 +10,11 @@ import { adjustGross, adjustForInflation, BASE_YEAR, WORDING, TICKET_PRICES } fr
 import { formatMoneyShort } from './formatMoney.js';
 
 // Switches to boxofficehistory.com once the domain lands.
-export const ARCHIVE_ORIGIN = 'https://boxofficehistory.com';
-export const ARCHIVE_API = `${ARCHIVE_ORIGIN}/api/v1`;
+export const HISTORY_ORIGIN = 'https://boxofficehistory.com';
+export const ARCHIVE_API = `${HISTORY_ORIGIN}/api/v1`;
 
-export const archiveMovieUrl = (id) => `${ARCHIVE_ORIGIN}/movie/${encodeURIComponent(id)}`;
-export const archiveWeekendUrl = (key) => `${ARCHIVE_ORIGIN}/weekend/${encodeURIComponent(key)}`;
+export const archiveMovieUrl = (id) => `${HISTORY_ORIGIN}/movie/${encodeURIComponent(id)}`;
+export const archiveWeekendUrl = (key) => `${HISTORY_ORIGIN}/weekend/${encodeURIComponent(key)}`;
 
 /** The 3-day weekends of a film's run, oldest first (4-day holiday versions dropped). */
 export const threeDayWeekends = (film) => {

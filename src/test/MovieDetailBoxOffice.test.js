@@ -17,7 +17,7 @@ vi.mock('@/utils/criticReviewsRequest.js', async () => {
 });
 
 const archive = vi.hoisted(() => ({ fetchArchiveFilm: vi.fn(async () => null), fetchArchiveCalendar: vi.fn(async () => null) }));
-vi.mock('@/utils/boxOfficeArchiveRequest.js', () => archive);
+vi.mock('@/utils/boxOfficeHistoryRequest.js', () => archive);
 
 const film = {
   id: 'darkknight',
@@ -78,7 +78,7 @@ describe('MovieDetail — Box Office History', () => {
     expect(archive.fetchArchiveFilm).toHaveBeenCalledWith(155);
     const tile = wrapper.find('#boxoffice');
     expect(tile.attributes('data-summary')).toBe('$535M domestic · opened #1, $158M · 2 weekends at #1 · $185M budget');
-    const facts = tile.find('.box-office-archive').text();
+    const facts = tile.find('.box-office-history').text();
     expect(facts).toContain('$535,234,033');
     expect(facts).toContain('4,366 theaters');
     expect(facts).toContain('2 at #1');
@@ -90,7 +90,7 @@ describe('MovieDetail — Box Office History', () => {
     await mountFor(movie(999, 'Unknown'));
     const tile = wrapper.find('#boxoffice');
     expect(tile.attributes('data-summary')).toBe('$185M budget · $1B box office');
-    expect(tile.find('.box-office-archive').exists()).toBe(false);
+    expect(tile.find('.box-office-history').exists()).toBe(false);
     expect(tile.find('.box-office-link').exists()).toBe(false);
   });
 

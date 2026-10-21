@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { archiveFacts, archiveSummary, weekendForDate, weekendLine, threeDayWeekends, archiveMovieUrl } from '@/assets/javascript/boxOfficeArchive.js';
-import { fetchArchiveFilm, fetchArchiveCalendar } from '@/utils/boxOfficeArchiveRequest.js';
+import { archiveFacts, archiveSummary, weekendForDate, weekendLine, threeDayWeekends, archiveMovieUrl } from '@/assets/javascript/boxOfficeHistory.js';
+import { fetchArchiveFilm, fetchArchiveCalendar } from '@/utils/boxOfficeHistoryRequest.js';
 
 const darkKnight = {
   id: 'darkknight',
@@ -23,7 +23,7 @@ const darkKnight = {
   ]
 };
 
-describe('boxOfficeArchive — facts for the Box office tile', () => {
+describe('boxOfficeHistory — facts for the Box office tile', () => {
   it('drops the 4-day holiday twin and keeps the weekends in date order', () => {
     const w = threeDayWeekends(darkKnight);
     expect(w).toHaveLength(7);
@@ -62,7 +62,7 @@ const calendar = {
   ]
 };
 
-describe('boxOfficeArchive — the weekend a viewing belongs to', () => {
+describe('boxOfficeHistory — the weekend a viewing belongs to', () => {
   it('finds the weekend holding the date, else the one just gone', () => {
     expect(weekendForDate(calendar, '2015-07-04').k).toBe('2015-27');
     expect(weekendForDate(calendar, '2015-07-08').k).toBe('2015-27');
@@ -80,7 +80,7 @@ describe('boxOfficeArchive — the weekend a viewing belongs to', () => {
   });
 });
 
-describe('boxOfficeArchiveRequest — two hops, cached, never throws', () => {
+describe('boxOfficeHistoryRequest — two hops, cached, never throws', () => {
   const json = (body, type = 'application/json') => ({ ok: true, headers: { get: () => type }, json: async () => body });
   let fetchMock;
   beforeEach(() => {
@@ -118,12 +118,12 @@ describe('boxOfficeArchiveRequest — two hops, cached, never throws', () => {
   });
 });
 
-import { grossTodayByRuns, todaysDollarsLabel } from '@/assets/javascript/boxOfficeArchive.js';
+import { grossTodayByRuns, todaysDollarsLabel } from '@/assets/javascript/boxOfficeHistory.js';
 import { adjustGross, BASE_YEAR, TICKET_PRICES } from '@/assets/javascript/inflation.js';
 
 // Matt, 2026-10-14: a lifetime total adjusted at the original year's price
 // overstates films with re-releases; do it release by release.
-describe('boxOfficeArchive — a lifetime gross restated release by release', () => {
+describe('boxOfficeHistory — a lifetime gross restated release by release', () => {
   const runs = [{ year: 1982, gross: 359197037 }, { year: 1985, gross: 40586054 }, { year: 2002, gross: 35306015 }];
   it('adjusts each run at its own year and the remainder at the original year', () => {
     const lifetime = 435110554;
@@ -142,7 +142,7 @@ describe('boxOfficeArchive — a lifetime gross restated release by release', ()
   });
 });
 
-describe('boxOfficeArchive — the old site\'s tickets estimate wins', () => {
+describe('boxOfficeHistory — the old site\'s tickets estimate wins', () => {
   it('restates from tickets sold when the archive carries them', () => {
     const facts = archiveFacts({ ...darkKnight, runs: [{ year: 1939, gross: 189523031 }, { year: 1989, gross: 2403316 }], tickets: 202286200 });
     expect(facts.domesticToday).toBeCloseTo(202286200 * TICKET_PRICES[String(BASE_YEAR)], 0);

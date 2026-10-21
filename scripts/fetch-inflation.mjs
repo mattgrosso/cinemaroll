@@ -1,4 +1,4 @@
-// Refresh the bundled money table from Box Office Archive, the one source
+// Refresh the bundled money table from Box Office History, the one source
 // both apps adjust dollars with (ticket prices for grosses, CPI for budgets,
 // one base year). Bundled, not fetched at runtime: this PWA works offline.
 //
