@@ -46,7 +46,7 @@ const {
 } = require('./pushCadence');
 const { publishFeedV2 } = require('./filmClubSyncPublisher.js');
 const { pushId } = require('./filmClubSync.js');
-const { mapLimit, rotate, requestDeadline, createSweepClock } = require('./sweepClock.js');
+const { mapLimit, rotate, requestDeadline, createSweepClock, retryTransient } = require('./sweepClock.js');
 const { planInbox, coalesceNotices, currentFeedId, isNegotiated, noticeTargets, buildNotice, INBOX_PAGE } = require('./clubNotices.js');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
@@ -352,40 +352,90 @@ const getDbToken = async () => {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `grant_type=${encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer')}&assertion=${header}.${claims}.${signature}`
   }, DB_TIMEOUT_MS);
-  if (!res.ok) throw new Error(`OAuth token exchange failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) throw httpError(`OAuth token exchange failed: ${res.status} ${await res.text()}`, res.status);
   const data = await res.json();
   dbTokenCache = { token: data.access_token, expiresAt: Date.now() + (data.expires_in || 3600) * 1000 };
   return dbTokenCache.token;
 };
 
-const dbGet = async (path, params = '') => {
+const httpError = (message, status) => Object.assign(new Error(message), { status });
+
+// Every Firebase call gets one more try when Firebase itself stumbles (a 5xx,
+// a timeout, a dropped connection), and a second stumble is thrown marked
+// `transient` so logFailure keeps it out of Sentry (2026-10-21: three one-off
+// hiccups in one night, three Sentry issues). Every call here is idempotent -
+// a GET, a PUT, a DELETE or a multi-path PATCH of fixed values - so a retry
+// of a write that did land is harmless. No retry once a second full wait
+// would eat into the sweep's reserve.
+const DB_RETRY_WAIT_MS = 500;
+const dbRetryAllowed = () => !Number.isFinite(invocationDeadlineAt) ||
+  invocationDeadlineAt - Date.now() > DB_TIMEOUT_MS + 10000;
+const dbCall = (attempt) => retryTransient(attempt, { canRetry: dbRetryAllowed, waitMs: DB_RETRY_WAIT_MS });
+
+const dbGet = (path, params = '') => dbCall(async () => {
   const token = await getDbToken();
   const res = await timedFetch(`${DATABASE_URL}/${path}.json?${params}`, {
     headers: { Authorization: `Bearer ${token}` }
   }, DB_TIMEOUT_MS);
-  if (!res.ok) throw new Error(`RTDB GET ${path} failed: ${res.status}`);
+  if (!res.ok) throw httpError(`RTDB GET ${path} failed: ${res.status}`, res.status);
   return res.json();
-};
+});
 
 // One atomic multi-path update at the root (Film Club v2 publishes).
-const dbPatch = async (updates) => {
+const dbPatch = (updates) => dbCall(async () => {
   const token = await getDbToken();
   const res = await timedFetch(`${DATABASE_URL}/.json`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(updates)
   }, DB_TIMEOUT_MS);
-  if (!res.ok) throw new Error(`RTDB PATCH root failed: ${res.status}`);
-};
+  if (!res.ok) throw httpError(`RTDB PATCH root failed: ${res.status}`, res.status);
+});
 
-const dbSet = async (path, value) => {
+const dbSet = (path, value) => dbCall(async () => {
   const token = await getDbToken();
   const res = await timedFetch(`${DATABASE_URL}/${path}.json`, {
     method: value === null ? 'DELETE' : 'PUT',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: value === null ? undefined : JSON.stringify(value)
   }, DB_TIMEOUT_MS);
-  if (!res.ok) throw new Error(`RTDB ${value === null ? 'DELETE' : 'PUT'} ${path} failed: ${res.status}`);
+  if (!res.ok) throw httpError(`RTDB ${value === null ? 'DELETE' : 'PUT'} ${path} failed: ${res.status}`, res.status);
+});
+
+// How the sweep reports a failure it has already contained. Firebase's own
+// trouble that survived the retry is a warning, counted for the sweep;
+// anything else is an error, which is to say a Sentry issue. A run of
+// Firebase trouble still reaches Sentry: noteDbTrouble raises it once every
+// sweep has had some for a day.
+let dbTroubleThisSweep = [];
+const logFailure = (label, error) => {
+  const message = (error && error.message) || String(error);
+  if (error && error.transient) {
+    dbTroubleThisSweep.push(message);
+    console.warn(label, message);
+  } else {
+    console.error(label, message);
+  }
+};
+
+const DB_TROUBLE_PATH = `${OWNER_ACCOUNT_KEY}/push/state/dbTrouble`;
+const noteDbTrouble = async (now) => {
+  const trouble = dbTroubleThisSweep;
+  try {
+    const known = await dbGet(DB_TROUBLE_PATH);
+    const { next, report } = boardFailuresDue({
+      known: known ? { firebase: known } : null,
+      results: [{ key: 'firebase', error: trouble.length ? trouble[trouble.length - 1] : null }],
+      now
+    });
+    if (report.length) console.error(`Firebase trouble on every sweep since ${new Date(report[0].since).toISOString()}:`, report[0].error);
+    const row = next.firebase || null;
+    // Firebase hands keys back sorted; compare the values or every sweep rewrites.
+    const shape = (r) => JSON.stringify(r ? [r.since, r.reportedAt || null] : null);
+    if (shape(known) !== shape(row)) await dbSet(DB_TROUBLE_PATH, row);
+  } catch (error) {
+    console.warn('Firebase trouble record failed:', error.message);
+  }
 };
 
 // --- Sending ----------------------------------------------------------------
@@ -481,7 +531,17 @@ const SWEEP_SLOT_MS = 15 * 60 * 1000;
 
 const runSweep = async (clock = createSweepClock()) => {
   const now = Date.now();
-  const roots = await clock.stage('accounts', () => dbGet('', 'shallow=true'));
+  dbTroubleThisSweep = [];
+  let roots;
+  try {
+    roots = await clock.stage('accounts', () => dbGet('', 'shallow=true'));
+  } catch (error) {
+    // No account list, no sweep; the next one is 15 minutes away.
+    if (!error.transient) throw error;
+    logFailure('Sweep skipped, no account list:', error);
+    await noteDbTrouble(now);
+    return [];
+  }
   // A different starting account each sweep, so if time runs out it isn't
   // always the same people who wait.
   const accounts = rotate(Object.keys(roots || {})
@@ -493,7 +553,7 @@ const runSweep = async (clock = createSweepClock()) => {
       const signups = await notifySignups(accounts, now);
       if (signups) results.push({ topKey: OWNER_ACCOUNT_KEY, delivered: signups, reason: 'signup' });
     } catch (error) {
-      console.error('Sign-up check failed:', error.message);
+      logFailure('Sign-up check failed:', error);
     }
   });
   let followers = [];
@@ -503,7 +563,7 @@ const runSweep = async (clock = createSweepClock()) => {
       followers = listings.followers;
       results.push(...listings.results);
     } catch (error) {
-      console.error('Listings check failed:', error.message);
+      logFailure('Listings check failed:', error);
     }
   });
   await clock.stage('reminders', () => mapLimit(followers, SWEEP_CONCURRENCY, async ({ topKey }) => {
@@ -512,7 +572,7 @@ const runSweep = async (clock = createSweepClock()) => {
       const delivered = await notifyReminders(topKey, now);
       if (delivered) results.push({ topKey, delivered, reason: 'reminders' });
     } catch (error) {
-      console.error(`Reminders check for ${topKey} failed:`, error.message);
+      logFailure(`Reminders check for ${topKey} failed:`, error);
     }
   }));
 
@@ -520,14 +580,14 @@ const runSweep = async (clock = createSweepClock()) => {
     try {
       results.push(...await releaseDayProfiles(now));
     } catch (error) {
-      console.error('End-of-day copies failed:', error.message);
+      logFailure('End-of-day copies failed:', error);
     }
   });
   await clock.stage('day-feeds', async () => {
     try {
       await releaseDayFeeds(now);
     } catch (error) {
-      console.error('End-of-day feeds failed:', error.message);
+      logFailure('End-of-day feeds failed:', error);
     }
   });
 
@@ -536,9 +596,10 @@ const runSweep = async (clock = createSweepClock()) => {
     try {
       await sweepAccount(topKey, now, results);
     } catch (error) {
-      console.error(`Sweep failed for ${topKey}:`, error.message);
+      logFailure(`Sweep failed for ${topKey}:`, error);
     }
   }));
+  await noteDbTrouble(now);
   console.log('Sweep:', JSON.stringify(results));
   console.log(clock.summary());
   return results;
@@ -732,7 +793,7 @@ const notifyTheaterListings = async (accounts, now, clock = createSweepClock()) 
       const delivered = await notifyAccountListings(topKey, boards, now);
       if (delivered) results.push({ topKey, delivered, reason: 'listings' });
     } catch (error) {
-      console.error(`Listings for ${topKey} failed:`, error.message);
+      logFailure(`Listings for ${topKey} failed:`, error);
     }
   });
   return { results, followers };
@@ -793,7 +854,7 @@ const notifyAccountListings = async (topKey, boards, now, { announce = true } = 
       if (keep.length) console.log(`Listings (${topKey}/${theater.key}): ${keep.length} new (${keep.map((l) => l.slug).join(', ')})`);
       pending.push({ theater, statePath, nextKnown, keep });
     } catch (error) {
-      console.error(`Listings (${topKey}/${theater.key}) failed:`, error.message);
+      logFailure(`Listings (${topKey}/${theater.key}) failed:`, error);
     }
   }
 
@@ -818,7 +879,7 @@ const notifyAccountListings = async (topKey, boards, now, { announce = true } = 
       console.log(`Listings (${topKey}): ${announced.length} new across ${pending.filter((p) => p.keep.length).length} theater(s), ${delivered} push(es) delivered`);
     } catch (error) {
       sendFailed = true;
-      console.error(`Listings push to ${topKey} failed:`, error.message);
+      logFailure(`Listings push to ${topKey} failed:`, error);
     }
   }
   for (const { theater, statePath, nextKnown, keep } of pending) {
@@ -827,7 +888,7 @@ const notifyAccountListings = async (topKey, boards, now, { announce = true } = 
       await dbSet(statePath, nextKnown);
       knownByKey[theater.key] = nextKnown;
     } catch (error) {
-      console.error(`Listings (${topKey}/${theater.key}) record failed:`, error.message);
+      logFailure(`Listings (${topKey}/${theater.key}) record failed:`, error);
     }
   }
 
@@ -844,7 +905,7 @@ const notifyAccountListings = async (topKey, boards, now, { announce = true } = 
       await dbSet(`${QA_BOARD_ACCOUNT_KEY}/theaters/board`, board);
     }
   } catch (error) {
-    console.error(`Theater board publish for ${topKey} failed:`, error.message);
+    logFailure(`Theater board publish for ${topKey} failed:`, error);
   }
 
   // Dismissals and reminders are forgotten here, never by the app: only once
@@ -983,7 +1044,7 @@ const noticeHints = async (topKey, friends) => {
       : null;
     return { feedId, byFriend: coalesceNotices(planInbox({ raw, friends }).notices) };
   } catch (error) {
-    console.error(`Notice hints for ${topKey} failed:`, error.message);
+    logFailure(`Notice hints for ${topKey} failed:`, error);
     return { feedId: null, byFriend: {} };
   }
 };
@@ -1079,7 +1140,7 @@ const notifyExternalLogs = async (topKey, push, prefs) => {
       if (read.etag && read.etag !== etags[id]) await dbSet(`${topKey}/push/state/externalEtag/${id}`, read.etag);
       if (!revision) await dbSet(`${topKey}/push/state/externalBodyAt/${id}`, Date.now());
     } catch (error) {
-      console.error(`External-friend sweep for ${topKey}/${id} failed:`, error.message);
+      logFailure(`External-friend sweep for ${topKey}/${id} failed:`, error);
     }
   }
 
@@ -1140,7 +1201,7 @@ const notifyFriendsOfLog = async (myKey, { tmdbId, title, score }) => {
       });
       notified += await sendToAccount(friendKey, push.subscriptions, payload);
     } catch (error) {
-      console.error(`Friend-log push to ${friendKey} failed:`, error.message);
+      logFailure(`Friend-log push to ${friendKey} failed:`, error);
     }
   }));
   // One line per announcement, so "did the push go out?" is a log search and
@@ -1237,13 +1298,13 @@ const releaseDayProfiles = async (now) => {
             appBadge
           }));
         } catch (error) {
-          console.error(`End-of-day push to ${friendKey} failed:`, error.message);
+          logFailure(`End-of-day push to ${friendKey} failed:`, error);
         }
       }));
       console.log(`End-of-day copy for ${owner}: ${news.length} new, ${delivered} sent`);
       if (delivered) results.push({ topKey: owner, delivered, reason: 'friend-day' });
     } catch (error) {
-      console.error(`End-of-day copy for ${owner} failed:`, error.message);
+      logFailure(`End-of-day copy for ${owner} failed:`, error);
     }
   }
   return results;
@@ -1296,10 +1357,10 @@ const releaseDayFeeds = async (now) => {
         }
       });
       await dbSet(`social/clubFeedLive/${owner}/release`, { cutoff, source, marker });
-      if (result.mode !== 'unchanged') await sendDayNotices(owner, secret, result.meta.revision).catch((error) => console.error(`Change notices for ${owner} failed:`, error.message));
+      if (result.mode !== 'unchanged') await sendDayNotices(owner, secret, result.meta.revision).catch((error) => logFailure(`Change notices for ${owner} failed:`, error));
       console.log(`End-of-day feed for ${owner}: ${copy.movieCount} films (${result.mode})`);
     } catch (error) {
-      console.error(`End-of-day feed for ${owner} failed:`, error.message);
+      logFailure(`End-of-day feed for ${owner} failed:`, error);
     }
   }
 };

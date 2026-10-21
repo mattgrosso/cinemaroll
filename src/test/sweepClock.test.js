@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 // every request got its own deadline. On a slow Firebase morning the sweep's
 // one-after-another reads ran past the limit on most runs, logging nothing.
 const require = createRequire(import.meta.url)
-const { mapLimit, rotate, requestDeadline, createSweepClock } = require('../../aws-lambda/sweepClock.js')
+const { mapLimit, rotate, requestDeadline, createSweepClock, isTransientFailure, retryTransient } = require('../../aws-lambda/sweepClock.js')
 
 const fakeTime = (start = 1000) => {
   let t = start
@@ -92,5 +92,74 @@ describe('createSweepClock', () => {
   it('never runs out of time with no deadline known', () => {
     const clock = createSweepClock({ log: () => {} })
     expect(clock.outOfTime()).toBe(false)
+  })
+})
+
+// Sentry, 2026-10-21: one 500 reading the Miracle's seen-state at 5:20 AM, one
+// timed-out save, one timed-out sign-up check - each its own issue, each gone
+// by the next sweep.
+const status = (code) => Object.assign(new Error(`RTDB GET x failed: ${code}`), { status: code })
+const named = (name, message = 'x') => Object.assign(new Error(message), { name })
+
+describe('isTransientFailure', () => {
+  it('counts Firebase stumbles: 5xx, 429, timeouts, dropped connections', () => {
+    expect(isTransientFailure(status(500))).toBe(true)
+    expect(isTransientFailure(status(503))).toBe(true)
+    expect(isTransientFailure(status(429))).toBe(true)
+    expect(isTransientFailure(named('TimeoutError', 'The operation was aborted due to timeout'))).toBe(true)
+    expect(isTransientFailure(named('AbortError'))).toBe(true)
+    expect(isTransientFailure(named('TypeError', 'fetch failed'))).toBe(true)
+  })
+
+  it('does not count real problems', () => {
+    expect(isTransientFailure(status(401))).toBe(false)
+    expect(isTransientFailure(status(404))).toBe(false)
+    expect(isTransientFailure(new SyntaxError('Unexpected token'))).toBe(false)
+    expect(isTransientFailure(new TypeError('cannot read x of undefined'))).toBe(false)
+    expect(isTransientFailure(null)).toBe(false)
+  })
+})
+
+describe('retryTransient', () => {
+  const noSleep = async () => {}
+
+  it('a one-off 500 is retried and the second answer stands', async () => {
+    let calls = 0
+    const value = await retryTransient(async () => {
+      calls += 1
+      if (calls === 1) throw status(500)
+      return 'board'
+    }, { sleep: noSleep })
+    expect(value).toBe('board')
+    expect(calls).toBe(2)
+  })
+
+  it('two stumbles in a row are thrown marked transient', async () => {
+    let calls = 0
+    const error = await retryTransient(async () => { calls += 1; throw status(500) }, { sleep: noSleep }).catch((e) => e)
+    expect(calls).toBe(2)
+    expect(error.status).toBe(500)
+    expect(error.transient).toBe(true)
+  })
+
+  it('a real problem is thrown at once, unmarked', async () => {
+    let calls = 0
+    const error = await retryTransient(async () => { calls += 1; throw status(401) }, { sleep: noSleep }).catch((e) => e)
+    expect(calls).toBe(1)
+    expect(error.transient).toBeUndefined()
+  })
+
+  it('no retry when time is short, but still marked transient', async () => {
+    let calls = 0
+    const error = await retryTransient(async () => { calls += 1; throw named('TimeoutError') }, { canRetry: () => false, sleep: noSleep }).catch((e) => e)
+    expect(calls).toBe(1)
+    expect(error.transient).toBe(true)
+  })
+
+  it('a stumble then a real problem is the real problem', async () => {
+    let calls = 0
+    const error = await retryTransient(async () => { calls += 1; throw status(calls === 1 ? 503 : 403) }, { sleep: noSleep }).catch((e) => e)
+    expect(error.status).toBe(403)
+    expect(error.transient).toBeUndefined()
   })
 })

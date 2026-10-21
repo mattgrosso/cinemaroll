@@ -16,7 +16,7 @@ describe('push Lambda request deadlines', () => {
 
   it('gives the Firebase helpers the longer deadline', () => {
     for (const name of ['getDbToken', 'dbGet', 'dbPatch', 'dbSet']) {
-      const body = source.slice(source.indexOf(`const ${name} = async`)).split('\n};')[0]
+      const body = source.slice(source.indexOf(`const ${name} = `)).split(/\n\}\)?;/)[0]
       expect(body, name).toContain('DB_TIMEOUT_MS)')
     }
   })
@@ -41,5 +41,24 @@ describe('push Lambda request deadlines', () => {
     expect(sweep.match(/mapLimit\(/g)).toHaveLength(2)
     expect(sweep.match(/if \(clock\.outOfTime\(\)\) return clock\.skip/g)).toHaveLength(2)
     expect(sweep).toContain('console.log(clock.summary())')
+  })
+
+  // 2026-10-21: one 500 reading the Miracle's seen-state, one timed-out save,
+  // one timed-out sign-up check - three Sentry issues, each gone by the next
+  // sweep. Firebase calls get one retry, and what's left is a warning.
+  it('retries every Firebase call once when Firebase itself stumbles', () => {
+    for (const name of ['dbGet', 'dbPatch', 'dbSet']) {
+      expect(source, name).toMatch(new RegExp(`const ${name} = \\([^)]*\\) => dbCall\\(async`))
+    }
+    expect(source).toContain('retryTransient(attempt, { canRetry: dbRetryAllowed')
+  })
+
+  it('logs contained sweep failures through logFailure, so Firebase trouble stays a warning', () => {
+    const sweep = source.slice(source.indexOf('const runSweep = async'), source.indexOf('// --- Handler'))
+    const bare = sweep.split('\n').filter((line) => /console\.error\(.*error\.message/.test(line))
+    expect(bare).toEqual([])
+    expect(source).toMatch(/if \(error && error\.transient\) \{\n\s+dbTroubleThisSweep\.push\(message\);\n\s+console\.warn/)
+    expect(sweep).toContain('dbTroubleThisSweep = [];')
+    expect(sweep).toContain('await noteDbTrouble(now);')
   })
 })

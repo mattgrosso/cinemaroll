@@ -97,4 +97,44 @@ function createSweepClock ({ deadlineAt = null, reserveMs = 10000, now = Date.no
   return { left, outOfTime, skip, stage, summary, stages, skipped };
 }
 
-module.exports = { mapLimit, rotate, requestDeadline, createSweepClock };
+/**
+ * Firebase's own trouble, as opposed to ours (Sentry, 2026-10-21: one 500 on
+ * the Miracle's seen-state, one 15s timeout on a save, one on the sign-up
+ * check - each its own Sentry issue, each gone by the next sweep). A 5xx, a
+ * 429, a timeout or a dropped connection is worth one more try; a 4xx is a
+ * real problem (rules, a bad path) and is not.
+ */
+function isTransientFailure (error) {
+  if (!error) return false;
+  const status = Number(error.status);
+  if (Number.isFinite(status)) return status >= 500 || status === 429;
+  if (error.name === 'TimeoutError' || error.name === 'AbortError') return true;
+  return error.name === 'TypeError' && /fetch failed|network|socket|ECONN|ETIMEDOUT|EAI_AGAIN/i.test(`${error.message} ${error.cause && error.cause.code}`);
+}
+
+/**
+ * Run `attempt` and, on a transient failure, once more after `waitMs` if
+ * `canRetry()` still allows it. A failure that stays transient is thrown
+ * marked `transient: true`, which is what lets the caller log it as a
+ * warning rather than file it with Sentry.
+ */
+async function retryTransient (attempt, { canRetry = () => true, waitMs = 500, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}) {
+  try {
+    return await attempt();
+  } catch (error) {
+    if (!isTransientFailure(error)) throw error;
+    if (!canRetry()) {
+      error.transient = true;
+      throw error;
+    }
+  }
+  await sleep(waitMs);
+  try {
+    return await attempt();
+  } catch (error) {
+    if (isTransientFailure(error)) error.transient = true;
+    throw error;
+  }
+}
+
+module.exports = { mapLimit, rotate, requestDeadline, createSweepClock, isTransientFailure, retryTransient };

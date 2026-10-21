@@ -705,6 +705,20 @@ always wait); and `timedFetch` / web push cut every deadline to end 2s before th
 invocation does. Function config (not in the zip, set by hand): timeout **120s**, async
 retries **0** (`put-function-event-invoke-config`) — the next sweep is the retry.
 
+**One Firebase stumble is a warning, a day of them is an error (2026-10-21).** One night
+filed three Sentry issues, each a single Firebase 500 or 15s timeout gone by the next
+sweep (the Miracle's seen-state read, an Alamo seen-state save, the sign-up check).
+`dbGet` / `dbSet` / `dbPatch` go through `dbCall` → `retryTransient` (sweepClock.js,
+tested): a 5xx, 429, timeout or dropped connection gets ONE retry after 500ms (skipped when
+under 25s of the invocation is left), and a second stumble is thrown with
+`transient: true`. Sweep catch sites report through `logFailure`, which warns for
+transient and errors for everything else (a 4xx is a real problem). The streak lives at
+`mattgrosso-gmail-com/push/state/dbTrouble` = { since, reportedAt } (`noteDbTrouble`,
+reusing `boardFailuresDue`): a sweep with no trouble clears it, and trouble on every sweep
+for a day raises `Firebase trouble on every sweep since …` once a day. A transient failure
+on the account list skips that sweep with a warning. New sweep catch sites use
+`logFailure`; `pushLambdaDeadlines.test.js` fails on a `console.error(… error.message)`.
+
 Client pieces: `public/push-sw.js` (declarative-payload fallback renderer, pulled in via
 `workboxOptions.importScripts`), `src/utils/push.js` (subscribe from a USER TAP only —
 see the parallax lesson in vue-ui.md; self-heal refresh on app open), store actions
