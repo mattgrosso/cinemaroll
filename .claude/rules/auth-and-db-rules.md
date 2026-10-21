@@ -718,6 +718,8 @@ reusing `boardFailuresDue`): a sweep with no trouble clears it, and trouble on e
 for a day raises `Firebase trouble on every sweep since …` once a day. A transient failure
 on the account list skips that sweep with a warning. New sweep catch sites use
 `logFailure`; `pushLambdaDeadlines.test.js` fails on a `console.error(… error.message)`.
+One exception stays an error: a theater's seen-state save lost AFTER its news was pushed
+(the next sweep repeats that push), logged as "record failed after announcing N".
 
 Client pieces: `public/push-sw.js` (declarative-payload fallback renderer, pulled in via
 `workboxOptions.importScripts`), `src/utils/push.js` (subscribe from a USER TAP only —

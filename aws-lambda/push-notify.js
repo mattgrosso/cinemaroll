@@ -888,7 +888,11 @@ const notifyAccountListings = async (topKey, boards, now, { announce = true } = 
       await dbSet(statePath, nextKnown);
       knownByKey[theater.key] = nextKnown;
     } catch (error) {
-      logFailure(`Listings (${topKey}/${theater.key}) record failed:`, error);
+      // Unrecorded news is announced again next sweep, so a lost save after
+      // a push went out stays an error even when Firebase only stumbled
+      // (Sentry, 2026-10-21: an Alamo Crystal City save timed out).
+      if (keep.length && delivered) logFailure(`Listings (${topKey}/${theater.key}) record failed after announcing ${keep.length}, next sweep repeats them:`, new Error(error.message));
+      else logFailure(`Listings (${topKey}/${theater.key}) record failed:`, error);
     }
   }
 

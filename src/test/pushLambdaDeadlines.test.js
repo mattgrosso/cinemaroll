@@ -61,4 +61,10 @@ describe('push Lambda request deadlines', () => {
     expect(sweep).toContain('dbTroubleThisSweep = [];')
     expect(sweep).toContain('await noteDbTrouble(now);')
   })
+
+  // A seen-state save lost after its news was pushed means the same push
+  // next sweep, so that one stays an error however transient the cause.
+  it('keeps a lost listings save an error when its news already went out', () => {
+    expect(source).toMatch(/if \(keep\.length && delivered\) logFailure\([^\n]*next sweep repeats them:`, new Error\(error\.message\)\);\n\s+else logFailure\(`Listings \(\$\{topKey\}\/\$\{theater\.key\}\) record failed:`, error\);/)
+  })
 })
