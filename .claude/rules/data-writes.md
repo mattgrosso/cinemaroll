@@ -308,6 +308,18 @@ caller. Open an N+1 issue's tags before anything else; archive expected ones
 Forever, never Resolve (resolving is what makes Sentry reopen them).
 `burstLabel.test.js` guards it. A new known burst gets a `KNOWN_BURSTS` entry.
 
+## A Movie Hat sign-in refusal is a state, not a fault (2026-10-22)
+
+Linked hats live in settings and follow the account; the Movie Hat sign-in is
+per device. So hat buttons show on a phone that never signed in there, and
+every hat call throws `MovieHatAccessError` (`not-connected`, `token-failed`,
+`denied`). Sentry caught the send logging it as an error with only "Couldn't
+reach <hat>." on screen. Any caller of a hat action must check
+`isMovieHatAccessError`: `ErrorLogService.warn`, commit
+`setMovieHatAccessError`, and show `MovieHatAccess.vue` (the one banner — the
+hat button's sheet, the Watchlist's hat note and the hats section all use it;
+connecting from the button finishes the send). Only other failures stay errors.
+
 ## A one-off read nobody catches must classify its refusal (2026-10-15)
 
 Sentry: on an expired sign-in every listener and the newsletter read were

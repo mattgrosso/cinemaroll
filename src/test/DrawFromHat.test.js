@@ -2,12 +2,16 @@ import { describe, it, expect, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import DrawFromHat from '@/components/DrawFromHat.vue';
 
-vi.mock('@/services/ErrorLogService.js', () => ({ default: { error: vi.fn() } }));
+import ErrorLogService from '@/services/ErrorLogService.js';
+import { MovieHatAccessError } from '@/assets/javascript/movieHat.js';
+
+vi.mock('@/services/ErrorLogService.js', () => ({ default: { error: vi.fn(), warn: vi.fn() } }));
 
 const HATS = [{ title: 'Just Matt', dbKey: 'k1' }, { title: 'Whole family', dbKey: 'k2' }];
 
 function factory ({ hats = HATS, result = null, summaries = [], accessError = null, connect = null } = {}) {
   const push = vi.fn();
+  const commit = vi.fn();
   const dispatch = vi.fn((action) => {
     if (action === 'loadMovieHatSummaries') return Promise.resolve(summaries);
     if (action === 'ensureMovieHatContents') return Promise.resolve();
@@ -22,13 +26,14 @@ function factory ({ hats = HATS, result = null, summaries = [], accessError = nu
         $store: {
           state: { movieHatSummaries: summaries, movieHatAccessError: accessError },
           getters: { linkedMovieHats: hats },
-          dispatch
+          dispatch,
+          commit
         },
         $router: { push }
       }
     }
   });
-  return { wrapper, dispatch, push };
+  return { wrapper, dispatch, push, commit };
 }
 
 async function drawFrom (wrapper, index = 0) {
@@ -165,6 +170,20 @@ describe('DrawFromHat', () => {
 
     expect(wrapper.find('.draw-message').text()).toBe('Just Matt is empty. Which is sad.');
     expect(wrapper.find('.drawn').exists()).toBe(false);
+  });
+
+  // Sentry, 2026-10-22: a draw refused for a sign-in reason is the banner's
+  // job, not a "couldn't reach" and not an error report.
+  it('hands a sign-in refusal to the banner instead of failing the draw', async () => {
+    ErrorLogService.error.mockClear();
+    const { wrapper, commit } = factory({ result: new MovieHatAccessError('token-failed', { email: 'matt@example.com' }) });
+
+    await drawFrom(wrapper);
+    await flushPromises();
+
+    expect(commit).toHaveBeenCalledWith('setMovieHatAccessError', { reason: 'token-failed', email: 'matt@example.com' });
+    expect(wrapper.find('.draw-message').exists()).toBe(false);
+    expect(ErrorLogService.error).not.toHaveBeenCalled();
   });
 
   it('reports a failure rather than showing a phantom draw', async () => {

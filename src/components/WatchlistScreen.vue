@@ -27,7 +27,11 @@
     <!-- Bug report (2026-09-29): hatted films were still being suggested.
          When a hat couldn't be read, the rows can't know what's in it, so
          say so rather than quietly suggesting films that may be hatted. -->
-    <p v-if="hatCheckIncomplete" class="hat-check-note">
+    <!-- When the reason is the Movie Hat sign-in, say that and offer the fix
+         (Sentry, 2026-10-22). Not on Tonight: the hats section there already
+         shows the same banner. -->
+    <MovieHatAccess v-if="hatAccessError" v-show="tab !== 'tonight'" :error="hatAccessError"/>
+    <p v-else-if="hatCheckIncomplete" class="hat-check-note">
       Couldn't check all your hats just now, so a few of these may already be in one.
     </p>
 
@@ -374,6 +378,7 @@ import SkeletonBlock from './SkeletonBlock.vue';
 import { afterFrame, SKELETON_FIRST } from '../utils/nextFrame.js';
 import WatchlistRow from './WatchlistRow.vue';
 import DrawFromHat from './DrawFromHat.vue';
+import MovieHatAccess from './MovieHatAccess.vue';
 import MoviePreview from './MoviePreview.vue';
 import { getRating } from '../assets/javascript/GetRating.js';
 import { friendsLoveUnseen } from '../assets/javascript/social.js';
@@ -455,6 +460,7 @@ export default {
     SkeletonBlock,
     BackLink,
     DrawFromHat,
+    MovieHatAccess,
     MoviePreview,
     WatchlistRow
   },
@@ -643,6 +649,10 @@ export default {
     // TMDB ids already sitting in one of your hats.
     hattedIds () {
       return this.$store.state.movieHatMovieIds || {};
+    },
+    hatAccessError () {
+      if (!(this.$store.getters.linkedMovieHats || []).length) return null;
+      return this.$store.state.movieHatAccessError || null;
     },
     hatCheckIncomplete () {
       return this.$store.state.movieHatContentsComplete === false

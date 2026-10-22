@@ -62,6 +62,21 @@
       </div>
     </Teleport>
 
+    <!-- Sentry, 2026-10-22: the hats in settings follow the account, but the
+         Movie Hat sign-in is per device, so this button shows on a phone that
+         has never signed in there — and the send could only say "Couldn't
+         reach <hat>." Same sheet as the picker, holding the same explanation
+         and Connect button as the hats section; connecting finishes the send. -->
+    <Teleport to="body">
+      <div v-if="accessError && !sending" class="hat-sheet-backdrop" @click.stop="closeAccess">
+        <div class="hat-sheet" @click.stop>
+          <p class="hat-sheet-title">Couldn't add to {{ accessHat?.title }}</p>
+          <MovieHatAccess :error="accessError" @connected="retryAfterConnect"/>
+          <button type="button" class="hat-sheet-cancel" @click="closeAccess">Cancel</button>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Same clipping problem, same answer. -->
     <Teleport to="body">
       <p v-if="result" class="hat-toast" :class="{ 'hat-toast-error': result.error }">{{ result.message }}</p>
@@ -86,9 +101,12 @@
 // was stale or a hat could not be read.
 import ErrorLogService from '../services/ErrorLogService.js';
 import { trackEvent } from '../utils/usage.js';
+import { isMovieHatAccessError } from '../assets/javascript/movieHat.js';
+import MovieHatAccess from './MovieHatAccess.vue';
 
 export default {
   name: 'SendToHat',
+  components: { MovieHatAccess },
   props: {
     // A Cinema Roll library entry, a TMDB movie, or a list of either.
     movies: { type: [Array, Object], required: true },
@@ -105,7 +123,11 @@ export default {
       open: false,
       sending: false,
       result: null,
-      resultTimer: null
+      resultTimer: null,
+      // `{ reason, email }` when Movie Hat refused the send for a sign-in
+      // reason, and the hat it was going to, so connecting can finish it.
+      accessError: null,
+      accessHat: null
     };
   },
   computed: {
@@ -189,11 +211,33 @@ export default {
         // already in the hat and the list already knew about it.
         if (added.length) this.$emit('added', added, this.list);
       } catch (error) {
+        // Not signed in, expired, or the wrong account: a state with a fix,
+        // not a fault. A warning (so it stays out of Sentry), the shared
+        // explanation, and the store told so the hats section agrees.
+        if (isMovieHatAccessError(error)) {
+          ErrorLogService.warn('Adding to a movie hat needs Movie Hat sign-in', { reason: error.reason });
+          const refusal = { reason: error.reason, email: error.email };
+          this.$store?.commit?.('setMovieHatAccessError', refusal);
+          this.accessError = refusal;
+          this.accessHat = hat;
+          return;
+        }
         ErrorLogService.error('Adding to a movie hat failed', error);
         this.report({ message: `Couldn't reach ${hat.title}.`, error: true });
       } finally {
         this.sending = false;
       }
+    },
+    closeAccess () {
+      this.accessError = null;
+      this.accessHat = null;
+    },
+    // The tap that failed was a request to add; connecting is the detour, so
+    // finish what was asked rather than making them find the button again.
+    retryAfterConnect () {
+      const hat = this.accessHat;
+      this.closeAccess();
+      if (hat) this.send(hat);
     },
     // Says what actually happened, including the already-in-there case.
     summarize (added, skipped, hatTitle) {

@@ -571,6 +571,22 @@ describe('films already in a hat are not suggested again', () => {
     expect(wrapper.find('.hat-check-note').exists()).toBe(true);
   });
 
+  // Sentry, 2026-10-22: when the reason is the Movie Hat sign-in, the note
+  // says so and offers the fix rather than a vague "couldn't check".
+  it('names the Movie Hat sign-in as the reason, with a button to connect', async () => {
+    const { wrapper } = factory({
+      movieHatContentsComplete: false,
+      linkedMovieHats: [{ title: 'Just Matt', dbKey: 'k1' }],
+      state: { movieHatAccessError: { reason: 'not-connected', email: null } }
+    });
+    await flushPromises();
+
+    const banner = wrapper.find('.hat-access');
+    expect(banner.text()).toContain("isn't signed in to Movie Hat");
+    expect(banner.find('.hat-access-btn').text()).toBe('Connect Movie Hat');
+    expect(wrapper.find('.hat-check-note').exists()).toBe(false);
+  });
+
   it('stays quiet when every hat was read, or there are no hats', async () => {
     const read = factory({ linkedMovieHats: [{ title: 'Just Matt', dbKey: 'k1' }] });
     const none = factory({ movieHatContentsComplete: false });

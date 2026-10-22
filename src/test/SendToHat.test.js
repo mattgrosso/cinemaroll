@@ -1,8 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
 import SendToHat from '@/components/SendToHat.vue';
 
-vi.mock('@/services/ErrorLogService.js', () => ({ default: { error: vi.fn() } }));
+import ErrorLogService from '@/services/ErrorLogService.js';
+import { MovieHatAccessError } from '@/assets/javascript/movieHat.js';
+
+vi.mock('@/services/ErrorLogService.js', () => ({ default: { error: vi.fn(), warn: vi.fn() } }));
 
 const HATS = [
   { title: 'Just Matt', dbKey: 'k1' },
@@ -189,3 +192,71 @@ describe('SendToHat announcing what it added', () => {
     expect(wrapper.emitted('added')).toBeUndefined();
   });
 })
+
+// Sentry, 2026-10-22: a phone that had never signed in to Movie Hat still
+// showed the hat button (linked hats follow the account; the Movie Hat
+// sign-in is per device). The send failed with "Couldn't reach Just Matt."
+// and the expected state was logged as an error, which is what reached Sentry.
+describe('when Movie Hat refuses the send for a sign-in reason', () => {
+  function refusedThenWorks (reason = 'not-connected', email = null) {
+    let refused = false;
+    const commit = vi.fn();
+    const dispatch = vi.fn((action) => {
+      if (action === 'addToMovieHat' && !refused) {
+        refused = true;
+        return Promise.reject(new MovieHatAccessError(reason, { email }));
+      }
+      if (action === 'addToMovieHat') return Promise.resolve({ added: [{ id: 1, title: 'Heat' }], skipped: [] });
+      return Promise.resolve();
+    });
+    const wrapper = mount(SendToHat, {
+      props: { movies: [movie(1, 'Heat')] },
+      global: {
+        stubs: { teleport: true },
+        mocks: { $store: { state: {}, getters: { linkedMovieHats: [HATS[0]] }, dispatch, commit } }
+      }
+    });
+    return { wrapper, dispatch, commit };
+  }
+
+  it('explains the sign-in and offers to connect, instead of "couldn\'t reach"', async () => {
+    ErrorLogService.error.mockClear();
+    const { wrapper, commit } = refusedThenWorks();
+
+    await wrapper.find('.hat-button').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('.hat-toast').exists()).toBe(false);
+    expect(wrapper.find('.hat-access').text()).toContain("isn't signed in to Movie Hat");
+    expect(wrapper.find('.hat-access-btn').text()).toBe('Connect Movie Hat');
+    // The hats section reads the same refusal from the store.
+    expect(commit).toHaveBeenCalledWith('setMovieHatAccessError', { reason: 'not-connected', email: null });
+    // A warning, so it stays out of Sentry.
+    expect(ErrorLogService.error).not.toHaveBeenCalled();
+    expect(ErrorLogService.warn).toHaveBeenCalled();
+  });
+
+  it('names the wrong account when the rules refused it', async () => {
+    const { wrapper } = refusedThenWorks('denied', 'someone@example.com');
+
+    await wrapper.find('.hat-button').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('.hat-access').text()).toContain('someone@example.com');
+    expect(wrapper.find('.hat-access-btn').text()).toBe('Reconnect');
+  });
+
+  it('finishes the send once connected', async () => {
+    const { wrapper, dispatch } = refusedThenWorks();
+
+    await wrapper.find('.hat-button').trigger('click');
+    await flushPromises();
+    await wrapper.find('.hat-access-btn').trigger('click');
+    await flushPromises();
+
+    expect(dispatch).toHaveBeenCalledWith('connectMovieHat');
+    expect(dispatch.mock.calls.filter(([action]) => action === 'addToMovieHat')).toHaveLength(2);
+    expect(wrapper.find('.hat-access').exists()).toBe(false);
+    expect(wrapper.find('.hat-toast').text()).toBe('Heat was added to Just Matt.');
+  });
+});
