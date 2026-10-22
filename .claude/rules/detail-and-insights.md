@@ -602,3 +602,7 @@ the one just gone (Sunday at most four days back) and otherwise answers null:
 the old "latest weekend before the date" put September's #1 under an October
 viewing. The line names its dates, and this year's calendar is cached a day
 (past years a month) so new weekends show up.
+
+**Theater viewings only (2026-10-21, report: "only ... if I watched that movie in a
+theater").** `seenInTheater` (medium "Theater", case blind) gates both the line and
+`viewingYears`, so a film never seen in a theater fetches no calendar at all.

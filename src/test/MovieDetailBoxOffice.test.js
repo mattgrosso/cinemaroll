@@ -96,7 +96,7 @@ describe('MovieDetail — Box Office History', () => {
 
   it('says what was #1 the weekend of each viewing, linked to the chart', async () => {
     archive.fetchArchiveCalendar.mockImplementation(async (year) => (year === 2015 ? calendar2015 : null));
-    await mountFor(movie(155, 'The Dark Knight'), [{ date: '2015-07-04T20:00:00', calculatedTotal: 8.1 }]);
+    await mountFor(movie(155, 'The Dark Knight'), [{ date: '2015-07-04T20:00:00', calculatedTotal: 8.1, medium: 'Theater' }]);
     await flushPromises();
     expect(archive.fetchArchiveCalendar).toHaveBeenCalledWith(2015);
     const line = wrapper.find('.viewing-weekend');
@@ -107,14 +107,34 @@ describe('MovieDetail — Box Office History', () => {
 
   it("shows no weekend line when the archive hasn't reached the viewing's weekend yet", async () => {
     archive.fetchArchiveCalendar.mockResolvedValue({ year: 2026, weekends: [{ k: '2026W39', s: '2026-09-25', e: '2026-09-27', top: 'Avengers Endgame: Encore', g: 26106643 }] });
-    await mountFor(movie(155, 'The Dark Knight'), [{ date: '2026-10-21T20:00:00', calculatedTotal: 8.1 }]);
+    await mountFor(movie(155, 'The Dark Knight'), [{ date: '2026-10-21T20:00:00', calculatedTotal: 8.1, medium: 'Theater' }]);
     await flushPromises();
     expect(archive.fetchArchiveCalendar).toHaveBeenCalledWith(2026);
     expect(wrapper.find('.viewing-weekend').exists()).toBe(false);
   });
 
+  // Report, 2026-10-21: "only ... if I watched that movie in a theater".
+  it('shows no weekend line, and fetches no chart, for a viewing not in a theater', async () => {
+    archive.fetchArchiveCalendar.mockImplementation(async (year) => (year === 2015 ? calendar2015 : null));
+    await mountFor(movie(155, 'The Dark Knight'), [{ date: '2015-07-04T20:00:00', calculatedTotal: 8.1, medium: 'Streaming' }]);
+    await flushPromises();
+    expect(archive.fetchArchiveCalendar).not.toHaveBeenCalled();
+    expect(wrapper.find('.viewing-weekend').exists()).toBe(false);
+  });
+
+  it('shows the line on the theater viewing only, whatever the medium\'s capitals', async () => {
+    archive.fetchArchiveCalendar.mockImplementation(async (year) => (year === 2015 ? calendar2015 : null));
+    await mountFor(movie(155, 'The Dark Knight'), [
+      { date: '2015-07-04T20:00:00', calculatedTotal: 8.1, medium: 'theater' },
+      { date: '2015-07-05T20:00:00', calculatedTotal: 8.0, medium: 'Physical Media' },
+      { date: '2015-07-03T20:00:00', calculatedTotal: 7.9 }
+    ]);
+    await flushPromises();
+    expect(wrapper.findAll('.viewing-weekend')).toHaveLength(1);
+  });
+
   it('shows no weekend line when the archive has no chart for that year', async () => {
-    await mountFor(movie(155, 'The Dark Knight'), [{ date: '1969-07-04T20:00:00', calculatedTotal: 8.1 }]);
+    await mountFor(movie(155, 'The Dark Knight'), [{ date: '1969-07-04T20:00:00', calculatedTotal: 8.1, medium: 'Theater' }]);
     expect(wrapper.find('.viewing-weekend').exists()).toBe(false);
   });
 });

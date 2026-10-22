@@ -157,7 +157,8 @@
                   </button>
                 </h2>
                 <!-- What the country was watching that weekend, from Box
-                     Office Archive (2026-10-14). A quiet line, tap for the chart. -->
+                     Office Archive (2026-10-14). A quiet line, tap for the chart.
+                     Theater viewings only (2026-10-21). -->
                 <a v-if="viewingWeekend(rating)" class="viewing-weekend" :href="archiveWeekendUrl(viewingWeekend(rating).k)" target="_blank" rel="noopener">{{ weekendLine(viewingWeekend(rating)) }}</a>
                 <div :id="`collapse-${index}`" class="accordion-collapse collapse" :aria-labelledby="`heading-${index}`">
                   <div class="accordion-body">
@@ -754,7 +755,7 @@ import { fetchCriticReviews, criticErrorMessage } from '../utils/criticReviewsRe
 import { cinemaScoreReading, CINEMASCORE_SITE } from '../assets/javascript/cinemaScore.js';
 import { fetchCinemaScore } from '../utils/cinemaScoreRequest.js';
 import { fetchArchiveFilm, fetchArchiveCalendar } from '../utils/boxOfficeHistoryRequest.js';
-import { archiveFacts, archiveSummary, weekendForDate, weekendLine, archiveWeekendUrl, todaysDollarsLabel, todaysBudgetLabel, budgetToday, DOLLARS_EXPLANATION } from '../assets/javascript/boxOfficeHistory.js';
+import { archiveFacts, archiveSummary, weekendForDate, seenInTheater, weekendLine, archiveWeekendUrl, todaysDollarsLabel, todaysBudgetLabel, budgetToday, DOLLARS_EXPLANATION } from '../assets/javascript/boxOfficeHistory.js';
 import NameRow from './NameRow.vue';
 import { formatMoneyShort } from '../assets/javascript/formatMoney.js';
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
@@ -964,6 +965,8 @@ export default {
       const ratings = this.getAllRatings(this.previousEntry) || [];
       const years = new Set();
       for (const rating of ratings) {
+        // Only theater viewings show a weekend's #1, so only their years are fetched.
+        if (!seenInTheater(rating)) continue;
         const day = LetterboxdUrlService.toLocalISODate(rating?.date);
         if (day) years.add(Number(day.slice(0, 4)));
       }
@@ -1402,6 +1405,7 @@ export default {
     },
     /** The archive's weekend chart a viewing falls in, or null while unknown. */
     viewingWeekend (rating) {
+      if (!seenInTheater(rating)) return null;
       const day = LetterboxdUrlService.toLocalISODate(rating?.date);
       if (!day) return null;
       return weekendForDate(this.archive.calendars[Number(day.slice(0, 4))], day);

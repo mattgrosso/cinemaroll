@@ -74,6 +74,13 @@ export const archiveSummary = (facts) => {
   return parts.join(' · ');
 };
 
+/**
+ * Whether a viewing was in a theater, the only kind that gets a weekend's #1
+ * (report, 2026-10-21: "only if I watched that movie in a theater"). Case
+ * blind, in case an older entry spelled the medium differently.
+ */
+export const seenInTheater = (rating) => String(rating?.medium || '').trim().toLowerCase() === 'theater';
+
 // A viewing on Monday to Thursday belongs to the weekend just gone: Sunday
 // is at most four days back. Further back than that, the archive simply
 // doesn't have the right weekend yet.
