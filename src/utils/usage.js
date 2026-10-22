@@ -5,7 +5,8 @@
 // kept in this browser so returning visitors can be told from new ones,
 // whether this open is the first on this browser, and whether the app runs
 // installed (Home Screen). Nothing else: no cookie, no account, and the
-// server keeps no IP. Skipped on localhost. `?nousage` skips one load.
+// server keeps no IP. Skipped on localhost and in robot-driven browsers.
+// `?nousage` skips one load.
 //
 // Usage, in main.js:   trackUsage('my-app')
 // Sends on load, and again when an installed app comes back to the
@@ -35,9 +36,20 @@ const installed = () => {
   }
 }
 
+// A browser driven by a program (crawlers that render pages, test runs,
+// screenshot tools) is not a visit. The server drops known crawler names
+// too; this catches the ones that pass as a normal browser.
+const robot = () => {
+  try {
+    return navigator.webdriver === true || /bot|crawl|spider|headless|lighthouse|puppeteer|playwright|phantom|selenium|electron/i.test(navigator.userAgent || '')
+  } catch {
+    return false
+  }
+}
+
 const skip = () => {
   const h = location.hostname
-  return h === 'localhost' || h === '127.0.0.1' || h.endsWith('.local') || /[?&]nousage\b/.test(location.search)
+  return h === 'localhost' || h === '127.0.0.1' || h.endsWith('.local') || /[?&]nousage\b/.test(location.search) || robot()
 }
 
 const send = (app, { first = false } = {}) => {
