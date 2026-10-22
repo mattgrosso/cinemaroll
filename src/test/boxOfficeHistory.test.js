@@ -73,8 +73,21 @@ describe('boxOfficeHistory — the weekend a viewing belongs to', () => {
     expect(weekendForDate(calendar, 'yesterday')).toBeNull();
     expect(weekendForDate(null, '2015-07-04')).toBeNull();
   });
-  it('writes the line', () => {
-    expect(weekendLine(calendar.weekends[1])).toBe('#1 that weekend: Inside Out ($30M)');
+  // Report 2026-10-21: an October 21, 2026 viewing said "#1 that weekend:
+  // Avengers Endgame: Encore" — the archive's 2026 file ended at Sep 25–27,
+  // and the last weekend before the date was taken however old it was.
+  it('never reaches back past the weekend just gone', () => {
+    const behind = { year: 2026, weekends: [{ k: '2026W39', s: '2026-09-25', e: '2026-09-27', top: 'Avengers Endgame: Encore', g: 26106643 }] };
+    expect(weekendForDate(behind, '2026-10-21')).toBeNull();
+    expect(weekendForDate(behind, '2026-09-29')).toBe(behind.weekends[0]);
+    expect(weekendForDate(behind, '2026-10-01')).toBe(behind.weekends[0]);
+    expect(weekendForDate(behind, '2026-10-02')).toBeNull();
+    expect(weekendForDate(calendar, '2015-07-16').k).toBe('2015-28');
+    expect(weekendForDate(calendar, '2015-07-17')).toBeNull();
+  });
+  it('writes the line with the weekend\'s dates', () => {
+    expect(weekendLine(calendar.weekends[1])).toBe('#1 the weekend of Jul 3–5: Inside Out ($30M)');
+    expect(weekendLine({ s: '2026-10-30', e: '2026-11-01', top: 'Halloween', g: 7061513 })).toBe('#1 the weekend of Oct 30–Nov 1: Halloween ($7.1M)');
     expect(weekendLine({ top: 'Jaws', g: 7061513 })).toBe('#1 that weekend: Jaws ($7.1M)');
     expect(weekendLine(null)).toBe('');
   });
@@ -115,6 +128,26 @@ describe('boxOfficeHistoryRequest — two hops, cached, never throws', () => {
     fetchMock.mockResolvedValueOnce(json(calendar));
     expect((await fetchArchiveCalendar(2015, { now: 1000 })).year).toBe(2015);
     expect(await fetchArchiveCalendar('not a year')).toBeNull();
+  });
+
+  // The archive adds a weekend every week; a month-old copy of this year's
+  // calendar hid every weekend since it was saved (report 2026-10-21).
+  it("asks again for this year's calendar after a day, a past year's after a month", async () => {
+    const day = 24 * 60 * 60 * 1000;
+    const now = Date.parse('2026-10-21T12:00:00');
+    fetchMock.mockResolvedValue(json({ year: 2026, weekends: [] }));
+    await fetchArchiveCalendar(2026, { now });
+    await fetchArchiveCalendar(2026, { now: now + day / 2 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await fetchArchiveCalendar(2026, { now: now + day + 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    fetchMock.mockResolvedValue(json(calendar));
+    await fetchArchiveCalendar(2015, { now });
+    await fetchArchiveCalendar(2015, { now: now + 20 * day });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await fetchArchiveCalendar(2015, { now: now + 31 * day });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });
 

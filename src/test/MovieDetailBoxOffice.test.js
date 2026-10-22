@@ -101,8 +101,16 @@ describe('MovieDetail — Box Office History', () => {
     expect(archive.fetchArchiveCalendar).toHaveBeenCalledWith(2015);
     const line = wrapper.find('.viewing-weekend');
     expect(line.exists()).toBe(true);
-    expect(line.text()).toBe('#1 that weekend: Inside Out ($30M)');
+    expect(line.text()).toBe('#1 the weekend of Jul 3–5: Inside Out ($30M)');
     expect(line.attributes('href')).toContain('/weekend/2015-27');
+  });
+
+  it("shows no weekend line when the archive hasn't reached the viewing's weekend yet", async () => {
+    archive.fetchArchiveCalendar.mockResolvedValue({ year: 2026, weekends: [{ k: '2026W39', s: '2026-09-25', e: '2026-09-27', top: 'Avengers Endgame: Encore', g: 26106643 }] });
+    await mountFor(movie(155, 'The Dark Knight'), [{ date: '2026-10-21T20:00:00', calculatedTotal: 8.1 }]);
+    await flushPromises();
+    expect(archive.fetchArchiveCalendar).toHaveBeenCalledWith(2026);
+    expect(wrapper.find('.viewing-weekend').exists()).toBe(false);
   });
 
   it('shows no weekend line when the archive has no chart for that year', async () => {

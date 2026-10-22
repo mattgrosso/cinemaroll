@@ -593,3 +593,12 @@ scroll and a filmography in progress. The panels are plain divs (no `d-*`), so
 `v-show` really hides them. Tests assert `style.display` per `.wl-panel-<key>`
 ("the Watchlist tabs" in `WatchlistScreen.test.js`); every older test still finds its
 section because all panels are mounted.
+
+## "#1 the weekend of …" on each viewing (Box Office History, fixed 2026-10-21)
+
+Box Office History runs a few weeks behind (it's rebuilt from Wayback Machine
+captures every Wednesday). `weekendForDate` takes the weekend holding the date or
+the one just gone (Sunday at most four days back) and otherwise answers null:
+the old "latest weekend before the date" put September's #1 under an October
+viewing. The line names its dates, and this year's calendar is cached a day
+(past years a month) so new weekends show up.

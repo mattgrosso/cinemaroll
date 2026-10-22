@@ -74,12 +74,20 @@ export const archiveSummary = (facts) => {
   return parts.join(' · ');
 };
 
+// A viewing on Monday to Thursday belongs to the weekend just gone: Sunday
+// is at most four days back. Further back than that, the archive simply
+// doesn't have the right weekend yet.
+const MAX_DAYS_AFTER_WEEKEND = 4;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const daysBetween = (from, to) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
+
 /**
  * The weekend chart a viewing date belongs to, from the archive's
  * calendar/<year>.json: the 3-day weekend whose Friday–Sunday holds the
- * date, else the most recent weekend before it (a Tuesday viewing belongs
- * to the weekend just gone). Null when the date is before the first weekend
- * of the year's file, or the file has nothing.
+ * date, else the weekend just gone (a Tuesday viewing belongs to the
+ * Friday–Sunday before it). Null when that weekend isn't in the file — the
+ * archive runs a few weeks behind, and an older weekend would be the wrong
+ * answer (2026-10-21: an October viewing said September's #1).
  */
 export const weekendForDate = (calendar, isoDate) => {
   const date = String(isoDate || '').slice(0, 10);
@@ -89,14 +97,27 @@ export const weekendForDate = (calendar, isoDate) => {
   const within = list.find((w) => w.s <= date && date <= w.e);
   if (within) return within;
   const before = list.filter((w) => w.e < date);
-  return before.length ? before[before.length - 1] : null;
+  const last = before[before.length - 1];
+  return last && daysBetween(last.e, date) <= MAX_DAYS_AFTER_WEEKEND ? last : null;
 };
 
-/** "That weekend's #1: Inside Out ($29.8M)" */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const monthDay = (iso) => ({ month: MONTHS[Number(iso.slice(5, 7)) - 1], day: Number(iso.slice(8, 10)) });
+
+/** "Oct 16–18", or "Sep 30–Oct 2" across a month end; '' without dates. */
+export const weekendDates = (weekend) => {
+  if (!/^\d{4}-\d{2}-\d{2}/.test(weekend?.s || '') || !/^\d{4}-\d{2}-\d{2}/.test(weekend?.e || '')) return '';
+  const start = monthDay(weekend.s);
+  const end = monthDay(weekend.e);
+  return start.month === end.month ? `${start.month} ${start.day}–${end.day}` : `${start.month} ${start.day}–${end.month} ${end.day}`;
+};
+
+/** "#1 the weekend of Jul 3–5: Inside Out ($30M)" — the dates say which weekend. */
 export const weekendLine = (weekend) => {
   if (!weekend?.top) return '';
   const gross = weekend.g ? ` (${formatMoneyShort(weekend.g)})` : '';
-  return `#1 that weekend: ${weekend.top}${gross}`;
+  const dates = weekendDates(weekend);
+  return `#1 ${dates ? `the weekend of ${dates}` : 'that weekend'}: ${weekend.top}${gross}`;
 };
 
 /**
