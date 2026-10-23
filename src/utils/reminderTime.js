@@ -42,9 +42,10 @@ const dayKey = (epoch) => {
 };
 
 /**
- * -> { remindAt, label, lastChance? } for the first rung still ahead of now;
- * a week's snooze when the showing has no date; null only when every rung
- * has passed (the film plays within three hours and no later day is known).
+ * -> { remindAt, label, lastChance?, snooze? } for the first rung still ahead
+ * of now; a week's snooze when the showing has no date, or when every rung
+ * has passed and the run's end is unknown; null only when every rung has
+ * passed and the known last showing is today.
  * A first showing today (or already gone) with a last showing on a later
  * day aims at that last showing instead, flagged lastChance.
  */
@@ -62,5 +63,10 @@ export function reminderTimeFor (firstShowTime, now = Date.now(), { lastShowTime
     const remindAt = showing - rung.before;
     if (remindAt > now) return { remindAt, label: rung.label };
   }
+  // Every rung gone and the source doesn't say when the run ends (CinemaClock
+  // lists one day, AFI none): it may well play tomorrow, so snooze a week
+  // rather than refuse (2026-10-23: Everest at the Smithsonian IMAX "won't
+  // let me" snooze, though it played on through the next week).
+  if (!last) return { remindAt: now + SNOOZE_MS, label: 'in a week', snooze: true };
   return null;
 }

@@ -15,10 +15,10 @@ describe('reminderTimeFor', () => {
     expect(reminderTimeFor('2026-10-02T19:00:00', now)).toEqual({ remindAt: local(2026, 10, 1, 19), label: 'the day before' });
   });
 
-  it('three hours before when already inside a day, and nothing once that has passed', () => {
+  it('three hours before when already inside a day, and nothing once that has passed on its last day', () => {
     const now = local(2026, 10, 2, 9);
     expect(reminderTimeFor('2026-10-02T19:00:00', now)).toEqual({ remindAt: local(2026, 10, 2, 16), label: 'three hours before' });
-    expect(reminderTimeFor('2026-10-02T19:00:00', local(2026, 10, 2, 17))).toBeNull();
+    expect(reminderTimeFor('2026-10-02T19:00:00', local(2026, 10, 2, 17), { lastShowTime: '2026-10-02T19:00:00' })).toBeNull();
   });
 
   it('a bare date means noon that day; no date at all means a week\'s snooze from now', () => {
@@ -59,6 +59,19 @@ describe('reminderTimeFor', () => {
       expect(reminderTimeFor('2026-10-23T19:00:00', today, { lastShowTime: '2026-10-23T22:00:00' }).label).toBe('three hours before');
       expect(reminderTimeFor('2026-10-23T19:00:00', today).label).toBe('three hours before');
       expect(reminderTimeFor('2026-10-23T19:00:00', local(2026, 10, 23, 17), { lastShowTime: '2026-10-24T09:00:00' })).toBeNull();
+    });
+
+    // 2026-10-23 report: Everest at the Smithsonian IMAX couldn't be swiped in
+    // the evening. CinemaClock lists one day, so the run's end is unknown -
+    // that is a week's snooze, not a refusal.
+    it('a showing too close with no known last showing snoozes a week', () => {
+      const evening = local(2026, 10, 23, 20);
+      expect(reminderTimeFor('2026-10-23T11:00:00', evening))
+        .toEqual({ remindAt: local(2026, 10, 30, 20), label: 'in a week', snooze: true });
+    });
+
+    it('still refuses when the known last showing is today and has passed every rung', () => {
+      expect(reminderTimeFor('2026-10-23T11:00:00', local(2026, 10, 23, 20), { lastShowTime: '2026-10-23T21:00:00' })).toBeNull();
     });
 
     it('a first showing on a later day keeps aiming at the first showing', () => {

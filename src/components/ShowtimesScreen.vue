@@ -346,7 +346,8 @@ export default {
       return `${WEEKDAYS[d.getDay()]} ${MONTHS[d.getMonth()]} ${d.getDate()}`;
     },
     // Swipe left: a reminder a week before the showing, else the day before,
-    // else three hours before; a film with no date yet is snoozed a week.
+    // else three hours before; a film with no date yet, or one whose rungs
+    // have all passed with no known end to its run, is snoozed a week.
     // One that starts today but runs on is held for its last showing.
     remind (theater, item) {
       const choice = reminderTimeFor(item.firstShowTime, Date.now(), { lastShowTime: item.lastShowTime });
@@ -360,7 +361,8 @@ export default {
         title: item.title,
         theaterName: theater.name,
         url: item.url || theater.url || null,
-        firstShowTime: item.firstShowTime,
+        // A snooze past today's showings mustn't push a date already gone.
+        firstShowTime: choice.snooze ? null : item.firstShowTime,
         ...(choice.lastChance ? { lastChance: true, lastShowTime: item.lastShowTime } : {})
       };
       this.leavingLeft = this.cardId(theater, item);

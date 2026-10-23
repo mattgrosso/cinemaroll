@@ -572,6 +572,10 @@ whole run (Alamo, Veezi, Cinema Arts; CinemaClock shows one day and AFI none, so
 showing today or earlier with a last showing on a later day aims two days before the last
 showing, else the day before (`LAST_CHANCE_RUNGS`); the reminder stores `lastChance` +
 `lastShowTime` and the push reads "Last chance: <film> / Final showing <day>".
+**Run's end unknown** (same day, Everest at the Smithsonian IMAX "won't let me" snooze in the
+evening): when every rung has passed and the board has no `lastShowTime` (CinemaClock, AFI),
+the swipe snoozes a week (`snooze: true`) and stores `firstShowTime: null` so the push says
+"On the board" rather than a gone date. Refusing is now only for a known last showing today.
 
 **Taps land in the app, links land on the theater** (v1.118.14: "Clicking on the notification
 should not take me directly to their website … it should just take me to Cinema Roll, to the

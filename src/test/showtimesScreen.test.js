@@ -43,6 +43,9 @@ describe('Showtimes screen wiring', () => {
     // carries it for the push to name.
     expect(screen).toContain('reminderTimeFor(item.firstShowTime, Date.now(), { lastShowTime: item.lastShowTime })');
     expect(screen).toMatch(/lastChance: true, lastShowTime: item\.lastShowTime/);
+    // A week's snooze past today's showings (2026-10-23) drops the gone date,
+    // so the push says "On the board" instead of naming a day already past.
+    expect(screen).toContain('firstShowTime: choice.snooze ? null : item.firstShowTime');
     // A notification lands on this screen, never on a theater's site.
     const cadence = read('../../aws-lambda/pushCadence.js');
     expect(cadence).toMatch(/navigate: `\/showtimes\?focus=/);
