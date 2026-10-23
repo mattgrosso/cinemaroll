@@ -816,6 +816,7 @@ describe('theater listings', () => {
     const listings = alamoListings(feed, '1101');
     expect(listings.map((l) => l.slug)).toEqual(['advance-screening-dune-part-three', 'dune-part-three', 'halloween-1978']);
     expect(listings[1].firstShowTime).toBe('2026-12-17T10:15:00');
+    expect(listings[1].lastShowTime).toBe('2026-12-18T19:30:00');
     expect(listings[1].url).toBe('https://drafthouse.com/dc-metro-area/show/dune-part-three?cinemaId=1101');
     expect(listings[1].poster).toBeNull();
     expect(alamoListings({ data: { presentations: [{ slug: 'p', show: { slug: 'p', title: 'P', posterImages: [{ uri: 'https://img/p.jpg' }] } }], sessions: [{ cinemaId: '1101', presentationSlug: 'p' }] } }, '1101')[0].poster).toBe('https://img/p.jpg');
@@ -840,7 +841,7 @@ describe('theater listings', () => {
     expect(alamoListings(null, '1101')).toEqual([]);
     expect(alamoListings({ data: {} }, '1101')).toEqual([]);
     expect(alamoListings({ data: { sessions: [{ cinemaId: '1101', presentationSlug: 'x' }] } }, '1101'))
-      .toEqual([{ slug: 'x', title: 'x', firstShowTime: null, url: 'https://drafthouse.com/dc-metro-area/show/x?cinemaId=1101', poster: null }]);
+      .toEqual([{ slug: 'x', title: 'x', firstShowTime: null, lastShowTime: null, url: 'https://drafthouse.com/dc-metro-area/show/x?cinemaId=1101', poster: null }]);
   });
 
   // 2026-10-05: "the Crystal City Alamo is probably my number two". Same
@@ -1002,8 +1003,8 @@ describe('theater listings — the parsed sites', () => {
   it('a Veezi page yields one film per film code with its earliest showing and a ticket link', () => {
     const listings = veeziListings(VEEZI, { now: SEPT_28 });
     expect(listings).toEqual([
-      { slug: '0000002468', title: 'Glory', firstShowTime: '2026-10-02T19:00:00', url: 'https://ticketing.useast.veezi.com/purchase/2907?siteToken=tok', poster: 'https://ticketing.useast.veezi.com/Media/Poster?siteToken=tok&code=0000002468' },
-      { slug: '0000002470', title: 'Selma & Friends', firstShowTime: '2026-11-06T19:00:00', url: 'https://ticketing.useast.veezi.com/purchase/2910?siteToken=tok', poster: 'https://ticketing.useast.veezi.com/Media/Poster?siteToken=tok&code=0000002470' }
+      { slug: '0000002468', title: 'Glory', firstShowTime: '2026-10-02T19:00:00', lastShowTime: '2026-10-04T14:00:00', url: 'https://ticketing.useast.veezi.com/purchase/2907?siteToken=tok', poster: 'https://ticketing.useast.veezi.com/Media/Poster?siteToken=tok&code=0000002468' },
+      { slug: '0000002470', title: 'Selma & Friends', firstShowTime: '2026-11-06T19:00:00', lastShowTime: '2026-11-07T14:00:00', url: 'https://ticketing.useast.veezi.com/purchase/2910?siteToken=tok', poster: 'https://ticketing.useast.veezi.com/Media/Poster?siteToken=tok&code=0000002470' }
     ]);
   });
 
@@ -1044,9 +1045,9 @@ describe('theater listings — the parsed sites', () => {
     const scheduled = { movieIds: {}, scheduledDays: { 3690: ['2026-10-26'], 327174: ['2026-10-03', '2026-10-02', 'garbage'], 999: ['2026-10-05'], 1000026622: ['2026-10-16'], 555: ['2026-10-07'] } };
     const movies = { nodes: [{ id: '3690', title: "All the President's Men", path: '/movies/3690-all-the-presidents-men', poster: 'https://cms/p.jpg' }, { id: '327174', title: 'Digger', path: '/movies/327174-digger' }, { id: '999', title: 'Verity' }, { id: '555', title: '  ' }] };
     expect(boxofficeListings(scheduled, movies, 'https://www.cinemaartstheatre.com/')).toEqual([
-      { slug: '327174', title: 'Digger', firstShowTime: '2026-10-02', url: 'https://www.cinemaartstheatre.com/movies/327174-digger', poster: null },
-      { slug: '3690', title: "All the President's Men", firstShowTime: '2026-10-26', url: 'https://www.cinemaartstheatre.com/movies/3690-all-the-presidents-men', poster: 'https://cms/p.jpg' },
-      { slug: '999', title: 'Verity', firstShowTime: '2026-10-05', url: 'https://www.cinemaartstheatre.com', poster: null }
+      { slug: '327174', title: 'Digger', firstShowTime: '2026-10-02', lastShowTime: '2026-10-03', url: 'https://www.cinemaartstheatre.com/movies/327174-digger', poster: null },
+      { slug: '3690', title: "All the President's Men", firstShowTime: '2026-10-26', lastShowTime: '2026-10-26', url: 'https://www.cinemaartstheatre.com/movies/3690-all-the-presidents-men', poster: 'https://cms/p.jpg' },
+      { slug: '999', title: 'Verity', firstShowTime: '2026-10-05', lastShowTime: '2026-10-05', url: 'https://www.cinemaartstheatre.com', poster: null }
     ]);
     expect(boxofficeListings(null, null, 'https://x.test')).toEqual([]);
   });
@@ -1154,7 +1155,7 @@ describe('the board the app shows', () => {
     const board = boardForApp(boards, known, NOW);
     expect(board.updatedAt).toBe(NOW);
     expect(board.theaters.map((t) => [t.key, t.ok, t.listings.length])).toEqual([['alamo', true, 1], ['afi', false, 0], ['majestic', true, 2]]);
-    expect(board.theaters[0].listings[0]).toEqual({ slug: 'x', title: 'Halloween (1978)', firstShowTime: '2026-10-31T21:00:00', url: 'ax', imax: false, poster: null, year: null, firstSeenAt: NOW - HOUR, coveredBy: null });
+    expect(board.theaters[0].listings[0]).toEqual({ slug: 'x', title: 'Halloween (1978)', firstShowTime: '2026-10-31T21:00:00', lastShowTime: null, url: 'ax', imax: false, poster: null, year: null, firstSeenAt: NOW - HOUR, coveredBy: null });
     expect(board.theaters[2].listings[0]).toMatchObject({ imax: true, url: 'm', firstSeenAt: NOW - 2 * HOUR, coveredBy: 'alamo' });
     expect(board.theaters[2].listings[1]).toMatchObject({ url: 'm2', poster: 'https://p/2.jpg', year: 2026, firstSeenAt: NOW, coveredBy: null });
   });
@@ -1193,6 +1194,23 @@ describe('reminders', () => {
       navigate: '/showtimes?focus=alamo/a'
     });
     expect(composeReminderMessage(e).body).toBe('From Mon Oct 26 at AFI Silver');
+  });
+
+  // 2026-10-23: swiped on the day of its first showing, held for the last.
+  it('words a last-chance reminder by the final showing', () => {
+    const r = { theaterKey: 'alamo', slug: 'g', remindAt: NOW, title: 'Glory', theaterName: 'Alamo Bryant Street', firstShowTime: '2026-10-23T19:00:00', lastChance: true, lastShowTime: '2026-10-29T21:00:00' };
+    expect(composeReminderMessage(r)).toEqual({
+      title: 'Last chance: Glory',
+      body: 'Final showing Thu Oct 29, 9:00 PM at Alamo Bryant Street',
+      tag: `remind-alamo-g-${NOW}`,
+      navigate: '/showtimes?focus=alamo/g'
+    });
+    expect(composeReminderMessage({ ...r, lastShowTime: null }).title).toBe('Reminder: Glory');
+  });
+
+  it('the board carries the last showing when the feed has one', () => {
+    const boards = [{ theater: { key: 'alamo', name: 'Alamo' }, listings: [{ slug: 'g', title: 'Glory', firstShowTime: '2026-10-23T19:00:00', lastShowTime: '2026-10-29T21:00:00' }] }];
+    expect(boardForApp(boards, {}, NOW).theaters[0].listings[0].lastShowTime).toBe('2026-10-29T21:00:00');
   });
 
   it('the board carries a showtime learned into the seen-state when the feed has none', () => {

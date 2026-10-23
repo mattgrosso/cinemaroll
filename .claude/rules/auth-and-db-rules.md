@@ -566,6 +566,12 @@ picks the first rung still ahead — a week before, the day before, three hours 
 the cinema-clock stamp as local time (a bare date is noon); no rung left or no showtime known
 means a toast and a snap back — except NO date at all, which is a week's snooze from now
 (v1.118.13: "if there isn't a date, snooze for a week, you can represent it then").
+**Last chance** (2026-10-23: a film whose first showing is today couldn't be swiped at all,
+though it played on for days): the board now carries `lastShowTime` where the source lists the
+whole run (Alamo, Veezi, Cinema Arts; CinemaClock shows one day and AFI none, so null). A first
+showing today or earlier with a last showing on a later day aims two days before the last
+showing, else the day before (`LAST_CHANCE_RUNGS`); the reminder stores `lastChance` +
+`lastShowTime` and the push reads "Last chance: <film> / Final showing <day>".
 
 **Taps land in the app, links land on the theater** (v1.118.14: "Clicking on the notification
 should not take me directly to their website … it should just take me to Cinema Roll, to the

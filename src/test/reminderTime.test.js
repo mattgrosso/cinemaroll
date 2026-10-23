@@ -34,4 +34,36 @@ describe('reminderTimeFor', () => {
     expect(reminderTimeFor('2026-10-31T19:00:00', now).label).toBe('the day before');
     expect(reminderTimeFor('2026-10-31T19:00:00', now - HOUR).label).toBe('a week before');
   });
+
+  // 2026-10-23 report: a film whose first showing was that day couldn't be
+  // swiped at all, though it played on for days. Hold it for the last one.
+  describe('last chance', () => {
+    const today = local(2026, 10, 23, 10);
+
+    it('a first showing today with later days aims two days before the last showing', () => {
+      expect(reminderTimeFor('2026-10-23T19:00:00', today, { lastShowTime: '2026-10-29T21:00:00' }))
+        .toEqual({ remindAt: local(2026, 10, 27, 21), label: 'two days before its last showing', lastChance: true });
+    });
+
+    it('steps to the day before when two days before has passed', () => {
+      expect(reminderTimeFor('2026-10-23T19:00:00', today, { lastShowTime: '2026-10-24T21:00:00' }))
+        .toEqual({ remindAt: local(2026, 10, 23, 21), label: 'the day before its last showing', lastChance: true });
+    });
+
+    it('a first showing already gone today still counts, and a bare last date means noon', () => {
+      expect(reminderTimeFor('2026-10-23T09:00:00', today, { lastShowTime: '2026-10-26' }))
+        .toEqual({ remindAt: local(2026, 10, 24, 12), label: 'two days before its last showing', lastChance: true });
+    });
+
+    it('falls back to the usual rungs when the last showing is today, unknown, or too close', () => {
+      expect(reminderTimeFor('2026-10-23T19:00:00', today, { lastShowTime: '2026-10-23T22:00:00' }).label).toBe('three hours before');
+      expect(reminderTimeFor('2026-10-23T19:00:00', today).label).toBe('three hours before');
+      expect(reminderTimeFor('2026-10-23T19:00:00', local(2026, 10, 23, 17), { lastShowTime: '2026-10-24T09:00:00' })).toBeNull();
+    });
+
+    it('a first showing on a later day keeps aiming at the first showing', () => {
+      expect(reminderTimeFor('2026-10-25T19:00:00', today, { lastShowTime: '2026-11-05T19:00:00' }))
+        .toEqual({ remindAt: local(2026, 10, 24, 19), label: 'the day before' });
+    });
+  });
 });

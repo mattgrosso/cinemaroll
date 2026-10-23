@@ -38,6 +38,11 @@ describe('Showtimes screen wiring', () => {
     expect(screen).toContain("dispatch('remindListing'");
     expect(store).toContain('`theaters/reminders/${theaterKey}/${slug}`');
     expect(lambda).toContain('/theaters/reminders`');
+    // A film starting today is held for its last showing (2026-10-23), so
+    // the swipe hands the picker the board's last showing and the reminder
+    // carries it for the push to name.
+    expect(screen).toContain('reminderTimeFor(item.firstShowTime, Date.now(), { lastShowTime: item.lastShowTime })');
+    expect(screen).toMatch(/lastChance: true, lastShowTime: item\.lastShowTime/);
     // A notification lands on this screen, never on a theater's site.
     const cadence = read('../../aws-lambda/pushCadence.js');
     expect(cadence).toMatch(/navigate: `\/showtimes\?focus=/);

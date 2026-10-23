@@ -908,7 +908,7 @@ const LISTINGS_FORGET_MS = 14 * ONE_DAY_MS;
 
 /**
  * Alamo's market feed -> the presentations with at least one session at ONE
- * cinema, each with the earliest local show time. A presentation is one
+ * cinema, each with the earliest and latest local show times. A presentation is one
  * bookable thing (Dune: Part Three, and separately its Big Show advance
  * screening), which is exactly the unit tickets go on sale in.
  */
@@ -916,9 +916,11 @@ function alamoListings (feed, cinemaId) {
   const data = (feed && feed.data) || feed || {};
   const sessions = (data.sessions || []).filter((s) => s && s.cinemaId === cinemaId && s.presentationSlug);
   const first = {};
+  const last = {};
   sessions.forEach((s) => {
     const when = typeof s.showTimeClt === 'string' ? s.showTimeClt : '';
     if (!(s.presentationSlug in first) || (when && when < first[s.presentationSlug])) first[s.presentationSlug] = when;
+    if (when && (!last[s.presentationSlug] || when > last[s.presentationSlug])) last[s.presentationSlug] = when;
   });
   const presentations = new Map((data.presentations || []).filter((p) => p && p.slug).map((p) => [p.slug, p]));
   // A film's page lives under the market's full slug: drafthouse.com/dc/show/…
@@ -938,6 +940,7 @@ function alamoListings (feed, cinemaId) {
       slug,
       title: eventLabel && slug !== show.slug ? `${title} (${eventLabel})` : title,
       firstShowTime: first[slug] || null,
+      lastShowTime: last[slug] || null,
       url: `https://drafthouse.com/${market}/show/${slug}?cinemaId=${cinemaId}`,
       poster
     };
@@ -1087,8 +1090,8 @@ function veeziDateTime (dateLabel, timeLabel, now = Date.now()) {
  * A Veezi "Show Times" page (the Miracle Theatre's ticketing). Films are
  * keyed by Veezi's film code (from the poster URL), which survives a title
  * edit. The page lists every film under every date and again by film, so
- * the same code appears several times: keep the earliest showing and the
- * first ticket link seen for it.
+ * the same code appears several times: keep the earliest and latest showings
+ * and the first ticket link seen for it.
  */
 function veeziListings (html, { now = Date.now(), fallbackUrl = null } = {}) {
   const films = new Map();
@@ -1103,6 +1106,7 @@ function veeziListings (html, { now = Date.now(), fallbackUrl = null } = {}) {
       slug: code,
       title,
       firstShowTime: null,
+      lastShowTime: null,
       url: purchase ? decodeEntities(purchase) : fallbackUrl,
       poster: posterPath ? `https://ticketing.useast.veezi.com${decodeEntities(posterPath)}` : null
     };
@@ -1111,6 +1115,7 @@ function veeziListings (html, { now = Date.now(), fallbackUrl = null } = {}) {
     while ((m = re.exec(block))) {
       const when = veeziDateTime(m[1], m[2], now);
       if (when && (!entry.firstShowTime || when < entry.firstShowTime)) entry.firstShowTime = when;
+      if (when && (!entry.lastShowTime || when > entry.lastShowTime)) entry.lastShowTime = when;
     }
     films.set(code, entry);
   }
@@ -1163,6 +1168,7 @@ function boxofficeListings (scheduled, movies, siteUrl) {
       slug: id,
       title,
       firstShowTime: dates[0] || null,
+      lastShowTime: dates[dates.length - 1] || null,
       url: movie && movie.path ? `${base}${movie.path}` : base,
       poster: movie && typeof movie.poster === 'string' && movie.poster ? movie.poster : null
     };
@@ -1378,6 +1384,10 @@ function boardForApp (boards, knownByKey, now = Date.now()) {
         // A theater whose grid has no dates (AFI) gets them backfilled into
         // the seen-state a few films a sweep; the board shows what's known.
         firstShowTime: l.firstShowTime || (stamp && typeof stamp === 'object' && typeof stamp.s === 'string' ? stamp.s : null),
+        // The last showing, where the source lists the whole run (Alamo,
+        // Veezi, Cinema Arts); CinemaClock shows one day and AFI none, so
+        // theirs is null. It aims a "last chance" reminder (2026-10-23).
+        lastShowTime: typeof l.lastShowTime === 'string' && l.lastShowTime ? l.lastShowTime : null,
         url: l.url || theater.url || null,
         imax: Boolean(l.imax),
         poster: typeof l.poster === 'string' && l.poster ? l.poster : null,
@@ -1398,7 +1408,8 @@ function boardForApp (boards, knownByKey, now = Date.now()) {
 // "Swipe left can be remind me again one week before the showtime. And if
 // it's already within one week, remind me again the day before." The app
 // writes `theaters/reminders/<theaterKey>/<slug>` = { remindAt, title,
-// theaterName, url, firstShowTime, setAt }; the sweep sends each one whose
+// theaterName, url, firstShowTime, setAt } (plus lastChance + lastShowTime for
+// a last-chance one); the sweep sends each one whose
 // time has come and stamps sentAt, so the card can return to the screen.
 
 /** reminders: { [theaterKey]: { [slug]: reminder } } -> the ones to send now. */
@@ -1505,8 +1516,19 @@ function showtimesWaiting (board, dismissed, reminders) {
 }
 
 function composeReminderMessage (reminder) {
-  const when = showTimeLabel(reminder.firstShowTime);
   const where = reminder.theaterName ? ` at ${reminder.theaterName}` : '';
+  // Swiped on the day of its first showing with more days to come: the
+  // reminder aims at the end of the run instead (2026-10-23).
+  const last = reminder.lastChance ? showTimeLabel(reminder.lastShowTime) : null;
+  if (last) {
+    return {
+      title: `Last chance: ${reminder.title || 'a film you flagged'}`,
+      body: `Final showing ${last}${where}`,
+      tag: `remind-${reminder.theaterKey}-${reminder.slug}-${Number(reminder.remindAt) || 0}`,
+      navigate: `/showtimes?focus=${reminder.theaterKey}/${reminder.slug}`
+    };
+  }
+  const when = showTimeLabel(reminder.firstShowTime);
   return {
     title: `Reminder: ${reminder.title || 'a film you flagged'}`,
     body: when ? `${/,/.test(when) ? 'First showing' : 'From'} ${when}${where}` : `On the board${where}`,

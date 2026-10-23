@@ -347,8 +347,9 @@ export default {
     },
     // Swipe left: a reminder a week before the showing, else the day before,
     // else three hours before; a film with no date yet is snoozed a week.
+    // One that starts today but runs on is held for its last showing.
     remind (theater, item) {
-      const choice = reminderTimeFor(item.firstShowTime, Date.now());
+      const choice = reminderTimeFor(item.firstShowTime, Date.now(), { lastShowTime: item.lastShowTime });
       if (!choice) {
         this.say(`${item.title} plays too soon to remind you about`);
         return;
@@ -359,13 +360,16 @@ export default {
         title: item.title,
         theaterName: theater.name,
         url: item.url || theater.url || null,
-        firstShowTime: item.firstShowTime
+        firstShowTime: item.firstShowTime,
+        ...(choice.lastChance ? { lastChance: true, lastShowTime: item.lastShowTime } : {})
       };
       this.leavingLeft = this.cardId(theater, item);
       setTimeout(() => {
         this.leavingLeft = null;
         this.$store.dispatch('remindListing', { theaterKey: theater.key, slug: item.slug, reminder }).catch(() => {});
-        this.say(`Reminder ${choice.label}: ${this.remindLabel(reminder)}`);
+        this.say(choice.lastChance
+          ? `Last chance reminder, ${choice.label}: ${this.remindLabel(reminder)}`
+          : `Reminder ${choice.label}: ${this.remindLabel(reminder)}`);
       }, 180);
     },
     cancelReminder (theater, item) {
