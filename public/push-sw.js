@@ -36,7 +36,19 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const navigate = (event.notification.data && event.notification.data.navigate) || '/';
+  // The Lambda writes links on https://www.cinemaroll.org, but the app may be
+  // installed from the bare cinemaroll.org (Matt re-added it from there,
+  // 2026-10-22). iOS opens a link on a different origin in a browser sheet
+  // OVER the app instead of in it, so the link is re-homed onto this
+  // worker's own origin, keeping its path and hash.
+  const raw = (event.notification.data && event.notification.data.navigate) || '/';
+  let navigate = raw;
+  try {
+    const url = new URL(raw, self.location.origin);
+    if (/(^|\.)cinemaroll\.org$/.test(url.hostname) || url.origin === self.location.origin) {
+      navigate = `${self.location.origin}${url.pathname}${url.search}${url.hash}`;
+    }
+  } catch (e) { /* leave it as it came */ }
   event.waitUntil((async () => {
     const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     // An already-open app wins — focus it and steer it, rather than opening
@@ -44,7 +56,7 @@ self.addEventListener('notificationclick', (event) => {
     for (const client of clientList) {
       if ('focus' in client) {
         await client.focus();
-        if ('navigate' in client && navigate !== '/') {
+        if ('navigate' in client && raw !== '/') {
           try { await client.navigate(navigate); } catch (e) { /* cross-origin or detached */ }
         }
         return;
