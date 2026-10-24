@@ -292,8 +292,8 @@ and deep stats?" — nothing did).** Deep Stats is no longer a page; `/stats` re
   Genres, scatter last.
 - **Activity** (when you watch) — pace, tappable counts, calendar coverage, watching
   years, Marathon Club, Rewatches, full calendar.
-- **Eras** (which release years are yours, accent `#ff7a6b`) — best release years, box
-  office by year, the Crown, Decade Championship.
+- **Eras** (which release years are yours, accent `#ff7a6b`) — the films-by-year shelf,
+  best release years, box office by year, the Crown, Decade Championship.
 - **People** — the eight Favorite sections plus a ninth pill, Box Office
   (`BoxOfficePeople`, fed `resultsWithRatings` via the category's `props`).
 - **Places**.
@@ -352,6 +352,20 @@ Every tap on a place hands Home a real `place` chip (`searchPlace`), the MovieDe
 sentence to force a break) put its list beside its own title on a phone (2026-09-30).
 Every Places block is in one full-width rule; `Insights.test.js` reads the stylesheet to
 guard it, since jsdom loads no CSS.
+
+## Films by release year — the shelf (Eras tab, top; 2026-10-24)
+
+`ReleaseYearShelf.vue` (report: "the number of movies I've watched for each year ... a bar
+graph, although that seems kind of boring"). Plain SVG, one column per RELEASE year from the
+oldest film to this year (empty years stay as gaps), one block per film, best at the bottom,
+shaded in five coral steps by the library's own quintiles (`releaseYearShelf.js`, pure,
+tested in `releaseYearShelfCounts.test.js` — not `releaseYearShelf.test.js`, which
+collides with the component's test on macOS's case-blind disk). Blocks under 4px merge
+same-shade runs into one rect. Opens scrolled to the recent end. Every column is a full-
+height tap target; the detail line has 40px prev/next buttons (columns are 11px) and a
+"See <year>'s films" year search. Years come from the date STRING's first four digits, like
+the year search — `new Date('2001-01-01')` is 2000 west of Greenwich. Not Chart.js: a bar
+chart on this tab was turned down in 2026-08.
 
 ## Years by box office (Eras tab since 2026-09-29; built 2026-09-13)
 

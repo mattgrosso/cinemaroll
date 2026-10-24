@@ -818,7 +818,7 @@ describe('Insights — one question per tab', () => {
   const PLACEMENT = {
     ratings: ['RatingCurvePlayback', 'Outliers', 'CrowdSection', 'StandoutsSection', 'PantheonSection', 'TiesSection', 'GenresSection'],
     activity: ['WatchYearsSection', 'MarathonSection', 'RewatchesSection', 'FullCalendarView'],
-    eras: ['YearlyAverage', 'BoxOfficeYears', 'CrownSection', 'DecadeChampionship']
+    eras: ['ReleaseYearShelf', 'YearlyAverage', 'BoxOfficeYears', 'CrownSection', 'DecadeChampionship']
   }
   const everySection = Object.values(PLACEMENT).flat()
 

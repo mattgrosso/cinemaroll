@@ -237,6 +237,13 @@
          Championship from Deep Stats; together they answer one question,
          "which eras of film are mine?". -->
     <template v-else-if="renderedTab === 'eras'">
+      <!-- How many films from each release year, and how good (report,
+           2026-10-24: "a new graph that shows the number of movies I've
+           watched for each year"). -->
+      <InsightsPane>
+        <ReleaseYearShelf :resultsWithRatings="resultsWithRatings" @updateSearchValue="updateSearchValue"/>
+      </InsightsPane>
+
       <InsightsPane>
         <YearlyAverage :resultsWithRatings="resultsWithRatings" @updateSearchValue="updateSearchValue"/>
       </InsightsPane>
@@ -369,6 +376,7 @@
 import { markRaw } from 'vue';
 import Outliers from "./Outliers.vue";
 import YearlyAverage from "./YearlyAverage.vue";
+import ReleaseYearShelf from "./ReleaseYearShelf.vue";
 import BoxOfficeYears from "./BoxOfficeYears.vue";
 import BoxOfficePeople from "./BoxOfficePeople.vue";
 import FullCalendarView from "./FullCalendarView.vue";
@@ -469,6 +477,7 @@ export default {
     RatingCurvePlayback,
     Outliers,
     YearlyAverage,
+    ReleaseYearShelf,
     BoxOfficeYears,
     BoxOfficePeople,
     FullCalendarView,
