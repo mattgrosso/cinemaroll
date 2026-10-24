@@ -2,7 +2,7 @@
   <div class="year-shelf">
     <div class="year-shelf-card">
       <p class="year-shelf-title">Films by release year</p>
-      <p class="year-shelf-caption">One column per year, one block per film you've rated, best at the bottom. Brighter blocks are your higher ratings. Tap a column.</p>
+      <p class="year-shelf-caption">One column per year, one block per film you've rated, best on top. Brighter blocks are your higher ratings. Tap a column.</p>
       <p v-if="!shelf.years.length" class="year-shelf-empty">Rate a film and its year shows up here.</p>
       <template v-else>
         <div ref="scroller" class="year-shelf-scroller">
@@ -125,7 +125,9 @@ export default {
       const separate = h >= SEPARATE_BLOCKS_FROM;
       return this.shelf.years.map(({ year, films }) => {
         const blocks = [];
-        films.forEach((film, i) => {
+        // Films come best first (the detail's "Best:" reads films[0]); stack
+        // from the lowest-rated up so the best sit on top (report 2026-10-24).
+        [...films].reverse().forEach((film, i) => {
           const bottom = CHART_HEIGHT - i * h;
           const last = blocks[blocks.length - 1];
           if (!separate && last && last.shade === film.shade) {

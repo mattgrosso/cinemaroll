@@ -24,6 +24,18 @@ describe('ReleaseYearShelf', () => {
     expect(wrapper.findAll('.year-shelf-column rect:not(.year-shelf-hit)')).toHaveLength(2)
   })
 
+  it('stacks a year best on top: the brightest block sits highest', () => {
+    // Report 2026-10-24: the best films were stacked at the bottom.
+    const wrapper = factory([film(9, '2000-06-01'), film(5, '2000-07-01'), film(7, '2001-01-01')])
+    const blocks = wrapper.findAll('.year-shelf-column')[0].findAll('rect:not(.year-shelf-hit)')
+    expect(blocks).toHaveLength(2)
+    const byY = blocks.map((b) => ({ y: Number(b.attributes('y')), fill: b.attributes('fill') }))
+      .sort((a, b) => a.y - b.y)
+    const SHADES = ['#a5544a', '#cf6152', '#ff7a6b', '#ffa898', '#ffe0da']
+    // Smaller y is higher on screen.
+    expect(SHADES.indexOf(byY[0].fill)).toBeGreaterThan(SHADES.indexOf(byY[1].fill))
+  })
+
   it('tapping a column names the year, its count and best film, and searches it', async () => {
     const wrapper = factory([film(9, '1939-06-01', 'The Wizard of Oz'), film(5, '1939-07-01'), film(7, '1941-01-01')])
     await wrapper.find('.year-shelf-hit[data-year="1939"]').trigger('click')
