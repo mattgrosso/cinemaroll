@@ -240,11 +240,12 @@ redeploying `cinemaroll-push` in the same sitting:** the source list was updated
 push Lambda wasn't, and within fifteen minutes Matt's phone announced that "Letterboxd
 Films" had just signed up for Cinema Roll (2026-09-29).
 
-**Deploy with `yarn deploy:newsletter` and check the zip.** The bundle directory under
-`$TMPDIR` was once found with hollow `node_modules` (57 dirs, 83 KB zipped) and shipped a
-Lambda that died on `Cannot find module 'web-push'` — the newsletter would have failed
-that Friday. A healthy zip is ~13 MB / ~4,900 files; `rm -rf` the bundle dir and rerun if
-it isn't. The script uses `~/aws-cli/aws` (the PATH `aws` is Intel on this Mac).
+**Deploy with `yarn deploy:newsletter`** — since 2026-10-24 the same
+`scripts/deploy-lambda.mjs` as push and ai (the bash script it replaced is gone). It used
+to install `node_modules` once into a `$TMPDIR` bundle and reuse it; that folder was once
+found hollow (57 dirs, 83 KB zipped) and shipped a Lambda that died on `Cannot find module
+'web-push'`. Now it starts from the DEPLOYED zip, so the SDK versions are whatever is
+running, and it refuses a zip under 2 MB (healthy ~4.5 MB on 2026-10-24).
 
 ## Download hygiene (audit, 2026-10-06)
 
@@ -681,8 +682,8 @@ env vars `FIREBASE_SA`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
 VAPID private key's only copies are the Lambda env and `.env.local`; the public half is
 committed in `.env` (`VUE_APP_VAPID_PUBLIC_KEY`, with `VUE_APP_PUSH_API_URL`).
 
-**Redeploy with `yarn deploy:push`** (and the AI Lambda with `yarn deploy:ai`; both are
-`scripts/deploy-lambda.mjs`, 2026-10-17 — this used to be a recipe pasted from here,
+**Redeploy with `yarn deploy:push`** (the AI Lambda with `yarn deploy:ai`, the newsletter
+with `yarn deploy:newsletter`; all are `scripts/deploy-lambda.mjs`, 2026-10-17 — this used to be a recipe pasted from here,
 with no checks). Add `--dry` (`node scripts/deploy-lambda.mjs push --dry`) to build and
 check without uploading. It starts from the DEPLOYED zip, so node_modules stay exactly
 what is running (web-push for push; the Anthropic and AWS SDKs for ai — the
@@ -941,8 +942,8 @@ pick that movie?" — Matt's question, 2026-09-20.
 inside `newsletter.js` is a template literal, and prose written about a
 `field` with backticks terminates it. That shipped once and surfaced only as a
 500 with `Runtime.UserCodeSyntaxError` in CloudWatch, AFTER the upload. The
-script runs `node --check` on all three sources and again on the bundled
-`index.js` before anything leaves the machine.
+script runs `node --check` on every source and loads the bundled `index.js`
+before anything leaves the machine.
 
 **The issue comes back as a forced tool call (2026-10-09).** It used to be JSON in
 prose, cut at the first `{` and last `}` and handed to `JSON.parse`; a Friday reply that
@@ -966,7 +967,7 @@ Infra (all `--profile personal`, us-east-1): Lambda `cinemaroll-newsletter`
 `cinemaroll-newsletter-self-invoke`), HTTP API `lpou4xxxng` ($default, throttle
 2/5), EventBridge rule `cinemaroll-newsletter-friday` at
 `cron(0 13 ? * FRI *)`. Env: `FIREBASE_SA`, `TMDB_API_KEY`, `OMDB_API_KEY`,
-`ANTHROPIC_API_KEY`, `VAPID_*`. Redeploy with `yarn deploy:newsletter` (its own script, below; `yarn deploy:push` is the push Lambda's).
+`ANTHROPIC_API_KEY`, `VAPID_*`. Redeploy with `yarn deploy:newsletter` (`scripts/deploy-lambda.mjs newsletter`, the same checked deploy as push and ai; `--dry` to stop before the upload).
 
 **`.env` must end with a newline.** Appending a line to it with `>>` when it
 did not glued `VUE_APP_NEWSLETTER_API_URL` onto the end of

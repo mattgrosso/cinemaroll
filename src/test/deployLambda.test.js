@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { LAMBDAS, localRequires, reachableFiles } from '../../scripts/deploy-lambda.mjs';
 
-// `yarn deploy:push` / `yarn deploy:ai` copy a fixed list of sources over the
+// `yarn deploy:push` / `deploy:ai` / `deploy:newsletter` copy a fixed list of sources over the
 // deployed zip. A module the code requires but the list leaves out ships a
 // Lambda that dies on its first load — the script refuses that at deploy
 // time, and this catches it at commit time.
@@ -30,5 +30,10 @@ describe('deploy-lambda', () => {
 
   it('ships push-notify.js as index.js, the handler the push Lambda is set to', () => {
     expect(LAMBDAS.push.files['aws-lambda/push-notify.js']).toBe('index.js');
+  });
+
+  it('ships newsletter.js as index.js, with the 2 MB floor that caught a hollow bundle', () => {
+    expect(LAMBDAS.newsletter.files['aws-lambda/newsletter.js']).toBe('index.js');
+    expect(LAMBDAS.newsletter.minBytes).toBeGreaterThanOrEqual(2000000);
   });
 });

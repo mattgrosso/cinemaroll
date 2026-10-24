@@ -373,3 +373,13 @@ live site blocked the service worker, and `register-service-worker` crashed read
 already skipped production builds served from localhost; `isTestBrowser`
 (`src/utils/sentryBeforeSend.js`) now also skips any page with `navigator.webdriver`,
 which Playwright, Puppeteer and Selenium always set.
+
+**The newsletter joins the checked Lambda deploy (2026-10-24).** Push and ai moved to
+`scripts/deploy-lambda.mjs` on 2026-10-17; the newsletter kept its bash script, which
+installed `node_modules` once into a reused `$TMPDIR` folder (the one that went hollow
+on 2026-10-07), never regenerated the `cinemaScore.js` twin, never refused uncommitted
+sources, and test-loaded only two of its modules. `yarn deploy:newsletter` is now
+`deploy-lambda.mjs newsletter`, starting from the deployed zip like the others. The
+dry run against the live Lambda passed (4.5 MB, all three SDKs present); the bash
+script was deleted. Proof the test guards it: dropping `cinemaScore.js` from the
+newsletter's file list fails `deployLambda.test.js` with that file named.

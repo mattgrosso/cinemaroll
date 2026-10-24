@@ -1,12 +1,13 @@
-// `yarn deploy:push` / `yarn deploy:ai`: ship the push or the AI Lambda with
-// the checks the newsletter's script has (2026-10-17). Both used to go out by
+// `yarn deploy:push` / `yarn deploy:ai` / `yarn deploy:newsletter`: ship a
+// Lambda with checks (2026-10-17; the newsletter joined 2026-10-24, retiring
+// scripts/deploy-newsletter-lambda.sh). Push and AI used to go out by
 // a recipe pasted from the rules file — download the live zip, copy the
 // sources over it, zip, upload — with nothing in between to notice a stale
 // twin, a file that doesn't parse, or a module left out of the copy. The push
 // Lambda sends every notification Cinema Roll has; a broken upload would stop
 // them all without a sound.
 //
-//   node scripts/deploy-lambda.mjs <push|ai> [--dry]
+//   node scripts/deploy-lambda.mjs <push|ai|newsletter> [--dry]
 //
 // The bundle starts from the DEPLOYED zip, so node_modules stay exactly what
 // is running (aws-lambda/node_modules on disk is the AI Lambda's, and never
@@ -60,6 +61,27 @@ export const LAMBDAS = {
       'aws-lambda/sentryLambda.js': 'sentryLambda.js'
     },
     dependencies: ['@anthropic-ai/sdk', '@aws-sdk/client-dynamodb', '@aws-sdk/client-lambda'],
+    minBytes: 2000000
+  },
+  // Was its own bash script until 2026-10-24, with a node_modules installed
+  // once into $TMPDIR and reused — the folder that went hollow and shipped a
+  // Lambda missing web-push (2026-10-07). Starting from the deployed zip pins
+  // the SDK versions to what is running instead.
+  newsletter: {
+    functionName: 'cinemaroll-newsletter',
+    entry: 'aws-lambda/newsletter.js',
+    files: {
+      'aws-lambda/newsletter.js': 'index.js',
+      'aws-lambda/newsletterCompose.js': 'newsletterCompose.js',
+      'aws-lambda/newsletterSources.js': 'newsletterSources.js',
+      'aws-lambda/cinemaScore.js': 'cinemaScore.js',
+      'aws-lambda/letterboxd.js': 'letterboxd.js',
+      'aws-lambda/letterboxdSync.js': 'letterboxdSync.js',
+      'aws-lambda/sentryLambda.js': 'sentryLambda.js'
+    },
+    dependencies: ['@anthropic-ai/sdk', '@aws-sdk/client-lambda', 'web-push'],
+    // Like push, it hands the VAPID keys to web-push as it loads.
+    loadSetup: "const k = require('web-push').generateVAPIDKeys(); process.env.VAPID_PUBLIC_KEY = k.publicKey; process.env.VAPID_PRIVATE_KEY = k.privateKey;",
     minBytes: 2000000
   }
 };

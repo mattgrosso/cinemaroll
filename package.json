@@ -22,7 +22,7 @@
     "fetch-inflation": "node scripts/fetch-inflation.mjs",
     "letterboxd-status": "node scripts/letterboxd-status.mjs",
     "import-letterboxd": "node scripts/import-letterboxd-csv.mjs",
-    "deploy:newsletter": "bash scripts/deploy-newsletter-lambda.sh",
+    "deploy:newsletter": "node scripts/deploy-lambda.mjs newsletter",
     "deploy:push": "node scripts/deploy-lambda.mjs push",
     "deploy:ai": "node scripts/deploy-lambda.mjs ai",
     "newsletter-e2e": "node scripts/newsletter-e2e.mjs",
