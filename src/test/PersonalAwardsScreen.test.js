@@ -182,6 +182,18 @@ describe('ceremony tabs', () => {
     expect(wrapper.findComponent(AwardsBoard).exists()).toBe(false);
   });
 
+  // 2026-10-24: Trophy Case moved here from the Insights directory, as the
+  // strip's first pill. It's a link to its own page, not a ceremony.
+  it('leads the strip with a Trophy Case link', async () => {
+    const { wrapper, pushSpy } = tabbed({ year: '1997' });
+    const strip = wrapper.find('.ceremony-scroller');
+    const first = strip.element.firstElementChild;
+    expect(first.classList.contains('trophy-case-pill')).toBe(true);
+    expect(first.textContent).toContain('Trophy Case');
+    await wrapper.find('.trophy-case-pill').trigger('click');
+    expect(pushSpy).toHaveBeenCalledWith('/trophy-case');
+  });
+
   // Matt, 2026-10-08: "if I select a year, and then I switch to a different
   // award... I want to maintain the year".
   it('switching ceremony keeps the year in the URL', async () => {

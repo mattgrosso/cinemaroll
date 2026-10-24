@@ -59,10 +59,8 @@ describe('the sort menu closes on a pick and stays open on the money toggle', ()
     expect(actionsRow()).not.toContain('<ul class="dropdown-menu" @click.stop>');
   });
 
-  // THE TRAP. These chips take their colours from
-  // .results-actions-button:nth-child(N), and `flex: 1 1 0` sits on the
-  // button rather than on any wrapper — so wrapping the toggle recolours and
-  // resizes the row. The <ul> is only safe as a sibling because the sort chip
+  // THE TRAP. `flex: 1 1 0` sits on the button rather than on any wrapper —
+  // so wrapping the toggle resizes the row. The <ul> is only safe as a sibling because the sort chip
   // is the LAST button in the group; putting it anywhere earlier would shift
   // every chip after it.
   it('never wraps the toggle, and keeps the sort chip last', () => {

@@ -286,8 +286,14 @@ Cancel; when they match or the diary has no stars, the log screen opens at once.
 and deep stats?" — nothing did).** Deep Stats is no longer a page; `/stats` redirects to
 `/insights?tab=eras`. Six tabs, two rows of three:
 
-- **Overview** — headline numbers, the directory (only pages about YOUR LIBRARY: Year in
-  Review, Trophy Case, Awards, Game Stats, Library Poster, The Web), fun facts.
+- **Overview** — headline numbers and fun facts. No directory of links since 2026-10-24
+  (report: "Awards needs to be a more first-class object ... I go to there all the
+  time"): Awards is a gold chip on Home's rainbow bar, Trophy Case is the first pill of
+  the Awards screen's ceremony strip (back falls to `/awards`), Game Stats lives only on
+  the Games hub, The Web is a link card heading the **People** tab, and Year in Review
+  and Library Poster are `SettingsSection` link rows under the Newsletter (back falls to
+  Home). Fallback if the eight-chip bar ever feels crowded: Awards as a full-width card
+  at the top of Overview.
 - **Ratings** (how you score) — curve replay, Outliers, Standouts, Pantheon, Ties,
   Genres, scatter last.
 - **Activity** (when you watch) — pace, tappable counts, calendar coverage, watching
@@ -485,7 +491,7 @@ commit is synchronous and `firstStickinessResult` already points at the next mov
 `/web` draws the library as one picture: films and the people who appear in more than
 one, one thread per credit (`web.js`, pure and tested; `WebScreen.vue` draws it on a
 canvas with d3-force). `?movie=<tmdbId>` / `?person=<name>` is the two-hop web around one
-node; the card's "web around" button walks. Entry points: the Insights directory, the
+node; the card's "web around" button walks. Entry points: the top of the Insights People tab, the
 Cast heading on MovieDetail, and "See their web" in `PersonModal`. Matt's brief:
 "a visualization that lets me zoom in and pan around to look at the web of my whole
 database."

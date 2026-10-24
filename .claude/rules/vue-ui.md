@@ -160,10 +160,13 @@ joins `screenTopGap.test.js`. Games keep their own padding (their banner differs
   not decoration. General lesson: a broad element rule under a page class can be masked
   for years by the containing block it happens to land in, and surfaces the moment
   anything re-parents.
-- **Don't wrap a chip in `.results-actions`.** Those buttons take their rainbow colours
-  from `.results-actions-button:nth-child(N)` and their width from `flex: 1 1 0` on the
-  button itself, so any wrapper recolours and resizes the row. Adding a SIBLING after the
-  last chip is safe; adding one earlier shifts every colour after it.
+- **Don't wrap a chip in `.results-actions`.** Those buttons take their width from
+  `flex: 1 1 0` on the button itself, so any wrapper resizes the row. Colours are pinned
+  per chip by a `chip-*` class (2026-10-24, when Awards joined after Insights — they used
+  to be `:nth-child(N)`, so an inserted chip shifted every colour after it). A new chip
+  needs its own `chip-*` colour. The sort chip must stay LAST (its menu is a sibling).
+  Eight chips at a 402px phone is about 44px per plain chip; a ninth would go under the
+  40px touch minimum.
 - **An invisible full-height overlay for a gesture will eat real taps.** `BackLink`'s
   20px edge-swipe strip silently ate the leftmost button on every game screen. Listen on
   `window` and filter by touch origin instead.

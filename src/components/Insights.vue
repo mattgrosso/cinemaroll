@@ -41,34 +41,12 @@
         <div class="glance-item third alt"><span class="glance-label">Lowest</span><span class="glance-value">{{ lowestRating }}</span></div>
       </div>
 
-      <!-- Pulled above the fun facts: these are the way OUT of this page, and
-           they were buried under a scroll ("maybe they should be pulled
-           further up"). -->
-      <!-- Only pages about your own library (2026-09-29 regroup). Showtimes
-           moved to the Watchlist (both answer "what should I go see") and
-           the Newsletter to Settings (Home's notice is the way in to a new
-           issue; Settings is the way back to old ones). Deep Stats is gone:
-           its sections live on the tabs whose question they answer. -->
-      <div class="insights-links">
-        <button type="button" class="insights-link-card" @click="$router.push('/year-in-review')">
-          <i class="bi bi-calendar-heart"></i><span>Year in Review</span><i class="bi bi-chevron-right link-chevron"></i>
-        </button>
-        <button type="button" class="insights-link-card" @click="$router.push('/trophy-case')">
-          <i class="bi bi-trophy"></i><span>Trophy Case</span><i class="bi bi-chevron-right link-chevron"></i>
-        </button>
-        <button type="button" class="insights-link-card" @click="$router.push('/awards')">
-          <i class="bi bi-award"></i><span>Awards</span><i class="bi bi-chevron-right link-chevron"></i>
-        </button>
-        <button type="button" class="insights-link-card" @click="$router.push('/games/stats')">
-          <i class="bi bi-controller"></i><span>Game Stats</span><i class="bi bi-chevron-right link-chevron"></i>
-        </button>
-        <button type="button" class="insights-link-card" @click="$router.push('/library-poster')">
-          <i class="bi bi-image"></i><span>Library Poster</span><i class="bi bi-chevron-right link-chevron"></i>
-        </button>
-        <button type="button" class="insights-link-card" @click="$router.push('/web')">
-          <i class="bi bi-diagram-3"></i><span>The Web</span><i class="bi bi-chevron-right link-chevron"></i>
-        </button>
-      </div>
+      <!-- The directory of link cards that sat here is gone (2026-10-24,
+           "I think these need to be ... put somewhere else, especially
+           awards"): Awards is a chip on Home's rainbow bar, Trophy Case
+           leads the Awards screen's ceremony strip, Game Stats lives only on
+           Games, The Web heads the People tab, and Year in Review and Library
+           Poster are rows in Settings beside the Newsletter. -->
 
       <!-- Board item 8: funFacts.js finally gets a shelf (bug report: "more
            fun data about my ratings and watching habits"). -->
@@ -347,6 +325,12 @@
     </template>
 
     <template v-else-if="renderedTab === 'people'">
+    <!-- The Web is a picture of people and the films they share, so it
+         heads the People tab (moved from Overview's directory, 2026-10-24:
+         "I like the web, but it feels like it's kind of hidden here"). -->
+    <button type="button" class="insights-link-card web-link-card" @click="$router.push('/web')">
+      <i class="bi bi-diagram-3"></i><span>The Web<small>Your films and the people they share, drawn</small></span><i class="bi bi-chevron-right link-chevron"></i>
+    </button>
     <div class="people-chips">
       <button
         v-for="category in peopleCategories"
@@ -1436,9 +1420,6 @@ export default {
     leave (target) {
       this.$store.commit("setShowHeader", true);
       followNavigationTarget(this.$router, target);
-    },
-    goToYearInReview () {
-      this.$router.push('/year-in-review');
     },
     randomizeAxes () {
       const availableOptions = this.axisOptions.map(opt => opt.key);
@@ -3185,58 +3166,54 @@ export default {
     .third .glance-value { font-size: 1.1rem; }
   }
 
-  .insights-links {
-    display: grid;
-    gap: 0.5rem;
-    grid-template-columns: repeat(2, 1fr);
-    margin-top: 0.75rem;
+  /* A link out of Insights (The Web, on the People tab). It reads as a
+     control, not one more tile: a raised fill, a soft 8px radius against the
+     tiles' hard 3px, a grey edge, and a chevron saying it goes somewhere. */
+  .insights-link-card {
+    align-items: center;
+    background: #33383d;
+    border: 1px solid #555c63;
+    border-radius: 8px;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+    color: white;
+    display: flex;
+    font-weight: 600;
+    gap: 0.55rem;
+    margin-bottom: 0.75rem;
+    min-height: 52px;
+    padding: 0.4rem 0.6rem;
+    text-align: left;
     width: 100%;
 
-    /* These read as boxes, not buttons ("they just kinda look like another box
-       like the others"). Everything about them now says control rather than
-       tile: a raised fill instead of a transparent panel, a soft 8px radius
-       against the tiles' hard 3px, a grey edge instead of the tiles' white
-       one, and a chevron saying it goes somewhere. The accent shrinks to the
-       icon's own colour — six filled accent chips were a sixth of the wall of
-       yellow by themselves. */
-    .insights-link-card {
-      align-items: center;
-      background: #33383d;
-      border: 1px solid #555c63;
-      border-radius: 8px;
-      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
-      color: white;
-      display: flex;
-      font-weight: 600;
-      gap: 0.55rem;
-      min-height: 52px;
-      padding: 0.4rem 0.6rem;
-      text-align: left;
+    i {
+      color: var(--accent);
+      flex: 0 0 auto;
+      font-size: 1.15rem;
+    }
 
-      i {
-        color: var(--accent);
-        flex: 0 0 auto;
-        font-size: 1.15rem;
-      }
+    span {
+      flex: 1 1 auto;
+      font-size: 0.95rem;
+      min-width: 0;
 
-      span {
-        flex: 1 1 auto;
-        /* Small enough that "Year in Review" and "Library Poster" stay on one
-           line at 357px, so the rows keep an even height. */
-        font-size: 0.85rem;
-        min-width: 0;
+      small {
+        /* #ccc on #33383d is ~8:1. */
+        color: #ccc;
+        display: block;
+        font-size: 0.78rem;
+        font-weight: 400;
       }
+    }
 
-      .link-chevron {
-        /* #9aa0a6 on #33383d is ~4.6:1 — a hint, but still a legible one. */
-        color: #9aa0a6;
-        font-size: 0.9rem;
-      }
+    .link-chevron {
+      /* #9aa0a6 on #33383d is ~4.6:1 — a hint, but still a legible one. */
+      color: #9aa0a6;
+      font-size: 0.9rem;
+    }
 
-      &:active {
-        background: #23272b;
-        box-shadow: none;
-      }
+    &:active {
+      background: #23272b;
+      box-shadow: none;
     }
   }
 

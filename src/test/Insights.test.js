@@ -401,12 +401,6 @@ describe('Insights', () => {
       expect(back).toHaveBeenCalled()
     })
 
-    it('goToYearInReview navigates to /year-in-review', () => {
-      const { wrapper, pushSpy } = mountInsights()
-      wrapper.vm.goToYearInReview()
-      expect(pushSpy).toHaveBeenCalledWith('/year-in-review')
-    })
-
     it('updateSearchValue navigates Home with the search term as a query param', () => {
       const { wrapper, pushSpy } = mountInsights()
       wrapper.vm.updateSearchValue('Denis Villeneuve')
@@ -847,10 +841,20 @@ describe('Insights — one question per tab', () => {
     expect(people.attributes('allentrieswithflatkeywordsadded')).toBeUndefined()
   })
 
-  it('lists only pages about your library in the Overview directory', () => {
+  // 2026-10-24: the six link cards left Overview for homes of their own
+  // (Awards on Home's bar, Trophy Case on Awards, Game Stats on Games, Year
+  // in Review and Library Poster in Settings). Only The Web stays, on People.
+  it('Overview has no directory of links; The Web heads the People tab', async () => {
     const { wrapper } = mountWithPanes()
-    const labels = wrapper.findAll('.insights-link-card').map((c) => c.text())
-    expect(labels).toEqual(['Year in Review', 'Trophy Case', 'Awards', 'Game Stats', 'Library Poster', 'The Web'])
+    expect(wrapper.vm.activeTab).toBe('overview')
+    expect(wrapper.findAll('.insights-link-card')).toHaveLength(0)
+
+    await wrapper.setData({ activeTab: 'people' })
+    const cards = wrapper.findAll('.insights-link-card')
+    expect(cards).toHaveLength(1)
+    expect(cards[0].text()).toContain('The Web')
+    await cards[0].trigger('click')
+    expect(wrapper.vm.$router.push).toHaveBeenCalledWith('/web')
   })
 
   it('opens the tab a link names — the old /stats address sends ?tab=eras', () => {

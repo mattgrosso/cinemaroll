@@ -374,13 +374,13 @@
       <div class="results-actions col-12 md-col-6 d-flex justify-content-between flex-wrap mt-1">
         <div class="btn-group col-12" role="group" aria-label="Button group">
           <!-- Settings (gear) button replaces shorts toggle -->
-          <button class="results-actions-button btn btn-secondary" @click="toggleSettingsPanel" title="Settings" aria-label="Open settings">
+          <button class="results-actions-button chip-settings btn btn-secondary" @click="toggleSettingsPanel" title="Settings" aria-label="Open settings">
             <i class="bi bi-gear"></i>
           </button>
-          <button class="results-actions-button btn btn-info" type="button" @click="goToGames" title="Games" aria-label="Go to games">
+          <button class="results-actions-button chip-games btn btn-info" type="button" @click="goToGames" title="Games" aria-label="Go to games">
             <i class="bi" :class="gamesButtonIcon"/>
           </button>
-          <button class="results-actions-button filtered-count-display btn btn-secondary" @click="toggleCountViewsAverage" title="Toggle count / average / views" aria-label="Toggle between result count, average rating, and view count">
+          <button class="results-actions-button chip-count filtered-count-display btn btn-secondary" @click="toggleCountViewsAverage" title="Toggle count / average / views" aria-label="Toggle between result count, average rating, and view count">
             <span v-if="showAverage">
               <span class="average-label">(avg)</span>
               <span class="average-value">{{averageRating(displayedResults)}}</span>
@@ -396,14 +396,20 @@
             <span v-else-if="quickLinkContext === 'bestPicture'">{{bestPicturesWithRatings.length}}/{{unifiedFilteredResults.length}}</span>
             <span v-else>{{displayedResults.length}}</span>
           </button>
-          <button class="results-actions-button btn btn-info" type="button" @click="goToInsights" title="Insights" aria-label="Go to insights">
+          <button class="results-actions-button chip-insights btn btn-info" type="button" @click="goToInsights" title="Insights" aria-label="Go to insights">
             <i class="bi bi-lightbulb"/>
+          </button>
+          <!-- Awards is a first-class stop (Matt, 2026-10-24: "Awards needs
+               to be a more first-class object ... I go to there all the
+               time"); it used to be one of six link cards on Insights. -->
+          <button class="results-actions-button chip-awards btn btn-sm" type="button" @click="$router.push('/awards')" title="Awards" aria-label="Go to awards">
+            <i class="bi bi-award"/>
           </button>
           <!-- The Film Club takes the lightning bolt's rainbow slot and
                color; the quick-links trigger now lives inside the
                search input's right edge (Matt: "it really
                needs to be a first order page"). -->
-          <button class="results-actions-button btn btn-warning btn-sm" type="button" @click="$router.push('/film-club')" title="Film Club" aria-label="Go to the Film Club">
+          <button class="results-actions-button chip-club btn btn-warning btn-sm" type="button" @click="$router.push('/film-club')" title="Film Club" aria-label="Go to the Film Club">
             <!-- New friend ratings since the club was last opened. Always
                  the OUTLINE club: "I basically wanted it to always be the
                  outline icon not the solid one because that better matches
@@ -418,10 +424,10 @@
           <!-- Shuffle lives inside the quick-links panel now (feedback:
                the extra watchlist button broke the rainbow); watchlist
                takes shuffle's old slot and color. -->
-          <button class="results-actions-button btn btn-info btn-sm" @click="$router.push('/watchlist')" title="Watchlist" aria-label="Go to watchlist">
+          <button class="results-actions-button chip-watchlist btn btn-info btn-sm" @click="$router.push('/watchlist')" title="Watchlist" aria-label="Go to watchlist">
             <i class="bi bi-binoculars watchlist-glyph"/>
           </button>
-          <button class="results-actions-button btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Sort results" aria-label="Sort results">
+          <button class="results-actions-button chip-sort btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Sort results" aria-label="Sort results">
             <i v-if="sortValue === 'rating'" class="bi bi-123"/>
             <i v-if="sortValue === 'watched'" class="bi bi-calendar3"/>
             <i v-if="sortValue === 'release'" class="bi bi-calendar-date"/>
@@ -454,9 +460,9 @@
                Bootstrap 5.3.3 page, 2026-08-26).
                Only the </button> moved. Wrapping the toggle in a <div
                class="dropdown"> — the other way to fix this — would have
-               broken the rainbow: these chips take their colours from
-               .results-actions-button:nth-child(N), and flex: 1 1 0 sits on
-               the button, not on a wrapper. The <ul> is safe here because the
+               broken the rainbow: flex: 1 1 0 sits on the button, not on a
+               wrapper (the colours were by nth-child then too; since
+               2026-10-24 each chip's colour is pinned by a chip-* class). The <ul> is safe here because the
                sort chip is the LAST button in the group, so no chip's index
                moves. -->
             <ul class="dropdown-menu dropdown-menu-end">
@@ -692,6 +698,10 @@
                    2026-09-29, the one entry there not about your library;
                    a new issue still announces itself in .home-notices. -->
               <SettingsSection title="Newsletter" hint="This week's issue, and turning it on or off" to="/newsletter"/>
+              <!-- The occasional keepsakes, beside the newsletter they resemble
+                   (moved from the Insights directory, 2026-10-24). -->
+              <SettingsSection title="Year in Review" hint="Your year in films, as a recap" to="/year-in-review"/>
+              <SettingsSection title="Library Poster" hint="Your whole library as one printable poster" to="/library-poster"/>
               <SettingsSection title="Library" hint="Short films, your rating curve, and personal awards" collapsible :startOpen="false">
 
                 <!-- "I should be able to set a default sort order somewhere in
@@ -6952,43 +6962,46 @@ export default {
               flex-grow: 1.6;
             }
 
-            &:nth-child(1) {
+            /* Each chip's colour is pinned by name, not by position
+               (2026-10-24): adding Awards after Insights would otherwise
+               have shifted every colour after it. */
+            &.chip-settings {
               background-color: #E71D36; /* Red */
               color: white;
             }
 
-            &:nth-child(2) {
+            &.chip-games {
               background-color: #FF9F1C; /* Orange */
               color: black;
             }
 
-            &:nth-child(3) {
+            &.chip-count {
               background-color: #FFD700; /* Yellow */
               color: black;
             }
 
-            &:nth-child(4) {
+            &.chip-insights {
               background-color: #24d776; /* Green */
               color: black;
             }
 
-            &:nth-child(5) {
+            &.chip-awards {
+              background-color: #C9A227; /* Gold, the awards colour */
+              color: black;
+            }
+
+            &.chip-club {
               background-color: #1D8BF1; /* Blue */
               color: black;
             }
 
-            &:nth-child(6) {
+            &.chip-watchlist {
               background-color: #5A189A; /* Indigo */
               color: white;
             }
 
-            &:nth-child(7) {
+            &.chip-sort {
               background-color: #cd7fe8; /* Violet */
-              color: white;
-            }
-
-            &:nth-child(8) {
-              background-color: #00FFFF; /* Cyan */
               color: white;
             }
           }

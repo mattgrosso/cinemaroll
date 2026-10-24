@@ -752,3 +752,17 @@ replaces it, so it can't get stuck), and eleven launch images covering every iPh
 screen iOS 18+ runs on. The same treatment then went to Matt's other home-screen apps.
 iOS caches launch images per home-screen icon, so an existing install may need
 re-adding once to pick them up.
+
+## The Insights directory breaks up (2026-10-24)
+
+Report from Matt on the Overview tab's six link cards: "Awards needs to be a more first-class
+object here. I go to there all the time ... trophy case seems kind of related to awards ...
+Year in Review feels a lot like the newsletter and the library poster ... I like the web, but
+it feels like it's kind of hidden ... game stats ... could just go over to games." He wanted
+the six-tab grid kept. Each card got a home: Awards a gold chip on Home's rainbow bar (beside
+Insights), Trophy Case the first pill on the Awards ceremony strip, Game Stats only on the
+Games hub (which already linked it), The Web a card at the top of the People tab, Year in
+Review and Library Poster Settings rows under the Newsletter. The rainbow bar's colours moved
+from `:nth-child(N)` to per-chip `chip-*` classes so the insert didn't recolour every chip
+after it. Eight chips is ~44px each on a 402px phone; the agreed fallback, if it feels
+cramped, is Awards as a full-width card atop Overview.

@@ -5,7 +5,13 @@
     <!-- Ceremony strip (Matt, 2026-10-07): yours, then every friend who
          publishes awards, then the real ceremonies. Flip through "the
          history of any award that we have access to". -->
-    <div v-if="tabs.length > 1" ref="tabScroller" class="ceremony-scroller">
+    <!-- Trophy Case leads the strip (2026-10-24): it moved here from the
+         Insights directory, beside the awards it's a cousin of. It goes to
+         its own page, so it's an outlined pill, not a tab. -->
+    <div ref="tabScroller" class="ceremony-scroller">
+      <button type="button" class="trophy-case-pill" @click="$router.push('/trophy-case')">
+        <i class="bi bi-trophy"></i> Trophy Case <i class="bi bi-chevron-right"></i>
+      </button>
       <button
         v-for="tab in tabs"
         :key="tab.id"
@@ -324,7 +330,25 @@ export default {
   font-weight: 700;
 }
 
-.ceremony-tab:active {
+.trophy-case-pill {
+  background: transparent;
+  border-radius: 999px;
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.8rem;
+  white-space: nowrap;
+  /* #ffc107 on the page's dark ground is ~11:1. */
+  border: 1px solid #ffc107;
+  color: #ffc107;
+  font-weight: 600;
+
+  .bi-chevron-right {
+    font-size: 0.7rem;
+  }
+}
+
+.ceremony-tab:active,
+.trophy-case-pill:active {
   opacity: 0.7;
 }
 

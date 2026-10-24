@@ -243,7 +243,7 @@ const routes = [
       // Back-link identity: what this screen is called, and where back
       // goes when there is no history to go back to.
       title: 'Year in Review',
-      parent: '/insights',
+      parent: '/',
       requiresLogin: true
     },
     beforeEnter: (to, from, next) => {
@@ -262,7 +262,7 @@ const routes = [
       // Back-link identity: what this screen is called, and where back
       // goes when there is no history to go back to.
       title: 'Trophy Case',
-      parent: '/insights',
+      parent: '/awards',
       requiresLogin: true
     },
     beforeEnter: (to, from, next) => {
@@ -454,7 +454,7 @@ const routes = [
       // Back-link identity: what this screen is called, and where back
       // goes when there is no history to go back to.
       title: 'Awards',
-      parent: '/insights',
+      parent: '/',
       requiresLogin: true
     },
     beforeEnter: (to, from, next) => {
@@ -473,7 +473,7 @@ const routes = [
       // Back-link identity: what this screen is called, and where back
       // goes when there is no history to go back to.
       title: 'Library Poster',
-      parent: '/insights',
+      parent: '/',
       requiresLogin: true
     },
     beforeEnter: (to, from, next) => {
