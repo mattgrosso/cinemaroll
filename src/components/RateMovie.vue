@@ -103,6 +103,7 @@
         :label="field.label"
         :description="field.description"
         :options="field.options"
+        :previous="lastTime(field.key)"
       />
 
       <!-- The score, where you land after answering the questions (bug
@@ -617,6 +618,12 @@ export default {
         text: `${formatScore(Math.abs(delta))} ${up ? 'higher' : 'lower'} than ${since}`
       };
     },
+    // The viewing the "Last time" buttons reveal: the film's most recent one.
+    // None on an edit — the form already opens on that viewing's numbers.
+    lastViewing () {
+      if (this.isEditing || !this.previousEntry) return null;
+      return this.mostRecentRating(this.previousEntry);
+    },
     previousViewings () {
       return getAllRatings(this.previousEntry) || [];
     },
@@ -784,6 +791,14 @@ export default {
       this.headerEditing = null;
     },
     formatScore,
+    lastTime (key) {
+      const viewing = this.lastViewing;
+      if (!viewing) return null;
+      const when = viewing.date
+        ? new Date(viewing.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+        : null;
+      return { value: viewing[key] ?? null, when };
+    },
     shortDate (date) {
       return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     },

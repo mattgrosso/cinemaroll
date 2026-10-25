@@ -47,4 +47,43 @@ describe('RatingSelect', () => {
     const wrapper = factory({ modelValue: null })
     expect(wrapper.find('select').element.value).toBe('')
   })
+
+  // Bug report 2026-10-25: on a re-rate, show what you gave this criterion
+  // last time — but only when asked, never by default.
+  describe('the "Last time" reveal', () => {
+    const previous = { value: 7, when: 'Mar 2024' }
+
+    it('has no button on a first rating', () => {
+      expect(factory().find('.rating-card-previous').exists()).toBe(false)
+    })
+
+    it('hides the old number until tapped, then shows it with its date', async () => {
+      const wrapper = factory({ previous })
+      const button = wrapper.find('.rating-card-previous')
+      expect(button.exists()).toBe(true)
+      expect(button.text()).toBe('Last time')
+      expect(button.text()).not.toContain('7')
+
+      await button.trigger('click')
+      expect(wrapper.find('.rating-card-previous').text()).toBe('Last time (Mar 2024): 7')
+      expect(wrapper.find('.rating-card-previous').attributes('aria-pressed')).toBe('true')
+    })
+
+    it('hides it again on a second tap', async () => {
+      const wrapper = factory({ previous })
+      await wrapper.find('.rating-card-previous').trigger('click')
+      await wrapper.find('.rating-card-previous').trigger('click')
+      expect(wrapper.find('.rating-card-previous').text()).toBe('Last time')
+    })
+
+    it('shows 0 as 0, and a dash when that viewing skipped the criterion', async () => {
+      const zero = factory({ previous: { value: 0, when: null } })
+      await zero.find('.rating-card-previous').trigger('click')
+      expect(zero.find('.rating-card-previous').text()).toBe('Last time: 0')
+
+      const missing = factory({ previous: { value: null, when: 'Mar 2024' } })
+      await missing.find('.rating-card-previous').trigger('click')
+      expect(missing.find('.rating-card-previous').text()).toBe('Last time (Mar 2024): –')
+    })
+  })
 })

@@ -320,3 +320,28 @@ describe('the store guards against a stale edit target', () => {
     expect(store.state.ratingToEdit).toBeNull()
   })
 })
+
+// Bug report 2026-10-25: each criterion can reveal what the most recent
+// viewing gave it. RateMovie decides which viewing that is, and leaves the
+// buttons off entirely when editing (the form already shows those numbers).
+describe('the "Last time" values handed to each criterion', () => {
+  const previousProps = (wrapper) => Object.fromEntries(
+    wrapper.findAllComponents({ name: 'RatingSelect' }).map((c) => [c.props('name'), c.props('previous')])
+  )
+
+  it('come from the most recent viewing, not the first one stored', async () => {
+    // Stored newest-first here, so ratings[0] alone would be the wrong pick.
+    const { wrapper } = mountEditing({ ratings: [firstViewing(), secondViewing()].reverse() })
+    await wrapper.vm.$nextTick()
+    const props = previousProps(wrapper)
+    expect(props.love).toEqual({ value: 10, when: 'Mar 2026' })
+    expect(props.direction).toEqual({ value: 8, when: 'Mar 2026' })
+    expect(props.stickiness).toEqual({ value: 4, when: 'Mar 2026' })
+  })
+
+  it('are not offered when editing a viewing', async () => {
+    const { wrapper } = mountEditing({ ratingToEdit: { dbKey: 'key-555', index: 0 } })
+    await wrapper.vm.$nextTick()
+    expect(Object.values(previousProps(wrapper)).every((p) => p === null)).toBe(true)
+  })
+})
