@@ -41,13 +41,14 @@ describe('the unified notification space', () => {
   it('contains every notification, each rendered nowhere else in Home', () => {
     const section = noticesSection();
 
-    for (const tag of ['<BugResolutionNotice', '<UpdateAvailableBanner', '<StickinessInline', '<TweakInline', '<PersonalAwardsModal']) {
+    for (const tag of ['<BugResolutionNotice', '<NewsletterNotice', '<UpdateAvailableBanner', '<StickinessInline', '<TweakInline', '<PersonalAwardsModal']) {
       expect(section).toContain(tag);
       // Once in the section means once in the whole file.
       expect(home.split(tag)).toHaveLength(2);
     }
 
     expect(section).toContain('prompt-badge-friends');
+    expect(section).toContain('reconcile-prompt');
   });
 
   // "I don't want it above the rainbow bar. It should go below the rainbow"

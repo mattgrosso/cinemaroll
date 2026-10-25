@@ -29,6 +29,8 @@ import { NEWSLETTER_READ_KEY as READ_KEY } from '../assets/javascript/newsletter
 
 export default {
   name: 'NewsletterNotice',
+  // The unread week, or null — for Home's one-at-a-time slot (homeNotices.js).
+  emits: ['notice'],
   data () {
     return { lastRead: null };
   },
@@ -43,6 +45,9 @@ export default {
       if (!this.optedIn || !this.issue?.weekKey) return false;
       return this.issue.weekKey !== this.lastRead;
     },
+    noticeSignature () {
+      return this.unread ? this.issue.weekKey : null;
+    },
     summary () {
       const picks = this.issue?.picks?.length || 0;
       const feature = this.issue?.feature;
@@ -52,6 +57,14 @@ export default {
       // original pieces read "at undefined" (Matt, 2026-10-09).
       if (feature?.title) parts.push(feature.turning ? `${feature.title} at ${feature.turning}` : `a piece on ${feature.title}`);
       return parts.length ? `${parts.join(', plus ')}.` : 'This week’s issue is ready.';
+    }
+  },
+  watch: {
+    noticeSignature: {
+      immediate: true,
+      handler (signature) {
+        this.$emit('notice', signature);
+      }
     }
   },
   created () {

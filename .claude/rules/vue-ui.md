@@ -47,6 +47,16 @@ first attempt at the games scroll-to-top do nothing at all.
   keep their app-vocabulary colours; anything where the app talks about itself
   (updates, bug resolutions, future housekeeping) uses the neutral `-app` accent.
   `homeNotices.test.js` enforces the placement at the source level.
+  **One card at a time (2026-10-25):** "I don't like having like three banners all
+  stacked on top of each other." `src/assets/javascript/homeNotices.js` ranks every
+  notice (`NOTICE_ORDER`: friend request, offline match, update, bug fix, Showtimes,
+  newsletter, then the chores) and Home renders only `currentNotice`. Each notice
+  reports a signature while due; the X hides it per device until tomorrow or until the
+  signature changes (a numeric one, a count, only when it grows). A dismissed chore is
+  skipped by `activeModalType` so the next chore can show; a tapped chore notification
+  clears chore dismissals. A new notice needs a place in `NOTICE_ORDER`, a
+  `.notice-slot` wrapper with the X, and (if it owns its state) an `@notice` emit.
+  `homeNoticeQueue.test.js` guards it.
 
 - **Don't build a feature on a permission the OS can revoke behind your back.**
   Banner tilt parallax was built 2026-08-21 and **removed 2026-08-24**. Read this before

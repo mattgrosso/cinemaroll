@@ -58,6 +58,9 @@ import { fetchUnseenResolutions, markResolutionsSeen } from '../utils/bugResolut
 
 export default {
   name: 'BugResolutionNotice',
+  // Tells Home what this card is about, so the one-at-a-time notice slot
+  // (homeNotices.js) can rank it: the fixes waiting, or null.
+  emits: ['notice'],
   data () {
     return {
       notices: [],
@@ -73,6 +76,12 @@ export default {
     }
   },
   watch: {
+    notices: {
+      immediate: true,
+      handler (notices) {
+        this.$emit('notice', notices.length ? notices.map((notice) => notice.id).join(',') : null);
+      }
+    },
     ready: {
       immediate: true,
       async handler (ready) {

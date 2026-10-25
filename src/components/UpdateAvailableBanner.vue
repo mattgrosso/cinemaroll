@@ -34,6 +34,9 @@ import { trackEvent } from '../utils/usage.js';
 // the app talking about itself, not movie homework.
 export default {
   name: 'UpdateAvailableBanner',
+  // The version waiting, or null — for Home's one-at-a-time slot
+  // (homeNotices.js). A dismissed update comes back for the NEXT version.
+  emits: ['notice'],
   data () {
     return {
       updating: false,
@@ -44,6 +47,10 @@ export default {
     };
   },
   computed: {
+    noticeSignature () {
+      if (!this.$store.state.updateAvailable) return null;
+      return this.$store.state.updateTargetBundle || 'update';
+    },
     // Also true while App.vue applies the update on its own (bug report
     // 2026-09-30: a Refresh button during the automatic update left Matt
     // wondering whether to tap it, and a tap only made it slower).
@@ -52,6 +59,14 @@ export default {
     },
     isDeferred () {
       return this.deferred || Boolean(this.$store.state.updateDeferred);
+    }
+  },
+  watch: {
+    noticeSignature: {
+      immediate: true,
+      handler (signature) {
+        this.$emit('notice', signature);
+      }
     }
   },
   methods: {

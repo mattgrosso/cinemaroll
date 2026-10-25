@@ -254,15 +254,6 @@
         </div>
       </div>
 
-    <!-- Movies rated offline that still need to be matched to a real TMDB
-         movie (see AddRating.js/ReconcilePlaceholder.vue). Only actionable
-         once online, since reconciliation needs a TMDB search. -->
-    <div v-if="pendingReconciliations.length && $store.state.isOnline" class="pending-reconciliation-banner mx-auto my-2">
-      <router-link :to="`/reconcile/${firstPendingReconciliationDbKey}`">
-        {{ pendingReconciliations.length }} movie<span v-if="pendingReconciliations.length > 1">s</span> rated offline need{{ pendingReconciliations.length > 1 ? '' : 's' }} a match — Review
-      </router-link>
-    </div>
-
     <!-- Active Filter Chips - only show when filters are active -->
     <div v-if="activeFiltersMinusTemps.length || activeQuickLinkList !== 'title'" class="active-filters-section mx-auto my-2">
       <div class="d-flex flex-wrap align-items-center">
@@ -352,13 +343,11 @@
          is the mistake the friend-request card had to be rescued from on
          2026-08-19: whether something needs your attention has nothing to
          do with what the results list is doing. When there are no results
-         the rainbow hides and the stack simply sits under the search bar.
+         the rainbow hides and the space simply sits under the search bar.
 
-         Order is deliberate: a person waiting comes first, then news about
-         your own reports, then app housekeeping, and the movie homework
-         last — the chores expand in place into working UIs, so they sit
-         closest to the library they act on. One chore at a time, chosen by
-         activeModalType. Shared look in scss/_prompt-card.scss. -->
+         Since 2026-10-25 it shows ONE card at a time, in the priority order
+         homeNotices.js keeps (see the comment on the section itself).
+         Shared look in scss/_prompt-card.scss. -->
     <!-- The rainbow bar, above the notification space (Matt, 2026-08-21:
          "I don't want it above the rainbow bar. It should go below the
          rainbow"). Moved out of results-exist so it can sit above the
@@ -560,6 +549,15 @@
       </div>
     </div>
 
+    <!-- ONE notice at a time (report 2026-10-25: "I don't like having like
+         three banners all stacked on top of each other"). Every card below
+         is ranked by homeNotices.js and only `currentNotice` shows; its X
+         hides it on this device until tomorrow or until something new
+         arrives, and the next one takes its place. The component cards stay
+         mounted under v-show — they report what they're about through
+         @notice, and a chore half-done keeps its state while a more urgent
+         card is up. The X hides itself while a chore is expanded into its
+         working UI (no .prompt-card left in the slot). -->
     <section class="home-notices">
       <!-- Friend requests: prominent ON PURPOSE. Bug report, 2026-08-19:
            "unless I think to look there I won't ever know that they're
@@ -567,26 +565,53 @@
            answered, so the card now answers the request itself — Accept, or
            Not now (hides it here for a few days; the Film Club inbox keeps
            it) — instead of only linking to Film Club. -->
-      <div
-        v-if="friendRequestsOnCard.length"
-        class="prompt-card friend-request-prompt"
-        @click="$router.push('/film-club')"
-      >
-        <span class="prompt-badge prompt-badge-friends"><i class="bi bi-people-fill"></i></span>
-        <span class="prompt-body">
-          <span class="prompt-label">Film Club</span>
-          <p class="prompt-text">{{ friendRequestBannerText }}</p>
-          <p class="friend-request-explainer">Friends see each other's ratings in Film Club.</p>
-          <span
-            v-for="request in friendRequestsOnCard"
-            :key="request.key"
-            class="friend-request-row"
-          >
-            <span v-if="friendRequestsOnCard.length > 1" class="friend-request-name">{{ request.name }}</span>
-            <button type="button" class="friend-request-accept" @click.stop="acceptFriendRequestFromCard(request.key)">Accept</button>
-            <button type="button" class="friend-request-later" @click.stop="snoozeFriendRequestFromCard(request.key)">Not now</button>
+      <div v-if="currentNotice === 'friendRequest'" class="notice-slot">
+        <div
+          class="prompt-card friend-request-prompt"
+          @click="$router.push('/film-club')"
+        >
+          <span class="prompt-badge prompt-badge-friends"><i class="bi bi-people-fill"></i></span>
+          <span class="prompt-body">
+            <span class="prompt-label">Film Club</span>
+            <p class="prompt-text">{{ friendRequestBannerText }}</p>
+            <p class="friend-request-explainer">Friends see each other's ratings in Film Club.</p>
+            <span
+              v-for="request in friendRequestsOnCard"
+              :key="request.key"
+              class="friend-request-row"
+            >
+              <span v-if="friendRequestsOnCard.length > 1" class="friend-request-name">{{ request.name }}</span>
+              <button type="button" class="friend-request-accept" @click.stop="acceptFriendRequestFromCard(request.key)">Accept</button>
+              <button type="button" class="friend-request-later" @click.stop="snoozeFriendRequestFromCard(request.key)">Not now</button>
+            </span>
           </span>
-        </span>
+        </div>
+        <button type="button" class="notice-dismiss" aria-label="Hide this for today" title="Hide for today" @click="dismissCurrentNotice"><i class="bi bi-x-lg"></i></button>
+      </div>
+
+      <!-- Movies rated offline that still need to be matched to a real TMDB
+           movie (see AddRating.js/ReconcilePlaceholder.vue). Only actionable
+           once online, since reconciliation needs a TMDB search. -->
+      <div v-if="currentNotice === 'reconcile'" class="notice-slot">
+        <div class="prompt-card reconcile-prompt" @click="$router.push(`/reconcile/${firstPendingReconciliationDbKey}`)">
+          <span class="prompt-badge prompt-badge-app"><i class="bi bi-wifi-off"></i></span>
+          <span class="prompt-body">
+            <span class="prompt-label">Rated offline</span>
+            <p class="prompt-text">{{ pendingReconciliations.length }} movie<span v-if="pendingReconciliations.length > 1">s</span> rated offline need{{ pendingReconciliations.length > 1 ? '' : 's' }} a match.</p>
+            <a class="prompt-action prompt-action-app" @click.stop="$router.push(`/reconcile/${firstPendingReconciliationDbKey}`)">Review</a>
+          </span>
+        </div>
+        <button type="button" class="notice-dismiss" aria-label="Hide this for today" title="Hide for today" @click="dismissCurrentNotice"><i class="bi bi-x-lg"></i></button>
+      </div>
+
+      <div v-show="currentNotice === 'update'" class="notice-slot">
+        <UpdateAvailableBanner @notice="reportNotice('update', $event)"/>
+        <button type="button" class="notice-dismiss" aria-label="Hide this for today" title="Hide for today" @click="dismissCurrentNotice"><i class="bi bi-x-lg"></i></button>
+      </div>
+
+      <div v-show="currentNotice === 'bugFix'" class="notice-slot">
+        <BugResolutionNotice @notice="reportNotice('bugFix', $event)"/>
+        <button type="button" class="notice-dismiss" aria-label="Hide this for today" title="Hide for today" @click="dismissCurrentNotice"><i class="bi bi-x-lg"></i></button>
       </div>
 
       <!-- Showtimes films on the icon badge. Bug report, 2026-10-06: with a
@@ -595,53 +620,60 @@
            only the Watchlist's card (one tap deeper) said anything. Same
            number as the badge (showtimesBadgeCount); dismissing or
            snoozing the films clears both. -->
-      <div
-        v-if="showtimesBadgeCount"
-        class="prompt-card showtimes-prompt"
-        @click="$router.push('/showtimes')"
-      >
-        <span class="prompt-badge prompt-badge-showtimes"><i class="bi bi-ticket-perforated"></i></span>
-        <span class="prompt-body">
-          <span class="prompt-label">Showtimes</span>
-          <p class="prompt-text">{{ showtimesPromptText }}</p>
-          <a class="prompt-action prompt-action-showtimes" @click.stop="$router.push('/showtimes')">See them</a>
-        </span>
+      <div v-if="currentNotice === 'showtimes'" class="notice-slot">
+        <div
+          class="prompt-card showtimes-prompt"
+          @click="$router.push('/showtimes')"
+        >
+          <span class="prompt-badge prompt-badge-showtimes"><i class="bi bi-ticket-perforated"></i></span>
+          <span class="prompt-body">
+            <span class="prompt-label">Showtimes</span>
+            <p class="prompt-text">{{ showtimesPromptText }}</p>
+            <a class="prompt-action prompt-action-showtimes" @click.stop="$router.push('/showtimes')">See them</a>
+          </span>
+        </div>
+        <button type="button" class="notice-dismiss" aria-label="Hide this for today" title="Hide for today" @click="dismissCurrentNotice"><i class="bi bi-x-lg"></i></button>
       </div>
 
-      <BugResolutionNotice/>
+      <div v-show="currentNotice === 'newsletter'" class="notice-slot">
+        <NewsletterNotice @notice="reportNotice('newsletter', $event)"/>
+        <button type="button" class="notice-dismiss" aria-label="Hide this for today" title="Hide for today" @click="dismissCurrentNotice"><i class="bi bi-x-lg"></i></button>
+      </div>
 
-      <NewsletterNotice/>
-
-      <UpdateAvailableBanner/>
-
-      <StickinessInline
-        :allEntriesWithFlatKeywordsAdded="allEntriesWithFlatKeywordsAdded"
-        :showStickinessModal="showStickinessModal"
-        :autoOpen="choreOpenIsFor('stickiness')"
-        :now="promptNow"
-        @stickiness-updated="onStickinessUpdated"
-      />
-      <TweakInline
-        :allEntriesWithFlatKeywordsAdded="allEntriesWithFlatKeywordsAdded"
-        :showTweakModal="showTweakModal"
-        :autoOpen="choreOpenIsFor('tieBreak')"
-        @tweak-updated="onTweakUpdated"
-      />
-      <!-- Banner-only on Home: tapping the "year is ready" notice navigates
-           to /awards (the overlay modal is retired — it "always feels a
-           little bit janky"). No :selectedYear here, deliberately — see
-           PersonalAwardsModal for why passing the persisted daily year
-           through the explicit-intent override kept the banner naming a
-           finished year. -->
-      <PersonalAwardsModal
-        v-if="showAwardsModal"
-        :allEntriesWithFlatKeywordsAdded="allEntriesWithFlatKeywordsAdded"
-        :personalAwardName="personalAwardName"
-        :awardNameWithThe="getAwardNameWithThe()"
-        :awardNameSingular="getAwardNameSingular()"
-        :autoOpen="awardsPromptState === 'forced' || choreOpenIsFor('awards')"
-        :navigateOnOpen="true"
-      />
+      <!-- The chores. activeModalType already names at most one of them
+           (and skips any put away for today); they show only when nothing
+           above outranks them. -->
+      <div v-show="currentNotice && currentNotice === activeModalType" class="notice-slot">
+        <StickinessInline
+          :allEntriesWithFlatKeywordsAdded="allEntriesWithFlatKeywordsAdded"
+          :showStickinessModal="showStickinessModal"
+          :autoOpen="choreOpenIsFor('stickiness')"
+          :now="promptNow"
+          @stickiness-updated="onStickinessUpdated"
+        />
+        <TweakInline
+          :allEntriesWithFlatKeywordsAdded="allEntriesWithFlatKeywordsAdded"
+          :showTweakModal="showTweakModal"
+          :autoOpen="choreOpenIsFor('tieBreak')"
+          @tweak-updated="onTweakUpdated"
+        />
+        <!-- Banner-only on Home: tapping the "year is ready" notice navigates
+             to /awards (the overlay modal is retired — it "always feels a
+             little bit janky"). No :selectedYear here, deliberately — see
+             PersonalAwardsModal for why passing the persisted daily year
+             through the explicit-intent override kept the banner naming a
+             finished year. -->
+        <PersonalAwardsModal
+          v-if="showAwardsModal"
+          :allEntriesWithFlatKeywordsAdded="allEntriesWithFlatKeywordsAdded"
+          :personalAwardName="personalAwardName"
+          :awardNameWithThe="getAwardNameWithThe()"
+          :awardNameSingular="getAwardNameSingular()"
+          :autoOpen="awardsPromptState === 'forced' || choreOpenIsFor('awards')"
+          :navigateOnOpen="true"
+        />
+        <button type="button" class="notice-dismiss" aria-label="Hide this for today" title="Hide for today" @click="dismissCurrentNotice"><i class="bi bi-x-lg"></i></button>
+      </div>
     </section>
 
     <!-- Brand new (0-rated) user: a short welcome, then suggestions shown
@@ -1723,6 +1755,7 @@ import TweakInline from "./TweakInline.vue";
 import StickinessInline from "./StickinessInline.vue";
 import PersonalAwardsModal from "./PersonalAwardsModal.vue";
 import BugResolutionNotice from "./BugResolutionNotice.vue";
+import { pickNotice, isNoticeDismissed, dismissNotice, clearChoreDismissals, readNoticeDismissals, writeNoticeDismissals } from '../assets/javascript/homeNotices.js';
 import NewsletterNotice from './NewsletterNotice.vue';
 import UpdateAvailableBanner from "./UpdateAvailableBanner.vue";
 import RatingCurveSettings from "./RatingCurveSettings.vue";
@@ -1987,6 +2020,10 @@ export default {
       // app comes back to the foreground, and on a chore-notification tap.
       promptNow: Date.now(),
       friendRequestSnoozes: readFriendRequestSnoozes(),
+      // The notice cards that own their own state report it here (@notice);
+      // see homeNotices.js. Dismissals are per-device, like the snoozes.
+      noticeReports: { update: null, bugFix: null, newsletter: null },
+      noticeDismissals: readNoticeDismissals(),
       letterboxdOverrides: {},
       letterboxdUserData: null,
       loadMoreObserver: null, // IntersectionObserver for infinite-scroll result loading
@@ -4043,23 +4080,44 @@ export default {
     showResultsList () {
       return Boolean(this.paginatedSortedResults.length) || Boolean(this.activeListChip) || this.activeQuickLinkList !== "title";
     },
+    // What each notice is about right now, or null when it isn't due —
+    // ranked by homeNotices.js, which picks the one card Home shows.
+    noticeSignatures () {
+      const signatures = {
+        friendRequest: this.friendRequestsOnCard.length
+          ? this.friendRequestsOnCard.map((request) => request.key).sort().join(',')
+          : null,
+        reconcile: (this.pendingReconciliations.length && this.$store.state.isOnline) ? this.pendingReconciliations.length : null,
+        showtimes: this.showtimesBadgeCount || null,
+        ...this.noticeReports
+      };
+      if (this.activeModalType) signatures[this.activeModalType] = this.activeModalType;
+      return signatures;
+    },
+    currentNotice () {
+      return pickNotice(this.noticeSignatures, this.noticeDismissals, this.promptNow);
+    },
     // Determine which modal should be active (eliminates circular dependencies)
     activeModalType () {
       // Check forced states first (highest priority)
-      if (this.stickinessPromptState === 'forced') {
+      // A chore put away with its X counts as off for today, forced or not —
+      // the X is the user's latest word — so the next chore due can take the
+      // slot. A tournament in progress stays saved and comes back tomorrow.
+      const dismissed = (type) => isNoticeDismissed(this.noticeDismissals, type, type, this.promptNow);
+      if (this.stickinessPromptState === 'forced' && !dismissed('stickiness')) {
         return 'stickiness';
       }
-      if (this.tieBreakPromptState === 'forced') {
+      if (this.tieBreakPromptState === 'forced' && !dismissed('tieBreak')) {
         return 'tieBreak';
       }
-      if (this.awardsPromptState === 'forced') {
+      if (this.awardsPromptState === 'forced' && !dismissed('awards')) {
         return 'awards';
       }
 
       // Check disabled states
-      const stickinessDisabled = this.stickinessPromptState === 'disabled';
-      const tieBreakDisabled = this.tieBreakPromptState === 'disabled';
-      const awardsDisabled = this.awardsPromptState === 'disabled';
+      const stickinessDisabled = this.stickinessPromptState === 'disabled' || dismissed('stickiness');
+      const tieBreakDisabled = this.tieBreakPromptState === 'disabled' || dismissed('tieBreak');
+      const awardsDisabled = this.awardsPromptState === 'disabled' || dismissed('awards');
 
       // Bug report, 2026-08-19: "Sometimes the prompt on the home screen will
       // tell me that I need to do some tiebreakers and then as soon as I
@@ -4448,6 +4506,18 @@ export default {
     snoozeFriendRequestFromCard (key) {
       this.friendRequestSnoozes = snoozeFriendRequest(key);
     },
+    reportNotice (id, signature) {
+      if (this.noticeReports[id] === signature) return;
+      this.noticeReports = { ...this.noticeReports, [id]: signature ?? null };
+    },
+    // The X on the card on screen: hidden here until tomorrow, or until it
+    // has something new to say. The next notice in line shows at once.
+    dismissCurrentNotice () {
+      const id = this.currentNotice;
+      if (!id) return;
+      this.noticeDismissals = dismissNotice(this.noticeDismissals, id, this.noticeSignatures[id], this.promptNow);
+      writeNoticeDismissals(this.noticeDismissals);
+    },
     /**
      * Opened from a chore notification (`?open=<chore>`, set by the push
      * Lambda): expand the prompt rather than just showing its card, and put
@@ -4500,6 +4570,14 @@ export default {
       // card whose prompt is on screen, and the prompt is only on screen if
       // the queue is non-empty.
       this.refreshPromptClock();
+
+      // Tapping a chore notification asks for the chores, even ones put away
+      // with the X earlier today.
+      const cleared = clearChoreDismissals(this.noticeDismissals);
+      if (Object.keys(cleared).length !== Object.keys(this.noticeDismissals).length) {
+        this.noticeDismissals = cleared;
+        writeNoticeDismissals(cleared);
+      }
 
       // Flip rather than assign. The cards open off a watcher on `autoOpen`,
       // so a second notification in the same session — arriving while the
@@ -6813,6 +6891,47 @@ export default {
 </script>
 
 <style lang="scss">
+/* The one-at-a-time notice slot (2026-10-25). Unscoped: the cards inside
+   belong to child components. The X sits in the card's top-right corner,
+   40px for a thumb, and the card's text keeps clear of it. Once a chore
+   expands into its working UI there is no .prompt-card in the slot, and
+   the X goes away with it. */
+.notice-slot {
+  position: relative;
+
+  /* Three classes deep to outrank each card's own scoped padding. */
+  .home-notices & .prompt-card {
+    padding-right: 2.75rem;
+  }
+
+  &:not(:has(.prompt-card)) .notice-dismiss {
+    display: none;
+  }
+}
+
+.notice-dismiss {
+  align-items: center;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: #ccc;
+  display: flex;
+  font-size: 0.85rem;
+  height: 40px;
+  justify-content: center;
+  padding: 0;
+  position: absolute;
+  right: 0.15rem;
+  /* Clears the card's 0.25rem collapse-partner top margin. */
+  top: 0.3rem;
+  width: 40px;
+
+  &:active {
+    background: #2e2e2e;
+    color: #fff;
+  }
+}
+
 /* Brief marker on the row you jumped to via a rank badge. Without it you
    arrive at a wall of posters with no idea which one you came for. Purely a
    box-shadow animation - nothing about the layout changes, so the list does
@@ -7657,23 +7776,6 @@ export default {
 }
 .did-you-mean-link:active {
   /* Mobile-first: no-hover affordance, visible press feedback */
-  opacity: 0.7;
-}
-.pending-reconciliation-banner {
-  background-color: #332701;
-  border: 1px solid #ffc107;
-  border-radius: 4px;
-  padding: 0.5rem 0.75rem;
-  text-align: center;
-  max-width: 500px;
-
-  a {
-    color: #ffe69c;
-    font-weight: 600;
-    text-decoration: underline;
-  }
-}
-.pending-reconciliation-banner a:active {
   opacity: 0.7;
 }
 .signed-in-as {
