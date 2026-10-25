@@ -1361,3 +1361,64 @@ describe('the Watchlist tabs', () => {
   });
 });
 
+
+// Bug report, 2026-10-25: "It's easy for streaming movies to just go by more
+// or less unnoticed. Let's add a watch list of popular movies that went
+// straight to streaming recently."
+describe('the "Went straight to streaming" row', () => {
+  const details = {
+    500: { release_dates: { results: [{ iso_3166_1: 'US', release_dates: [{ type: 2 }, { type: 4 }] }] }, 'watch/providers': { results: { US: { flatrate: [{ provider_name: 'Netflix', display_priority: 0 }] } } } },
+    501: { release_dates: { results: [{ iso_3166_1: 'US', release_dates: [{ type: 3 }, { type: 4 }] }] }, 'watch/providers': { results: { US: { flatrate: [{ provider_name: 'Peacock', display_priority: 0 }] } } } }
+  };
+  const impl = (url) => {
+    if (url.includes('/discover/movie') && url.includes('watch_region=US')) {
+      if (!url.includes('page=1')) return Promise.resolve({ data: { results: [] } });
+      return Promise.resolve({
+        data: {
+          results: [
+            { id: 500, title: 'Streaming Original', release_date: '2026-06-01', vote_count: 900, vote_average: 7.1 },
+            { id: 501, title: 'Big Theatrical Hit', release_date: '2026-03-01', vote_count: 5000, vote_average: 7.8 }
+          ]
+        }
+      });
+    }
+    const detail = url.match(/\/movie\/(\d+)\?.*append_to_response=release_dates/);
+    if (detail) return Promise.resolve({ data: details[detail[1]] });
+    return tmdbImpl(url);
+  };
+  const section = (wrapper) => wrapper.findAll('.watchlist-section').find((s) => s.text().includes('Went straight to streaming'));
+
+  beforeEach(() => {
+    axios.get.mockReset();
+    axios.get.mockImplementation(impl);
+  });
+
+  it('shows recent streaming films that never opened wide, naming the service', async () => {
+    const { wrapper } = factory();
+    await flushPromises();
+    const row = section(wrapper);
+    expect(row).toBeTruthy();
+    expect(row.text()).toContain('never in wide release');
+    const names = row.findAll('.watchlist-card').map((card) => card.attributes('aria-label'));
+    expect(names).toEqual(['Streaming Original']);
+    expect(row.text()).toContain('On Netflix');
+  });
+
+  it('remembers each release check, so a return visit asks only discover', async () => {
+    factory();
+    await flushPromises();
+    axios.get.mockClear();
+    factory();
+    await flushPromises();
+    const detailCalls = axios.get.mock.calls.filter(([url]) => url.includes('append_to_response=release_dates'));
+    expect(detailCalls).toHaveLength(0);
+  });
+
+  it('records what it showed for the learning loop, under its own name', async () => {
+    const dispatch = vi.fn();
+    factory({ dispatch });
+    await flushPromises();
+    const recorded = dispatch.mock.calls.find(([name]) => name === 'recordWatchlistSuggestions')?.[1];
+    expect(recorded.streaming).toEqual([500]);
+  });
+});

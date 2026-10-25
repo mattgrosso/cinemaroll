@@ -317,7 +317,8 @@
     <section v-for="section in rankedSections" :key="section.key" class="watchlist-section">
       <h2 class="section-title">{{ section.title }}</h2>
       <p class="section-caption">
-        Based on {{ section.names.join(', ') }}.
+        <template v-if="section.caption">{{ section.caption }}</template>
+        <template v-else>Based on {{ section.names.join(', ') }}.</template>
         <span v-if="section.record" class="section-record">{{ section.record.hits }} of {{ section.record.suggested }} watched</span>
       </p>
       <p v-if="section.loading" class="section-loading">Looking up filmographies&hellip;</p>
@@ -389,7 +390,7 @@ import { memoByIdentity } from '../utils/memoByIdentity.js';
 const friendPicksMemo = memoByIdentity((library, profiles) => friendsLoveUnseen(library, getRating, profiles));
 import { rankSections, sourceSummary } from '../assets/javascript/recommendationStats.js';
 import { crowdRating } from '../assets/javascript/letterboxdCompare.js';
-import { rewatchCandidates, anotherShotCandidates, nearThresholdYears, favoritePeople, peopleYouRateHigher, rankWatchlistCandidates, dailyPick, ratedTmdbIds, topRatedSeeds, tasteProfile, puntKeyFor, nextPunt, dismissPunt, isPunted, PEOPLE_PER_SECTION, MIN_PEOPLE_PER_SECTION } from '../assets/javascript/discover.js';
+import { rewatchCandidates, anotherShotCandidates, nearThresholdYears, favoritePeople, peopleYouRateHigher, rankWatchlistCandidates, rankStraightToStreaming, streamingCheck, streamingWindowStart, dailyPick, ratedTmdbIds, topRatedSeeds, tasteProfile, puntKeyFor, nextPunt, dismissPunt, isPunted, PEOPLE_PER_SECTION, MIN_PEOPLE_PER_SECTION } from '../assets/javascript/discover.js';
 import { awardsYearThreshold } from '../assets/javascript/personalAwards.js';
 import { formatScore } from '../assets/javascript/formatScore.js';
 import { includeShortsSetting, SHORT_RUNTIME } from '../assets/javascript/shorts.js';
@@ -400,7 +401,7 @@ import { buildCatalog, typeaheadEntries } from '../assets/javascript/catalog.js'
 import { rankTypeahead, describeSuggestion } from '../assets/javascript/searchSuggestions.js';
 import { postToAi } from '../utils/aiRequest.js';
 import { rememberedPerson, rememberPerson } from '../utils/personIdCache.js';
-import { peopleCredits, filmRecommendations, trimForWatchlist } from '../assets/javascript/watchlistLookups.js';
+import { peopleCredits, filmRecommendations, streamingChecks, trimForWatchlist } from '../assets/javascript/watchlistLookups.js';
 import { hasUnseenShowtimes, SHOWTIMES_SEEN_KEY } from '../assets/javascript/showtimesUnread.js';
 
 // The X on the suggestion rows (bug report 2026-10-08): gone for good, where
@@ -418,6 +419,10 @@ const PUNT_AFTER_HAT_MS = 4000;
 // Bug report 2026-09-20 — the directors row was empty because its twelve
 // were all already in a hat, and the rows never changed between visits.
 const RANK_POOL = 36;
+
+// "Went straight to streaming" checks each candidate's release dates; on a
+// first open (nothing cached yet) they go out this many at a time.
+const STREAMING_CHECK_BATCH = 10;
 
 // The performer pool is resolved against TMDB (for gender and id) in rank
 // order, this many names at a time, until both the actors and the
@@ -517,6 +522,8 @@ export default {
       selectedYear: null,
       gemMovies: [],
       gemsLoading: true,
+      streamingMovies: [],
+      streamingLoading: true,
       yearsLoading: true,
       directorMovies: [],
       actorMovies: [],
@@ -834,8 +841,18 @@ export default {
           names: this.topTasteGenres.map((g) => g.name),
           movies: this.showing(this.gemMovies),
           loading: this.gemsLoading
+        },
+        {
+          // Built on the calendar, not on names, so it says what it is
+          // instead of "Based on …".
+          key: 'streaming',
+          title: 'Went straight to streaming',
+          caption: 'Popular this past year, never in wide release in theaters. Ranked for your taste.',
+          names: [],
+          movies: this.showing(this.streamingMovies),
+          loading: this.streamingLoading
         }
-      ].filter((section) => section.names.length >= (PEOPLE_SECTION_KEYS.has(section.key) ? MIN_PEOPLE_PER_SECTION : 1));
+      ].filter((section) => section.caption || section.names.length >= (PEOPLE_SECTION_KEYS.has(section.key) ? MIN_PEOPLE_PER_SECTION : 1));
     },
     // Order by what has actually earned watches (recommendationStats.js).
     // Sources with no history sit at the neutral prior, so a new section
@@ -849,7 +866,8 @@ export default {
         actresses: 'Starring an actress you love',
         underrated: 'Starring someone you rate higher than most people do',
         similar: 'Like one of your favorites',
-        gems: 'A hidden gem'
+        gems: 'A hidden gem',
+        streaming: 'Went straight to streaming'
       };
     },
     rankedSections () {
@@ -1110,7 +1128,10 @@ export default {
         poster: media.poster_path ? `https://image.tmdb.org/t/p/w342${media.poster_path}` : null,
         // Only ever a reason to be here — never the title, which the poster
         // is already carrying.
-        metaLines: [media.note || (media.matchPct ? `${media.matchPct}% match` : null)].filter(Boolean),
+        // The streaming row names where to find it, then the match.
+        metaLines: (media.service
+          ? [`On ${media.service}`, media.matchPct ? `${media.matchPct}% match` : null]
+          : [media.note || (media.matchPct ? `${media.matchPct}% match` : null)]).filter(Boolean),
         source: media
       }));
     },
@@ -1208,6 +1229,7 @@ export default {
     async buildWatchlists () {
       if (!this.$store.state.isOnline) {
         this.gemsLoading = false;
+        this.streamingLoading = false;
         this.yearsLoading = false;
         this.directorsLoading = false;
         this.actorsLoading = false;
@@ -1230,13 +1252,14 @@ export default {
       this.actorNames = performers.filter((p) => p.gender === 2).slice(0, PEOPLE_PER_SECTION);
       this.underratedNames = await this.resolvePerformers(this.underratedPerformers);
 
-      const [directorRow, actressMovies, actorMovies, underratedMovies, similarMovies, gemMovies] = await Promise.all([
+      const [directorRow, actressMovies, actorMovies, underratedMovies, similarMovies, gemMovies, streamingMovies] = await Promise.all([
         this.moviesFromPeopleUntilFull(this.favoriteDirectorPool, 'crew', rated),
         this.moviesFromPeople(this.actressNames, 'cast', rated),
         this.moviesFromPeople(this.actorNames, 'cast', rated),
         this.moviesFromPeople(this.underratedNames, 'cast', rated),
         this.moviesLikeFavorites(this.recommendationSeeds, rated),
-        this.hiddenGems(this.topTasteGenres, rated)
+        this.hiddenGems(this.topTasteGenres, rated),
+        this.straightToStreaming(rated)
       ]);
       // Each row's runtimes were looked up while it was ranked (rankFeatures),
       // so no short flashes up and then vanishes. Hidden Gems and the year
@@ -1244,6 +1267,8 @@ export default {
       await yearLoaded;
       this.gemMovies = gemMovies;
       this.gemsLoading = false;
+      this.streamingMovies = streamingMovies;
+      this.streamingLoading = false;
       const directorMovies = directorRow.movies;
       this.directorNames = directorRow.people;
       this.directorMovies = directorMovies;
@@ -1280,6 +1305,7 @@ export default {
           actors: this.showing(actorMovies).map((movie) => movie.id),
           similar: this.showing(similarMovies).map((movie) => movie.id),
           gems: this.showing(gemMovies).map((movie) => movie.id),
+          streaming: this.showing(streamingMovies).map((movie) => movie.id),
           friends: this.friendPickMedia.map((movie) => movie.id)
         });
       } catch (error) {
@@ -1324,6 +1350,57 @@ export default {
         genre_ids: movie.genre_ids
       }));
       return rankWatchlistCandidates(candidates, rated, Date.now(), { cap: RANK_POOL, profile: this.taste, exclude: this.skipFromSuggestions });
+    },
+    /**
+     * "Went straight to streaming" (bug report 2026-10-25). Discover finds
+     * the past year's popular films on a US subscription service; each one
+     * not already rated, hatted or dismissed is then checked for a wide US
+     * theatrical release (discover.js streamingCheck). The checks are kept
+     * on the device for a week, so a normal open asks only for the three
+     * discover pages.
+     */
+    async straightToStreaming (rated) {
+      const apiKey = process.env.VUE_APP_TMDB_API_KEY;
+      const today = new Date().toISOString().slice(0, 10);
+      const pages = await Promise.all([1, 2, 3].map(async (page) => {
+        try {
+          const response = await axios.get(`https://api.themoviedb.org/3/discover/movie?api_key=${apiKey}&watch_region=US&with_watch_monetization_types=flatrate&primary_release_date.gte=${streamingWindowStart()}&primary_release_date.lte=${today}&sort_by=popularity.desc&vote_count.gte=20&without_genres=10770&page=${page}${this.featureLengthParam()}`);
+          return response.data?.results || [];
+        } catch {
+          return [];
+        }
+      }));
+      const candidates = pages.flat().filter((movie) => movie?.id != null && !rated.has(movie.id) && !this.skipFromSuggestions(movie));
+      const checks = new Map();
+      const missing = [];
+      candidates.forEach((movie) => {
+        const known = streamingChecks.get(movie.id);
+        if (known) checks.set(movie.id, known); else missing.push(movie.id);
+      });
+      const fresh = [];
+      for (let start = 0; start < missing.length; start += STREAMING_CHECK_BATCH) {
+        await Promise.all(missing.slice(start, start + STREAMING_CHECK_BATCH).map(async (id) => {
+          try {
+            const { data } = await axios.get(`https://api.themoviedb.org/3/movie/${id}?api_key=${apiKey}&append_to_response=release_dates,watch/providers`);
+            const check = streamingCheck(data);
+            checks.set(id, check);
+            fresh.push([id, check]);
+          } catch {
+            // Left unchecked: the film sits out this visit and is asked about next time.
+          }
+        }));
+      }
+      streamingChecks.setMany(fresh);
+      const trimmed = candidates.map((movie) => ({
+        id: movie.id,
+        title: movie.title,
+        poster_path: movie.poster_path,
+        release_date: movie.release_date,
+        vote_average: movie.vote_average,
+        vote_count: movie.vote_count,
+        genre_ids: movie.genre_ids
+      }));
+      return rankStraightToStreaming(trimmed, checks, rated, Date.now(), { cap: RANK_POOL, profile: this.taste, exclude: this.skipFromSuggestions });
     },
     // Per near-threshold year: TMDB discover, well-voted first, then the
     // shared unseen-only quality ranking.

@@ -622,6 +622,15 @@ rows, still ordered by `rankSections`), **Club** (Your Film Club loves these, on
 these another shot), **Years** (Get a year to N), **Search** (Ask for something,
 Someone's filmography). Each tab has an empty line when it has nothing.
 
+**Went straight to streaming (2026-10-25)** is a For You row (learning-loop key
+`streaming`): discover's past-year popular films on a US subscription service, minus
+any with a US wide theatrical release (type 3). Limited runs (type 2) stay — that's
+how Netflix-style originals qualify for awards. Each film's check (one details call
+with release_dates + watch/providers) is kept a week in `streamingChecks`
+(`watchlistLookups.js`). A section with a `caption` replaces "Based on …" and skips
+the min-names rule; a movie with `service` gets "On <service>" over its match %.
+`straightToStreaming.test.js`.
+
 Panels are **`v-show`, not `v-if`**, unlike Film Club: every row still loads on
 arrival as it did on the long page, and flipping tabs keeps typed text, a row's
 scroll and a filmography in progress. The panels are plain divs (no `d-*`), so

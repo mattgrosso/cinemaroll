@@ -34,4 +34,10 @@ export function trimForWatchlist (movies) {
 export function forgetWatchlistLookups () {
   peopleCredits.clear();
   filmRecommendations.clear();
+  streamingChecks.clear();
 }
+
+// "Went straight to streaming": each candidate's wide-release check and the
+// service carrying it (discover.js streamingCheck), a week at a time. A film
+// can still open wide later or change services, so a week, not forever.
+export const streamingChecks = deviceCache('cinemaRoll.watchlist.streamingChecks', { maxAgeMs: WEEK_MS, maxEntries: 200 });

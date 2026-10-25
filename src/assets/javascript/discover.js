@@ -458,3 +458,73 @@ export function isPunted (item, punts, now = Date.now()) {
   if (punts[key].forever) return true;
   return Number.isFinite(punts[key].until) && punts[key].until > now;
 }
+
+// "Went straight to streaming" (bug report 2026-10-25: "It's easy for
+// streaming movies to just go by more or less unnoticed. Let's add a watch
+// list of popular movies that went straight to streaming recently").
+//
+// TMDB can't be asked for that directly. Its discover endpoint finds what's
+// on a US subscription service and released lately; each candidate's own
+// US release dates then say whether it ever opened wide in theaters (type
+// 3). A limited run (type 2) doesn't disqualify a film — Netflix's
+// originals routinely get a week in a few cinemas for awards eligibility,
+// and they're exactly the films that slip by. Checked against the live
+// catalogue on the day: about half of the past year's popular streaming
+// titles had no wide release.
+export const STREAMING_WINDOW_MONTHS = 12;
+const TMDB_THEATRICAL_WIDE = 3;
+
+/** The window's first day as TMDB's YYYY-MM-DD, `months` before `now`. */
+export function streamingWindowStart (now = Date.now(), months = STREAMING_WINDOW_MONTHS) {
+  const date = new Date(now);
+  date.setUTCMonth(date.getUTCMonth() - months);
+  return date.toISOString().slice(0, 10);
+}
+
+/** True when TMDB's release_dates show a wide theatrical release in `region`. */
+export function hadWideRelease (releaseDates, region = 'US') {
+  return (releaseDates?.results || [])
+    .filter((country) => country?.iso_3166_1 === region)
+    .some((country) => (country.release_dates || []).some((release) => release?.type === TMDB_THEATRICAL_WIDE));
+}
+
+// The service to name on the poster: TMDB's first subscription provider in
+// the region, by its own display order. A store's resale of a channel
+// ("HBO Max Amazon Channel") and an ad tier ("Netflix Standard with Ads")
+// are the same service under a longer name, so the plain one wins when both
+// are listed, and an ad tier is named without its suffix.
+export function streamingService (providers, region = 'US') {
+  const flatrate = [...(providers?.results?.[region]?.flatrate || [])]
+    .filter((provider) => provider?.provider_name)
+    .sort((a, b) => (a.display_priority ?? Infinity) - (b.display_priority ?? Infinity));
+  if (!flatrate.length) return null;
+  const isResold = (name) => /\b(amazon|apple tv|roku premium) channel$/i.test(name);
+  const pick = flatrate.find((provider) => !isResold(provider.provider_name)) || flatrate[0];
+  return pick.provider_name.replace(/\s+(standard\s+)?with ads$/i, '').trim();
+}
+
+/** What gets kept per film on the device: TMDB's details, boiled down. */
+export function streamingCheck (details, region = 'US') {
+  return {
+    wide: hadWideRelease(details?.release_dates, region),
+    service: streamingService(details?.['watch/providers'], region)
+  };
+}
+
+/**
+ * Discover candidates + each one's streamingCheck -> the row's ranked pool.
+ * A film with no check yet (its lookup failed) is left out rather than
+ * guessed at; one that opened wide, or that no subscription service carries
+ * any more, is dropped. The rest are ranked like every other suggestion
+ * row, taste profile included, and carry their service for the poster.
+ * `minVotes` sits lower than the other rows' because a film from last month
+ * hasn't had years to gather votes.
+ */
+export function rankStraightToStreaming (candidates, checks, ratedIds, now = Date.now(), { cap = 12, minVotes = 20, profile = null, exclude = null } = {}) {
+  const checkFor = (id) => (checks instanceof Map ? checks.get(id) : checks?.[id]);
+  const kept = (candidates || []).filter((movie) => {
+    const check = movie && checkFor(movie.id);
+    return check && !check.wide && check.service;
+  }).map((movie) => ({ ...movie, service: checkFor(movie.id).service }));
+  return rankWatchlistCandidates(kept, ratedIds, now, { cap, minVotes, profile, exclude });
+}
