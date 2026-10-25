@@ -164,7 +164,9 @@ async function runQuery (query, fetchImpl) {
   });
 
   if (!response?.ok) {
-    throw new Error(`Wikidata query failed: ${response?.status}`);
+    // The status rides along so callers can tell "slow down" (429, 503:
+    // the public endpoint's rate limit) from a real failure.
+    throw Object.assign(new Error(`Wikidata query failed: ${response?.status}`), { status: response?.status });
   }
 
   return response.json();

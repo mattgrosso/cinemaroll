@@ -26,6 +26,7 @@ describe('the locations lookup after a rating', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    locations.fetchLocationsForIds.mockReset()
     mockStore.state.isOnline = true
     mockStore.state.movieLog = { 550: dbEntry().value }
     warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -44,6 +45,26 @@ describe('the locations lookup after a rating', () => {
     locations.fetchLocationsForIds.mockRejectedValue(Object.assign(new Error('signal timed out'), { name: 'TimeoutError' }))
     await storeLocationsForRating(dbEntry())
     expect(error).not.toHaveBeenCalled()
+  })
+
+  it('retries once, then only warns, when Wikidata says slow down', async () => {
+    locations.fetchLocationsForIds.mockRejectedValue(Object.assign(new Error('Wikidata query failed: 429'), { status: 429 }))
+    await storeLocationsForRating(dbEntry(), { retryDelayMs: 0 })
+    expect(locations.fetchLocationsForIds).toHaveBeenCalledTimes(2)
+    expect(error).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('stores what the retry found after a 503', async () => {
+    locations.fetchLocationsForIds
+      .mockRejectedValueOnce(Object.assign(new Error('Wikidata query failed: 503'), { status: 503 }))
+      .mockResolvedValueOnce({ 550: [{ label: 'Wilmington' }] })
+    await storeLocationsForRating(dbEntry(), { retryDelayMs: 0 })
+    expect(warn).not.toHaveBeenCalled()
+    expect(mockStore.dispatch).toHaveBeenCalledWith('writeDatabaseEntryNow', {
+      path: 'movieLog/550/movie/locations',
+      value: [{ label: 'Wilmington' }]
+    })
   })
 
   it('still reports Wikidata answering with an error', async () => {

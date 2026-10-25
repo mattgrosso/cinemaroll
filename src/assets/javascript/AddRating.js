@@ -211,7 +211,24 @@ const CARRIED_OVER_MOVIE_FIELDS = ['locations'];
 // never delay or fail an actual rating. Anything missed here is picked up by
 // the backfill, since a movie only counts as "checked" once `locations` is
 // actually written.
-export const storeLocationsForRating = async (dbEntry) => {
+// Wikidata's public endpoint rate-limits (429) and sheds load (503). Neither
+// is our bug, so it gets one quiet retry and then a warning, not a Sentry error.
+const isWikidataBusy = (error) => error?.status === 429 || error?.status === 503;
+const WIKIDATA_RETRY_MS = 5000;
+
+const lookUpLocations = async (tmdbId, retryDelayMs) => {
+  try {
+    return await fetchLocationsForIds([tmdbId]);
+  } catch (error) {
+    if (!isWikidataBusy(error)) {
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    return fetchLocationsForIds([tmdbId]);
+  }
+};
+
+export const storeLocationsForRating = async (dbEntry, { retryDelayMs = WIKIDATA_RETRY_MS } = {}) => {
   const movie = dbEntry?.value?.movie;
 
   // Placeholders have no real TMDB id to join on; they get locations once
@@ -231,7 +248,7 @@ export const storeLocationsForRating = async (dbEntry) => {
   const key = dbEntry.path.split('movieLog/')[1];
 
   try {
-    const found = await fetchLocationsForIds([String(movie.id)]);
+    const found = await lookUpLocations(String(movie.id), retryDelayMs);
     const locations = found[String(movie.id)] || [];
 
     // Re-read rather than reusing dbEntry: by the time this resolves the
@@ -256,8 +273,9 @@ export const storeLocationsForRating = async (dbEntry) => {
     // A request nothing answered ("Load failed" on iOS, a timeout) is
     // expected and already covered by the backfill, so it's a warning:
     // captureConsole makes every console.error a Sentry event (2026-10-09).
+    // So is Wikidata asking us to slow down, even after the retry.
     // Wikidata saying no, or a bad answer, is still worth hearing about.
-    const log = isStallError(error) ? console.warn : console.error;
+    const log = isStallError(error) || isWikidataBusy(error) ? console.warn : console.error;
     log('Could not look up locations for this rating; the Settings backfill will catch it:', error);
   }
 };

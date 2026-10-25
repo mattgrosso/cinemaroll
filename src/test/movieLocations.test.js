@@ -163,6 +163,11 @@ describe('fetchLocationsForIds', () => {
     await expect(fetchLocationsForIds(['1'], { fetchImpl })).rejects.toThrow(/500/);
   });
 
+  it('carries the status on the error, so a rate limit can be told apart', async () => {
+    const fetchImpl = vi.fn(() => Promise.resolve({ ok: false, status: 429 }));
+    await expect(fetchLocationsForIds(['1'], { fetchImpl })).rejects.toMatchObject({ status: 429 });
+  });
+
   it('gives every request a deadline, so a dead connection cannot hang forever', async () => {
     const fetchImpl = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(response([])) }));
     await fetchLocationsForIds(['1'], { fetchImpl });
