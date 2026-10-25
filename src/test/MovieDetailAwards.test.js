@@ -120,6 +120,49 @@ describe('MovieDetail - awards sections', () => {
     })
   })
 
+  // Report 2026-10-25: The Great Escape showed Best Supporting Actor as won
+  // by James Garner AND Richard Attenborough — both were nominated, only
+  // Garner won.
+  describe('a winner shares the film with another nominee', () => {
+    beforeEach(async () => {
+      wrapper = mountWithSettings({
+        tags: { 'viewing-tags': {} },
+        personalAwards: {
+          1963: {
+            categories: {
+              bestPicture: {
+                winner: { type: 'movie', movieId: 42 },
+                nominees: [{ type: 'movie', movieId: 42 }]
+              },
+              bestSupportingActor: {
+                winner: { type: 'person', name: 'James Garner', movieId: 42 },
+                nominees: [
+                  { type: 'person', name: 'James Garner', movieId: 42 },
+                  { type: 'person', name: 'Richard Attenborough', movieId: 42 },
+                  { type: 'person', name: 'Someone Else', movieId: 7 }
+                ]
+              }
+            }
+          }
+        }
+      })
+      await wrapper.setData({ result: makeResult(), movie: makeResult().movie })
+    })
+
+    it('credits the win to the winner alone', () => {
+      expect(wrapper.vm.personalAwardWins).toEqual([
+        { id: '1963-bestPicture', year: '1963', category: 'Best Picture', names: null },
+        { id: '1963-bestSupportingActor', year: '1963', category: 'Best Supporting Actor', names: ['James Garner'] }
+      ])
+    })
+
+    it('lists the co-star who lost under Nominated', () => {
+      expect(wrapper.vm.personalAwardNominations).toEqual([
+        { id: '1963-bestSupportingActor', year: '1963', category: 'Best Supporting Actor', names: ['Richard Attenborough'] }
+      ])
+    })
+  })
+
   // Report 2026-10-16: "best picture is always at the top and then it works
   // its way down from there" — the awards page's order, not Firebase's
   // alphabetical keys (which put bestActor ahead of bestPicture).

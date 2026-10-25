@@ -1106,20 +1106,28 @@ export default {
             // one year still has to name itself on the film that won it.
             const categoryName = categoryNames[categoryKey] || categoryKey;
             const matchingNominees = (categoryData.nominees || []).filter((nominee) => nominee && nominee.movieId === this.movie.id);
-            const winnerMatches = Boolean(categoryData.winner && categoryData.winner.movieId === this.movie.id);
-            const names = matchingNominees.map((nominee) => nominee.name).filter(Boolean);
-
-            const entry = {
+            const winner = categoryData.winner;
+            const winnerMatches = Boolean(winner && winner.movieId === this.movie.id);
+            const entry = (names) => ({
               id: `${year}-${categoryKey}`,
               year,
               category: categoryName,
               names: names.length ? names : null
-            };
+            });
 
+            // The winner is ONE nominee. A co-star nominated beside them from
+            // the same film lost, so they go under Nominated (report,
+            // 2026-10-25: The Great Escape credited Attenborough with
+            // Garner's Supporting Actor win). Matched by name, as
+            // awardsShare.js does.
             if (winnerMatches) {
-              wins.push(entry);
+              wins.push(entry(winner.name ? [winner.name] : []));
+              const losers = matchingNominees
+                .filter((nominee) => nominee.name && nominee.name !== winner.name)
+                .map((nominee) => nominee.name);
+              if (losers.length) nominations.push(entry(losers));
             } else if (matchingNominees.length) {
-              nominations.push(entry);
+              nominations.push(entry(matchingNominees.map((nominee) => nominee.name).filter(Boolean)));
             }
           });
         });

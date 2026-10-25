@@ -166,6 +166,10 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
   `Object.keys`, which is Firebase's alphabetical order and put Best Actor first;
   friends' (`friendAwardsForMovie`) and the other ceremonies (`findOtherAwardsForMovie`,
   ceremonies in `OTHER_CEREMONIES` tab order) by `houseCategoryRank`.
+- **A personal-award win names the winner only** (report, 2026-10-25: The Great Escape
+  credited Attenborough with Garner's Supporting Actor). Other nominees from the same
+  film in that category lost; they go under Nominated, matched by name as
+  `awardsShare.js` does. `MovieDetailAwards.test.js`.
 - Awards content scrolls internally (`.awards-body`, `max-height: 150px`), matching the
   `.long-list` treatment on Cast/Genres/Directors. Don't collapse it behind a toggle.
 - `formatTimeDifference`'s months branch runs to 730 days, so `'1 year'` is effectively
