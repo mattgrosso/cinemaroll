@@ -43,10 +43,15 @@
 
       <!-- The directory of link cards that sat here is gone (2026-10-24,
            "I think these need to be ... put somewhere else, especially
-           awards"): Awards is a chip on Home's rainbow bar, Trophy Case
-           leads the Awards screen's ceremony strip, Game Stats lives only on
-           Games, The Web heads the People tab, and Year in Review and Library
-           Poster are rows in Settings beside the Newsletter. -->
+           awards"): Trophy Case leads the Awards screen's ceremony strip,
+           Game Stats lives only on Games, The Web heads the People tab, and
+           Year in Review and Library Poster are rows in Settings beside the
+           Newsletter. Awards went to Home's rainbow bar for an afternoon and
+           came straight back here ("there's no room for new colors. I don't
+           want anymore on there"): one card, until Matt picks its real home. -->
+      <button type="button" class="insights-link-card awards-link-card" @click="$router.push('/awards')">
+        <i class="bi bi-award"></i><span>Awards<small>Your personal awards, year by year</small></span><i class="bi bi-chevron-right link-chevron"></i>
+      </button>
 
       <!-- Board item 8: funFacts.js finally gets a shelf (bug report: "more
            fun data about my ratings and watching habits"). -->
@@ -3166,7 +3171,13 @@ export default {
     .third .glance-value { font-size: 1.1rem; }
   }
 
-  /* A link out of Insights (The Web, on the People tab). It reads as a
+  /* Overview's card sits under the glance tiles, which carry no bottom
+     margin of their own. */
+  .awards-link-card {
+    margin-top: 0.75rem;
+  }
+
+  /* A link out of Insights (Awards on Overview, The Web on People). It reads as a
      control, not one more tile: a raised fill, a soft 8px radius against the
      tiles' hard 3px, a grey edge, and a chevron saying it goes somewhere. */
   .insights-link-card {

@@ -399,12 +399,6 @@
           <button class="results-actions-button chip-insights btn btn-info" type="button" @click="goToInsights" title="Insights" aria-label="Go to insights">
             <i class="bi bi-lightbulb"/>
           </button>
-          <!-- Awards is a first-class stop (Matt, 2026-10-24: "Awards needs
-               to be a more first-class object ... I go to there all the
-               time"); it used to be one of six link cards on Insights. -->
-          <button class="results-actions-button chip-awards btn btn-sm" type="button" @click="$router.push('/awards')" title="Awards" aria-label="Go to awards">
-            <i class="bi bi-award"/>
-          </button>
           <!-- The Film Club takes the lightning bolt's rainbow slot and
                color; the quick-links trigger now lives inside the
                search input's right edge (Matt: "it really
@@ -6963,8 +6957,9 @@ export default {
             }
 
             /* Each chip's colour is pinned by name, not by position
-               (2026-10-24): adding Awards after Insights would otherwise
-               have shifted every colour after it. */
+               (2026-10-24), so inserting a chip can't shift every colour
+               after it. No new chips, though: Matt, the same day, "there's
+               no room for new colors. I don't want anymore on there." */
             &.chip-settings {
               background-color: #E71D36; /* Red */
               color: white;
@@ -6982,11 +6977,6 @@ export default {
 
             &.chip-insights {
               background-color: #24d776; /* Green */
-              color: black;
-            }
-
-            &.chip-awards {
-              background-color: #C9A227; /* Gold, the awards colour */
               color: black;
             }
 

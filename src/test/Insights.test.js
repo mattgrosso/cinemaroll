@@ -842,12 +842,18 @@ describe('Insights — one question per tab', () => {
   })
 
   // 2026-10-24: the six link cards left Overview for homes of their own
-  // (Awards on Home's bar, Trophy Case on Awards, Game Stats on Games, Year
-  // in Review and Library Poster in Settings). Only The Web stays, on People.
-  it('Overview has no directory of links; The Web heads the People tab', async () => {
+  // (Trophy Case on Awards, Game Stats on Games, Year in Review and Library
+  // Poster in Settings, The Web on People). Awards tried Home's rainbow bar
+  // and came back the same day as Overview's one card: "there's no room for
+  // new colors."
+  it('Overview has one link, to Awards; The Web heads the People tab', async () => {
     const { wrapper } = mountWithPanes()
     expect(wrapper.vm.activeTab).toBe('overview')
-    expect(wrapper.findAll('.insights-link-card')).toHaveLength(0)
+    const overviewCards = wrapper.findAll('.insights-link-card')
+    expect(overviewCards).toHaveLength(1)
+    expect(overviewCards[0].text()).toContain('Awards')
+    await overviewCards[0].trigger('click')
+    expect(wrapper.vm.$router.push).toHaveBeenCalledWith('/awards')
 
     await wrapper.setData({ activeTab: 'people' })
     const cards = wrapper.findAll('.insights-link-card')

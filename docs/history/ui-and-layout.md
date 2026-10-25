@@ -766,3 +766,10 @@ Review and Library Poster Settings rows under the Newsletter. The rainbow bar's 
 from `:nth-child(N)` to per-chip `chip-*` classes so the insert didn't recolour every chip
 after it. Eight chips is ~44px each on a 402px phone; the agreed fallback, if it feels
 cramped, is Awards as a full-width card atop Overview.
+
+The same evening Matt pulled the chip ("I see you added a new tab to the rainbow bar for the
+awards. Remove that. No, there's no room for new colors. I don't want anymore on there. I need
+to figure out another solution"). The bar is back to its seven chips in their old colours (the
+`chip-*` classes stayed), and Awards took the fallback: one full-width card at the top of
+Overview, styled like The Web's card on People, back falling to Insights. It's a stopgap until
+Matt picks the real home; the lesson is that the rainbow bar is closed, not merely full.

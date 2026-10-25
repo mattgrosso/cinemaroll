@@ -286,14 +286,16 @@ Cancel; when they match or the diary has no stars, the log screen opens at once.
 and deep stats?" — nothing did).** Deep Stats is no longer a page; `/stats` redirects to
 `/insights?tab=eras`. Six tabs, two rows of three:
 
-- **Overview** — headline numbers and fun facts. No directory of links since 2026-10-24
-  (report: "Awards needs to be a more first-class object ... I go to there all the
-  time"): Awards is a gold chip on Home's rainbow bar, Trophy Case is the first pill of
-  the Awards screen's ceremony strip (back falls to `/awards`), Game Stats lives only on
-  the Games hub, The Web is a link card heading the **People** tab, and Year in Review
-  and Library Poster are `SettingsSection` link rows under the Newsletter (back falls to
-  Home). Fallback if the eight-chip bar ever feels crowded: Awards as a full-width card
-  at the top of Overview.
+- **Overview** — headline numbers, one Awards link card, and fun facts. The six-card
+  directory went 2026-10-24 (report: "Awards needs to be a more first-class object ...
+  I go to there all the time"): Trophy Case is the first pill of the Awards screen's
+  ceremony strip (back falls to `/awards`), Game Stats lives only on the Games hub, The
+  Web is a link card heading the **People** tab, and Year in Review and Library Poster
+  are `SettingsSection` link rows under the Newsletter (back falls to Home). Awards spent
+  that afternoon as a gold chip on Home's rainbow bar and Matt pulled it the same day:
+  "there's no room for new colors. I don't want anymore on there." So it is back here as
+  a full-width card at the top of Overview (back falls to `/insights`) until Matt picks
+  its real home. Never solve it with another rainbow chip.
 - **Ratings** (how you score) — curve replay, Outliers, Standouts, Pantheon, Ties,
   Genres, scatter last.
 - **Activity** (when you watch) — pace, tappable counts, calendar coverage, watching

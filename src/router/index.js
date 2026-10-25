@@ -454,7 +454,7 @@ const routes = [
       // Back-link identity: what this screen is called, and where back
       // goes when there is no history to go back to.
       title: 'Awards',
-      parent: '/',
+      parent: '/insights',
       requiresLogin: true
     },
     beforeEnter: (to, from, next) => {
