@@ -1,17 +1,9 @@
 <template>
   <div class="personal-awards-screen">
-    <BackLink/>
-
     <!-- Ceremony strip (Matt, 2026-10-07): yours, then every friend who
          publishes awards, then the real ceremonies. Flip through "the
          history of any award that we have access to". -->
-    <!-- Trophy Case leads the strip (2026-10-24): it moved here from the
-         Insights directory, beside the awards it's a cousin of. It goes to
-         its own page, so it's an outlined pill, not a tab. -->
     <div ref="tabScroller" class="ceremony-scroller">
-      <button type="button" class="trophy-case-pill" @click="$router.push('/trophy-case')">
-        <i class="bi bi-trophy"></i> Trophy Case <i class="bi bi-chevron-right"></i>
-      </button>
       <button
         v-for="tab in tabs"
         :key="tab.id"
@@ -47,6 +39,7 @@
 
     <PersonalAwardsModal
       v-else
+      :key="modalKey"
       :allEntriesWithFlatKeywordsAdded="allEntriesWithFlatKeywordsAdded"
       :personalAwardName="personalAwardName"
       :awardNameWithThe="awardNameWithTheLabel"
@@ -54,9 +47,18 @@
       :selectedYear="yearFromRoute"
       :autoOpen="true"
       :pageMode="true"
-      @closed="leave"
+      @closed="reopen"
       @yearChanged="activeYear = $event"
     />
+
+    <!-- Trophy Case, quietly, at the foot of your own awards (2026-10-25: "I
+         don't go to the trophy case very often. It should be less
+         prominent"). It led the ceremony strip for a day. -->
+    <div v-if="ceremonyId === 'mine'" class="trophy-case-foot">
+      <button type="button" class="trophy-case-link" @click="$router.push('/trophy-case')">
+        <i class="bi bi-trophy"></i> Trophy Case
+      </button>
+    </div>
   </div>
 </template>
 
@@ -70,6 +72,11 @@
 // looked. Now the year rides in the URL (/awards?year=1997) and there is
 // no handoff to race.
 //
+// Since 2026-10-25 it is the Awards tab of Insights, rendered in place:
+// /awards redirects to /insights?tab=awards (keeping year and ceremony),
+// and every address this screen writes is that one. Insights owns the back
+// link.
+//
 // The old AwardsResults browser used to sit below this — a year <select>
 // plus a winners table, relocated here from Insights. It's gone: the page
 // above it now IS the view of a year's awards, and the year strip replaces
@@ -77,7 +84,6 @@
 // it with what we're looking at now", 2026-08-16).
 import PersonalAwardsModal from './PersonalAwardsModal.vue';
 import AwardsBoard from './AwardsBoard.vue';
-import BackLink from './games/BackLink.vue';
 import otherAwardsWinners from '../assets/data/otherAwardsWinners.json';
 import {
   ceremonyTabs,
@@ -89,22 +95,26 @@ import {
   ACADEMY_BOARD_OPTIONS,
   OTHER_CEREMONIES
 } from '../assets/javascript/ceremonies.js';
-import { navigationTarget, followNavigationTarget } from '../utils/navigationTarget.js';
 import {
   awardNameWithThe,
   awardNameSingular,
   awardsBrowsableYears
 } from '../assets/javascript/personalAwards.js';
 
+// The Awards tab's address (see above).
+const AWARDS_PATH = '/insights';
+
 export default {
   name: 'PersonalAwardsScreen',
-  components: { PersonalAwardsModal, AwardsBoard, BackLink },
+  components: { PersonalAwardsModal, AwardsBoard },
   data () {
     return {
       // Mirrors whichever year the modal is actually showing, which is not
       // always the one in the URL: arriving at /awards with no year lets the
       // modal pick, and the strip has to highlight what you're looking at.
-      activeYear: null
+      activeYear: null,
+      // Bumped to remount the awards component after it closes itself.
+      modalKey: 0
     };
   },
   computed: {
@@ -226,7 +236,7 @@ export default {
     this.$store.dispatch?.('syncExternalFriends');
   },
   methods: {
-    // Arriving with no year at all — the Awards card on Insights does exactly
+    // Arriving with no year at all — tapping the Awards tab does exactly
     // that — used to leave the modal to pick, and its picker answers "which
     // year needs work", returning null once every year is finished. The page
     // then rendered with no year and no values in it at all (Matt, 2026-08-16:
@@ -237,17 +247,17 @@ export default {
     // which is what the home screen's "a year is ready" prompt asks.
     defaultToMostRecentYear (years) {
       if (this.yearFromRoute != null || this.ceremonyId !== 'mine') return;
-      this.$router.replace({ path: '/awards', query: { year: years[years.length - 1] } });
+      this.$router.replace({ path: AWARDS_PATH, query: this.query({ year: years[years.length - 1] }) });
     },
     query (changes) {
-      const query = { ...this.$route.query, ...changes };
+      const query = { ...this.$route.query, tab: 'awards', ...changes };
       Object.keys(query).forEach((key) => { if (query[key] == null) delete query[key]; });
       return query;
     },
     selectYear (year) {
       if (year === this.stripActiveYear) return;
       // replace, not push: stepping through years shouldn't bury the way back.
-      this.$router.replace({ path: '/awards', query: this.query({ year }) });
+      this.$router.replace({ path: AWARDS_PATH, query: this.query({ year }) });
     },
     // Switching ceremony keeps the year (Matt, 2026-10-08: "if I select a
     // year, and then I switch to a different award... I want to maintain the
@@ -261,7 +271,7 @@ export default {
       if (id === 'mine' && year != null && !this.awardsYears.includes(year)) {
         year = this.awardsYears[this.awardsYears.length - 1] ?? null;
       }
-      this.$router.replace({ path: '/awards', query: this.query({ ceremony: id === 'mine' ? null : id, year }) });
+      this.$router.replace({ path: AWARDS_PATH, query: this.query({ ceremony: id === 'mine' ? null : id, year }) });
     },
     openMovie (pick) {
       if (pick?.movieId) this.$router.push(`/movie/${pick.movieId}`);
@@ -286,24 +296,17 @@ export default {
       const furthest = scroller.scrollWidth - scroller.clientWidth;
       scroller.scrollLeft = Math.max(0, Math.min(centered, furthest));
     },
-    leave () {
-      // window.history.length counts entries from before this app was ever
-      // opened, so it is not a reliable "is there anywhere to go back to".
-      // history.state.back is, and it is the same rule BackLink follows.
-      const target = navigationTarget({
-        backPath: this.$router?.options?.history?.state?.back,
-        currentPath: this.$route?.fullPath,
-        parentPath: this.$route?.meta?.parent || '/',
-        avoid: ['/login']
-      });
-      followNavigationTarget(this.$router, target);
+    // Completing a year closes the awards component; on a page of its own
+    // that used to mean leaving. As a tab there is nowhere to leave to, so
+    // it comes straight back on the year you just finished.
+    reopen () {
+      this.modalKey += 1;
     }
   }
 };
 </script>
 
 <style lang="scss" scoped>
-@import '@/assets/scss/screen-top';
 .ceremony-scroller {
   display: flex;
   gap: 0.4rem;
@@ -330,26 +333,29 @@ export default {
   font-weight: 700;
 }
 
-.trophy-case-pill {
-  background: transparent;
-  border-radius: 999px;
-  flex-shrink: 0;
-  font-size: 0.82rem;
-  padding: 0.3rem 0.8rem;
-  white-space: nowrap;
-  /* #ffc107 on the page's dark ground is ~11:1. */
-  border: 1px solid #ffc107;
-  color: #ffc107;
-  font-weight: 600;
-
-  .bi-chevron-right {
-    font-size: 0.7rem;
-  }
+.ceremony-tab:active,
+.trophy-case-link:active {
+  opacity: 0.7;
 }
 
-.ceremony-tab:active,
-.trophy-case-pill:active {
-  opacity: 0.7;
+.trophy-case-foot {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+/* Muted on purpose, but still legible: #ccc on the dark ground is ~10:1. */
+.trophy-case-link {
+  background: transparent;
+  border: 0;
+  color: #ccc;
+  font-size: 0.85rem;
+  min-height: 40px;
+  padding: 0.4rem 0.9rem;
+
+  .bi-trophy {
+    margin-right: 0.25rem;
+  }
 }
 
 .ceremony-who {
@@ -374,11 +380,9 @@ export default {
 
 .personal-awards-screen {
   color: #eee;
-  /* Side padding only. The old 2.5rem top "BackLink safety margin" was a
-     misunderstanding: BackLink is position:absolute and floats over the
-     global header banner, so the reserved space was pure dead air below
-     the header image (feedback, twice). */
-  padding: $screen-top-gap 1rem 2rem;
+  /* A tab of Insights now: the tab row above already sits $screen-top-gap
+     under the header, and Insights sets the side margins. */
+  padding: 0 0 2rem;
 }
 
 .awards-year-scroller {

@@ -221,7 +221,7 @@ null until loaded — every reader `v-if`s on that). All maths in
 `letterboxdCompare.js` (pure, tested), and always by RANK within the films both sides
 rated: a 0–10 weighted score and a 0.5–5 star average can't be subtracted.
 
-- Ratings tab: `CrowdSection` (You vs Letterboxd) — rank correlation with a word for
+- Activity tab, ratings half: `CrowdSection` (You vs Letterboxd) — rank correlation with a word for
   it (`agreementLabel`), then the widest gaps each way in percentile points.
 - Year in Review: You vs the Crowd — the year's films, hottest take / the crowd's pick /
   you both loved (`yearVsCrowd`).
@@ -286,20 +286,29 @@ Cancel; when they match or the diary has no stars, the log screen opens at once.
 and deep stats?" — nothing did).** Deep Stats is no longer a page; `/stats` redirects to
 `/insights?tab=eras`. Six tabs, two rows of three:
 
-- **Overview** — headline numbers, one Awards link card, and fun facts. The six-card
-  directory went 2026-10-24 (report: "Awards needs to be a more first-class object ...
-  I go to there all the time"): Trophy Case is the first pill of the Awards screen's
-  ceremony strip (back falls to `/awards`), Game Stats lives only on the Games hub, The
-  Web is a link card heading the **People** tab, and Year in Review and Library Poster
-  are `SettingsSection` link rows under the Newsletter (back falls to Home). Awards spent
-  that afternoon as a gold chip on Home's rainbow bar and Matt pulled it the same day:
-  "there's no room for new colors. I don't want anymore on there." So it is back here as
-  a full-width card at the top of Overview (back falls to `/insights`) until Matt picks
-  its real home. Never solve it with another rainbow chip.
-- **Ratings** (how you score) — curve replay, Outliers, Standouts, Pantheon, Ties,
-  Genres, scatter last.
-- **Activity** (when you watch) — pace, tappable counts, calendar coverage, watching
-  years, Marathon Club, Rewatches, full calendar.
+- **Overview** — headline numbers and fun facts, no link cards. The six-card directory
+  went 2026-10-24: Game Stats lives only on the Games hub, The Web is a link card heading
+  the **People** tab, and Year in Review and Library Poster are `SettingsSection` link
+  rows under the Newsletter (back falls to Home). Awards tried a rainbow chip (pulled:
+  "there's no room for new colors" — never solve a destination with another chip), then
+  a card on Overview ("still an extra click"), then got a tab.
+- **Awards** (2026-10-25, in Ratings' old slot and blue) — `PersonalAwardsScreen`
+  rendered in place, no BackLink of its own. Its year and ceremony ride in the address
+  (`/insights?tab=awards&year=1997&ceremony=oscars`); `/awards` is a router redirect
+  that keeps them, so every old link (MovieDetail's award rows, Home's "a year is
+  ready" card via the modal) lands on the tab. Only the Awards tab writes the address:
+  `setTab` replaces it with `?tab=awards` or nothing, so no stale year rides along, and a
+  `$route.query.tab` watcher follows a link while Insights is open. Completing a year
+  closes the awards component; the screen remounts it (`modalKey`) instead of leaving.
+  **Trophy Case is a small muted link at the foot of your own awards** ("I don't go to
+  the trophy case very often. It should be less prominent"; it led the ceremony strip
+  for a day), and its back falls to `/insights?tab=awards`.
+- **Activity** (when you watch, then how you score) — pace, tappable counts, calendar
+  coverage, watching years, Marathon Club, Rewatches, full calendar; then a quiet
+  "Ratings" divider (`.insights-divider`) and what was the Ratings tab: curve replay,
+  Outliers, Crowd, Standouts, Pantheon, Ties, Genres, scatter last. A remembered or
+  linked `ratings` tab opens Activity (`RETIRED_TABS`). Offered if it feels too long:
+  ratings first, behind the divider.
 - **Eras** (which release years are yours, accent `#ff7a6b`) — the films-by-year shelf,
   best release years, box office by year, the Crown, Decade Championship.
 - **People** — the eight Favorite sections plus a ninth pill, Box Office

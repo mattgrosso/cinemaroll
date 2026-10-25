@@ -24,7 +24,8 @@ const SCREENS = [
   ['FilmClubScreen', '.film-club-screen', '.fc-tabs'],
   ['ShowtimesScreen', '.showtimes', '.st-head'],
   ['ShowtimesSetup', '.setup', '.su-title'],
-  ['PersonalAwardsScreen', '.personal-awards-screen', null],
+  // PersonalAwardsScreen left this list 2026-10-25: it is the Awards tab of
+  // Insights now, under Insights' tab row, which carries the gap.
   ['NewsletterScreen', '.newsletter-screen', null],
   ['FriendComparison', '.friend-comparison', '.fc-title'],
   ['TrophyCase', '.trophy-case', '.trophy-case-title'],

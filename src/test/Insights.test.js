@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { shallowMount } from '@vue/test-utils'
+import { reactive } from 'vue'
 import Insights from '@/components/Insights.vue'
 
 vi.mock('@/assets/javascript/GetRating.js', () => ({
@@ -625,14 +626,6 @@ describe('Insights — what lives on which tab', () => {
     })
   })
 
-  it('no longer repeats the rating figures on Ratings', async () => {
-    const { wrapper } = mountInsights({ mediaEntries: [entry()] })
-    await showTab(wrapper, 'ratings')
-
-    expect(wrapper.text()).not.toMatch(/Highest Rating/)
-    expect(wrapper.find('.glance-label').exists()).toBe(false)
-  })
-
   // Colour that means something: each tab owns one, and the panels inside it
   // inherit it through a custom property.
   it('carries the active tab colour on the root, and marks the active tab', async () => {
@@ -656,7 +649,7 @@ describe('Insights — what lives on which tab', () => {
       movie: { id: i, runtime: 60 + i * 10 }
     }))
     const { wrapper } = mountInsights({ mediaEntries: rising })
-    await showTab(wrapper, 'ratings')
+    await showTab(wrapper, 'activity')
     await wrapper.setData({ selectedXAxis: 'runtime', selectedYAxis: 'userRating' })
 
     // Asserted on the computed: the readout renders inside an InsightsPane,
@@ -803,15 +796,18 @@ describe('Insights — one question per tab', () => {
 
   const has = (wrapper, name) => wrapper.findComponent({ name }).exists()
 
-  it('has six tabs, Eras between Activity and People', () => {
+  // 2026-10-25: Awards took Ratings' place, and Ratings' sections joined
+  // Activity ("It's still an extra click").
+  it('has six tabs, Awards where Ratings was', () => {
     const { wrapper } = mountWithPanes()
     expect(wrapper.findAll('.insights-tab').map((t) => t.text()))
-      .toEqual(['Overview', 'Ratings', 'Activity', 'Eras', 'People', 'Places'])
+      .toEqual(['Overview', 'Awards', 'Activity', 'Eras', 'People', 'Places'])
   })
 
   const PLACEMENT = {
-    ratings: ['RatingCurvePlayback', 'Outliers', 'CrowdSection', 'StandoutsSection', 'PantheonSection', 'TiesSection', 'GenresSection'],
-    activity: ['WatchYearsSection', 'MarathonSection', 'RewatchesSection', 'FullCalendarView'],
+    awards: ['PersonalAwardsScreen'],
+    activity: ['WatchYearsSection', 'MarathonSection', 'RewatchesSection', 'FullCalendarView',
+      'RatingCurvePlayback', 'Outliers', 'CrowdSection', 'StandoutsSection', 'PantheonSection', 'TiesSection', 'GenresSection'],
     eras: ['ReleaseYearShelf', 'YearlyAverage', 'BoxOfficeYears', 'CrownSection', 'DecadeChampionship']
   }
   const everySection = Object.values(PLACEMENT).flat()
@@ -828,7 +824,7 @@ describe('Insights — one question per tab', () => {
 
   it('keeps the box office people ranking with the people, fed the rated films', async () => {
     const { wrapper } = mountWithPanes()
-    await wrapper.setData({ activeTab: 'ratings' })
+    await wrapper.setData({ activeTab: 'activity' })
     expect(has(wrapper, 'BoxOfficePeople')).toBe(false)
 
     await wrapper.setData({ activeTab: 'people' })
@@ -842,18 +838,13 @@ describe('Insights — one question per tab', () => {
   })
 
   // 2026-10-24: the six link cards left Overview for homes of their own
-  // (Trophy Case on Awards, Game Stats on Games, Year in Review and Library
-  // Poster in Settings, The Web on People). Awards tried Home's rainbow bar
-  // and came back the same day as Overview's one card: "there's no room for
-  // new colors."
-  it('Overview has one link, to Awards; The Web heads the People tab', async () => {
+  // (Game Stats on Games, Year in Review and Library Poster in Settings, The
+  // Web on People). Awards was Overview's one card for a day, then got a tab
+  // of its own (2026-10-25).
+  it('Overview has no link cards; The Web heads the People tab', async () => {
     const { wrapper } = mountWithPanes()
     expect(wrapper.vm.activeTab).toBe('overview')
-    const overviewCards = wrapper.findAll('.insights-link-card')
-    expect(overviewCards).toHaveLength(1)
-    expect(overviewCards[0].text()).toContain('Awards')
-    await overviewCards[0].trigger('click')
-    expect(wrapper.vm.$router.push).toHaveBeenCalledWith('/awards')
+    expect(wrapper.findAll('.insights-link-card')).toHaveLength(0)
 
     await wrapper.setData({ activeTab: 'people' })
     const cards = wrapper.findAll('.insights-link-card')
@@ -861,6 +852,39 @@ describe('Insights — one question per tab', () => {
     expect(cards[0].text()).toContain('The Web')
     await cards[0].trigger('click')
     expect(wrapper.vm.$router.push).toHaveBeenCalledWith('/web')
+  })
+
+  // Awards keeps its ceremony and year in the address; every other tab
+  // leaves the address bare, so no stale year rides along.
+  it('tapping Awards puts the tab in the address, and leaving it clears the address', async () => {
+    const replace = vi.fn()
+    const { wrapper } = mountWithPanes({ route: { query: { tab: 'awards', year: '1997' } } })
+    wrapper.vm.$router.replace = replace
+    expect(wrapper.vm.activeTab).toBe('awards')
+
+    const tab = (key) => wrapper.find(`.insights-tab-${key}`)
+    await tab('activity').trigger('click')
+    expect(replace).toHaveBeenLastCalledWith({ path: '/insights', query: {} })
+    await tab('awards').trigger('click')
+    expect(replace).toHaveBeenLastCalledWith({ path: '/insights', query: { tab: 'awards' } })
+    expect(window.localStorage.getItem('cinemaRoll.insights.tab')).toBe('awards')
+  })
+
+  it('a remembered or linked Ratings tab opens Activity, where its sections went', () => {
+    window.localStorage.setItem('cinemaRoll.insights.tab', 'ratings')
+    expect(mountWithPanes().wrapper.vm.activeTab).toBe('activity')
+    window.localStorage.clear()
+    expect(mountWithPanes({ route: { query: { tab: 'ratings' } } }).wrapper.vm.activeTab).toBe('activity')
+  })
+
+  // The awards prompt on Home and a movie's award rows still say /awards.
+  it('follows a link that names a tab while Insights is open', async () => {
+    const route = reactive({ query: {} })
+    const { wrapper } = mountWithPanes({ route })
+    expect(wrapper.vm.activeTab).toBe('overview')
+    route.query = { tab: 'awards', year: '1997' }
+    await wrapper.vm.$nextTick()
+    expect(wrapper.vm.activeTab).toBe('awards')
   })
 
   it('opens the tab a link names — the old /stats address sends ?tab=eras', () => {
@@ -872,7 +896,7 @@ describe('Insights — one question per tab', () => {
 
   // Found writing the tests above: a film with a crew but no Director
   // credit threw inside countDirectors and blanked the Ratings tab.
-  it('opens Ratings for a library with a film that has no director', async () => {
+  it('opens the ratings sections for a library with a film that has no director', async () => {
     const wrapper = shallowMount(Insights, {
       global: {
         mocks: {
@@ -888,7 +912,7 @@ describe('Insights — one question per tab', () => {
         stubs: { InsightsPane: { template: '<div><slot /></div>' } }
       }
     })
-    await wrapper.setData({ activeTab: 'ratings' })
+    await wrapper.setData({ activeTab: 'activity' })
     expect(wrapper.findComponent({ name: 'Outliers' }).exists()).toBe(true)
   })
 

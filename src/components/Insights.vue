@@ -41,82 +41,23 @@
         <div class="glance-item third alt"><span class="glance-label">Lowest</span><span class="glance-value">{{ lowestRating }}</span></div>
       </div>
 
-      <!-- The directory of link cards that sat here is gone (2026-10-24,
-           "I think these need to be ... put somewhere else, especially
-           awards"): Trophy Case leads the Awards screen's ceremony strip,
-           Game Stats lives only on Games, The Web heads the People tab, and
-           Year in Review and Library Poster are rows in Settings beside the
-           Newsletter. Awards went to Home's rainbow bar for an afternoon and
-           came straight back here ("there's no room for new colors. I don't
-           want anymore on there"): one card, until Matt picks its real home. -->
-      <button type="button" class="insights-link-card awards-link-card" @click="$router.push('/awards')">
-        <i class="bi bi-award"></i><span>Awards<small>Your personal awards, year by year</small></span><i class="bi bi-chevron-right link-chevron"></i>
-      </button>
+      <!-- The directory of link cards that sat here is gone (2026-10-24):
+           Trophy Case is a link at the foot of your own awards, Game Stats
+           lives only on Games, The Web heads the People tab, and Year in
+           Review and Library Poster are rows in Settings beside the
+           Newsletter. Awards was a card here for a day, then got the tab
+           Ratings left ("It's still an extra click", 2026-10-25). -->
 
       <!-- Board item 8: funFacts.js finally gets a shelf (bug report: "more
            fun data about my ratings and watching habits"). -->
       <FunFactsRow/>
     </template>
 
-    <!-- RATINGS: how you score films. What used to be split between here
-         and Deep Stats (2026-09-29): the curve, then what you rate high and
-         low, then perfection, ties and genres, and the free-form scatter
-         last because it asks you to do the work. -->
-    <template v-else-if="renderedTab === 'ratings'">
-    <InsightsPane>
-      <RatingCurvePlayback
-        :chartData="ratingsCountData"
-        :options="ratingsCountOptions"
-        :entries="resultsWithRatings"
-      />
-    </InsightsPane>
-
-    <InsightsPane>
-      <Outliers :resultsWithRatings="resultsWithRatings" :allCounts="allCounts" @updateSearchValue="updateSearchValue"/>
-    </InsightsPane>
-
-    <InsightsPane><CrowdSection/></InsightsPane>
-    <InsightsPane><StandoutsSection/></InsightsPane>
-    <InsightsPane><PantheonSection/></InsightsPane>
-    <InsightsPane><TiesSection/></InsightsPane>
-    <InsightsPane><GenresSection/></InsightsPane>
-
-    <InsightsPane>
-      <ScatterChart :chartData="scatterPlotData" :options="scatterPlotOptions"/>
-      <!-- What the cloud of dots is actually saying. 1,300 points are hard to
-           read by eye, so the plot states its own conclusion. -->
-      <p v-if="scatterReading" class="scatter-reading">{{ scatterReading }}</p>
-      <div class="scatter-controls mt-3">
-        <div class="row g-2">
-          <div class="col-12">
-            <button class="btn btn-outline-light w-100 scatter-button" @click="randomizeAxes" title="Random Axes">
-              <i class="bi bi-shuffle"/>
-            </button>
-          </div>
-          <div class="col-12">
-            <div class="form-floating" data-bs-theme="dark">
-              <select id="x-axis-select" class="form-select scatter-select" v-model="selectedXAxis">
-                <option v-for="option in axisOptions" :key="option.key" :value="option.key">
-                  {{ option.label }}
-                </option>
-              </select>
-              <label for="x-axis-select">X-Axis</label>
-            </div>
-          </div>
-          <div class="col-12">
-            <div class="form-floating" data-bs-theme="dark">
-              <select id="y-axis-select" class="form-select scatter-select" v-model="selectedYAxis">
-                <option v-for="option in axisOptions" :key="option.key" :value="option.key">
-                  {{ option.label }}
-                </option>
-              </select>
-              <label for="y-axis-select">Y-Axis</label>
-            </div>
-          </div>
-        </div>
-      </div>
-    </InsightsPane>
-    </template>
+    <!-- AWARDS: the whole awards screen, in place (2026-10-25: the Overview
+         card was "still an extra click"). Its ceremony and year ride in this
+         address (?tab=awards&year=1997), and the old /awards address
+         redirects here, so every link into awards lands on this tab. -->
+    <PersonalAwardsScreen v-else-if="renderedTab === 'awards'" embedded/>
 
     <!-- ACTIVITY: when you watch. -->
     <template v-else-if="renderedTab === 'activity'">
@@ -212,6 +153,66 @@
 
       <InsightsPane>
         <FullCalendarView :results="filteredEntriesWithFlatKeywordsAdded" :open="true" />
+      </InsightsPane>
+
+      <!-- What was the Ratings tab (2026-10-25: "take all the content of the
+           ratings tab, move it into the activity tab, and then we're gonna
+           give awards its own tab in place of ratings"). How you score films:
+           the curve, what you rate high and low, perfection, ties and genres,
+           and the free-form scatter last because it asks you to do the work. -->
+      <h2 class="insights-divider">Ratings</h2>
+      <InsightsPane>
+        <RatingCurvePlayback
+          :chartData="ratingsCountData"
+          :options="ratingsCountOptions"
+          :entries="resultsWithRatings"
+        />
+      </InsightsPane>
+
+      <InsightsPane>
+        <Outliers :resultsWithRatings="resultsWithRatings" :allCounts="allCounts" @updateSearchValue="updateSearchValue"/>
+      </InsightsPane>
+
+      <InsightsPane><CrowdSection/></InsightsPane>
+      <InsightsPane><StandoutsSection/></InsightsPane>
+      <InsightsPane><PantheonSection/></InsightsPane>
+      <InsightsPane><TiesSection/></InsightsPane>
+      <InsightsPane><GenresSection/></InsightsPane>
+
+      <InsightsPane>
+        <ScatterChart :chartData="scatterPlotData" :options="scatterPlotOptions"/>
+        <!-- What the cloud of dots is actually saying. 1,300 points are hard to
+             read by eye, so the plot states its own conclusion. -->
+        <p v-if="scatterReading" class="scatter-reading">{{ scatterReading }}</p>
+        <div class="scatter-controls mt-3">
+          <div class="row g-2">
+            <div class="col-12">
+              <button class="btn btn-outline-light w-100 scatter-button" @click="randomizeAxes" title="Random Axes">
+                <i class="bi bi-shuffle"/>
+              </button>
+            </div>
+            <div class="col-12">
+              <div class="form-floating" data-bs-theme="dark">
+                <select id="x-axis-select" class="form-select scatter-select" v-model="selectedXAxis">
+                  <option v-for="option in axisOptions" :key="option.key" :value="option.key">
+                    {{ option.label }}
+                  </option>
+                </select>
+                <label for="x-axis-select">X-Axis</label>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="form-floating" data-bs-theme="dark">
+                <select id="y-axis-select" class="form-select scatter-select" v-model="selectedYAxis">
+                  <option v-for="option in axisOptions" :key="option.key" :value="option.key">
+                    {{ option.label }}
+                  </option>
+                </select>
+                <label for="y-axis-select">Y-Axis</label>
+              </div>
+            </div>
+          </div>
+        </div>
       </InsightsPane>
     </template>
 
@@ -419,17 +420,23 @@ import { placeRows, favouritePlaces, mostVisitedPlaces, placeSummary, countryCov
 import { memoByIdentity } from "../utils/memoByIdentity.js";
 import { afterFrame } from "../utils/nextFrame.js";
 import SkeletonBlock from "./SkeletonBlock.vue";
+import PersonalAwardsScreen from "./PersonalAwardsScreen.vue";
 
-const TAB_KEYS = ['overview', 'ratings', 'activity', 'eras', 'people', 'places'];
+const TAB_KEYS = ['overview', 'awards', 'activity', 'eras', 'people', 'places'];
+
+// Tabs that are gone, and where their content went: Ratings joined
+// Activity when Awards took its place (2026-10-25).
+const RETIRED_TABS = { ratings: 'activity' };
 
 // A link can name the tab (?tab=eras — the old /stats address does); else
 // the last one you were on; else Overview. A stored key from a tab that no
 // longer exists falls back rather than rendering an empty page.
 function initialTab (route) {
-  const asked = route?.query?.tab;
+  const asked = RETIRED_TABS[route?.query?.tab] || route?.query?.tab;
   if (TAB_KEYS.includes(asked)) return asked;
   let stored = null;
   try { stored = localStorage.getItem('cinemaRoll.insights.tab'); } catch { /* private mode */ }
+  stored = RETIRED_TABS[stored] || stored;
   return TAB_KEYS.includes(stored) ? stored : 'overview';
 }
 
@@ -458,6 +465,7 @@ Chart.register(...registerables);
 export default {
   name: "Insights",
   components: {
+    PersonalAwardsScreen,
     CoverageMap,
     FunFactsRow,
     ScatterChart,
@@ -500,7 +508,7 @@ export default {
       monthAbbreviations: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
       tabs: [
         { key: 'overview', label: 'Overview' },
-        { key: 'ratings', label: 'Ratings' },
+        { key: 'awards', label: 'Awards' },
         { key: 'activity', label: 'Activity' },
         { key: 'eras', label: 'Eras' },
         { key: 'people', label: 'People' },
@@ -1353,6 +1361,12 @@ export default {
     // Content a frame behind the highlight - see the template note. A
     // watcher rather than part of setTab, so a tab set any other way (a
     // restored choice, a deep link, a test) is rendered too.
+    // A link that names a tab while Insights is already open (the awards
+    // prompt's /awards, which redirects to ?tab=awards).
+    '$route.query.tab' (asked) {
+      const key = RETIRED_TABS[asked] || asked;
+      if (TAB_KEYS.includes(key) && key !== this.activeTab) this.activeTab = key;
+    },
     activeTab: {
       immediate: true,
       handler (key) {
@@ -1374,8 +1388,12 @@ export default {
       return `coverage-${Math.min(4, Math.max(1, step))}`;
     },
     setTab (key) {
+      if (key === this.activeTab) return;
       this.activeTab = key;
       localStorage.setItem('cinemaRoll.insights.tab', key);
+      // Only Awards keeps its state in the address (ceremony, year), so a
+      // tab change clears it rather than carrying a stale year or tab along.
+      this.$router?.replace?.({ path: '/insights', query: key === 'awards' ? { tab: 'awards' } : {} });
     },
     async loadWorld () {
       if (this.world) return;
@@ -3028,7 +3046,10 @@ export default {
     --accent-deep: #6d5c00;
   }
 
-  &.insights-accent-ratings {
+  /* Awards took Ratings' slot and its blue (2026-10-25); the awards screen
+     inside keeps its own gold, which beside Overview's gold tab would read
+     as the same tab twice. */
+  &.insights-accent-awards {
     --accent: #1D8BF1;
     --accent-deep: #12578f;
   }
@@ -3056,7 +3077,7 @@ export default {
 
   /* The deep shades are dark enough to need white back. */
   &.insights-accent-overview .alt .glance-label,
-  &.insights-accent-ratings .alt .glance-label,
+  &.insights-accent-awards .alt .glance-label,
   &.insights-accent-activity .alt .glance-label,
   &.insights-accent-eras .alt .glance-label,
   &.insights-accent-people .alt .glance-label,
@@ -3108,7 +3129,7 @@ export default {
       }
 
       &.insights-tab-overview.active { background: #FFD700; }
-      &.insights-tab-ratings.active { background: #1D8BF1; }
+      &.insights-tab-awards.active { background: #1D8BF1; }
       &.insights-tab-activity.active { background: #24d776; }
       &.insights-tab-eras.active { background: #ff7a6b; }
       &.insights-tab-people.active { background: #cd7fe8; }
@@ -3171,13 +3192,29 @@ export default {
     .third .glance-value { font-size: 1.1rem; }
   }
 
-  /* Overview's card sits under the glance tiles, which carry no bottom
-     margin of their own. */
-  .awards-link-card {
-    margin-top: 0.75rem;
+  /* Where Activity's own sections end and what was the Ratings tab begins:
+     a quiet label on a hairline, not a second tab bar. #ccc on the page's
+     dark ground is ~10:1. */
+  .insights-divider {
+    align-items: center;
+    color: #ccc;
+    display: flex;
+    font-size: 0.8rem;
+    font-weight: 600;
+    gap: 0.6rem;
+    letter-spacing: 0.08em;
+    margin: 1.75rem 0 0.75rem;
+    text-transform: uppercase;
+
+    &::before,
+    &::after {
+      border-top: 1px solid #4a4a4a;
+      content: '';
+      flex: 1 1 auto;
+    }
   }
 
-  /* A link out of Insights (Awards on Overview, The Web on People). It reads as a
+  /* A link out of Insights (The Web on People). It reads as a
      control, not one more tile: a raised fill, a soft 8px radius against the
      tiles' hard 3px, a grey edge, and a chevron saying it goes somewhere. */
   .insights-link-card {

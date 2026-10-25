@@ -248,7 +248,10 @@ contiguous run of equal scores; `createRoundRobinTournament(ids, rng)` builds ev
   doesn't depend on Vue's flush ordering between the parent's prop update and the child's
   watcher.
 
-## Ceremony tabs on /awards (2026-10-07)
+## Ceremony tabs on the Awards screen (2026-10-07)
+
+Since 2026-10-25 the screen is the Awards tab of Insights (`/insights?tab=awards`;
+`/awards` redirects there keeping its query). See `.claude/rules/detail-and-insights.md`.
 
 Matt: "a series of tabs at the top that would let us flip between the
 Groskers, the Golden Globes, all of my friends' awards, but also the Oscars…

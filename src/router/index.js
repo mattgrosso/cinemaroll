@@ -37,7 +37,6 @@ const CineplexityGame = lazyScreen(() => import(/* webpackChunkName: "games" */ 
 const GameStatsScreen = lazyScreen(() => import(/* webpackChunkName: "games" */ "../components/games/GameStatsScreen.vue"));
 const WatchlistScreen = lazyScreen(() => import(/* webpackChunkName: "watchlist" */ "../components/WatchlistScreen.vue"));
 const LibraryPoster = lazyScreen(() => import(/* webpackChunkName: "library-poster" */ "../components/LibraryPoster.vue"));
-const PersonalAwardsScreen = lazyScreen(() => import(/* webpackChunkName: "awards" */ "../components/PersonalAwardsScreen.vue"));
 const FilmClubScreen = lazyScreen(() => import(/* webpackChunkName: "film-club" */ "../components/FilmClubScreen.vue"));
 const FriendComparison = lazyScreen(() => import(/* webpackChunkName: "film-club" */ "../components/FriendComparison.vue"));
 
@@ -262,7 +261,7 @@ const routes = [
       // Back-link identity: what this screen is called, and where back
       // goes when there is no history to go back to.
       title: 'Trophy Case',
-      parent: '/awards',
+      parent: '/insights?tab=awards',
       requiresLogin: true
     },
     beforeEnter: (to, from, next) => {
@@ -447,23 +446,11 @@ const routes = [
     }
   },
   {
+    // Awards is a tab of Insights (2026-10-25). Every old link — a movie's
+    // award rows, Home's "a year is ready" card — still says /awards, and
+    // lands on the tab with its year and ceremony intact.
     path: '/awards',
-    name: 'PersonalAwardsScreen',
-    component: PersonalAwardsScreen,
-    meta: {
-      // Back-link identity: what this screen is called, and where back
-      // goes when there is no history to go back to.
-      title: 'Awards',
-      parent: '/insights',
-      requiresLogin: true
-    },
-    beforeEnter: (to, from, next) => {
-      if (!loggedIn()) {
-        next('/login');
-      } else {
-        next();
-      }
-    }
+    redirect: (to) => ({ path: '/insights', query: { ...to.query, tab: 'awards' } })
   },
   {
     path: '/library-poster',

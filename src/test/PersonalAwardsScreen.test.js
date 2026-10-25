@@ -63,7 +63,7 @@ describe('PersonalAwardsScreen', () => {
     it('defaults to the most recent year', () => {
       const { replaceSpy } = factory({}, {}, library);
 
-      expect(replaceSpy).toHaveBeenCalledWith({ path: '/awards', query: { year: 2001 } });
+      expect(replaceSpy).toHaveBeenCalledWith({ path: '/insights', query: { tab: 'awards', year: 2001 } });
     });
 
     it('defaults even when every year is already complete — the case that broke', () => {
@@ -72,7 +72,7 @@ describe('PersonalAwardsScreen', () => {
       };
       const { replaceSpy } = factory({}, settings, library);
 
-      expect(replaceSpy).toHaveBeenCalledWith({ path: '/awards', query: { year: 2001 } });
+      expect(replaceSpy).toHaveBeenCalledWith({ path: '/insights', query: { tab: 'awards', year: 2001 } });
     });
 
     it('leaves an explicit year in the URL alone', () => {
@@ -82,13 +82,28 @@ describe('PersonalAwardsScreen', () => {
     });
   });
 
-  it('closing leaves the page (Home fallback when there is no history to go back to)', () => {
-    const { wrapper, pushSpy, backSpy } = factory({ year: '1997' });
-    wrapper.findComponent(PersonalAwardsModal).vm.$emit('closed');
-    // jsdom starts with history.length === 1, so this exercises the fallback.
-    expect(backSpy.mock.calls.length + pushSpy.mock.calls.length).toBeGreaterThan(0);
-    if (pushSpy.mock.calls.length) expect(pushSpy).toHaveBeenCalledWith('/');
+  // A tab of Insights since 2026-10-25: completing a year closes the awards
+  // component, and with no page to leave it comes straight back, still on
+  // that year, rather than navigating away from Insights.
+  it('completing a year reopens the awards in place instead of leaving', async () => {
+    const { wrapper, pushSpy, backSpy, replaceSpy } = factory({ year: '1997' });
+    const before = wrapper.findComponent(PersonalAwardsModal).vm;
+    before.$emit('closed');
+    await wrapper.vm.$nextTick();
+    const after = wrapper.findComponent(PersonalAwardsModal);
+    expect(after.exists()).toBe(true);
+    expect(after.vm).not.toBe(before);
+    expect(after.props('selectedYear')).toBe(1997);
+    expect(pushSpy).not.toHaveBeenCalled();
+    expect(backSpy).not.toHaveBeenCalled();
+    expect(replaceSpy).not.toHaveBeenCalled();
   });
+
+  it('has no back link of its own; Insights carries it', () => {
+    const { wrapper } = factory({ year: '1997' });
+    expect(wrapper.findComponent({ name: 'BackLink' }).exists()).toBe(false);
+  });
+
   // "I'm not sure how to get to my awards view. If I wanna just look at a
   // single year's awards... a similar kind of side to side scrollable list of
   // years at the top of the awards page." (2026-08-16)
@@ -128,7 +143,7 @@ describe('PersonalAwardsScreen', () => {
       await wrapper.vm.$nextTick();
 
       await wrapper.findAll('.awards-year-pill')[2].trigger('click');
-      expect(replaceSpy).toHaveBeenCalledWith({ path: '/awards', query: { year: 2001 } });
+      expect(replaceSpy).toHaveBeenCalledWith({ path: '/insights', query: { tab: 'awards', year: 2001 } });
 
       // Tapping the year you're already on is a no-op, not a redundant nav.
       replaceSpy.mockClear();
@@ -182,16 +197,21 @@ describe('ceremony tabs', () => {
     expect(wrapper.findComponent(AwardsBoard).exists()).toBe(false);
   });
 
-  // 2026-10-24: Trophy Case moved here from the Insights directory, as the
-  // strip's first pill. It's a link to its own page, not a ceremony.
-  it('leads the strip with a Trophy Case link', async () => {
+  // 2026-10-25: "I don't go to the trophy case very often. It should be
+  // less prominent." Out of the ceremony strip, down to a quiet link under
+  // your own awards.
+  it('keeps Trophy Case out of the strip, as a link under your own awards only', async () => {
     const { wrapper, pushSpy } = tabbed({ year: '1997' });
-    const strip = wrapper.find('.ceremony-scroller');
-    const first = strip.element.firstElementChild;
-    expect(first.classList.contains('trophy-case-pill')).toBe(true);
-    expect(first.textContent).toContain('Trophy Case');
-    await wrapper.find('.trophy-case-pill').trigger('click');
+    expect(wrapper.find('.ceremony-scroller').text()).not.toContain('Trophy Case');
+    const link = wrapper.find('.trophy-case-link');
+    expect(link.text()).toContain('Trophy Case');
+    // Last thing on the page, after the awards themselves.
+    expect(wrapper.element.lastElementChild.contains(link.element)).toBe(true);
+    await link.trigger('click');
     expect(pushSpy).toHaveBeenCalledWith('/trophy-case');
+
+    const oscars = tabbed({ ceremony: 'oscars', year: '1994' });
+    expect(oscars.wrapper.find('.trophy-case-link').exists()).toBe(false);
   });
 
   // Matt, 2026-10-08: "if I select a year, and then I switch to a different
@@ -199,25 +219,25 @@ describe('ceremony tabs', () => {
   it('switching ceremony keeps the year in the URL', async () => {
     const { wrapper, replaceSpy } = tabbed({ year: '1997' });
     await wrapper.findAll('.ceremony-tab')[2].trigger('click');
-    expect(replaceSpy).toHaveBeenCalledWith({ path: '/awards', query: { ceremony: 'oscars', year: 1997 } });
+    expect(replaceSpy).toHaveBeenCalledWith({ path: '/insights', query: { tab: 'awards', ceremony: 'oscars', year: 1997 } });
   });
 
   it('a board without the year shows its newest, but the year stays for the next tab', async () => {
     const { wrapper, replaceSpy } = tabbed({ ceremony: 'friend:ext-1', year: '1994' });
     expect(wrapper.find('.board-header h2').text()).toBe('1980 Goegan Globes');
     await wrapper.findAll('.ceremony-tab')[2].trigger('click');
-    expect(replaceSpy).toHaveBeenCalledWith({ path: '/awards', query: { ceremony: 'oscars', year: 1994 } });
+    expect(replaceSpy).toHaveBeenCalledWith({ path: '/insights', query: { tab: 'awards', ceremony: 'oscars', year: 1994 } });
   });
 
   it('back to your own awards keeps the year when it is one of yours, else lands on your newest', async () => {
     const library = libraryForYears({ 1994: 10, 2001: 10 });
     const kept = tabbed({ ceremony: 'oscars', year: '1994' }, {}, library);
     await kept.wrapper.findAll('.ceremony-tab')[0].trigger('click');
-    expect(kept.replaceSpy).toHaveBeenCalledWith({ path: '/awards', query: { year: 1994 } });
+    expect(kept.replaceSpy).toHaveBeenCalledWith({ path: '/insights', query: { tab: 'awards', year: 1994 } });
 
     const moved = tabbed({ ceremony: 'oscars', year: '1977' }, {}, library);
     await moved.wrapper.findAll('.ceremony-tab')[0].trigger('click');
-    expect(moved.replaceSpy).toHaveBeenCalledWith({ path: '/awards', query: { year: 2001 } });
+    expect(moved.replaceSpy).toHaveBeenCalledWith({ path: '/insights', query: { tab: 'awards', year: 2001 } });
   });
 
   it('a friend\'s tab lands on their newest year with the board, and a pick opens the film', async () => {
@@ -231,7 +251,7 @@ describe('ceremony tabs', () => {
     board.vm.$emit('pick', { movieId: 1891 });
     expect(pushSpy).toHaveBeenCalledWith('/movie/1891');
     await wrapper.findAll('.awards-year-pill')[0].trigger('click');
-    expect(replaceSpy).toHaveBeenCalledWith({ path: '/awards', query: { ceremony: 'friend:ext-1', year: 1977 } });
+    expect(replaceSpy).toHaveBeenCalledWith({ path: '/insights', query: { tab: 'awards', ceremony: 'friend:ext-1', year: 1977 } });
   });
 
   it('the Oscars tab reads the bundled dataset', () => {

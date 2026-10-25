@@ -773,3 +773,15 @@ to figure out another solution"). The bar is back to its seven chips in their ol
 `chip-*` classes stayed), and Awards took the fallback: one full-width card at the top of
 Overview, styled like The Web's card on People, back falling to Insights. It's a stopgap until
 Matt picks the real home; the lesson is that the rainbow bar is closed, not merely full.
+
+## Awards gets a tab; Ratings joins Activity (2026-10-25)
+
+Matt, the next day: "the awards you put a button back on the overview page, but I still don't
+really like it there. It's still an extra click", so: Ratings' sections move into Activity,
+Awards takes Ratings' tab, and Trophy Case, which led the ceremony strip, "should be less
+prominent. I don't go to the trophy case very often." Awards renders `PersonalAwardsScreen`
+in place, keeping year and ceremony in the Insights address; `/awards` became a redirect, so
+no caller had to change. The Awards tab took Ratings' blue rather than gold: two gold tabs
+side by side in the top row would read as one. Activity's ratings half sits under a small
+"Ratings" divider after the calendar; the other order (ratings first) was offered in case the
+tab feels long. Trophy Case is a muted text link under your own awards.
