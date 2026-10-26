@@ -377,6 +377,7 @@ import axios from 'axios';
 import BackLink from './games/BackLink.vue';
 import SkeletonBlock from './SkeletonBlock.vue';
 import { afterFrame, SKELETON_FIRST } from '../utils/nextFrame.js';
+import { markRaw } from 'vue';
 import WatchlistRow from './WatchlistRow.vue';
 import DrawFromHat from './DrawFromHat.vue';
 import MovieHatAccess from './MovieHatAccess.vue';
@@ -390,7 +391,7 @@ import { memoByIdentity } from '../utils/memoByIdentity.js';
 const friendPicksMemo = memoByIdentity((library, profiles) => friendsLoveUnseen(library, getRating, profiles));
 import { rankSections, sourceSummary } from '../assets/javascript/recommendationStats.js';
 import { crowdRating } from '../assets/javascript/letterboxdCompare.js';
-import { rewatchCandidates, anotherShotCandidates, nearThresholdYears, favoritePeople, peopleYouRateHigher, rankWatchlistCandidates, rankStraightToStreaming, streamingCheck, streamingWindowStart, dailyPick, ratedTmdbIds, topRatedSeeds, tasteProfile, puntKeyFor, nextPunt, dismissPunt, isPunted, PEOPLE_PER_SECTION, MIN_PEOPLE_PER_SECTION } from '../assets/javascript/discover.js';
+import { rewatchCandidates, anotherShotCandidates, nearThresholdYears, favoritePeople, peopleYouRateHigher, rankWatchlistCandidates, rankStraightToStreaming, streamingCheck, streamingWindowStart, dailyPick, keepShowing, ratedTmdbIds, topRatedSeeds, tasteProfile, puntKeyFor, nextPunt, dismissPunt, isPunted, PEOPLE_PER_SECTION, MIN_PEOPLE_PER_SECTION } from '../assets/javascript/discover.js';
 import { awardsYearThreshold } from '../assets/javascript/personalAwards.js';
 import { formatScore } from '../assets/javascript/formatScore.js';
 import { includeShortsSetting, SHORT_RUNTIME } from '../assets/javascript/shorts.js';
@@ -487,6 +488,9 @@ export default {
       runtimeTick: 0,
       // Pending hat-punts, cleared on unmount — see puntAll.
       puntTimers: [],
+      // What each suggestion row last showed (see `showing`). markRaw: it is
+      // written from inside the rows' own computeds, so it must not track.
+      shownRows: markRaw({}),
       // The "ask for something" box. `promptAsked` is the request the results
       // on screen belong to, kept separate from what's currently typed so the
       // caption doesn't change under you while you edit.
@@ -702,9 +706,22 @@ export default {
      * than leaving a gap until the next visit — and hat contents that land
      * after the pool was built are honoured the moment they do.
      */
+    //
+    // Given a row name, the row also holds still while the screen is open
+    // (bug report 2026-10-26: an X "totally reevaluates the whole list"):
+    // what's already showing keeps its place, and replacements join at the
+    // end — see keepShowing. A new pool (a fresh fetch) or a new visit starts
+    // from today's pick again.
     showing () {
       const exclude = this.skipFromSuggestions;
-      return (pool) => dailyPick(pool || [], Date.now(), { exclude });
+      return (pool, row) => {
+        const fresh = dailyPick(pool || [], Date.now(), { exclude });
+        if (!row) return fresh;
+        const last = this.shownRows[row];
+        const shown = last && last.pool === pool ? keepShowing(last.shown, fresh, { exclude }) : fresh;
+        this.shownRows[row] = { pool, shown };
+        return shown;
+      };
     },
     rewatchList () {
       return rewatchCandidates(this.library, getRating, Date.now(), { exclude: this.skipFromSuggestions });
@@ -746,7 +763,7 @@ export default {
       return this.nearYears.find((year) => year.year === this.selectedYear) || { count: 0, missing: 0 };
     },
     selectedYearMovies () {
-      return this.showing(this.yearMovies[this.selectedYear]);
+      return this.showing(this.yearMovies[this.selectedYear], `year-${this.selectedYear}`);
     },
     awardsThreshold () {
       return awardsYearThreshold(this.$store.state.settings);
@@ -802,21 +819,21 @@ export default {
           key: 'directors',
           title: 'From directors you love',
           names: (this.directorNames.length ? this.directorNames : this.favoriteDirectors).map((p) => p.name),
-          movies: this.showing(this.directorMovies),
+          movies: this.showing(this.directorMovies, 'directors'),
           loading: this.directorsLoading
         },
         {
           key: 'actresses',
           title: 'From actresses you love',
           names: this.actressNames.map((p) => p.name),
-          movies: this.showing(this.actressMovies),
+          movies: this.showing(this.actressMovies, 'actresses'),
           loading: this.actorsLoading
         },
         {
           key: 'actors',
           title: 'From actors you love',
           names: this.actorNames.map((p) => p.name),
-          movies: this.showing(this.actorMovies),
+          movies: this.showing(this.actorMovies, 'actors'),
           loading: this.actorsLoading
         },
         {
@@ -825,21 +842,21 @@ export default {
           key: 'underrated',
           title: 'From people you rate higher than most',
           names: this.underratedNames.map((p) => p.name),
-          movies: this.showing(this.underratedMovies),
+          movies: this.showing(this.underratedMovies, 'underrated'),
           loading: this.actorsLoading
         },
         {
           key: 'similar',
           title: 'More like your favorites',
           names: this.recommendationSeeds.map((entry) => entry.movie.title),
-          movies: this.showing(this.similarMovies),
+          movies: this.showing(this.similarMovies, 'similar'),
           loading: this.similarLoading
         },
         {
           key: 'gems',
           title: 'Hidden gems',
           names: this.topTasteGenres.map((g) => g.name),
-          movies: this.showing(this.gemMovies),
+          movies: this.showing(this.gemMovies, 'gems'),
           loading: this.gemsLoading
         },
         {
@@ -849,7 +866,7 @@ export default {
           title: 'Went straight to streaming',
           caption: 'Popular this past year, never in wide release in theaters. Ranked for your taste.',
           names: [],
-          movies: this.showing(this.streamingMovies),
+          movies: this.showing(this.streamingMovies, 'streaming'),
           loading: this.streamingLoading
         }
       ].filter((section) => section.caption || section.names.length >= (PEOPLE_SECTION_KEYS.has(section.key) ? MIN_PEOPLE_PER_SECTION : 1));

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rewatchCandidates, rewatchCycleYears, anotherShotCandidates, nearThresholdYears, favoritePeople, rankWatchlistCandidates, dailyPick, ratedTmdbIds, tasteProfile, tasteBonus, nextPunt, dismissPunt, isPunted, puntKeyFor , peopleYouRateHigher } from '@/assets/javascript/discover.js';
+import { rewatchCandidates, rewatchCycleYears, anotherShotCandidates, nearThresholdYears, favoritePeople, rankWatchlistCandidates, dailyPick, keepShowing, ratedTmdbIds, tasteProfile, tasteBonus, nextPunt, dismissPunt, isPunted, puntKeyFor , peopleYouRateHigher } from '@/assets/javascript/discover.js';
 
 const NOW = new Date('2026-08-15T00:00:00Z').getTime();
 const yearsAgo = (years) => NOW - years * 365.25 * 24 * 3600 * 1000;
@@ -272,6 +272,43 @@ describe('dailyPick', () => {
     const shown = dailyPick(pool(36), NOW, { cap: 12, reach: 24 });
     expect(shown[0].matchPct).toBe(97);
     expect(shown[shown.length - 1].matchPct).toBe(62);
+  });
+});
+
+// Bug report 2026-10-26: an X "totally reevaluates the whole list and then
+// rearranges things". A row already on screen holds still; only the end moves.
+describe('keepShowing', () => {
+  const pool = (n) => Array.from({ length: n }, (_, i) => ({ id: i, title: `M${i}`, score: 100 - i }));
+  const NOW_DAY = Date.UTC(2026, 9, 26, 12);
+
+  it('keeps every film before an X where it was, and tops the row up at the end', () => {
+    const before = dailyPick(pool(36), NOW_DAY, { cap: 12, reach: 24 });
+    const gone = before[4].id;
+    const exclude = (m) => m.id === gone;
+    const after = keepShowing(before, dailyPick(pool(36), NOW_DAY, { cap: 12, reach: 24, exclude }), { exclude });
+
+    expect(after).toHaveLength(12);
+    expect(after.slice(0, 4)).toEqual(before.slice(0, 4));
+    expect(after.slice(4, 11)).toEqual(before.slice(5));
+    expect(before.map((m) => m.id)).not.toContain(after[11].id);
+  });
+
+  it('keeps the captions it showed, instead of rescaling match %', () => {
+    const before = dailyPick(pool(36), NOW_DAY, { cap: 12, reach: 24 });
+    const exclude = (m) => m.id === before[0].id;
+    const after = keepShowing(before, dailyPick(pool(36), NOW_DAY, { cap: 12, reach: 24, exclude }), { exclude });
+    expect(after.slice(0, 11).map((m) => m.matchPct)).toEqual(before.slice(1).map((m) => m.matchPct));
+  });
+
+  it('just shrinks when nothing is left to add', () => {
+    const before = dailyPick(pool(5), NOW_DAY);
+    const exclude = (m) => m.id === 2;
+    expect(keepShowing(before, dailyPick(pool(5), NOW_DAY, { exclude }), { exclude }).map((m) => m.id)).toEqual([0, 1, 3, 4]);
+  });
+
+  it('shows the fresh pick when nothing was showing yet', () => {
+    const fresh = dailyPick(pool(36), NOW_DAY);
+    expect(keepShowing(null, fresh)).toEqual(fresh);
   });
 });
 

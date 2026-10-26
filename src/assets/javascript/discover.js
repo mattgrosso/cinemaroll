@@ -368,6 +368,33 @@ export function dailyPick (ranked, now = Date.now(), { cap = 12, reach = cap * 2
   return withMatchPct(chosen.map((movie) => ({ movie, score: movie.score ?? 0 })));
 }
 
+/**
+ * A row that is already on screen, kept still while it changes.
+ *
+ * Bug report, 2026-10-26: "When I'm going through a watch list and I tap X on
+ * items, sometimes it seems like it totally reevaluates the whole list and
+ * then rearranges things ... It would be better if the change only ever
+ * happened further to the right from wherever I made my choice." dailyPick
+ * shuffles today's 12 out of the top 24, so one X shifts that window and the
+ * shuffle lands on a mostly different twelve, with every match % rescaled.
+ *
+ * So once a row has been shown, `previous` wins: every film still eligible
+ * keeps its place AND its caption, the excluded ones drop out, and `fresh`
+ * (today's dailyPick) only tops the row back up — at the end, to the right of
+ * anything you've already looked at.
+ */
+export function keepShowing (previous, fresh, { cap = 12, exclude = null } = {}) {
+  const kept = (previous || []).filter((movie) => movie && !(exclude && exclude(movie)));
+  const seen = new Set(kept.map((movie) => movie.id));
+  for (const movie of fresh || []) {
+    if (kept.length >= cap) break;
+    if (!movie || seen.has(movie.id)) continue;
+    seen.add(movie.id);
+    kept.push(movie);
+  }
+  return kept;
+}
+
 // The movies to seed "more like this" recommendations from: your highest
 // rated, one per title. Ties keep library order (stable sort).
 export function topRatedSeeds (entries, getRatingFn, { cap = 5 } = {}) {

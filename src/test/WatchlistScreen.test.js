@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
+import { reactive } from 'vue';
 import WatchlistScreen from '@/components/WatchlistScreen.vue';
 import axios from 'axios';
 import { clearRuntimeCache } from '@/assets/javascript/suggestionFilters.js';
@@ -609,6 +610,53 @@ describe('films already in a hat are not suggested again', () => {
 // there's a way to combine those into a single list with like a year selector
 // above it... and then, if you could see on each one of those selectors, how
 // close we actually are so I can look at any given year."
+// Bug report 2026-10-26: "When I'm going through a watch list and I tap X on
+// items, sometimes it seems like it totally reevaluates the whole list and
+// then rearranges things." The row is a day-seeded 12 of the top 24, and one
+// X used to reshuffle it. Now the films left of the X stay put.
+describe('an X only changes the row to the right of it', () => {
+  beforeEach(() => {
+    axios.get.mockReset();
+    const crew = Array.from({ length: 30 }, (_, i) => ({
+      id: 400 + i, title: `Pool Film ${i}`, job: 'Director', release_date: '2015-06-15', vote_count: 9000 - i * 100, vote_average: 8
+    }));
+    axios.get.mockImplementation((url) => (
+      url.includes('/person/777/movie_credits')
+        ? Promise.resolve({ data: { crew, cast: [] } })
+        : tmdbImpl(url)
+    ));
+  });
+
+  it('keeps the earlier posters in place and adds the replacement at the end', async () => {
+    const state = reactive({ isOnline: true, movieHatMovieIds: {}, movieHatContentsComplete: true, settings: { watchlistPunts: {} } });
+    const dispatch = vi.fn((action, payload) => {
+      if (action === 'writeDurably') state.settings.watchlistPunts[payload.path.split('/').pop()] = payload.value;
+    });
+    const wrapper = mount(WatchlistScreen, {
+      global: {
+        mocks: {
+          $store: { state, getters: { allMoviesAsArray: library(), linkedMovieHats: [], showtimesBadgeCount: 0 }, commit: vi.fn(), dispatch },
+          $router: { push: vi.fn(), replace: vi.fn() }
+        }
+      }
+    });
+    await flushPromises();
+
+    const rowNames = () => cardNames(wrapper).filter((name) => name.startsWith('Pool Film'));
+    const before = rowNames();
+    expect(before).toHaveLength(12);
+
+    const fifth = wrapper.findAll('.watchlist-card').find((card) => card.attributes('aria-label') === before[4]);
+    await fifth.find('.punt-btn').trigger('click');
+    await flushPromises();
+
+    const after = rowNames();
+    expect(after).toHaveLength(12);
+    expect(after).not.toContain(before[4]);
+    expect(after.slice(0, 11)).toEqual([...before.slice(0, 4), ...before.slice(5)]);
+  });
+});
+
 describe('the "get a year to 10" picker', () => {
   // 1997 needs 1 more, 2003 needs 3, 1962 needs 9. Under the old rules 1962
   // was dropped outright (beyond a reach of 4).

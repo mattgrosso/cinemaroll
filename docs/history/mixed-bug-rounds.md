@@ -828,3 +828,23 @@ true all day whenever `settings.dailyAwardsYear` was stamped today — the
 "Resume Awards" shortcut — regardless of whether any year still needs work.
 Matt's settings had it set (1973) with 2024–2026 all completed. Not changed;
 flagged to him.
+
+## Watchlist: an X reshuffled the whole row (2026-10-26)
+
+Report: "When I tap X on items, sometimes it seems like it totally reevaluates
+the whole list and then rearranges things ... It would be better if the change
+only ever happened further to the right from wherever I made my choice."
+
+Cause: `dailyPick` shows a day-seeded 12 of a row's top 24 eligible films.
+Dismissing one shifts that 24-film window, so the same seed shuffles out a
+mostly different twelve, and `withMatchPct` rescales every caption to the new
+set. Rewatch rows were never affected (deterministic order, no shuffle).
+
+Fix: `keepShowing(previous, fresh, { cap, exclude })` in `discover.js`. The
+screen's `showing(pool, row)` remembers each row's last showing (a `markRaw`
+map, since it is written from inside computeds) while the pool keeps the same
+identity: still-eligible films keep their place and caption, excluded ones
+drop, and the fresh pick only tops the row up at the end. A new fetch or a new
+visit starts from today's pick again. Tests: `keepShowing` in
+`discover.test.js`, and "an X only changes the row to the right of it" in
+`WatchlistScreen.test.js` (both fail with the fix reverted).
