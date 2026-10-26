@@ -176,12 +176,12 @@ describe('the midnight push', () => {
 
   it('names one film, or lists several', () => {
     expect(composeDayMessage('Matt', [{ id: 1, t: 'Heat' }])).toEqual({
-      title: 'Matt logged Heat',
-      body: 'Tap to see it in their library.',
+      title: 'Matt logged',
+      body: 'Heat. Tap to see it.',
       navigate: '/movie/1'
     });
     const three = composeDayMessage('Matt', ['Heat', 'Tenet', 'Alien'].map((t, i) => ({ id: i, t })));
-    expect(three.title).toBe('Matt logged 3 films');
+    expect(three.title).toBe('3 films from Matt');
     expect(three.body).toBe('Heat, Tenet and Alien.');
     expect(three.navigate).toBe('/film-club');
     const six = composeDayMessage('Matt', 'ABCDEF'.split('').map((t, i) => ({ id: i, t })));

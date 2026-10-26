@@ -62,6 +62,7 @@ const {
   RELEASE_WINDOW_DAYS
 } = require('./newsletterCompose.js');
 const letterboxd = require('./letterboxd.js');
+const { fitNotification } = require('./pushFit.js');
 const {
   discoverReleases, enrichCandidate, anniversaryPool, trendingThisWeek, filmCard,
   personWithSignatureFilm, olderNamesake
@@ -239,8 +240,9 @@ const dbSet = async (path, value) => {
 
 // --- Push (copied from push-notify.js) ---------------------------------------
 
+// Cut to fit the watch (pushFit.js: title 24, body 60).
 const buildPayload = ({ title, body, navigate = '/', tag }) =>
-  JSON.stringify({ web_push: 8030, notification: { title, body, navigate: `${APP_URL}/#${navigate}`, tag } });
+  JSON.stringify({ web_push: 8030, notification: { ...fitNotification({ title, body }), navigate: `${APP_URL}/#${navigate}`, tag } });
 
 const sendToAccount = async (topKey, subscriptions, payload) => {
   let delivered = 0;

@@ -44,7 +44,8 @@ export const LAMBDAS = {
       'aws-lambda/filmClubSyncPublisher.js': 'filmClubSyncPublisher.js',
       'aws-lambda/clubNotices.js': 'clubNotices.js',
       'aws-lambda/sweepClock.js': 'sweepClock.js',
-      'aws-lambda/sentryLambda.js': 'sentryLambda.js'
+      'aws-lambda/sentryLambda.js': 'sentryLambda.js',
+      'aws-lambda/pushFit.js': 'pushFit.js'
     },
     dependencies: ['web-push'],
     // index.js hands the VAPID keys to web-push as it loads, and web-push
@@ -77,7 +78,8 @@ export const LAMBDAS = {
       'aws-lambda/cinemaScore.js': 'cinemaScore.js',
       'aws-lambda/letterboxd.js': 'letterboxd.js',
       'aws-lambda/letterboxdSync.js': 'letterboxdSync.js',
-      'aws-lambda/sentryLambda.js': 'sentryLambda.js'
+      'aws-lambda/sentryLambda.js': 'sentryLambda.js',
+      'aws-lambda/pushFit.js': 'pushFit.js'
     },
     dependencies: ['@anthropic-ai/sdk', '@aws-sdk/client-lambda', 'web-push'],
     // Like push, it hands the VAPID keys to web-push as it loads.

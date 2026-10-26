@@ -343,6 +343,14 @@ offer `feed` + `notices: true`, and fall back to a plain request if an inbox ref
 
 ## The push Lambda (`aws-lambda/push-notify.js`, deployed as `cinemaroll-push`)
 
+**Every push fits Matt's Apple Watch (2026-10-26): title ≤ 24, body ≤ 60.** Write
+wording that fits the usual case, most important word first ("Stickiness: Sinners",
+"Personal awards: 1997", a friend's log is titled "<name> logged" with the film leading
+the body). `aws-lambda/pushFit.js` is the backstop: both `buildPayload`s (here and the
+newsletter's) run title and body through `fitNotification`, which cuts at a word with
+"…". It's bundled into both Lambdas (`scripts/deploy-lambda.mjs`); tested in
+`src/test/pushFit.test.js`.
+
 **External friends are read by revision first (2026-10-09).** `notifyExternalLogs`
 reads each external feed's 34-byte `revision` child and downloads the body only when
 it moved (`push/state/externalRevision/<id>`, stored after the body was announced).

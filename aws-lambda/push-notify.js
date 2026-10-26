@@ -48,6 +48,7 @@ const { publishFeedV2 } = require('./filmClubSyncPublisher.js');
 const { pushId } = require('./filmClubSync.js');
 const { mapLimit, rotate, requestDeadline, createSweepClock, retryTransient } = require('./sweepClock.js');
 const { planInbox, coalesceNotices, currentFeedId, isNegotiated, noticeTargets, buildNotice, INBOX_PAGE } = require('./clubNotices.js');
+const { fitNotification } = require('./pushFit.js');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
 const DATABASE_URL = 'https://movie-log-8c4d5-default-rtdb.firebaseio.com';
@@ -442,11 +443,13 @@ const noteDbTrouble = async (now) => {
 
 // Declarative web push envelope. iOS 18.4+ renders this without running any
 // service worker JS; public/push-sw.js renders the same JSON elsewhere.
+// Every push goes through here, so this is where it is cut to fit the watch
+// (pushFit.js: title 24, body 60).
 const buildPayload = ({ title, body, navigate = '/', tag, appBadge }) => {
   // An absolute URL (a theater's ticket page) is opened as-is; anything else
   // is a route inside the app.
   const target = /^https?:\/\//.test(navigate) ? navigate : `${APP_URL}/#${navigate}`;
-  const notification = { title, body, navigate: target };
+  const notification = { ...fitNotification({ title, body }), navigate: target };
   if (tag) notification.tag = tag;
   if (typeof appBadge === 'number') notification.app_badge = appBadge;
   return JSON.stringify({ web_push: 8030, notification });
@@ -1120,8 +1123,8 @@ const notifyExternalLogs = async (topKey, push, prefs) => {
         // chores plus this log, which the app clears when it opens.
         const appBadge = await accountBadge(topKey, push, Date.now(), { extra: 1 });
         const payload = buildPayload({
-          title: `${friend.name || 'A friend'} logged ${watch.title}`,
-          body: friendLogBody(scoreLine, prefs),
+          title: `${friend.name || 'A friend'} logged`,
+          body: friendLogBody(scoreLine, prefs, watch.title),
           // An external friend's film may not be in Matt's library at all, so
           // the movie page is still the right landing - FriendsWhoSaw fetches
           // its own club data (see the 2026-08-29 cold-start fix).
@@ -1187,7 +1190,7 @@ const notifyFriendsOfLog = async (myKey, { tmdbId, title, score }) => {
       // The RECIPIENT decides whether the score is in the notification
       // (prefs.friendLogScores); a null score means the rater doesn't share
       // ratings at all. Both cases live in friendLogBody, where the tests are.
-      const body = friendLogBody(scoreLine, prefs);
+      const body = friendLogBody(scoreLine, prefs, title);
 
       // Icon badge: the recipient's own chore count plus this log — a badge
       // should say "things waiting for you", and the friend's log is one of
@@ -1197,7 +1200,7 @@ const notifyFriendsOfLog = async (myKey, { tmdbId, title, score }) => {
       const appBadge = await accountBadge(friendKey, push, Date.now(), { extra: 1 });
 
       const payload = buildPayload({
-        title: `${name} logged ${title}`,
+        title: `${name} logged`,
         body,
         navigate,
         tag: `friend-log-${myKey}-${tmdbId || 'x'}`,
@@ -1441,7 +1444,7 @@ exports.handler = async (event, context) => {
       const push = await dbGet(`${myKey}/push`);
       if (!push?.subscriptions) return response(404, { error: 'No subscriptions on this account' });
       const payload = buildPayload({
-        title: 'Cinema Roll can reach you here',
+        title: 'Notifications are on',
         body: 'This is what a notification will look like.',
         navigate: '/',
         tag: 'test'

@@ -274,12 +274,12 @@ function composeMessage (due, digest, news, now = Date.now()) {
 
     if (title && (justOne || (leadWithNew && news.newStickiness))) {
       parts.push(due.stickinessCount > 1
-        ? `${title} is ready for its stickiness rating (+${due.stickinessCount - 1} more)`
-        : `${title} is ready for its stickiness rating`);
+        ? `Stickiness: ${title} +${due.stickinessCount - 1}`
+        : `Stickiness: ${title}`);
     } else {
       parts.push(due.stickinessCount === 1
-        ? 'A film is ready for its stickiness rating'
-        : `${due.stickinessCount} films are ready for a stickiness check`);
+        ? 'Stickiness check ready'
+        : `${due.stickinessCount} stickiness checks`);
     }
     kinds.push('stickiness');
   }
@@ -302,7 +302,7 @@ function composeMessage (due, digest, news, now = Date.now()) {
   // [0] is genuinely the year you are about to be given - the notification
   // now names that and says nothing about the queue behind it.
   if (due.awardYears.length) {
-    parts.push(`${due.awardYears[0]} needs its personal awards`);
+    parts.push(`Personal awards: ${due.awardYears[0]}`);
     kinds.push('awards');
   }
 
@@ -369,7 +369,7 @@ function composeGamesMessage (unplayed, total = unplayed.length) {
   if (!unplayed.length) return null;
   if (unplayed.length === 1) {
     return {
-      title: `${unplayed[0].name} is waiting for you today`,
+      title: `Time for ${unplayed[0].name}`,
       body: 'Tap to play.',
       navigate: `/games/${unplayed[0].key}`
     };
@@ -378,7 +378,7 @@ function composeGamesMessage (unplayed, total = unplayed.length) {
   const shown = names.slice(0, 4);
   const rest = names.length - shown.length;
   return {
-    title: unplayed.length >= total ? "Today's games are waiting" : `${unplayed.length} games still to play today`,
+    title: unplayed.length >= total ? "Today's games are ready" : `${unplayed.length} games left today`,
     body: rest > 0 ? `${shown.join(', ')} and ${rest} more.` : `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}.`,
     navigate: '/games'
   };
@@ -390,10 +390,12 @@ function composeGamesMessage (unplayed, total = unplayed.length) {
 // (2026-09-06: "turn off the score so you see that they watched it, but you
 // don't see their score"). Default on, so an account that has never seen the
 // toggle keeps the notification it already had.
-function friendLogBody (scoreLine, prefs) {
-  const quiet = 'Tap to see it in their library.';
-  if (!scoreLine) return quiet;
-  return prefs && prefs.friendLogScores === false ? quiet : scoreLine;
+// `film` (2026-10-26) leads the body when given: the title is just the
+// friend's name, so a long film title has the body's room, not the title's.
+function friendLogBody (scoreLine, prefs, film) {
+  const showScore = Boolean(scoreLine) && !(prefs && prefs.friendLogScores === false);
+  if (!film) return showScore ? scoreLine : 'Tap to see it in their library.';
+  return showScore ? `${film}. ${scoreLine}` : `${film}. Tap to see it.`;
 }
 
 // --- Friend requests --------------------------------------------------------
@@ -417,16 +419,16 @@ function friendRequestMessage ({ kind, myKey, toKey, edges, request, name }) {
   if (kind === 'request') {
     if (!mine || theirs || !request) return null;
     return {
-      title: `${who} sent you a friend request`,
-      body: 'Open Film Club to accept it.',
+      title: 'Friend request',
+      body: `From ${who}. Open Film Club to accept it.`,
       navigate: '/film-club',
       tag: `friend-request-${myKey}`
     };
   }
   if (!mine || !theirs) return null;
   return {
-    title: `${who} accepted your friend request`,
-    body: "They're in your Film Club now.",
+    title: 'Friend request accepted',
+    body: `${who} is in your Film Club now.`,
     navigate: '/film-club',
     tag: `friend-accepted-${myKey}`
   };
@@ -624,8 +626,8 @@ function composeDayMessage (name, films) {
   if (!films || !films.length) return null;
   if (films.length === 1) {
     return {
-      title: `${name} logged ${films[0].t}`,
-      body: friendLogBody(null),
+      title: `${name} logged`,
+      body: friendLogBody(null, null, films[0].t),
       navigate: films[0].id ? `/movie/${films[0].id}` : '/film-club'
     };
   }
@@ -633,7 +635,7 @@ function composeDayMessage (name, films) {
   const shown = titles.slice(0, 4);
   const rest = titles.length - shown.length;
   return {
-    title: `${name} logged ${films.length} films`,
+    title: `${films.length} films from ${name}`,
     body: rest > 0 ? `${shown.join(', ')} and ${rest} more.` : `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}.`,
     navigate: '/film-club'
   };
@@ -880,7 +882,7 @@ function composeSignupMessages (fresh) {
   };
   if (list.length > SIGNUP_MAX_PER_SWEEP) {
     return [{
-      title: `${list.length} new Cinema Roll sign-ups`,
+      title: `${list.length} new sign-ups`,
       body: list.map(label).join(', '),
       tag: 'signup-batch'
     }];

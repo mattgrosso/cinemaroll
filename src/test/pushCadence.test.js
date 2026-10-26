@@ -274,7 +274,7 @@ describe('stickinessLead', () => {
     expect(stickinessLead(digest, NOW)).toBe('Coraline');
     const due = { stickinessCount: 2, tiebreak: null, awardYears: [] };
     const message = composeMessage(due, digest, { any: true, newStickiness: true, newAwardYears: [] }, NOW);
-    expect(message.title).toBe('Coraline is ready for its stickiness rating (+1 more)');
+    expect(message.title).toBe('Stickiness: Coraline +1');
   });
 
   it('keeps the already-waiting film in front when it was rated more recently', () => {
@@ -301,7 +301,7 @@ describe('stickinessLead', () => {
     expect(stickinessLead(digest, NOW)).toBeNull();
     const due = { stickinessCount: 2, tiebreak: null, awardYears: [] };
     const message = composeMessage(due, digest, { any: true, newStickiness: true, newAwardYears: [] }, NOW);
-    expect(message.title).toBe('2 films are ready for a stickiness check');
+    expect(message.title).toBe('2 stickiness checks');
   });
 
   it('still names the lone waiting film when nothing has matured', () => {
@@ -315,21 +315,21 @@ describe('composeMessage', () => {
     const due = { stickinessCount: 3, tiebreak: null, awardYears: [] };
     const digest = digestWith({ count: 3, nextTitle: 'Sinners' });
     const message = composeMessage(due, digest, { any: true, newStickiness: true, newAwardYears: [] });
-    expect(message.title).toBe('Sinners is ready for its stickiness rating (+2 more)');
+    expect(message.title).toBe('Stickiness: Sinners +2');
   });
 
   it('names the film plainly when it is the only one waiting', () => {
     const due = { stickinessCount: 1, tiebreak: null, awardYears: [] };
     const digest = digestWith({ count: 1, nextTitle: 'Sinners' });
     const message = composeMessage(due, digest, { any: true, newStickiness: true, newAwardYears: [] });
-    expect(message.title).toBe('Sinners is ready for its stickiness rating');
+    expect(message.title).toBe('Stickiness: Sinners');
   });
 
   it('falls back to counts for a stale re-mention', () => {
     const due = { stickinessCount: 13, tiebreak: null, awardYears: [] };
     const digest = digestWith({ count: 13, nextTitle: 'Sinners' });
     const message = composeMessage(due, digest, { any: false, newStickiness: false, newAwardYears: [] });
-    expect(message.title).toBe('13 films are ready for a stickiness check');
+    expect(message.title).toBe('13 stickiness checks');
   });
 
   it('puts the other chores in the body', () => {
@@ -339,7 +339,7 @@ describe('composeMessage', () => {
       awardYears: [1997]
     };
     const message = composeMessage(due, digestWith({ count: 2 }), { any: false, newAwardYears: [] });
-    expect(message.body).toBe('4 films are tied · 1997 needs its personal awards');
+    expect(message.body).toBe('4 films are tied · Personal awards: 1997');
   });
 
   // Bug report (Matt, 2026-08-28): "The notification told me that I had three
@@ -349,7 +349,7 @@ describe('composeMessage', () => {
   it('names one award year rather than counting them', () => {
     const due = { stickinessCount: 0, tiebreak: null, awardYears: [2009, 2014, 2019] };
     const message = composeMessage(due, digestWith({ count: 0 }), { any: false, newAwardYears: [] });
-    expect(message.title).toBe('2009 needs its personal awards');
+    expect(message.title).toBe('Personal awards: 2009');
     expect(message.title).not.toMatch(/\d+ years/);
   });
 
@@ -371,7 +371,7 @@ describe('composeMessage', () => {
     // the earliest first, so [0] is the year actually about to be offered.
     const due = { stickinessCount: 0, tiebreak: null, awardYears: [1997, 2004] };
     const message = composeMessage(due, digestWith({ count: 0 }), { any: false, newAwardYears: [] });
-    expect(message.title).toBe('1997 needs its personal awards');
+    expect(message.title).toBe('Personal awards: 1997');
   });
 });
 
@@ -457,6 +457,12 @@ describe('friendLogBody', () => {
   it('has nothing to hide when the rater does not share ratings', () => {
     expect(friendLogBody(null, { friendLogScores: true })).toBe('Tap to see it in their library.');
   });
+
+  it('leads with the film when given one, since the title is only the name (2026-10-26)', () => {
+    expect(friendLogBody(line, {}, 'Tenet')).toBe('Tenet. They gave it a 7.16.');
+    expect(friendLogBody(line, { friendLogScores: false }, 'Tenet')).toBe('Tenet. Tap to see it.');
+    expect(friendLogBody(null, {}, 'Tenet')).toBe('Tenet. Tap to see it.');
+  });
 });
 
 // "I should get a notification so I know that they're in my film club now"
@@ -468,8 +474,8 @@ describe('friendRequestMessage', () => {
 
   it('tells the requester their request was accepted once both edges exist', () => {
     const message = friendRequestMessage({ kind: 'accepted', myKey: 'me', toKey: 'them', edges: mutual, name: 'Seth' });
-    expect(message.title).toBe('Seth accepted your friend request');
-    expect(message.body).toBe("They're in your Film Club now.");
+    expect(message.title).toBe('Friend request accepted');
+    expect(message.body).toBe('Seth is in your Film Club now.');
     expect(message.navigate).toBe('/film-club');
   });
 
@@ -485,7 +491,8 @@ describe('friendRequestMessage', () => {
 
   it('tells someone about a request waiting in their inbox', () => {
     const message = friendRequestMessage({ kind: 'request', myKey: 'me', toKey: 'them', edges: sent, request, name: 'Seth' });
-    expect(message.title).toBe('Seth sent you a friend request');
+    expect(message.title).toBe('Friend request');
+    expect(message.body).toBe('From Seth. Open Film Club to accept it.');
     expect(message.navigate).toBe('/film-club');
   });
 
@@ -502,7 +509,7 @@ describe('friendRequestMessage', () => {
 
   it('tags by sender so a repeat replaces rather than stacks, and survives a missing name', () => {
     const a = friendRequestMessage({ kind: 'accepted', myKey: 'me', toKey: 'them', edges: mutual });
-    expect(a.title).toBe('Someone accepted your friend request');
+    expect(a.body).toBe('Someone is in your Film Club now.');
     expect(a.tag).toBe('friend-accepted-me');
   });
 });
@@ -586,7 +593,7 @@ describe('composeGamesMessage', () => {
 
   it('deep-links a lone game to itself', () => {
     expect(composeGamesMessage([g('wordle', 'Reel Wordle')], 11)).toEqual({
-      title: 'Reel Wordle is waiting for you today',
+      title: 'Time for Reel Wordle',
       body: 'Tap to play.',
       navigate: '/games/wordle'
     });
@@ -595,12 +602,12 @@ describe('composeGamesMessage', () => {
   it('names up to four, then counts the rest, and lands on the hub', () => {
     const all = [g('a', 'Higher or Lower'), g('b', 'Reel Wordle'), g('c', 'Connections'), g('d', 'Six Degrees'), g('e', 'Timeline'), g('f', 'Trivia')];
     expect(composeGamesMessage(all, 6)).toEqual({
-      title: "Today's games are waiting",
+      title: "Today's games are ready",
       body: 'Higher or Lower, Reel Wordle, Connections, Six Degrees and 2 more.',
       navigate: '/games'
     });
     expect(composeGamesMessage(all.slice(0, 3), 6)).toEqual({
-      title: '3 games still to play today',
+      title: '3 games left today',
       body: 'Higher or Lower, Reel Wordle and Connections.',
       navigate: '/games'
     });
@@ -784,7 +791,7 @@ describe('new sign-ups', () => {
     const fresh = Array.from({ length: SIGNUP_MAX_PER_SWEEP + 1 }, (_, i) => ({ key: `p${i}-gmail-com`, name: '' }));
     const messages = composeSignupMessages(fresh);
     expect(messages).toHaveLength(1);
-    expect(messages[0].title).toBe(`${fresh.length} new Cinema Roll sign-ups`);
+    expect(messages[0].title).toBe(`${fresh.length} new sign-ups`);
   });
 });
 
