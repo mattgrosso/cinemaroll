@@ -99,6 +99,19 @@ describe('PersonalAwardsScreen', () => {
     expect(replaceSpy).not.toHaveBeenCalled();
   });
 
+  // The Complete button sits at the foot of a long category list; the
+  // reopened year must start at the top. A bare scrollTo({ top: 0 }) is a
+  // no-op under <html>'s smooth scrolling, so the behavior is asserted too.
+  it('completing a year scrolls back to the top of the page', async () => {
+    const scrollSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const { wrapper } = factory({ year: '1997' });
+    scrollSpy.mockClear();
+    wrapper.findComponent(PersonalAwardsModal).vm.$emit('closed');
+    await wrapper.vm.$nextTick();
+    expect(scrollSpy).toHaveBeenCalledWith({ top: 0, behavior: 'instant' });
+    scrollSpy.mockRestore();
+  });
+
   it('has no back link of its own; Insights carries it', () => {
     const { wrapper } = factory({ year: '1997' });
     expect(wrapper.findComponent({ name: 'BackLink' }).exists()).toBe(false);

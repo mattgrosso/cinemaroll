@@ -100,6 +100,7 @@ import {
   awardNameSingular,
   awardsBrowsableYears
 } from '../assets/javascript/personalAwards.js';
+import { scrollWindowTo } from '../utils/scrollWindowTo.js';
 
 // The Awards tab's address (see above).
 const AWARDS_PATH = '/insights';
@@ -298,9 +299,13 @@ export default {
     },
     // Completing a year closes the awards component; on a page of its own
     // that used to mean leaving. As a tab there is nowhere to leave to, so
-    // it comes straight back on the year you just finished.
+    // it comes straight back on the year you just finished — at the top of
+    // the page, not down by the Complete button that closed it (2026-10-26:
+    // "when I click complete awards on a year, it should scroll back to the
+    // top of the page").
     reopen () {
       this.modalKey += 1;
+      scrollWindowTo(0);
     }
   }
 };
