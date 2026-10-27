@@ -452,7 +452,7 @@ const buildPayload = ({ title, body, navigate = '/', tag, appBadge }) => {
   const notification = { ...fitNotification({ title, body }), navigate: target };
   if (tag) notification.tag = tag;
   if (typeof appBadge === 'number') notification.app_badge = appBadge;
-  return JSON.stringify({ web_push: 8030, notification });
+  return JSON.stringify({ notification });
 };
 
 // The icon badge for an account: its chores (the same arithmetic as the

@@ -243,7 +243,8 @@ const dbSet = async (path, value) => {
 
 // Cut to fit the watch (pushFit.js: title 24, body 60).
 const buildPayload = ({ title, body, navigate = '/', tag }) =>
-  JSON.stringify({ web_push: 8030, notification: { ...fitNotification({ title, body }), navigate: `${APP_URL}/#${navigate}`, tag } });
+  // Plain web push, not the declarative `web_push: 8030` envelope: a declarative push never wakes the service worker, and a reader who keeps only Badges on (no banners) gets no count from it at all; the worker draws the notice and sets the badge itself (found by experiment in Newsprinted, 2026-10-27).
+  JSON.stringify({ notification: { ...fitNotification({ title, body }), navigate: `${APP_URL}/#${navigate}`, tag } });
 
 const sendToAccount = async (topKey, subscriptions, payload) => {
   let delivered = 0;
