@@ -60,7 +60,9 @@ export default {
   name: 'BugResolutionNotice',
   // Tells Home what this card is about, so the one-at-a-time notice slot
   // (homeNotices.js) can rank it: the fixes waiting, or null.
-  emits: ['notice'],
+  // `settled` once the check has come back, so Home knows this source has
+  // answered (homeNotices.js, settle then hold).
+  emits: ['notice', 'settled'],
   data () {
     return {
       notices: [],
@@ -88,6 +90,10 @@ export default {
         if (!ready || this.checked) return;
         this.checked = true;
         this.notices = await fetchUnseenResolutions(this.$store);
+        // After the tick, so the `notice` watcher has told Home what the
+        // fixes are before Home hears that this source is done.
+        await this.$nextTick();
+        this.$emit('settled');
       }
     },
     // Same convention as every other modal here (Favorite* etc.): the page

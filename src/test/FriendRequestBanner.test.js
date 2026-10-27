@@ -4,6 +4,7 @@ import {
 import { mount } from '@vue/test-utils';
 import Home from '@/components/Home.vue';
 import { QA_ACCOUNT_KEYS } from '@/assets/javascript/databaseKey.js';
+import { resetNoticeLaunch, markNoticesSettled } from '@/assets/javascript/homeNotices.js';
 
 // Bug report, 2026-08-19: "I need a more prominent notification when somebody
 // wants to be my friend either via movie log or from cinnamon roll directly
@@ -89,7 +90,13 @@ function mountHome ({ library = [movie(1, 'A Film')], socialRequests = {}, socia
 
 const banner = (wrapper) => wrapper.find('.prompt-badge-friends');
 
-beforeEach(() => localStorage.clear());
+// A launch whose notice sources have all answered: these tests are about the
+// card, not the settle wait (homeNoticeQueue.test.js covers that).
+beforeEach(() => {
+  localStorage.clear();
+  resetNoticeLaunch();
+  markNoticesSettled();
+});
 
 describe('the friend request banner', () => {
   it('shows when someone has asked to be a friend', () => {

@@ -4,7 +4,8 @@ import {
 import { mount } from '@vue/test-utils';
 import Home from '@/components/Home.vue';
 import {
-  NOTICE_ORDER, pickNotice, dismissNotice, isNoticeDismissed, clearChoreDismissals, NOTICE_DISMISSALS_KEY
+  NOTICE_ORDER, pickNotice, dismissNotice, isNoticeDismissed, clearChoreDismissals, NOTICE_DISMISSALS_KEY,
+  holdNotice, noticeSourcesSettled, NOTICE_SETTLE_MS, resetNoticeLaunch, markNoticesSettled
 } from '@/assets/javascript/homeNotices.js';
 
 // Report 2026-10-25: "I don't like having like three banners all stacked on
@@ -48,6 +49,39 @@ describe('picking the one notice', () => {
   });
 });
 
+// Report 2026-10-27: "When I load the app now the content in the activity
+// banner often shows one thing and then switches to another." The sources
+// answer at different moments after launch, and re-ranking on every answer
+// swapped the card. Settle first (a blank card holds the space), then hold.
+describe('settle, then hold', () => {
+  it('keeps the card on screen when a higher-ranked one arrives later', () => {
+    // The reported swap: a chore up, then the bug fixes come back.
+    expect(holdNotice('stickiness', { stickiness: 'stickiness', bugFix: 'fix-1' }, {}, NOON)).toBe('stickiness');
+    expect(holdNotice('showtimes', { showtimes: 3, friendRequest: 'a' }, {}, NOON)).toBe('showtimes');
+  });
+
+  it('hands the slot on once the card is put away or stops being due', () => {
+    const signatures = { stickiness: 'stickiness', bugFix: 'fix-1' };
+    const dismissed = dismissNotice({}, 'stickiness', 'stickiness', NOON);
+    expect(holdNotice('stickiness', signatures, dismissed, NOON)).toBe('bugFix');
+    expect(holdNotice('stickiness', { stickiness: null, bugFix: 'fix-1' }, {}, NOON)).toBe('bugFix');
+    expect(holdNotice(null, signatures, {}, NOON)).toBe('bugFix');
+    expect(holdNotice('stickiness', {}, {}, NOON)).toBeNull();
+  });
+
+  it('is settled only when every source has answered', () => {
+    expect(noticeSourcesSettled({ library: true, bugFix: false })).toBe(false);
+    expect(noticeSourcesSettled({ library: true, bugFix: true })).toBe(true);
+  });
+});
+
+// The bug-fix card's check, answered whenever the test says so.
+let answerBugFixes;
+vi.mock('@/utils/bugResolutions', () => ({
+  fetchUnseenResolutions: vi.fn(() => new Promise((resolve) => { answerBugFixes = resolve; })),
+  markResolutionsSeen: vi.fn()
+}));
+
 vi.mock('axios', () => ({ default: { get: vi.fn() } }));
 vi.mock('lodash/debounce', () => ({ default: vi.fn((fn) => fn) }));
 vi.mock('@/assets/javascript/GetRating.js', () => ({
@@ -62,19 +96,30 @@ const library = [{
   ratings: [{ calculatedTotal: 8, date: '2023-01-01' }]
 }];
 
-function mountHome () {
+function mountHome ({ pendingReconciliations = [{ dbEntry: { path: `${ME}/movieLog/offline-1` } }], showtimes = 2, chores = 'normal' } = {}) {
   const store = {
     state: {
       dbLoaded: true,
+      settingsLoaded: true,
+      newsletterLoaded: true,
+      socialRequestsLoaded: true,
       databaseTopKey: ME,
       isOnline: true,
       currentLog: 'movieLog',
       DBSearchValue: '',
       DBSortValue: 'rating',
       academyAwardWinners: { bestPicture: [] },
-      settings: { normalizationTweak: 0.25, tieBreakTweak: 1, includeShorts: false, tags: { 'viewing-tags': {} } },
+      settings: {
+        normalizationTweak: 0.25,
+        tieBreakTweak: 1,
+        includeShorts: false,
+        tags: { 'viewing-tags': {} },
+        stickinessPromptState: chores,
+        tieBreakPromptState: chores,
+        awardsPromptState: chores
+      },
       filteredResults: [],
-      pendingReconciliations: [{ dbEntry: { path: `${ME}/movieLog/offline-1` } }],
+      pendingReconciliations,
       socialRequests: {},
       socialEdges: {},
       homePageScrollPosition: 0,
@@ -91,7 +136,8 @@ function mountHome () {
       allMoviesAsArray: library,
       allMediaSortedByRating: library,
       socialUserKey: ME,
-      showtimesBadgeCount: 2
+      databaseTopKey: ME,
+      showtimesBadgeCount: showtimes
     },
     commit: vi.fn(),
     dispatch: vi.fn()
@@ -104,8 +150,14 @@ function mountHome () {
   });
 }
 
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 describe('Home shows one notice at a time', () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    resetNoticeLaunch();
+    markNoticesSettled();
+  });
 
   it('shows only the top card, and its X hands the slot to the next one', async () => {
     const wrapper = mountHome();
@@ -120,12 +172,64 @@ describe('Home shows one notice at a time', () => {
     expect(JSON.parse(localStorage.getItem(NOTICE_DISMISSALS_KEY))).toHaveProperty('reconcile');
   });
 
-  it('keeps a lower card hidden while a reported one outranks it', async () => {
-    const wrapper = mountHome();
-    await wrapper.find('.reconcile-prompt').element.parentElement.querySelector('.notice-dismiss').click();
+  it('lets a card that arrives later wait its turn instead of replacing the one on screen', async () => {
+    const wrapper = mountHome({ pendingReconciliations: [] });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.showtimes-prompt').exists()).toBe(true);
+
     wrapper.vm.reportNotice('bugFix', 'fix-1');
     await wrapper.vm.$nextTick();
+    expect(wrapper.vm.currentNotice).toBe('showtimes');
+    expect(wrapper.find('.showtimes-prompt').exists()).toBe(true);
+
+    // Its turn comes when the card on screen is put away.
+    await wrapper.find('.showtimes-prompt').element.parentElement.querySelector('.notice-dismiss').click();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.currentNotice).toBe('bugFix');
+  });
+});
+
+describe('Home at launch, before every source has answered', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetNoticeLaunch();
+  });
+
+  it('holds a blank card in place, then reveals the top card once everything is in', async () => {
+    const wrapper = mountHome({ pendingReconciliations: [] });
+    await wrapper.vm.$nextTick();
+    // Showtimes is known already, but the bug fixes aren't back yet.
+    expect(wrapper.find('.notice-placeholder').exists()).toBe(true);
+    expect(wrapper.find('.showtimes-prompt').exists()).toBe(false);
+
+    answerBugFixes([{ id: 'fix-1', text: 'Fixed.' }]);
+    await flush();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.notice-placeholder').exists()).toBe(false);
+    // The bug fix outranks Showtimes, and it was never preceded by it.
     expect(wrapper.vm.currentNotice).toBe('bugFix');
     expect(wrapper.find('.showtimes-prompt').exists()).toBe(false);
+  });
+
+  it('holds no space when nothing is due', async () => {
+    const wrapper = mountHome({ pendingReconciliations: [], showtimes: 0, chores: 'disabled' });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.noticesSettled).toBe(false);
+    expect(wrapper.find('.notice-placeholder').exists()).toBe(false);
+  });
+
+  it('stops waiting a short while after the library lands', async () => {
+    vi.useFakeTimers();
+    try {
+      const wrapper = mountHome({ pendingReconciliations: [] });
+      await wrapper.vm.$nextTick();
+      expect(wrapper.vm.currentNotice).toBeNull();
+      vi.advanceTimersByTime(NOTICE_SETTLE_MS);
+      await wrapper.vm.$nextTick();
+      expect(wrapper.vm.currentNotice).toBe('showtimes');
+      expect(wrapper.find('.notice-placeholder').exists()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

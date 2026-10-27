@@ -55,6 +55,57 @@ export function pickNotice (signatures, dismissals, now) {
   return NOTICE_ORDER.find((id) => isDue(signatures?.[id]) && !isNoticeDismissed(dismissals, id, signatures[id], now)) ?? null;
 }
 
+// Settle, then hold (report 2026-10-27: "the content in the activity banner
+// often shows one thing and then switches to another"). The sources answer
+// at different moments after launch — the chores from the library, the bug
+// fixes and the newsletter from their own reads, friend requests from the
+// Film Club inbox — and re-ranking on every answer swapped the card under
+// the user. So: nothing is revealed until every source has answered (or
+// NOTICE_SETTLE_MS after the library lands, whichever is sooner), while a
+// blank card holds the space so nothing shifts when it fills (Matt: "it
+// needs to reserve the space but not show what it is until it has
+// everything"). Once a card is up it stays until it is put away, acted on,
+// or stops being due; anything arriving later waits its turn.
+export const NOTICE_SETTLE_MS = 2000;
+
+export function noticeSourcesSettled (sources) {
+  return Object.values(sources || {}).every(Boolean);
+}
+
+// The notice to show given the one already on screen: the held one while it
+// is still due and not put away, otherwise the next in line.
+export function holdNotice (held, signatures, dismissals, now) {
+  if (held && isDue(signatures?.[held]) && !isNoticeDismissed(dismissals, held, signatures[held], now)) return held;
+  return pickNotice(signatures, dismissals, now);
+}
+
+// Per page load, not per mount: Home remounts on every return to it, and
+// waiting again — or re-ranking a card already shown — would bring the swap
+// back on every navigation.
+const launch = { settled: false, held: null };
+
+export function noticesSettledThisLaunch () {
+  return launch.settled;
+}
+
+export function markNoticesSettled () {
+  launch.settled = true;
+}
+
+export function heldNoticeThisLaunch () {
+  return launch.held;
+}
+
+export function rememberHeldNotice (id) {
+  launch.held = id ?? null;
+}
+
+// Tests only: a fresh page load.
+export function resetNoticeLaunch () {
+  launch.settled = false;
+  launch.held = null;
+}
+
 // A new dismissals object (never mutated in place — Home keeps it reactive).
 // Records from earlier days are dropped on the way, so the store never grows.
 export function dismissNotice (dismissals, id, signature, now) {

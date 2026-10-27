@@ -30,7 +30,9 @@ import { NEWSLETTER_READ_KEY as READ_KEY } from '../assets/javascript/newsletter
 export default {
   name: 'NewsletterNotice',
   // The unread week, or null — for Home's one-at-a-time slot (homeNotices.js).
-  emits: ['notice'],
+  // `settled` once the newsletter read has come back (homeNotices.js, settle
+  // then hold).
+  emits: ['notice', 'settled'],
   data () {
     return { lastRead: null };
   },
@@ -64,6 +66,16 @@ export default {
       immediate: true,
       handler (signature) {
         this.$emit('notice', signature);
+      }
+    },
+    // After the tick, so the `notice` watcher has told Home what the week
+    // is before Home hears that this source is done.
+    '$store.state.newsletterLoaded': {
+      immediate: true,
+      async handler (loaded) {
+        if (!loaded) return;
+        await this.$nextTick();
+        this.$emit('settled');
       }
     }
   },

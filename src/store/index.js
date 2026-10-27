@@ -603,6 +603,9 @@ export default createStore({
     // directory and friend profiles fetched on demand. Shapes and the
     // publish-don't-peek design live in src/assets/javascript/social.js.
     socialRequests: {},
+    // The requests listener has answered once — Home waits on it before
+    // revealing a notice (homeNotices.js, settle then hold).
+    socialRequestsLoaded: false,
     socialEdges: {},
     socialDirectory: {},
     // Letterboxd (2026-09-29): the shared per-film public stats the sweep
@@ -998,6 +1001,7 @@ export default createStore({
     },
     setSocialRequests (state, value) {
       state.socialRequests = value || {};
+      state.socialRequestsLoaded = true;
     },
     setSocialEdges (state, value) {
       state.socialEdges = value || {};

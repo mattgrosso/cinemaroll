@@ -57,6 +57,18 @@ first attempt at the games scroll-to-top do nothing at all.
   clears chore dismissals. A new notice needs a place in `NOTICE_ORDER`, a
   `.notice-slot` wrapper with the X, and (if it owns its state) an `@notice` emit.
   `homeNoticeQueue.test.js` guards it.
+  **Settle, then hold (2026-10-27):** "the content in the activity banner often shows one
+  thing and then switches to another." Sources answer at different moments after launch,
+  so Home reveals nothing until every source has answered (library + awards, bug fixes,
+  newsletter, friend-request listener) or `NOTICE_SETTLE_MS` (2s) after the library lands.
+  Meanwhile a blank `.notice-placeholder` holds the space if anything is due (Matt: "reserve
+  the space but not show what it is until it has everything"); nothing due, no space. Once
+  a card is up, `holdNotice` keeps it until it's put away or stops being due; later
+  arrivals wait. Settled/held state is per page load (module-level), not per mount. A card
+  that owns its state and loads async must also emit `settled` — AFTER a `$nextTick`, so
+  its `notice` signature reaches Home first (otherwise Home commits to a lower card).
+  Tests that mount Home for a card's content call `resetNoticeLaunch()` +
+  `markNoticesSettled()` in `beforeEach`.
 
 - **Don't build a feature on a permission the OS can revoke behind your back.**
   Banner tilt parallax was built 2026-08-21 and **removed 2026-08-24**. Read this before

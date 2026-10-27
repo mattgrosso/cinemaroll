@@ -559,6 +559,10 @@
          card is up. The X hides itself while a chore is expanded into its
          working UI (no .prompt-card left in the slot). -->
     <section class="home-notices">
+      <!-- The space a card will fill, held blank while the sources answer
+           (report 2026-10-27: one card, then a different one, at launch).
+           See homeNotices.js. -->
+      <div v-if="noticePlaceholder" class="notice-placeholder" aria-hidden="true"></div>
       <!-- Friend requests: prominent ON PURPOSE. Bug report, 2026-08-19:
            "unless I think to look there I won't ever know that they're
            pending." And 2026-10-09: friends who had just joined never
@@ -610,7 +614,7 @@
       </div>
 
       <div v-show="currentNotice === 'bugFix'" class="notice-slot">
-        <BugResolutionNotice @notice="reportNotice('bugFix', $event)"/>
+        <BugResolutionNotice @notice="reportNotice('bugFix', $event)" @settled="bugFixChecked = true"/>
         <button type="button" class="notice-dismiss" aria-label="Hide this for today" title="Hide for today" @click="dismissCurrentNotice"><i class="bi bi-x-lg"></i></button>
       </div>
 
@@ -636,7 +640,7 @@
       </div>
 
       <div v-show="currentNotice === 'newsletter'" class="notice-slot">
-        <NewsletterNotice @notice="reportNotice('newsletter', $event)"/>
+        <NewsletterNotice @notice="reportNotice('newsletter', $event)" @settled="newsletterChecked = true"/>
         <button type="button" class="notice-dismiss" aria-label="Hide this for today" title="Hide for today" @click="dismissCurrentNotice"><i class="bi bi-x-lg"></i></button>
       </div>
 
@@ -1755,7 +1759,10 @@ import TweakInline from "./TweakInline.vue";
 import StickinessInline from "./StickinessInline.vue";
 import PersonalAwardsModal from "./PersonalAwardsModal.vue";
 import BugResolutionNotice from "./BugResolutionNotice.vue";
-import { pickNotice, isNoticeDismissed, dismissNotice, clearChoreDismissals, readNoticeDismissals, writeNoticeDismissals } from '../assets/javascript/homeNotices.js';
+import {
+  pickNotice, holdNotice, noticeSourcesSettled, NOTICE_SETTLE_MS, noticesSettledThisLaunch, markNoticesSettled,
+  heldNoticeThisLaunch, rememberHeldNotice, isNoticeDismissed, dismissNotice, clearChoreDismissals, readNoticeDismissals, writeNoticeDismissals
+} from '../assets/javascript/homeNotices.js';
 import NewsletterNotice from './NewsletterNotice.vue';
 import UpdateAvailableBanner from "./UpdateAvailableBanner.vue";
 import RatingCurveSettings from "./RatingCurveSettings.vue";
@@ -2024,6 +2031,14 @@ export default {
       // see homeNotices.js. Dismissals are per-device, like the snoozes.
       noticeReports: { update: null, bugFix: null, newsletter: null },
       noticeDismissals: readNoticeDismissals(),
+      // Settle, then hold (homeNotices.js): nothing is revealed until every
+      // source has answered or the settle timer fires, and the card on
+      // screen stays until it is put away or stops being due.
+      noticeSettleTimedOut: noticesSettledThisLaunch(),
+      noticeSettleTimer: null,
+      bugFixChecked: false,
+      newsletterChecked: false,
+      heldNotice: heldNoticeThisLaunch(),
       letterboxdOverrides: {},
       letterboxdUserData: null,
       loadMoreObserver: null, // IntersectionObserver for infinite-scroll result loading
@@ -2096,6 +2111,30 @@ export default {
     // router being usable.
     '$route.query.open' () {
       this.readChoreOpenRequest();
+    },
+    // The settle timer runs from the library landing, not from the mount:
+    // a cold launch can spend seconds on the login check first.
+    '$store.state.dbLoaded': {
+      immediate: true,
+      handler (loaded) {
+        if (!loaded || this.noticesSettled || this.noticeSettleTimer) return;
+        this.noticeSettleTimer = setTimeout(() => { this.noticeSettleTimedOut = true; }, NOTICE_SETTLE_MS);
+      }
+    },
+    noticesSettled: {
+      immediate: true,
+      handler (settled) {
+        if (settled) markNoticesSettled();
+      }
+    },
+    // Immediate: a Home mounted after the launch has settled shows a card
+    // straight away, and that card has to be the held one too.
+    currentNotice: {
+      immediate: true,
+      handler (id) {
+        this.heldNotice = id;
+        rememberHeldNotice(id);
+      }
     },
     // Report -P3bg_m1nXLcjC3DGPc5 (2026-10-10): "Sometimes when i follow a
     // notification to a tiebreak. When i tap on the winner to break the tie
@@ -2557,6 +2596,7 @@ export default {
     this.debouncedSetSearchValue.cancel?.();
     document.removeEventListener('visibilitychange', this.refreshPromptClockIfVisible);
     clearTimeout(this.libraryLoadTimer);
+    clearTimeout(this.noticeSettleTimer);
 
     // Clean up error log refresh interval
     this.stopErrorLogRefresh();
@@ -4094,8 +4134,27 @@ export default {
       if (this.activeModalType) signatures[this.activeModalType] = this.activeModalType;
       return signatures;
     },
+    // Every source has answered (or the wait ran out) — see homeNotices.js.
+    noticesSettled () {
+      if (this.noticeSettleTimedOut) return true;
+      const state = this.$store.state;
+      return noticeSourcesSettled({
+        // The chores, Showtimes and the offline matches come from the
+        // library; the awards chore also waits for the awards themselves.
+        library: Boolean(state.dbLoaded && state.settingsLoaded && !state.personalAwardsPending),
+        bugFix: this.bugFixChecked,
+        newsletter: this.newsletterChecked,
+        friendRequest: Boolean(state.socialRequestsLoaded)
+      });
+    },
+    // Something is due but not yet revealed: hold a blank card's worth of
+    // space so the page doesn't drop when it fills. Nothing due, no space.
+    noticePlaceholder () {
+      return !this.noticesSettled && pickNotice(this.noticeSignatures, this.noticeDismissals, this.promptNow) !== null;
+    },
     currentNotice () {
-      return pickNotice(this.noticeSignatures, this.noticeDismissals, this.promptNow);
+      if (!this.noticesSettled) return null;
+      return holdNotice(this.heldNotice, this.noticeSignatures, this.noticeDismissals, this.promptNow);
     },
     // Determine which modal should be active (eliminates circular dependencies)
     activeModalType () {
@@ -4588,6 +4647,8 @@ export default {
       // with a library and nothing due, it belongs to nothing.
       const onScreen = this.activeModalType;
       const libraryLoaded = Boolean(this.allEntriesWithFlatKeywordsAdded.length);
+      // An explicit "show me": no point holding the slot blank for it.
+      this.noticeSettleTimedOut = true;
       this.openChoreRequested = false;
       this.openChoreFor = onScreen || (libraryLoaded ? 'none' : null);
       this.$nextTick(() => {
@@ -6907,6 +6968,18 @@ export default {
   &:not(:has(.prompt-card)) .notice-dismiss {
     display: none;
   }
+}
+
+/* Card-shaped, empty: the same margins and frame as a .prompt-card (see
+   _prompt-card.scss), at the height of a two-line card. */
+.notice-placeholder {
+  background: #161616;
+  border: 1px solid #2e2e2e;
+  border-radius: 10px;
+  margin-bottom: 0.5rem;
+  margin-top: 0.25rem;
+  min-height: 5rem;
+  width: 100%;
 }
 
 .notice-dismiss {

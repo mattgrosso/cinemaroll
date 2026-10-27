@@ -1,8 +1,16 @@
 import {
-  describe, it, expect, vi
+  describe, it, expect, vi, beforeEach
 } from 'vitest';
 import { mount } from '@vue/test-utils';
 import Home from '@/components/Home.vue';
+import { resetNoticeLaunch, markNoticesSettled } from '@/assets/javascript/homeNotices.js';
+
+// A launch whose notice sources have all answered: these tests are about the
+// card, not the settle wait (homeNoticeQueue.test.js covers that).
+beforeEach(() => {
+  resetNoticeLaunch();
+  markNoticesSettled();
+});
 
 // Bug report, 2026-10-06: "When cinema roll has a badge icon on it ... there's
 // nothing on the home screen that guides me to where I need to go ... mostly
