@@ -562,7 +562,11 @@
       <!-- The space a card will fill, held blank while the sources answer
            (report 2026-10-27: one card, then a different one, at launch).
            See homeNotices.js. -->
-      <div v-if="noticePlaceholder" class="notice-placeholder" aria-hidden="true"></div>
+      <!-- Not just blank (report 2026-10-27: "it's just like an empty box. It
+           looks kind of broken"): a shimmer and one line saying what's up. -->
+      <div v-if="noticePlaceholder" class="notice-placeholder" role="status">
+        <span class="notice-placeholder-text">Checking what's new&hellip;</span>
+      </div>
       <!-- Friend requests: prominent ON PURPOSE. Bug report, 2026-08-19:
            "unless I think to look there I won't ever know that they're
            pending." And 2026-10-09: friends who had just joined never
@@ -6970,16 +6974,39 @@ export default {
   }
 }
 
-/* Card-shaped, empty: the same margins and frame as a .prompt-card (see
-   _prompt-card.scss), at the height of a two-line card. */
+/* Card-shaped: the same margins and frame as a .prompt-card (see
+   _prompt-card.scss), at the height of a two-line card. The sweep is
+   SkeletonBlock's shimmer, so it reads as loading rather than broken. */
 .notice-placeholder {
-  background: #161616;
+  align-items: center;
+  animation: notice-placeholder-shimmer 1.2s ease-in-out infinite;
+  background: linear-gradient(90deg, #161616 0%, #222 50%, #161616 100%);
+  background-size: 200% 100%;
   border: 1px solid #2e2e2e;
   border-radius: 10px;
+  display: flex;
+  justify-content: center;
   margin-bottom: 0.5rem;
   margin-top: 0.25rem;
   min-height: 5rem;
   width: 100%;
+}
+
+/* #b8b8b8 on #161616–#222 is about 8:1. */
+.notice-placeholder-text {
+  color: #b8b8b8;
+  font-size: 0.9rem;
+}
+
+@keyframes notice-placeholder-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice-placeholder {
+    animation: none;
+  }
 }
 
 .notice-dismiss {

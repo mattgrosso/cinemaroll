@@ -62,7 +62,10 @@ first attempt at the games scroll-to-top do nothing at all.
   so Home reveals nothing until every source has answered (library + awards, bug fixes,
   newsletter, friend-request listener) or `NOTICE_SETTLE_MS` (2s) after the library lands.
   Meanwhile a blank `.notice-placeholder` holds the space if anything is due (Matt: "reserve
-  the space but not show what it is until it has everything"); nothing due, no space. Once
+  the space but not show what it is until it has everything"); nothing due, no space. It is
+  not blank, though ("just an empty box. It looks kind of broken"): it shimmers like
+  `SkeletonBlock` (still under reduced motion) and reads "Checking what's new…" as a
+  `role="status"`. Keep the line generic and the box the card's height. Once
   a card is up, `holdNotice` keeps it until it's put away or stops being due; later
   arrivals wait. Settled/held state is per page load (module-level), not per mount. A card
   that owns its state and loads async must also emit `settled` — AFTER a `$nextTick`, so

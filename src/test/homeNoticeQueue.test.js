@@ -199,13 +199,20 @@ describe('Home at launch, before every source has answered', () => {
     const wrapper = mountHome({ pendingReconciliations: [] });
     await wrapper.vm.$nextTick();
     // Showtimes is known already, but the bug fixes aren't back yet.
-    expect(wrapper.find('.notice-placeholder').exists()).toBe(true);
+    const placeholder = wrapper.find('.notice-placeholder');
+    expect(placeholder.exists()).toBe(true);
+    // Report 2026-10-27: a bare box "looks kind of broken" — it says what's up,
+    // and says it to a screen reader too.
+    expect(placeholder.text()).toContain("Checking what's new");
+    expect(placeholder.attributes('role')).toBe('status');
+    expect(placeholder.attributes('aria-hidden')).toBeUndefined();
     expect(wrapper.find('.showtimes-prompt').exists()).toBe(false);
 
     answerBugFixes([{ id: 'fix-1', text: 'Fixed.' }]);
     await flush();
     await wrapper.vm.$nextTick();
     expect(wrapper.find('.notice-placeholder').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Checking what's new");
     // The bug fix outranks Showtimes, and it was never preceded by it.
     expect(wrapper.vm.currentNotice).toBe('bugFix');
     expect(wrapper.find('.showtimes-prompt').exists()).toBe(false);
