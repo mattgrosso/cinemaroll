@@ -3085,14 +3085,22 @@ export default {
     color: white;
   }
 
-  /* Six tabs in two rows of three: one row of six left ~57px a tab at
-     phone width, too narrow for "Overview" at a readable size. */
+  /* Six tabs on one row (2026-10-27, report: on the Awards tab "there's
+     just way too much content before I even get to the awards"). Two rows
+     of three cost a whole row on every tab. In Roboto Condensed at 12px bold
+     "Overview" measures 44px; a 375px iPhone leaves each tab ~54px, so with
+     slim side padding it fits. Anything narrower falls back to two rows. */
   .insights-tabs {
     display: grid;
-    gap: 0.35rem;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    margin: $screen-top-gap 0 0.75rem;
+    gap: 0.25rem;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    margin: $screen-top-gap 0 0.6rem;
     width: 100%;
+
+    @media screen and (max-width: 369px) {
+      gap: 0.35rem;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
 
     .insights-pane-pending {
       padding: 1rem 1rem 0;
@@ -3116,10 +3124,12 @@ export default {
       border-radius: 3px;
       color: white;
       flex: 1 1 0;
-      font-size: 0.85rem;
+      font-size: 0.75rem;
       font-weight: 600;
       min-height: 40px;
       min-width: 0;
+      padding: 0 0.15rem;
+      white-space: nowrap;
 
       /* Each tab wears its own colour when active, so the bar itself carries
          the key to the colour coding below it. */

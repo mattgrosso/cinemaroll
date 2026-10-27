@@ -288,7 +288,10 @@ Cancel; when they match or the diary has no stars, the log screen opens at once.
 
 **One question per tab (2026-09-29 regroup, "what distinguishes between regular stats
 and deep stats?" — nothing did).** Deep Stats is no longer a page; `/stats` redirects to
-`/insights?tab=eras`. Six tabs, two rows of three:
+`/insights?tab=eras`. Six tabs, **one row of six** on phones (2026-10-27; two rows of
+three below 370px). They were two rows of three until the Awards tab made the cost plain:
+"way too much content before I even get to the awards". 12px bold Roboto Condensed puts
+"Overview" at 44px against ~54px a tab on a 375px iPhone; re-measure before lengthening a label.
 
 - **Overview** — headline numbers and fun facts, no link cards. The six-card directory
   went 2026-10-24: Game Stats lives only on the Games hub, The Web is a link card heading
@@ -304,6 +307,11 @@ and deep stats?" — nothing did).** Deep Stats is no longer a page; `/stats` re
   `setTab` replaces it with `?tab=awards` or nothing, so no stale year rides along, and a
   `$route.query.tab` watcher follows a link while Insights is open. Completing a year
   closes the awards component; the screen remounts it (`modalKey`) instead of leaving.
+  **No heading on the tab (2026-10-27):** the ceremony and year strips already say
+  which awards these are, so the big "The 2006 Groskers / Your own annual awards"
+  heading renders only in Home's pop-up (`pageMode` false), and a board shows only the
+  Oscars' "67th Academy Awards · films of 1994" caption, nothing for friends or the
+  other ceremonies. `AwardsTabHeading.test.js`.
   **Trophy Case is a small muted link at the foot of your own awards** ("I don't go to
   the trophy case very often. It should be less prominent"; it led the ceremony strip
   for a day), and its back falls to `/insights?tab=awards`.

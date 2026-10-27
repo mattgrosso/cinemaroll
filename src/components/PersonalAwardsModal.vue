@@ -10,12 +10,17 @@
     </div>
     <Modal :show="showModal" :page="pageMode" @close="closeModal">
       <template v-slot:header>
-        <div v-if="!selectedCategory" class="text-center awards-header">
+        <div v-if="!selectedCategory" class="text-center awards-header" :class="{ 'awards-header-page': pageMode }">
           <!-- "The 2026 Oscars", not "The Oscars 2026" — the award name is
                explicitly shaped to read like the Oscars, so the year belongs
-               in front of it (2026-08-17). -->
-          <h2 class="mb-1">{{ awardHeading }}</h2>
-          <p class="mb-0">Your own annual awards</p>
+               in front of it (2026-08-17). Home's pop-up only: on the Awards
+               tab the ceremony and year strips right above already say it, and
+               the heading pushed the categories off the first screen (report,
+               2026-10-27). -->
+          <template v-if="!pageMode">
+            <h2 class="mb-1">{{ awardHeading }}</h2>
+            <p class="mb-0">Your own annual awards</p>
+          </template>
 
           <!-- New Movies Notification: dark card + poster row (house style:
                posters over text, no Bootstrap alert-info blue on dark) -->
@@ -2666,6 +2671,16 @@ export default {
 
   .awards-header {
     padding: 1rem 0;
+
+    /* On the Awards tab the header is only the new-movies card, when there
+       is one; the strips above it carry the spacing. */
+    &.awards-header-page {
+      padding: 0;
+
+      .new-movies-card {
+        margin: 0 0 0.75rem;
+      }
+    }
 
     h2 {
       font-size: 1.5rem;

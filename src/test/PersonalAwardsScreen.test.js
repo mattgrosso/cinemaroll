@@ -237,7 +237,7 @@ describe('ceremony tabs', () => {
 
   it('a board without the year shows its newest, but the year stays for the next tab', async () => {
     const { wrapper, replaceSpy } = tabbed({ ceremony: 'friend:ext-1', year: '1994' });
-    expect(wrapper.find('.board-header h2').text()).toBe('1980 Goegan Globes');
+    expect(wrapper.findAll('.awards-year-pill').filter((b) => b.classes('selected'))[0].text()).toBe('1980');
     await wrapper.findAll('.ceremony-tab')[2].trigger('click');
     expect(replaceSpy).toHaveBeenCalledWith({ path: '/insights', query: { tab: 'awards', ceremony: 'oscars', year: 1994 } });
   });
@@ -257,7 +257,7 @@ describe('ceremony tabs', () => {
     const { wrapper, replaceSpy, pushSpy } = tabbed({ ceremony: 'friend:ext-1' });
     expect(wrapper.findComponent(PersonalAwardsModal).exists()).toBe(false);
     expect(replaceSpy).not.toHaveBeenCalled();
-    expect(wrapper.find('.board-header h2').text()).toBe('1980 Goegan Globes');
+    expect(wrapper.findAll('.awards-year-pill').filter((b) => b.classes('selected'))[0].text()).toBe('1980');
     expect(wrapper.findAll('.awards-year-pill').map((b) => b.text())).toEqual(['1977', '1980']);
     const board = wrapper.findComponent(AwardsBoard);
     expect(board.props('categories')[0]).toMatchObject({ label: 'Best Picture', winners: [{ movieId: 1891, title: 'Empire' }] });
@@ -269,8 +269,24 @@ describe('ceremony tabs', () => {
 
   it('the Oscars tab reads the bundled dataset', () => {
     const { wrapper } = tabbed({ ceremony: 'oscars', year: '1994' });
-    expect(wrapper.find('.board-header h2').text()).toBe('1994 Oscars');
+    expect(wrapper.findAll('.awards-year-pill').filter((b) => b.classes('selected'))[0].text()).toBe('1994');
     expect(wrapper.findComponent(AwardsBoard).props('categories')[0].winners[0]).toEqual({ movieId: 13, title: 'Forrest Gump', poster: '/fg.jpg' });
+  });
+
+  // Report, 2026-10-27: on the Awards tab "there's just way too much content
+  // before I even get to the awards". The strips already name the ceremony
+  // and year, so a board has no big heading; only a caption that adds
+  // something (which ceremony number) stays.
+  it('a board has no heading above it, just the Oscars ceremony line when there is one', () => {
+    const oscars = tabbed({ ceremony: 'oscars', year: '1994' }, {
+      allAcademyAwards: [{ year: 1994, ceremony: '67th Academy Awards', category: 'Best Picture', tmdb: '13', title: 'Forrest Gump', img: '/fg.jpg', isWinner: true, isActing: false, names: [] }]
+    });
+    expect(oscars.wrapper.find('h2').exists()).toBe(false);
+    expect(oscars.wrapper.find('.board-caption').text()).toBe('67th Academy Awards · films of 1994');
+
+    const friend = tabbed({ ceremony: 'friend:ext-1' });
+    expect(friend.wrapper.find('h2').exists()).toBe(false);
+    expect(friend.wrapper.find('.board-caption').exists()).toBe(false);
   });
 
   it('an unknown ceremony falls back to mine', () => {

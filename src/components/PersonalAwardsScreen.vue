@@ -30,10 +30,10 @@
     </div>
 
     <template v-if="ceremonyId !== 'mine'">
-      <div class="text-center board-header">
-        <h2 class="mb-1">{{ boardYear }} {{ activeTab.label }}</h2>
-        <p class="mb-0 board-caption">{{ boardCaption }}</p>
-      </div>
+      <!-- No big "1994 Oscars" heading (report, 2026-10-27: too much above
+           the awards): the strips above already name the ceremony and the
+           year. Only a caption that adds something stays. -->
+      <p v-if="boardCaption" class="text-center board-caption">{{ boardCaption }}</p>
       <AwardsBoard :categories="boardCategories" @pick="openMovie"/>
     </template>
 
@@ -168,12 +168,11 @@ export default {
       return this.board.find((entry) => entry.year === this.boardYear)?.categories || [];
     },
     boardCaption () {
-      if (this.activeTab?.who) return `${this.activeTab.who}'s own annual awards`;
       if (this.ceremonyId === 'oscars') {
         const ceremony = this.board.find((entry) => entry.year === this.boardYear)?.meta?.ceremony;
-        return ceremony ? `${ceremony} · films of ${this.boardYear}` : 'Every winner and nominee, from the first ceremony';
+        return ceremony ? `${ceremony} · films of ${this.boardYear}` : '';
       }
-      return this.board.some((entry) => entry.categories.some((c) => c.nominees.length)) ? 'Winners and nominees' : 'Winners';
+      return '';
     },
     // The one strip serves both views.
     stripYears () {
@@ -315,7 +314,7 @@ export default {
 .ceremony-scroller {
   display: flex;
   gap: 0.4rem;
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.4rem;
   overflow-x: auto;
   padding: 0.15rem 0.1rem;
   -webkit-overflow-scrolling: touch;
@@ -370,17 +369,10 @@ export default {
   opacity: 0.75;
 }
 
-.board-header {
-  margin: 0.4rem 0 1rem;
-}
-
-.board-header h2 {
-  font-size: 1.5rem;
-}
-
 .board-caption {
   color: #ccc;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
+  margin: 0 0 0.6rem;
 }
 
 .personal-awards-screen {
@@ -393,7 +385,7 @@ export default {
 .awards-year-scroller {
   display: flex;
   gap: 0.4rem;
-  margin-bottom: 0.9rem;
+  margin-bottom: 0.6rem;
   overflow-x: auto;
   padding: 0.15rem 0.1rem;
   -webkit-overflow-scrolling: touch;

@@ -313,3 +313,16 @@ not a film.
 
 Awards created in v1.90.0 carry no `type` at all. They default to `'movie'`, which is
 what they were, rather than being backfilled.
+
+## The Awards tab loses its heading (2026-10-27)
+
+A day after Awards became an Insights tab, Matt reported from his phone that everything
+felt "pushed way too far down... way too much content before I even get to the awards".
+Above the first category sat the Insights tabs (two rows of three), the ceremony strip,
+the year strip, then the old page's "The 2006 Groskers / Your own annual awards" heading.
+He floated hiding the Insights tabs on Awards and rejected it himself ("then it doesn't
+work like the other tabs"). What shipped instead: the heading only renders in Home's
+pop-up, boards keep only the Oscars ceremony caption, the strips sit closer together, and
+the Insights tabs went to one row of six (measured: "Overview" is 44px at 12px bold in
+Roboto Condensed, a 375px iPhone gives each tab ~54px). Held in reserve if it still feels
+tall: fold the ceremony strip into one dropdown button beside the years.

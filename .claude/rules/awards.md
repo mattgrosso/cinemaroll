@@ -265,6 +265,8 @@ Cannes and whatever else… the history of any award that we have access to."
   it). A board without that year shows its newest, but the URL keeps the
   picked year so the next tab that has it lands on it. Back on your own tab,
   a year that isn't one of your award years becomes your newest.
+- No heading above either view on the tab (2026-10-27): the strips name the ceremony
+  and year; see `.claude/rules/detail-and-insights.md`.
 - Your own tab is the existing nominate-and-pick page. Every other tab is
   `AwardsBoard.vue` (read-only: categories in order, winners as poster cards,
   nominees as chips; a pick with a TMDB id opens the film).
