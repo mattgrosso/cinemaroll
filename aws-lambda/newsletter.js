@@ -632,10 +632,14 @@ const paperFeed = async (topKey) => {
       date_published: new Date(issue.builtAt || Date.now()).toISOString()
     });
   }
-  // New showtimes: every listing first seen in the last two weeks, newest first.
+  // New showtimes at the theaters the paper reports on (FEED_THEATERS, by
+  // key; Matt, 2026-10-27: "the only theater I want full reports on is the
+  // Bryant Street Alamo"), first seen in the last two weeks, newest first.
   const board = (await dbGet(`${topKey}/theaters/board`).catch(() => null)) || {};
   const since = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  const wanted = new Set((process.env.FEED_THEATERS || 'alamo-bryant-street').split(',').map((k) => k.trim()).filter(Boolean));
   for (const theater of board.theaters || []) {
+    if (!wanted.has(theater.key)) continue;
     for (const l of theater.listings || []) {
       if (!l.firstSeenAt || l.firstSeenAt < since) continue;
       items.push({
