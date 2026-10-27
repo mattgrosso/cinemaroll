@@ -613,6 +613,50 @@ const publishIssue = async ({ topKey, issue, push }) => {
   }));
 };
 
+// --- The paper's feed -------------------------------------------------------
+
+const escapeHtml = (t) => String(t || '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+const paperFeed = async (topKey) => {
+  const items = [];
+  const node = (await dbGet(`${topKey}/newsletter`).catch(() => null)) || {};
+  const issues = Object.values(node.issues || {}).filter((i) => i && !i.testing).sort((a, b) => (b.builtAt || 0) - (a.builtAt || 0)).slice(0, 4);
+  for (const issue of issues) {
+    const picks = (issue.picks || []).map((p) => `<h3>${escapeHtml(p.headline || p.title)}</h3>${p.hook ? `<p><i>${escapeHtml(p.hook)}</i></p>` : ''}${String(p.article || '').split(/\n\s*\n/).filter(Boolean).map((para) => `<p>${escapeHtml(para)}</p>`).join('')}`).join('');
+    const feature = issue.feature ? `<h3>${escapeHtml(issue.feature.headline || issue.feature.title)}</h3>${String(issue.feature.article || issue.feature.body || '').split(/\n\s*\n/).filter(Boolean).map((para) => `<p>${escapeHtml(para)}</p>`).join('')}` : '';
+    items.push({
+      id: `issue-${issue.weekKey}`,
+      url: 'https://www.cinemaroll.org/newsletter',
+      title: `This week in film: ${(issue.picks || []).map((p) => p.title).filter(Boolean).slice(0, 3).join(', ')}`,
+      content_html: `${issue.intro ? `<p>${escapeHtml(issue.intro)}</p>` : ''}${picks}${feature}`,
+      date_published: new Date(issue.builtAt || Date.now()).toISOString()
+    });
+  }
+  // New showtimes: every listing first seen in the last two weeks, newest first.
+  const board = (await dbGet(`${topKey}/theaters/board`).catch(() => null)) || {};
+  const since = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  for (const theater of board.theaters || []) {
+    for (const l of theater.listings || []) {
+      if (!l.firstSeenAt || l.firstSeenAt < since) continue;
+      items.push({
+        id: `listing-${theater.key}-${l.slug}`,
+        url: l.url || theater.url || 'https://www.cinemaroll.org/showtimes',
+        title: `New at ${theater.name}: ${l.title}${l.year ? ` (${l.year})` : ''}`,
+        content_html: `${l.poster ? `<p><img src="${escapeHtml(l.poster)}" alt=""></p>` : ''}<p>${l.firstShowTime ? `First showing ${escapeHtml(new Date(l.firstShowTime).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }))}` : 'Showtimes are up'}${l.imax ? ' · IMAX' : ''}${l.lastShowTime ? `; through ${escapeHtml(new Date(l.lastShowTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' }))}` : ''}.</p>`,
+        image: l.poster || undefined,
+        date_published: new Date(l.firstSeenAt).toISOString(),
+        _newsprinted: { expires: l.lastShowTime || new Date(l.firstSeenAt + 14 * 24 * 60 * 60 * 1000).toISOString() }
+      });
+    }
+  }
+  items.sort((a, b) => String(b.date_published).localeCompare(String(a.date_published)));
+  return {
+    statusCode: 200,
+    headers: { 'content-type': 'application/feed+json', 'cache-control': 'public, max-age=600' },
+    body: JSON.stringify({ version: 'https://jsonfeed.org/version/1.1', title: 'Cinema Roll', home_page_url: 'https://www.cinemaroll.org', items })
+  };
+};
+
 // --- Entry points -------------------------------------------------------------
 
 const runForAccount = async (topKey, { now, alwaysOn }) => {
@@ -732,6 +776,13 @@ exports.handler = async (event, context) => {
 
   activeOrigin = event.headers?.origin || event.headers?.Origin || ALLOWED_ORIGINS[0];
   if (event.requestContext.http?.method === 'OPTIONS') return response(204, {});
+
+  // The paper's feed (Newsprinted): this week's issue and what's newly
+  // listed at the followed theaters, for the owner's account. A secret in
+  // the path, no sign-in; nothing here that isn't already pushed to his phone.
+  if (process.env.FEED_TOKEN && event.requestContext.http?.method === 'GET' && (event.rawPath || '') === `/feed/${process.env.FEED_TOKEN}`) {
+    return paperFeed(process.env.FEED_ACCOUNT || 'mattgrosso-gmail-com');
+  }
 
   const claims = await verifyIdToken(event.headers?.authorization || event.headers?.Authorization);
   if (!claims?.email) return response(401, { error: 'Sign in required' });
