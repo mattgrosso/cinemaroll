@@ -151,6 +151,11 @@ post-rating Wikidata locations lookup, keywords): `isStallError` → warn,
 anything else → error. Third-party lookups get their own `AbortSignal.timeout`
 rather than `fetchWithTimeout`, so a slow outside service doesn't flip the app
 offline (Wikidata: 20s, `LOOKUP_TIMEOUT_MS`).
+**A failed lookup is not a miss (Sentry, 2026-10-27).** The Showtimes poster
+lookup (`posterLookup.js`) fired a whole board at TMDB at once, got a 429, and
+stored that failure as "no poster" for a month. Device caches store only real
+answers; a 429 waits (Retry-After, else 2s) and retries once; a burst of
+lookups runs a few at a time (four there). `posterLookupRateLimit.test.js`.
 Branch on `state.isOnline` for offline behaviour, never on `navigator.onLine`;
 never add a network call without a timeout (axios has the default; raw `fetch`
 goes through `fetchWithTimeout`). Everything queued through `pendingWriteQueue`

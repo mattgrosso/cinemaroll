@@ -9,15 +9,48 @@
 // of a hundred films costs one round of lookups per device, not one per
 // visit. Same shape as personLookup: module cache + shared in-flight
 // promise; a miss resolves to null and never retries in-session.
+//
+// Sentry, 2026-10-27: a board's worth of lookups fired at once and TMDB
+// answered one with 429. That failure was then stored as a miss for a month,
+// so the card stayed a bare title. Now only real answers are stored, a 429
+// waits and tries once more, at most MAX_CONCURRENT searches run at a time,
+// and "slow down" or a stall is a warning, not a Sentry error.
 import ErrorLogService from '../services/ErrorLogService.js';
-import { fetchWithTimeout } from './networkHealth.js';
+import { fetchWithTimeout, isStallError } from './networkHealth.js';
 
 const STORAGE_KEY = 'showtimesPosters';
 const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const POSTER_BASE = 'https://image.tmdb.org/t/p/w342';
 
+export const MAX_CONCURRENT = 4;
+export const RATE_LIMIT_WAIT_MS = 2000;
+const MAX_RATE_LIMIT_WAIT_MS = 10000;
+
 const memory = new Map();
 const inFlight = new Map();
+
+// A tiny semaphore: a board of a hundred films asks TMDB four at a time.
+let running = 0;
+const waiting = [];
+async function withSlot (task) {
+  if (running >= MAX_CONCURRENT) await new Promise((resolve) => waiting.push(resolve));
+  running += 1;
+  try {
+    return await task();
+  } finally {
+    running -= 1;
+    const next = waiting.shift();
+    if (next) next();
+  }
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function retryAfterMs (response) {
+  const seconds = Number(response.headers?.get?.('Retry-After'));
+  if (!Number.isFinite(seconds) || seconds <= 0) return RATE_LIMIT_WAIT_MS;
+  return Math.min(seconds * 1000, MAX_RATE_LIMIT_WAIT_MS);
+}
 
 // "HALLOWEEN (1978) in 35mm" -> { query: 'halloween', year: 1978 }. The
 // bracketed year is the strongest hint a repertory title carries; format
@@ -74,11 +107,18 @@ export async function lookupFilm (title, year = null) {
   const search = async (query) => {
     const params = new URLSearchParams({ api_key: process.env.VUE_APP_TMDB_API_KEY, query, include_adult: 'false' });
     if (q.year) params.set('year', String(q.year));
-    const response = await fetchWithTimeout(`https://api.themoviedb.org/3/search/movie?${params}`);
-    if (!response.ok) throw new Error(`TMDB search/movie returned ${response.status}`);
+    const url = `https://api.themoviedb.org/3/search/movie?${params}`;
+    let response = await fetchWithTimeout(url);
+    if (response.status === 429) {
+      await sleep(retryAfterMs(response));
+      response = await fetchWithTimeout(url);
+    }
+    if (!response.ok) {
+      throw Object.assign(new Error(`TMDB search/movie returned ${response.status}`), { status: response.status });
+    }
     return (await response.json())?.results || [];
   };
-  const lookup = (async () => {
+  const lookup = withSlot(async () => {
     try {
       let results = await search(q.query);
       // "Manhunter: The Final Cut", "THE RIVER TRAIN w/ FOR THE OPPONENTS":
@@ -92,12 +132,18 @@ export async function lookupFilm (title, year = null) {
         year: released ? Number(released) : null
       };
     } catch (error) {
-      ErrorLogService.error('Error fetching TMDB film:', error);
-      return NONE;
+      // TMDB asking us to slow down (even after the retry) or a connection
+      // that didn't answer isn't our bug; anything else is worth hearing.
+      const quiet = error?.status === 429 || isStallError(error);
+      ErrorLogService[quiet ? 'warn' : 'error']('Error fetching TMDB film:', error);
+      return null;
     }
-  })().then((hit) => {
-    memory.set(key, hit);
+  }).then((hit) => {
     inFlight.delete(key);
+    // A failed lookup is not a miss: nothing is remembered, so the next
+    // visit asks again.
+    if (!hit) return NONE;
+    memory.set(key, hit);
     const next = readStore();
     next[key] = { url: hit.poster, year: hit.year, at: Date.now() };
     writeStore(next);
