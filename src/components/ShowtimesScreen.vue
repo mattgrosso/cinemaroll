@@ -7,7 +7,7 @@
         <i class="bi bi-geo-alt"></i> Your theaters
       </button>
     </div>
-    <p class="st-subtitle">What's on the boards at the theaters you follow. Swipe right to dismiss, left to be reminded before it plays.</p>
+    <p class="st-subtitle">What's on the boards at the theaters you follow. Swipe right to dismiss, left to be reminded before it plays. Hold a poster when you've got tickets.</p>
     <transition name="st-toast">
       <div v-if="toast" class="st-toast" role="status">{{ toast }}</div>
     </transition>
@@ -26,6 +26,10 @@
         <button v-if="dismissedCount" type="button" class="st-toggle" :class="{ on: showDismissed }" @click="showDismissed = !showDismissed" :aria-pressed="showDismissed" :aria-label="`Show ${dismissedCount} dismissed`">
           <i class="bi" :class="showDismissed ? 'bi-eye-fill' : 'bi-eye-slash'"></i>
           <span>{{ dismissedCount }}</span>
+        </button>
+        <button v-if="ticketsCount" type="button" class="st-toggle" :class="{ on: showTickets }" @click="showTickets = !showTickets" :aria-pressed="showTickets" :aria-label="`Show ${ticketsCount} film${ticketsCount === 1 ? '' : 's'} you have tickets for`">
+          <i class="bi" :class="showTickets ? 'bi-ticket-perforated-fill' : 'bi-ticket-perforated'"></i>
+          <span>{{ ticketsCount }}</span>
         </button>
         <button v-if="waitingCount" type="button" class="st-toggle" :class="{ on: showWaiting }" @click="showWaiting = !showWaiting" :aria-pressed="showWaiting" :aria-label="`Show ${waitingCount} reminder${waitingCount === 1 ? '' : 's'}`">
           <i class="bi" :class="showWaiting ? 'bi-bell-fill' : 'bi-bell'"></i>
@@ -53,13 +57,14 @@
             v-for="item in theater.shown"
             :key="item.slug"
             class="st-card"
-            :class="{ covered: item.coveredBy, dismissed: item.dismissed, waiting: item.waiting, focused: focus === cardId(theater, item), leaving: leaving === cardId(theater, item), 'leaving-left': leavingLeft === cardId(theater, item) }"
+            :class="{ covered: item.coveredBy, dismissed: item.dismissed, tickets: item.tickets, waiting: item.waiting, pressed: pressed === cardId(theater, item), focused: focus === cardId(theater, item), leaving: leaving === cardId(theater, item), 'leaving-left': leavingLeft === cardId(theater, item) }"
             :data-card="cardId(theater, item)"
             :style="cardStyle(theater, item)"
             @touchstart.passive="touchStart($event, theater, item)"
             @touchmove.passive="touchMove($event, theater, item)"
             @touchend="touchEnd($event, theater, item)"
             @touchcancel="touchEnd($event, theater, item, true)"
+            @contextmenu.prevent
           >
             <a class="st-card-link" :href="hrefFor(theater, item)" :target="targetFor(hrefFor(theater, item))" rel="noopener" @click="blockIfSwiping($event)">
               <img
@@ -74,6 +79,7 @@
               <div class="st-tags">
                 <span v-if="item.imax" class="st-tag">IMAX</span>
                 <span v-if="isNew(item)" class="st-tag new">new</span>
+                <span v-if="item.tickets" class="st-tag tickets"><i class="bi bi-ticket-perforated-fill"></i> tickets</span>
                 <span v-if="item.waiting" class="st-tag remind"><i class="bi bi-bell-fill"></i> {{ remindLabel(item.reminder) }}</span>
                 <span v-else-if="item.reminded" class="st-tag reminded">reminded</span>
               </div>
@@ -86,7 +92,16 @@
               </div>
             </a>
             <button
-              v-if="item.waiting"
+              v-if="item.tickets"
+              type="button"
+              class="st-dismiss"
+              :aria-label="`Undo got tickets for ${item.title}`"
+              @click.stop="undoTickets(item)"
+            >
+              <i class="bi bi-arrow-counterclockwise"></i>
+            </button>
+            <button
+              v-else-if="item.waiting"
               type="button"
               class="st-dismiss"
               :aria-label="`Cancel the reminder for ${item.title}`"
@@ -103,6 +118,24 @@
             >
               <i class="bi" :class="item.dismissed ? 'bi-arrow-counterclockwise' : 'bi-x-lg'"></i>
             </button>
+            <!-- Hold, let go, confirm (2026-10-27): the sheet sits on the
+                 card, outside the link, so its taps never open the theater. -->
+            <div
+              v-if="ticketSheet === cardId(theater, item)"
+              class="st-sheet"
+              role="dialog"
+              :aria-label="`Got tickets for ${item.title}?`"
+              @touchstart.stop
+              @click.stop
+            >
+              <p class="st-sheet-title">Got tickets for {{ item.title }}?</p>
+              <div class="st-sheet-buttons">
+                <button type="button" class="st-sheet-cancel" @click="ticketSheet = null">Cancel</button>
+                <button type="button" class="st-sheet-yes" @click="gotTickets(theater, item)">
+                  <i class="bi bi-ticket-perforated-fill"></i> Got tickets
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -129,6 +162,7 @@ import { lookupFilm, titleWithYear } from '../utils/posterLookup.js';
 import { reminderTimeFor } from '../utils/reminderTime.js';
 import { theaterHref, opensInNewTab } from '../assets/javascript/theaterLinks.js';
 import { SHOWTIMES_SEEN_KEY, dismissedFilms, dismissedAtRank, titleKey } from '../assets/javascript/showtimesUnread.js';
+import { isTicketsMark, filmCopies, ticketFilms } from '../assets/javascript/showtimesTickets.js';
 
 // Matt, 2026-09-28: "it would also be great if I could see this somewhere on
 // Cinemaroll, besides just the push notification … a page … that would show
@@ -148,6 +182,10 @@ const NEW_FOR_MS = 7 * 24 * 60 * 60 * 1000;
 // A right swipe dismisses once it has travelled this far or a third of the
 // card, whichever is less - a flick on a phone, not a drag across it.
 const SWIPE_DISMISS_PX = 110;
+// "A long press on the poster, and then it like confirms and I tap a got
+// tickets button" (2026-10-27). Held this long without moving past the
+// swipe's 8px, the card lifts; letting go opens the sheet.
+export const LONG_PRESS_MS = 500;
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -174,6 +212,7 @@ export default {
       onlyUnique,
       showDismissed: false,
       showWaiting: false,
+      showTickets: false,
       toast: '',
       toastTimer: null,
       now: Date.now(),
@@ -185,6 +224,10 @@ export default {
       swipe: null,
       leaving: null,
       leavingLeft: null,
+      // The long press: the card being held past LONG_PRESS_MS, and the card
+      // whose "Got tickets" sheet is open.
+      pressed: null,
+      ticketSheet: null,
       // A notification tap lands here with ?focus=<theater>/<slug>: that card
       // is shown whatever its state, scrolled to and lit for a moment.
       focus: null
@@ -204,6 +247,15 @@ export default {
     dismissedCount () {
       return this.theaters.reduce((n, t) => n + t.listings.filter((l) => l.dismissed).length, 0);
     },
+    ticketTitles () {
+      return ticketFilms(Array.isArray(this.board?.theaters) ? this.board.theaters : [], this.dismissedMap);
+    },
+    // Films, not copies: tickets cover a film at every theater.
+    ticketsCount () {
+      const films = new Set();
+      this.theaters.forEach((t) => t.listings.forEach((l) => { if (l.tickets) films.add(titleKey(l.title) || l.slug); }));
+      return films.size;
+    },
     remindersMap () { return this.$store.state.theaterReminders || {}; },
     waitingCount () {
       return Object.values(this.remindersMap).reduce((n, slugs) => n + Object.values(slugs || {}).filter((r) => r && !r.sentAt).length, 0);
@@ -214,16 +266,19 @@ export default {
         const listings = (Array.isArray(t.listings) ? t.listings : [])
           .map((l) => {
             const reminder = this.remindersMap[t.key]?.[l.slug] || null;
+            // Tickets are their own pile, never counted as dismissed.
+            const tickets = isTicketsMark(this.dismissedMap[t.key]?.[l.slug]) || this.ticketTitles.has(titleKey(l.title));
             return {
               ...l,
-              dismissed: Boolean(this.dismissedMap[t.key]?.[l.slug]) || dismissedAtRank(this.dismissedTitles, l.title, rank),
+              tickets,
+              dismissed: !tickets && (Boolean(this.dismissedMap[t.key]?.[l.slug]) || dismissedAtRank(this.dismissedTitles, l.title, rank)),
               reminder,
               waiting: Boolean(reminder && !reminder.sentAt),
               reminded: Boolean(reminder && reminder.sentAt)
             };
           });
         listings.sort((a, b) => (a.firstShowTime || '9999').localeCompare(b.firstShowTime || '9999'));
-        const shown = listings.filter((l) => (this.showDismissed || !l.dismissed) && (this.showWaiting || !l.waiting) && (!this.onlyUnique || !l.coveredBy));
+        const shown = listings.filter((l) => (this.showDismissed || !l.dismissed) && (this.showTickets || !l.tickets) && (this.showWaiting || !l.waiting) && (!this.onlyUnique || !l.coveredBy));
         return { ...t, listings, shown };
       });
     }
@@ -251,6 +306,9 @@ export default {
     try { localStorage.setItem(SHOWTIMES_SEEN_KEY, String(Date.now())); } catch { /* private mode */ }
     this.fillPosters();
     this.focusFromQuery();
+  },
+  beforeUnmount () {
+    clearTimeout(this.pressTimer);
   },
   methods: {
     cardId (theater, item) { return `${theater.key}/${item.slug}`; },
@@ -325,6 +383,7 @@ export default {
       const item = theater && theater.listings.find((l) => l.slug === slug);
       if (!item) return;
       if (item.dismissed) this.showDismissed = true;
+      if (item.tickets) this.showTickets = true;
       if (item.waiting) this.showWaiting = true;
       if (item.coveredBy) this.onlyUnique = false;
       this.focus = focus;
@@ -406,16 +465,62 @@ export default {
         this.$store.dispatch('dismissListing', { theaterKey: theater.key, slug: item.slug }).catch(() => {});
       }, 180);
     },
+    // Got tickets: every copy of the film on the board is marked (a
+    // dismissal with a note, showtimesTickets.js), which also clears its
+    // notifications, and any reminder waiting on it is cancelled.
+    gotTickets (theater, item) {
+      this.ticketSheet = null;
+      const copies = filmCopies(this.board?.theaters || [], item.title);
+      if (!copies.some((c) => c.theaterKey === theater.key && c.slug === item.slug)) copies.push({ theaterKey: theater.key, slug: item.slug });
+      this.leaving = this.cardId(theater, item);
+      setTimeout(() => {
+        this.leaving = null;
+        copies.forEach(({ theaterKey, slug }) => {
+          this.$store.dispatch('dismissListing', { theaterKey, slug, tickets: true }).catch(() => {});
+          if (this.remindersMap[theaterKey]?.[slug]) this.$store.dispatch('remindListing', { theaterKey, slug, reminder: null }).catch(() => {});
+        });
+        this.say(`Got tickets for ${item.title}`);
+      }, 180);
+    },
+    // Undo lifts the film's tickets everywhere; it comes back as unhandled.
+    undoTickets (item) {
+      const film = titleKey(item.title);
+      (this.board?.theaters || []).forEach((t) => (t.listings || []).forEach((l) => {
+        if (!isTicketsMark(this.dismissedMap[t.key]?.[l.slug])) return;
+        if (film ? titleKey(l.title) !== film : l.slug !== item.slug) return;
+        this.$store.dispatch('dismissListing', { theaterKey: t.key, slug: l.slug, restore: true }).catch(() => {});
+      }));
+      this.say(`No tickets for ${item.title}`);
+    },
+    cancelPress () {
+      clearTimeout(this.pressTimer);
+      this.pressTimer = null;
+      this.pressed = null;
+    },
     // Swipe RIGHT to dismiss, LEFT to be reminded (the back gesture owns the
     // left 20px of the screen, and the cards start 30px in, so the two
     // never meet).
     // Horizontal intent is decided once (a mostly vertical move is a scroll
     // and the card stays put); a release past the threshold dismisses,
     // short of it snaps back.
+    // A press that stays put for LONG_PRESS_MS lifts the card instead; any
+    // move past 8px (a scroll or a swipe deciding itself) calls it off.
     touchStart (event, theater, item) {
-      if (item.dismissed || event.touches.length !== 1) return;
+      this.cancelPress();
+      if (item.dismissed || item.tickets || event.touches.length !== 1) return;
       const t = event.touches[0];
-      this.swipe = { id: this.cardId(theater, item), x: t.clientX, y: t.clientY, dx: 0, horizontal: null, fired: false };
+      const id = this.cardId(theater, item);
+      // A touch on a card whose sheet is open only closes it (the click
+      // that follows is blocked); on any other card it's a fresh gesture.
+      if (this.ticketSheet === id) return;
+      this.ticketSheet = null;
+      this.swipe = { id, x: t.clientX, y: t.clientY, dx: 0, horizontal: null, fired: false };
+      this.pressTimer = setTimeout(() => {
+        this.pressTimer = null;
+        if (!this.swipe || this.swipe.id !== id || this.swipe.horizontal !== null) return;
+        this.pressed = id;
+        try { navigator.vibrate?.(15); } catch { /* not on iOS */ }
+      }, LONG_PRESS_MS);
     },
     touchMove (event, theater, item) {
       const s = this.swipe;
@@ -423,6 +528,7 @@ export default {
       const t = event.touches[0];
       const dx = t.clientX - s.x;
       const dy = t.clientY - s.y;
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) this.cancelPress();
       if (s.horizontal === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) s.horizontal = Math.abs(dx) > Math.abs(dy);
       if (!s.horizontal) return;
       this.swipe = { ...s, dx };
@@ -431,6 +537,16 @@ export default {
       const s = this.swipe;
       if (!s || s.id !== this.cardId(theater, item)) return;
       this.swipe = null;
+      const held = this.pressed === s.id;
+      this.cancelPress();
+      if (held && !cancelled) {
+        // Letting go of a held card opens its sheet, and must not also
+        // follow the link underneath.
+        if (event && event.cancelable) event.preventDefault();
+        this.justSwiped = Date.now();
+        this.ticketSheet = s.id;
+        return;
+      }
       if (cancelled || !s.horizontal) return;
       const width = (event && event.currentTarget && event.currentTarget.offsetWidth) || 0;
       const threshold = Math.min(SWIPE_DISMISS_PX, width ? width / 3 : SWIPE_DISMISS_PX);
@@ -446,6 +562,10 @@ export default {
     blockIfSwiping (event) {
       // The tap that ends a swipe must not also open the ticket page.
       if (Date.now() - (this.justSwiped || 0) < 400) event.preventDefault();
+      else if (this.ticketSheet) {
+        event.preventDefault();
+        this.ticketSheet = null;
+      }
     },
     cardStyle (theater, item) {
       const s = this.swipe;
@@ -603,6 +723,8 @@ export default {
 
   &.covered { opacity: 0.55; }
   &.dismissed { opacity: 0.4; }
+  &.tickets { opacity: 0.6; }
+  &.pressed { transform: scale(1.03); }
   &.waiting { opacity: 0.75; }
   &.focused { box-shadow: 0 0 0 3px #ffc107; }
   &.leaving { transform: translateX(120%); opacity: 0; }
@@ -613,6 +735,13 @@ export default {
   color: inherit;
   display: block;
   text-decoration: none;
+  /* The hold is ours: no iOS link preview, no image save menu, no text
+     selection under the finger. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+
+  img { -webkit-touch-callout: none; }
 }
 
 .st-poster {
@@ -656,6 +785,7 @@ export default {
   &.new { background: #ffc107; color: #000; }
   &.remind { background: #0d6efd; color: #fff; }
   &.reminded { background: rgba(13, 110, 253, 0.35); color: #cfe2ff; }
+  &.tickets { background: #146c43; color: #fff; }
 }
 
 /* What a swipe is about to do, fading in with the drag. */
@@ -734,5 +864,54 @@ export default {
   right: 0.4rem;
   top: 0.4rem;
   width: 36px;
+}
+.st-sheet {
+  background: rgba(10, 10, 10, 0.94);
+  border-top: 1px solid #2e2e2e;
+  bottom: 0;
+  left: 0;
+  padding: 0.9rem 0.8rem 0.8rem;
+  position: absolute;
+  right: 0;
+  z-index: 2;
+}
+
+.st-sheet-title {
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 0.7rem;
+}
+
+.st-sheet-buttons {
+  display: flex;
+  gap: 0.5rem;
+
+  button {
+    align-items: center;
+    border-radius: 8px;
+    display: inline-flex;
+    flex: 1 1 0;
+    font-weight: 700;
+    gap: 0.4rem;
+    justify-content: center;
+    min-height: 44px;
+  }
+}
+
+.st-sheet-cancel {
+  background: #2b2b2b;
+  border: 1px solid #444;
+  color: #eee;
+
+  &:active { background: #3a3a3a; }
+}
+
+.st-sheet-yes {
+  background: #ffc107;
+  border: 0;
+  color: #111;
+
+  &:active { background: #e0a800; }
 }
 </style>

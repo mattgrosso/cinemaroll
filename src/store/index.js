@@ -44,6 +44,7 @@ import { buildPushDigest } from "../assets/javascript/pushDigest.js";
 import { appBadgeCount } from "../assets/javascript/appBadge.js";
 import { pendingFriendRequests } from "../assets/javascript/friendRequests.js";
 import { showtimesWaiting } from "../assets/javascript/showtimesUnread.js";
+import { ticketsMark } from "../assets/javascript/showtimesTickets.js";
 import { buildNewsletterProfile } from "../assets/javascript/newsletterProfile.js";
 import { postToNewsletter } from "../utils/newsletterRequest.js";
 import { announceFriendRequest , closeNotificationsWhere } from "../utils/push.js";
@@ -3369,12 +3370,18 @@ export default createStore({
       if (!root || !theaterKey || !slug) return;
       await context.dispatch('writeDurably', { path: `theaters/reminders/${theaterKey}/${slug}`, value: reminder || null });
     },
-    async dismissListing (context, { theaterKey, slug, restore = false }) {
+    // "A third way that I can mark as that I got tickets" (2026-10-27):
+    // `tickets: true` writes { at, tickets: true } instead of a bare time.
+    // Everything that skips dismissed films only asks whether the key is
+    // there, so the pushes, the badge and the sweep's pruning treat it as a
+    // dismissal with no change of their own (showtimesTickets.js).
+    async dismissListing (context, { theaterKey, slug, restore = false, tickets = false }) {
       const root = context.getters.databaseTopKey;
       if (!root || !theaterKey || !slug) return;
       // Dealt with here, so its notifications go too (the new-listing one and any reminder).
       if (!restore) closeNotificationsWhere((tag) => tag === `listings-${slug}` || tag.startsWith(`remind-${theaterKey}-${slug}-`));
-      await context.dispatch('writeDurably', { path: `theaters/dismissed/${theaterKey}/${slug}`, value: restore ? null : Date.now() });
+      const value = restore ? null : (tickets ? ticketsMark(Date.now()) : Date.now());
+      await context.dispatch('writeDurably', { path: `theaters/dismissed/${theaterKey}/${slug}`, value });
     },
     // Anyone's theaters (2026-09-30: "other people could set it up for their
     // own local theaters"). The sweep reads theaters/follow; saving asks the

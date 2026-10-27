@@ -157,7 +157,7 @@ describe('Showtimes controls row', () => {
 
   it('keeps visible labels short and the long wording in aria-label', () => {
     const labels = [...controls.matchAll(/<span>([^<]*)<\/span>/g)].map((m) => m[1].trim());
-    expect(labels).toEqual(['Unique', '{{ dismissedCount }}', '{{ waitingCount }}']);
+    expect(labels).toEqual(['Unique', '{{ dismissedCount }}', '{{ ticketsCount }}', '{{ waitingCount }}']);
     expect(controls).toContain('aria-label="Only films no better theater has"');
     expect(controls).not.toContain('st-updated');
   });

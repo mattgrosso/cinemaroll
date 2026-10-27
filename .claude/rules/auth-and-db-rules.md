@@ -586,6 +586,19 @@ evening): when every rung has passed and the board has no `lastShowTime` (Cinema
 the swipe snoozes a week (`snooze: true`) and stores `firstShowTime: null` so the push says
 "On the board" rather than a gone date. Refusing is now only for a known last showing today.
 
+**Got tickets = hold, let go, confirm** (2026-10-27: "a third way that I can mark as that I got
+tickets … a long press, release, click"). Held 500ms (`LONG_PRESS_MS`) without moving past the
+swipe's 8px, the card lifts (`navigator.vibrate` where it exists, not iOS); letting go opens a sheet
+ON the card, outside the link, with Got tickets / Cancel, and the click iOS sends after is blocked.
+The posters carry `-webkit-touch-callout: none` + `@contextmenu.prevent`, or iOS's link preview
+takes the hold. A ticket is a DISMISSAL with a note: `theaters/dismissed/<theater>/<slug>` =
+`{ at, tickets: true }` (store `dismissListing({ tickets: true })`, `showtimesTickets.js`), written
+for every copy of the film on the board, and any reminder on a copy is cancelled. Every other reader
+(pushes, badge, Watchlist dot, `staleTheaterEntries`) only asks whether the key exists, so the Lambda
+needed no change — keep it that way: never read a dismissal's value as a number. Only the screen
+tells them apart: tickets are their own pill and `tickets` tag, never counted as dismissed, and undo
+lifts the film's tickets everywhere. `showtimesTickets.test.js` guards it.
+
 **Taps land in the app, links land on the theater** (v1.118.14: "Clicking on the notification
 should not take me directly to their website … it should just take me to Cinema Roll, to the
 Showtimes page … I don't ever want to go to that movie clock intermediate page"). Every listing
