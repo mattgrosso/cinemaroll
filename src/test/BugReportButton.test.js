@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import BugReportButton from '@/components/BugReportButton.vue';
 import { submitBugReport } from '@/utils/bugReports';
 
@@ -79,5 +81,15 @@ describe('BugReportButton', () => {
 
     expect(wrapper.find('.bug-report-panel').exists()).toBe(false);
     expect(wrapper.vm.transcript).toBe('');
+  });
+
+  // Matt's call (2026-10-27): the trigger lives in the bottom-RIGHT corner.
+  // jsdom loads no scoped CSS, so this reads the rule from the source.
+  it('pins the trigger to the bottom-right corner', () => {
+    const src = readFileSync(resolve(process.cwd(), 'src/components/BugReportButton.vue'), 'utf8');
+    const rule = src.match(/\.bug-report-trigger\s*\{([^}]*)\}/)[1];
+    expect(rule).toMatch(/^\s*right:\s*1rem;/m);
+    expect(rule).not.toMatch(/^\s*left:/m);
+    expect(rule).toMatch(/^\s*bottom:\s*calc\(1rem \+ env\(safe-area-inset-bottom/m);
   });
 });

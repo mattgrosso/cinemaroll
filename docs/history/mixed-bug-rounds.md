@@ -848,3 +848,11 @@ drop, and the fresh pick only tops the row up at the end. A new fetch or a new
 visit starts from today's pick again. Tests: `keepShowing` in
 `discover.test.js`, and "an X only changes the row to the right of it" in
 `WatchlistScreen.test.js` (both fail with the fix reverted).
+
+## Bug button back to the bottom right (2026-10-27)
+
+Matt: "Did we move the bug button from the right side over to the left side, I think I
+want it on the bottom right." It had moved left on 2026-08-01 at his own earlier request.
+`.bug-report-trigger` is `right: 1rem` again; nothing else is fixed in that corner
+(SavedFlash is centered, the scroll-to-top strip is at the top). `BugReportButton.test.js`
+now pins the side from the source, since jsdom loads no scoped CSS.

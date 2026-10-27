@@ -90,15 +90,15 @@ export default {
 </script>
 
 <style scoped>
-/* Fixed bottom-LEFT (bug report: "we should move the bug button to the
-   bottom left instead of bottom right") — clear of every other fixed element
+/* Fixed bottom-RIGHT. It was moved left on 2026-08-01 by request, then back
+   on 2026-10-27 ("I think I want it on the bottom right") — clear of every other fixed element
    in the app (search bar / header live at the top, quick-link controls live
    in-flow). Sized and positioned as an always-visible tap target — no hover
    state, per the project's mobile-first UI rule. Respects the iOS safe-area
    inset so it doesn't sit under the home-indicator on notched phones. */
 .bug-report-trigger {
   position: fixed;
-  left: 1rem;
+  right: 1rem;
   bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   z-index: 1200;
   width: 2.75rem;
