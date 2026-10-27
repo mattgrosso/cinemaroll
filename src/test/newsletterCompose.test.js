@@ -16,7 +16,8 @@ import {
   firstHomeRelease,
   VOTE_FLOOR,
   ISSUE_TOOL,
-  issueFromReply
+  issueFromReply,
+  showtimePosts
 } from '../../aws-lambda/newsletterCompose.js';
 
 const providers = (us) => ({ results: { US: us } });
@@ -783,5 +784,44 @@ describe('pushHeadline', () => {
   });
   it('falls back to the count with no feature', () => {
     expect(pushHeadline({ picks, feature: null })).toBe('2 new films worth your time');
+  });
+});
+
+describe('showtimePosts', () => {
+  const morning = Date.parse('2026-10-27T13:00:00Z');
+  const film = (slug, title, extra = {}) => ({ slug, title, firstSeenAt: morning, url: `https://drafthouse.com/dc-metro-area/show/${slug}`, ...extra });
+  const theater = (listings) => ({ key: 'alamo-bryant-street', name: 'Alamo Bryant Street', url: 'https://drafthouse.com/dc-metro-area/theater/bryant-street', listings });
+
+  it("makes one post for a day's new films, not one per film", () => {
+    const posts = showtimePosts(theater([
+      film('batman-returns', 'Batman Returns', { firstShowTime: '2026-10-30T23:00:00Z', lastShowTime: '2026-11-02T03:00:00Z', poster: 'https://x.example/b.jpg' }),
+      film('little-women', 'Little Women', { year: 2019, firstShowTime: '2026-10-29T23:00:00Z', lastShowTime: '2026-11-05T03:00:00Z' }),
+      film('dive', 'Dive in Wonderland'),
+      film('eyes-wide-shut', 'Eyes Wide Shut', { firstShowTime: '2026-10-31T23:00:00Z' })
+    ]));
+    expect(posts).toHaveLength(1);
+    const [post] = posts;
+    expect(post.title).toBe('New at Alamo Bryant Street: Little Women (2019), Batman Returns and 2 more');
+    expect(post.content_html.match(/<h3>/g)).toHaveLength(4);
+    expect(post.content_html).toContain('href="https://drafthouse.com/dc-metro-area/show/batman-returns"');
+    expect(post.image).toBe('https://x.example/b.jpg');
+    expect(post._newsprinted.group).toBe('listings-alamo-bryant-street-2026-10-27');
+    // Lasts until the longest run ends (a film without a last showing counts two weeks).
+    expect(post._newsprinted.expires).toBe(new Date(morning + 14 * 864e5).toISOString());
+  });
+
+  it("gives a later batch the same day a new id in the same group, and a new day its own post", () => {
+    const first = showtimePosts(theater([film('a', 'A')]))[0];
+    const later = showtimePosts(theater([film('a', 'A'), film('b', 'B', { firstSeenAt: morning + 3 * 3600e3 })]));
+    expect(later).toHaveLength(1);
+    expect(later[0].id).not.toBe(first.id);
+    expect(later[0]._newsprinted.group).toBe(first._newsprinted.group);
+    expect(later[0].title).toBe('New at Alamo Bryant Street: A and B');
+    const twoDays = showtimePosts(theater([film('a', 'A'), film('c', 'C', { firstSeenAt: morning + 864e5 })]));
+    expect(twoDays.map((p) => p._newsprinted.group)).toEqual(['listings-alamo-bryant-street-2026-10-27', 'listings-alamo-bryant-street-2026-10-28']);
+  });
+
+  it('leaves out films first seen before the window', () => {
+    expect(showtimePosts(theater([film('a', 'A')]), { since: morning + 1 })).toEqual([]);
   });
 });

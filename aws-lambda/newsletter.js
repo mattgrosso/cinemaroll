@@ -59,7 +59,8 @@ const {
   previouslyIssued,
   ISSUE_TOOL,
   issueFromReply,
-  RELEASE_WINDOW_DAYS
+  RELEASE_WINDOW_DAYS,
+  showtimePosts
 } = require('./newsletterCompose.js');
 const letterboxd = require('./letterboxd.js');
 const { fitNotification } = require('./pushFit.js');
@@ -634,24 +635,12 @@ const paperFeed = async (topKey) => {
   }
   // New showtimes at the theaters the paper reports on (FEED_THEATERS, by
   // key; Matt, 2026-10-27: "the only theater I want full reports on is the
-  // Bryant Street Alamo"), first seen in the last two weeks, newest first.
+  // Bryant Street Alamo"), first seen in the last two weeks, one post a day.
   const board = (await dbGet(`${topKey}/theaters/board`).catch(() => null)) || {};
   const since = Date.now() - 14 * 24 * 60 * 60 * 1000;
   const wanted = new Set((process.env.FEED_THEATERS || 'alamo-bryant-street').split(',').map((k) => k.trim()).filter(Boolean));
   for (const theater of board.theaters || []) {
-    if (!wanted.has(theater.key)) continue;
-    for (const l of theater.listings || []) {
-      if (!l.firstSeenAt || l.firstSeenAt < since) continue;
-      items.push({
-        id: `listing-${theater.key}-${l.slug}`,
-        url: l.url || theater.url || 'https://www.cinemaroll.org/showtimes',
-        title: `New at ${theater.name}: ${l.title}${l.year ? ` (${l.year})` : ''}`,
-        content_html: `${l.poster ? `<p><img src="${escapeHtml(l.poster)}" alt=""></p>` : ''}<p>${l.firstShowTime ? `First showing ${escapeHtml(new Date(l.firstShowTime).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }))}` : 'Showtimes are up'}${l.imax ? ' · IMAX' : ''}${l.lastShowTime ? `; through ${escapeHtml(new Date(l.lastShowTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' }))}` : ''}.</p>`,
-        image: l.poster || undefined,
-        date_published: new Date(l.firstSeenAt).toISOString(),
-        _newsprinted: { expires: l.lastShowTime || new Date(l.firstSeenAt + 14 * 24 * 60 * 60 * 1000).toISOString() }
-      });
-    }
+    if (wanted.has(theater.key)) items.push(...showtimePosts(theater, { since }));
   }
   items.sort((a, b) => String(b.date_published).localeCompare(String(a.date_published)));
   return {

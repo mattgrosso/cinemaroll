@@ -695,7 +695,58 @@ const issueFromReply = (message) => {
   return { issue: input };
 };
 
+// --- Newsprinted: new showtimes, one post a day -----------------------------
+
+const escapeHtml = (t) => String(t || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const nyDay = (ms) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+const filmName = (l) => `${l.title}${l.year ? ` (${l.year})` : ''}`;
+
+/**
+ * A theater's new showtimes as Newsprinted feed items: one post per day the
+ * films were first seen, not one per film (Matt, 2026-10-27: "it'd be nice
+ * if the New at Alamo Bryant Street entries got combined into a single
+ * post"). Films added later the same day make a fresh post (a new id, so the
+ * paper shows it as new) in the same `group`, and Newsprinted keeps only a
+ * group's newest, so the morning's post gives way to the fuller one.
+ */
+const showtimePosts = (theater, { since = 0 } = {}) => {
+  const byDay = new Map();
+  for (const l of theater.listings || []) {
+    if (!l.firstSeenAt || l.firstSeenAt < since) continue;
+    const day = nyDay(l.firstSeenAt);
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push(l);
+  }
+  const when = (ms, opts) => escapeHtml(new Date(ms).toLocaleString('en-US', { ...opts, timeZone: 'America/New_York' }));
+  return [...byDay].map(([day, films]) => {
+    const at = (t) => Date.parse(t || '') || Infinity;
+    films.sort((a, b) => at(a.firstShowTime) - at(b.firstShowTime) || String(a.title).localeCompare(String(b.title)));
+    const latest = Math.max(...films.map((l) => l.firstSeenAt));
+    const names = films.map(filmName);
+    const title = names.length <= 2 ? names.join(' and ') : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
+    // Gone once the last of them has had its last showing.
+    const ends = films.map((l) => Date.parse(l.lastShowTime || '') || l.firstSeenAt + 14 * 24 * 60 * 60 * 1000);
+    const expires = new Date(Math.max(...ends)).toISOString();
+    const poster = films.find((l) => l.poster)?.poster;
+    const body = films.map((l) => {
+      const line = `${l.firstShowTime ? `First showing ${when(l.firstShowTime, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : 'Showtimes are up'}${l.imax ? ' · IMAX' : ''}${l.lastShowTime ? `; through ${when(l.lastShowTime, { month: 'short', day: 'numeric' })}` : ''}.`;
+      const name = l.url ? `<a href="${escapeHtml(l.url)}">${escapeHtml(filmName(l))}</a>` : escapeHtml(filmName(l));
+      return `${l.poster ? `<p><img src="${escapeHtml(l.poster)}" alt=""></p>` : ''}<h3>${name}</h3><p>${line}</p>`;
+    }).join('');
+    return {
+      id: `listings-${theater.key}-${day}-${latest}`,
+      url: theater.url || 'https://www.cinemaroll.org/showtimes',
+      title: `New at ${theater.name}: ${title}`,
+      content_html: body,
+      image: poster || undefined,
+      date_published: new Date(latest).toISOString(),
+      _newsprinted: { expires, group: `listings-${theater.key}-${day}` }
+    };
+  });
+};
+
 module.exports = {
+  showtimePosts,
   VOTE_FLOOR,
   MAX_AGE_YEARS,
   RELEASE_WINDOW_DAYS,
