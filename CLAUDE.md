@@ -301,3 +301,14 @@ bump `ACADEMY_AWARDS_LATEST_YEAR` in `src/store/index.js` — it is part of the 
 snapshot key, which is what makes devices that cached last year's file fetch the new
 one — then deploy. The `year` field is the films' year (the 98th ceremony, March 2026,
 is `2025`).
+
+## The Film Club page for Newsprinted
+`aws-lambda/clubPaper.js` (tests beside it) builds one JSON Feed of what the
+reader's friends did: Cinema Roll friends' new log entries (found by the
+timestamp prefix of `movieLog` keys from a shallow read, so a friend's whole
+library is never downloaded; a rewatch added to an old entry is missed),
+their Letterboxd reviews with words, awards boards touched lately, and Movie
+Log friends' logs (revision child first, body only when it moved, remembered
+under `<account>/paper/club/external`). Served by the newsletter Lambda at
+`/club/<FEED_TOKEN>` for `FEED_ACCOUNT` only (Matt, 2026-10-27: "Letterboxd
+reviews … and awards … a lot of stuff in Cinema Roll we could bring over").
