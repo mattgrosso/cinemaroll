@@ -204,7 +204,9 @@ function unfinishedSheet (log, rows, now) {
   }
   if (!near.length) return null;
   near.sort((a, b) => b.seen - a.seen);
-  return { kind: 'unfinished', key: dayKey(now), facts: { directors: near.slice(0, 5) }, factLine: near.slice(0, 3).map((n) => `${n.director}: ${n.left.map((f) => f.title).join(', ')} left`).join(' · '), expiresDays: 7 };
+  // The key carries the directors named, so a different short list is a different story.
+  const stamp = near.slice(0, 5).map((n) => n.director).join('|').split('').reduce((h, c) => ((h * 31 + c.charCodeAt(0)) >>> 0), 7).toString(36);
+  return { kind: 'unfinished', key: `${dayKey(now)}-${stamp}`, facts: { directors: near.slice(0, 5) }, factLine: near.slice(0, 3).map((n) => `${n.director}: ${n.left.map((f) => f.title).join(', ')} left`).join(' · '), expiresDays: 7 };
 }
 
 // --- 7. Anniversaries ---------------------------------------------------------------
