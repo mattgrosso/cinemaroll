@@ -161,6 +161,7 @@ export default {
       this.pushDigestTimer = setTimeout(() => {
         this.pushDigestTimer = null;
         this.$store.dispatch('publishPushDigest');
+        this.$store.dispatch('publishPeopleList');
         this.$store.dispatch('refreshAppBadge');
       }, 5000);
     },

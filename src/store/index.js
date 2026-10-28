@@ -45,7 +45,9 @@ import { appBadgeCount } from "../assets/javascript/appBadge.js";
 import { pendingFriendRequests } from "../assets/javascript/friendRequests.js";
 import { showtimesWaiting } from "../assets/javascript/showtimesUnread.js";
 import { ticketsMark } from "../assets/javascript/showtimesTickets.js";
-import { buildNewsletterProfile } from "../assets/javascript/newsletterProfile.js";
+import { buildNewsletterProfile, buildPeopleList } from "../assets/javascript/newsletterProfile.js";
+const PEOPLE_PUBLISH_EVERY_MS = 6 * 60 * 60 * 1000;
+let peoplePublishedAt = 0;
 import { postToNewsletter } from "../utils/newsletterRequest.js";
 import { announceFriendRequest , closeNotificationsWhere } from "../utils/push.js";
 
@@ -3482,6 +3484,25 @@ export default createStore({
         if (now && now !== before) return context.state.newsletterIssue;
       }
       throw new Error('The issue is still building. Give it a minute and reopen this screen.');
+    },
+    // The longer list of his people that Newsprinted matches casting news
+    // against (newsletterProfile.js buildPeopleList). Not tied to the
+    // newsletter switch, and refreshed at most every six hours: names move
+    // slowly, and this runs after every library sync.
+    async publishPeopleList (context) {
+      const root = context.getters.databaseTopKey;
+      if (!root || !context.state.dbLoaded || !context.state.settingsLoaded) return;
+      if (Date.now() - peoplePublishedAt < PEOPLE_PUBLISH_EVERY_MS) return;
+      peoplePublishedAt = Date.now();
+      try {
+        await set(ref(db, `${root}/newsletter/people`), buildPeopleList({
+          entries: context.getters.allMediaAsArray,
+          getRating
+        }));
+      } catch (error) {
+        peoplePublishedAt = 0;
+        console.error('Failed to publish the people list:', error);
+      }
     },
     async publishPushDigest (context) {
       const root = context.getters.databaseTopKey;

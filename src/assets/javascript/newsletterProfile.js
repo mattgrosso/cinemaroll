@@ -179,4 +179,60 @@ export function buildNewsletterProfile ({ entries = [], getRating, now = Date.no
   return profile;
 }
 
-export { MIN_FILMS, TOP_N, RECENT_WINDOW_MS, shrunkAverage };
+// The longer list of his people, for Newsprinted (Matt, 2026-10-28: casting
+// news only for "actors and directors that I care about", and "it may need
+// more than just the top dozen"). Published apart from the profile to
+// `{topKey}/newsletter/people`: the profile goes into a prompt and must stay
+// small, while this is only ever matched against headlines, so it can be
+// long. Served at /people/<FEED_TOKEN> by aws-lambda/newsletter.js.
+const PEOPLE_N = { actors: 150, directors: 100, writers: 50 };
+// Top billing only: the fifth name down is a lead; the twentieth is a cameo.
+const ACTOR_BILLING = 5;
+
+function collectActors (entries, scoreOf) {
+  const byName = new Map();
+  for (const entry of entries) {
+    const score = scoreOf(entry);
+    if (score == null) continue;
+    const cast = entry?.movie?.cast;
+    if (!Array.isArray(cast)) continue;
+    const seen = new Set();
+    for (const person of cast.slice(0, ACTOR_BILLING)) {
+      if (!person?.name || seen.has(person.name)) continue;
+      seen.add(person.name);
+      if (!byName.has(person.name)) byName.set(person.name, []);
+      byName.get(person.name).push(score);
+    }
+  }
+  return byName;
+}
+
+// Ranked like the profile's lists, but only people he rates above his own
+// average: three films he disliked is not someone he cares about.
+function cared (byName, libraryAverage, limit) {
+  const rows = [];
+  for (const [name, scores] of byName) {
+    if (scores.length < MIN_FILMS) continue;
+    const average = shrunkAverage(scores, libraryAverage);
+    if (average <= libraryAverage) continue;
+    rows.push({ name, films: scores.length, average: Number(average.toFixed(2)) });
+  }
+  rows.sort((a, b) => b.average - a.average || b.films - a.films);
+  return rows.slice(0, limit);
+}
+
+export function buildPeopleList ({ entries = [], getRating, now = Date.now() } = {}) {
+  const scoreOf = (entry) => {
+    const total = getRating?.(entry)?.calculatedTotal;
+    return typeof total === 'number' && Number.isFinite(total) ? total : null;
+  };
+  const scored = entries.map(scoreOf).filter((n) => n != null);
+  const libraryAverage = scored.length ? scored.reduce((sum, n) => sum + n, 0) / scored.length : 5;
+  const people = { updatedAt: now, actors: cared(collectActors(entries, scoreOf), libraryAverage, PEOPLE_N.actors) };
+  for (const role of CREW_ROLES) {
+    people[role.key] = cared(collectPeople(entries, scoreOf, role.match), libraryAverage, PEOPLE_N[role.key]);
+  }
+  return people;
+}
+
+export { MIN_FILMS, TOP_N, RECENT_WINDOW_MS, PEOPLE_N, shrunkAverage };

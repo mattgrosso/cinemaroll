@@ -869,6 +869,12 @@ exports.handler = async (event, context) => {
   if (process.env.FEED_TOKEN && event.requestContext.http?.method === 'GET' && (event.rawPath || '') === `/log/${process.env.FEED_TOKEN}`) {
     return logFeed(process.env.FEED_ACCOUNT || 'mattgrosso-gmail-com');
   }
+  // His people (newsletterProfile.js buildPeopleList), for Newsprinted to
+  // match casting news against. Names only, published by the app.
+  if (process.env.FEED_TOKEN && event.requestContext.http?.method === 'GET' && (event.rawPath || '') === `/people/${process.env.FEED_TOKEN}`) {
+    const people = await dbGet(`${process.env.FEED_ACCOUNT || 'mattgrosso-gmail-com'}/newsletter/people`).catch(() => null);
+    return { statusCode: 200, headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=3600' }, body: JSON.stringify(people || {}) };
+  }
 
   const claims = await verifyIdToken(event.headers?.authorization || event.headers?.Authorization);
   if (!claims?.email) return response(401, { error: 'Sign in required' });

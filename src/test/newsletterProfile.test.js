@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildNewsletterProfile, shrunkAverage, MIN_FILMS } from '@/assets/javascript/newsletterProfile.js';
+import { buildNewsletterProfile, buildPeopleList, shrunkAverage, MIN_FILMS, TOP_N, PEOPLE_N } from '@/assets/javascript/newsletterProfile.js';
 
 // Scores live only where getRating runs — calculatedTotal is never persisted —
 // so the tests inject it exactly as the store does.
@@ -143,5 +143,38 @@ describe('buildNewsletterProfile', () => {
     const profile = buildNewsletterProfile({ entries, getRating: (e) => ({ calculatedTotal: e.score }) });
     expect(profile.libraryCount).toBe(2);
     expect(Number.isFinite(profile.libraryAverage)).toBe(true);
+  });
+});
+
+describe('buildPeopleList', () => {
+  const withCast = (name, count, score, startId, billing = 0) =>
+    Array.from({ length: count }, (_, i) => {
+      const f = film({ id: startId + i, title: `${name} ${i}`, score });
+      f.movie.cast = [...Array.from({ length: billing }, (_, j) => ({ name: `Lead ${startId + i}-${j}` })), { name }];
+      return f;
+    });
+
+  it('lists top-billed actors he rates above his average, three films or more', () => {
+    const entries = [
+      ...withCast('Loved Actor', 4, 9, 100),
+      ...withCast('Disliked Actor', 4, 3, 200),
+      ...withCast('Once Actor', 1, 10, 300),
+      ...withCast('Cameo Actor', 4, 9.5, 400, 6)
+    ];
+    const people = buildPeopleList({ entries, getRating });
+    const names = people.actors.map((a) => a.name);
+    expect(names).toContain('Loved Actor');
+    expect(names).not.toContain('Disliked Actor');
+    expect(names).not.toContain('Once Actor');
+    expect(names).not.toContain('Cameo Actor');
+  });
+
+  it('goes well past the profile\'s dozen', () => {
+    const entries = [];
+    for (let d = 0; d < 40; d += 1) entries.push(...byDirector(`Director ${d}`, 3, 9, d * 10 + 1));
+    entries.push(...byDirector('Low', 30, 4, 1000));
+    const people = buildPeopleList({ entries, getRating });
+    expect(people.directors.length).toBe(40);
+    expect(PEOPLE_N.directors).toBeGreaterThan(TOP_N);
   });
 });
