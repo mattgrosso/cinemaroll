@@ -312,3 +312,23 @@ Log friends' logs (revision child first, body only when it moved, remembered
 under `<account>/paper/club/external`). Served by the newsletter Lambda at
 `/club/<FEED_TOKEN>` for `FEED_ACCOUNT` only (Matt, 2026-10-27: "Letterboxd
 reviews … and awards … a lot of stuff in Cinema Roll we could bring over").
+
+## Stories from the log for Newsprinted (2026-10-28)
+`aws-lambda/logPaper.js` (tests beside it) turns Matt's own log into short
+written pieces, one JSON Feed at `/log/<FEED_TOKEN>` (`FEED_ACCOUNT` only; Matt:
+"tons of data in there that should be fun to look at … stories get generated …
+look for an angle"). Seven kinds of fact sheet, all pure and built here: `sits`
+(the morning after a film is logged), `on-this-day`, `month` (the 1st),
+`milestone` (round numbers of films, viewings, theater trips, hours, the year),
+`unfinished` (Sundays: directors one or two features from done; filmography
+entries carry only id/popularity/date/title, so popularity and a title filter
+stand in for "a real feature"), `anniversary` (Mondays: a 8.5+ film turning a
+round age), `numbers` (the 15th: one pattern, rotating). `writeStory` hands ONE
+sheet to Opus (`claude-opus-5-5`, `tool_choice` auto + `strict` — forced choice
+is a 400 on this family) with the last ten headlines and angles so it varies;
+the sheet is its whole world, and every item also carries a deterministic fact
+line. State at `<account>/paper/log/{state,items}`; `runLogPaper` runs from
+EventBridge `cinemaroll-log-paper` (10:45 UTC, `{"logPaper":true}`), or by hand
+with `{"logPaper":true,"force":true}` (every kind at once). The first morning
+marks every round number already passed as history. The whole `movieLog`
+(~11 MB) is read once a day for it.

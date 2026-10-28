@@ -175,6 +175,8 @@ function milestoneSheets (rows, done, now) {
 
 // --- 5. Unfinished business ---------------------------------------------------------
 
+const NOT_A_FEATURE = /\b(collection|concert|live at|live from|making of|behind the scenes|legacy continues|anniversary edition|the series|episode)\b|: the (immaculate|complete)/i;
+
 function unfinishedSheet (log, rows, now) {
   const today = new Date(now).toISOString().slice(0, 10);
   const dirs = new Map();
@@ -191,8 +193,11 @@ function unfinishedSheet (log, rows, now) {
   const near = [];
   for (const d of dirs.values()) {
     if (d.seen.size < 3 || !d.filmography) continue;
-    // Features with an audience, already out; the filmography carries shorts and TV bits too.
-    const left = d.filmography.filter((f) => f?.id && !d.seen.has(f.id) && f.release_date && f.release_date < today && (f.popularity || 0) >= 3);
+    // Features with an audience, already out; the filmography carries shorts, TV
+    // bits, concert films and compilations too (a Madonna video collection is
+    // Fincher's, but not what "one left" means), and says only id, popularity,
+    // date and title about each.
+    const left = d.filmography.filter((f) => f?.id && !d.seen.has(f.id) && f.release_date && f.release_date < today && (f.popularity || 0) >= 8 && !NOT_A_FEATURE.test(f.title || ''));
     if (left.length < 1 || left.length > 2) continue;
     const seen = [...d.seen.values()].sort((a, b) => b.rating - a.rating);
     near.push({ director: d.name, seen: d.seen.size, average: avg(seen.map((s) => s.rating).filter((x) => x != null)), best: seen[0], left: left.map((f) => ({ title: f.title, year: String(f.release_date).slice(0, 4) })) });
@@ -240,7 +245,8 @@ function numbersSheet (rows, now, pattern = PATTERNS[local(now).m % PATTERNS.len
     facts = { question: 'When he watches a film again, does it go up or down?', rewatches: rows.filter((r) => r.prior.length).length, up: rows.filter((r) => r.prior.length && r.rating > r.prior[r.prior.length - 1]).length, biggestSwings: swings };
   } else if (pattern === 'month') facts = { question: 'Which month of the year is his heaviest?', groups: by((r) => MONTHS[local(r.date).m]) };
   else facts = { question: 'How does he spread his ratings?', bands: ['0–3', '3–5', '5–7', '7–9', '9–10'].map((b, i) => { const [lo, hi] = [[0, 3], [3, 5], [5, 7], [7, 9], [9, 10.01]][i]; return { band: b, films: rows.filter((r) => r.rating >= lo && r.rating < hi).length }; }), total: rows.length, averageAllTime: avg(rows.map((r) => r.rating)) };
-  return { kind: 'numbers', key: `${pattern}-${dayKey(now).slice(0, 7)}`, facts: { pattern, ...facts, since: rows[0] ? dateWords(rows[0].date) : null, viewings: rows.length }, factLine: facts.question, expiresDays: 7 };
+  const line = facts.groups ? facts.groups.slice().sort((a, b) => b.films - a.films).slice(0, 4).map((g) => `${g.group} ${g.films} (avg ${g.average})`).join(' · ') : facts.bands ? facts.bands.map((b) => `${b.band}: ${b.films}`).join(' · ') : `${facts.rewatches} rewatches, ${facts.up} went up`;
+  return { kind: 'numbers', key: `${pattern}-${dayKey(now).slice(0, 7)}`, facts: { pattern, ...facts, since: rows[0] ? dateWords(rows[0].date) : null, viewings: rows.length }, factLine: `${rows.length} viewings · ${line}`, expiresDays: 7 };
 }
 
 // --- What's due today ------------------------------------------------------------------

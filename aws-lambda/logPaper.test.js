@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { flatten, sitsSheets, onThisDaySheet, monthSheet, milestoneSheets, unfinishedSheet, anniversariesSheet, numbersSheet, dueSheets, storyItem } from './logPaper.js';
 
 const t = (s) => Date.parse(s);
-const spielberg = { job: 'Director', name: 'Steven Spielberg', filmography: [{ id: 1, title: 'Jaws', release_date: '1975-06-20', popularity: 50 }, { id: 2, title: 'E.T.', release_date: '1982-06-11', popularity: 40 }, { id: 3, title: 'Hook', release_date: '1991-12-11', popularity: 20 }, { id: 4, title: 'Lincoln', release_date: '2012-11-09', popularity: 15 }, { id: 9, title: 'Short Thing', release_date: '1970-01-01', popularity: 0.5 }] };
+const spielberg = { job: 'Director', name: 'Steven Spielberg', filmography: [{ id: 1, title: 'Jaws', release_date: '1975-06-20', popularity: 50 }, { id: 2, title: 'E.T.', release_date: '1982-06-11', popularity: 40 }, { id: 3, title: 'Hook', release_date: '1991-12-11', popularity: 20 }, { id: 4, title: 'Lincoln', release_date: '2012-11-09', popularity: 15 }, { id: 9, title: 'Short Thing', release_date: '1970-01-01', popularity: 0.5 }, { id: 10, title: 'Spielberg: The Complete Collection', release_date: '2001-01-01', popularity: 30 }] };
 const film = (id, title, year, extra = {}) => ({ id, title, release_date: `${year}-06-01`, runtime: 120, genres: [{ name: 'Drama' }], production_countries: [{ name: 'United States of America' }], cast: [{ name: 'Tom Hanks' }], crew: [spielberg], ...extra });
 const log = {
   a: { movie: film(1, 'Jaws', 1975), ratings: [{ date: t('2024-10-28T20:00:00-04:00'), rating: 8.1, medium: 'Theater' }] },
@@ -67,7 +67,7 @@ describe('milestones and unfinished business', () => {
     expect(films.facts.crossedBy.title).toBe('Film 97');
     expect(milestoneSheets([...rows, ...big], { 'films-100': true, 'ratings-100': true, 'year-2026-100': true }, now).map((s) => s.facts.measure)).toEqual([]);
   });
-  it('lists directors with one or two features left, ignoring shorts', () => {
+  it('lists directors with one or two features left, ignoring shorts and compilations', () => {
     const sheet = unfinishedSheet(log, flatten(log), now);
     expect(sheet.facts.directors).toEqual([{ director: 'Steven Spielberg', seen: 3, average: 7.23, best: { title: 'Jaws', rating: 8.1 }, left: [{ title: 'Lincoln', year: '2012' }] }]);
   });
