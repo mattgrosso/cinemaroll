@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { flatten, sitsSheets, onThisDaySheet, monthSheet, milestoneSheets, unfinishedSheet, anniversariesSheet, numbersSheet, dueSheets, storyItem } from './logPaper.js';
+import { flatten, sitsSheets, onThisDaySheet, monthSheet, milestoneSheets, unfinishedSheet, anniversariesSheet, numbersSheet, dueSheets, storyItem, writeStory } from './logPaper.js';
 
 const t = (s) => Date.parse(s);
 const spielberg = { job: 'Director', name: 'Steven Spielberg', filmography: [{ id: 1, title: 'Jaws', release_date: '1975-06-20', popularity: 50 }, { id: 2, title: 'E.T.', release_date: '1982-06-11', popularity: 40 }, { id: 3, title: 'Hook', release_date: '1991-12-11', popularity: 20 }, { id: 4, title: 'Lincoln', release_date: '2012-11-09', popularity: 15 }, { id: 9, title: 'Short Thing', release_date: '1970-01-01', popularity: 0.5 }, { id: 10, title: 'Spielberg: The Complete Collection', release_date: '2001-01-01', popularity: 30 }] };
@@ -95,5 +95,31 @@ describe('the numbers and what is due', () => {
     expect(item.url).toBe('https://www.cinemaroll.org/movie/2');
     expect(item.content_html).toBe('<p>One.</p><p>Two &amp; three.</p><p><small>E.T. (1982) · 9 · Theater · Steven Spielberg: ranks 1 of 3 of theirs</small></p>');
     expect(item._newsprinted.expires).toBe(new Date(now + 3 * 864e5).toISOString());
+  });
+});
+
+describe('asking the model', () => {
+  // Sentry, 2026-10-28: forced tool choice ("tool"/"any") is a 400 on the current models,
+  // so every story failed before a word was written.
+  const fakeClient = (reply) => {
+    const calls = [];
+    return { calls, messages: { create: async (params) => { calls.push(params); return reply; } } };
+  };
+  const sheet = { kind: 'milestone', key: 'ratings-1500', facts: { count: 1500 } };
+  const story = { type: 'tool_use', name: 'write_story', input: { angle: 'scale', headline: 'Fifteen hundred', paragraphs: ['One.', 'Two.'] } };
+
+  it('never forces a tool call, and keeps the schema strict', async () => {
+    const client = fakeClient({ stop_reason: 'tool_use', content: [story] });
+    const out = await writeStory(client, sheet);
+    expect(out.headline).toBe('Fifteen hundred');
+    expect(client.calls).toHaveLength(1);
+    expect(['tool', 'any']).not.toContain(client.calls[0].tool_choice?.type);
+    expect(client.calls[0].tools[0].strict).toBe(true);
+  });
+
+  it('asks once more when the reply has no story, then gives up with the stop reason', async () => {
+    const client = fakeClient({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Here you go' }] });
+    await expect(writeStory(client, sheet)).rejects.toThrow(/end_turn/);
+    expect(client.calls).toHaveLength(2);
   });
 });
