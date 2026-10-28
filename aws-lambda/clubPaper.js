@@ -79,7 +79,8 @@ function reviewItems ({ key, name, reviews }, since) {
   for (const [tmdbId, byDate] of Object.entries(reviews || {})) {
     for (const [entryKey, e] of Object.entries(byDate || {})) {
       if (!e?.review) continue;
-      const at = Date.parse(e.publishedAt || `${e.watchedDate || ''}T12:00:00Z`);
+      // publishedAt is epoch milliseconds from the sync (a string in older rows).
+      const at = Number.isFinite(Number(e.publishedAt)) && Number(e.publishedAt) > 0 ? Number(e.publishedAt) : Date.parse(e.publishedAt || `${e.watchedDate || ''}T12:00:00Z`);
       if (!Number.isFinite(at) || at < since) continue;
       const rating = stars(e.rating);
       const paras = String(e.review).split(/\n\s*\n/).map((p) => `<p>${esc(p)}</p>`).join('');

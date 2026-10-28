@@ -18,7 +18,7 @@ describe('club paper items', () => {
   });
 
   it('a Letterboxd review carries its stars, words and spoiler warning', () => {
-    const reviews = { 4232: { a: { title: 'Scream', year: 1996, rating: 2.5, review: 'First one.\n\nScary <b>', spoilers: true, publishedAt: '2026-10-25T20:00:00Z', url: 'https://letterboxd.com/x' }, b: { title: 'Scream', rating: 3, publishedAt: '2026-10-26T20:00:00Z' } } };
+    const reviews = { 4232: { a: { title: 'Scream', year: 1996, rating: 2.5, review: 'First one.\n\nScary <b>', spoilers: true, publishedAt: Date.parse('2026-10-25T20:00:00Z'), url: 'https://letterboxd.com/x' }, b: { title: 'Scream', rating: 3, publishedAt: '2026-10-26T20:00:00Z' } } };
     const items = reviewItems({ key: 'nat', name: 'Natalie Grosso', reviews }, since);
     expect(items).toHaveLength(1);
     expect(items[0].title).toBe('Natalie on Scream (1996): ★★½');
