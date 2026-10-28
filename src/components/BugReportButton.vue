@@ -94,12 +94,16 @@ export default {
    on 2026-10-27 ("I think I want it on the bottom right") — clear of every other fixed element
    in the app (search bar / header live at the top, quick-link controls live
    in-flow). Sized and positioned as an always-visible tap target — no hover
-   state, per the project's mobile-first UI rule. Respects the iOS safe-area
-   inset so it doesn't sit under the home-indicator on notched phones. */
+   state, per the project's mobile-first UI rule. A FIXED distance from the
+   bottom, not 1rem + env(safe-area-inset-bottom): iOS Safari changes that
+   inset while its toolbar shrinks and grows during a scroll, so the button
+   jumped (report 2026-10-28, "coming unhinged on scroll"). 3.125rem is
+   where the old formula put it on a home-indicator iPhone (16px + 34px),
+   so it still clears the indicator and never moves. */
 .bug-report-trigger {
   position: fixed;
   right: 1rem;
-  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  bottom: 3.125rem;
   z-index: 1200;
   width: 2.75rem;
   height: 2.75rem;

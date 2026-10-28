@@ -856,3 +856,20 @@ want it on the bottom right." It had moved left on 2026-08-01 at his own earlier
 `.bug-report-trigger` is `right: 1rem` again; nothing else is fixed in that corner
 (SavedFlash is centered, the scroll-to-top strip is at the top). `BugReportButton.test.js`
 now pins the side from the source, since jsdom loads no scoped CSS.
+
+## Slow Home posters, and a bug button that moved on scroll (2026-10-28)
+
+Matt: "The tiles are loading really slowly on the main page and the bug button is
+coming unhinged on scroll."
+
+- **Posters.** The 2026-09-23 speed sweep put `content-visibility: auto` on
+  `.grid-layout-media-result`. In WebKit that hides an off-screen card's contents from
+  IntersectionObserver, so the lazy loader's `rootMargin: 1200px` head start (main.js)
+  did nothing and each poster started downloading only when it scrolled into view. A
+  Playwright check on a 402px page of 250px cards: WebKit saw 3 cards with the property
+  and 8 without; Chromium saw 8 either way, which is why it never showed up on desktop.
+  The sweep had already found it didn't move the keystroke time, so it's gone.
+  `gridPosterHeadStart.test.js` pins that.
+- **Bug button.** `bottom: calc(1rem + env(safe-area-inset-bottom))` moved whenever iOS
+  Safari changed the inset as its toolbar collapsed. Now a flat `bottom: 3.125rem` (what
+  the old formula gave on a home-indicator iPhone). `BugReportButton.test.js` pins it.

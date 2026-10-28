@@ -213,6 +213,15 @@ joins `screenTopGap.test.js`. Games keep their own padding (their banner differs
 - **`transform` only during drag** — combining it with `filter`/shadow left visual trails
   on real devices.
 
+- **No `content-visibility: auto` on anything holding a lazy-loaded image.** In WebKit
+  (every iPhone) the skipped contents are invisible to IntersectionObserver, so
+  vue3-lazyload's 1200px head start never fires and posters load only once on screen.
+  Measured in Playwright WebKit 2026-10-28; Chromium doesn't show it. Removed from the
+  Home grid card for that reason.
+- **Never tie a fixed bottom control to `env(safe-area-inset-bottom)`.** iOS Safari
+  changes the inset while its toolbar collapses mid-scroll, so the control jumps (the
+  bug button, 2026-10-28). Use a fixed distance that already clears the home indicator.
+
 ## Mid-drag state and animation
 
 A helper that mutates reactive state as its last act, followed by more mutations in the

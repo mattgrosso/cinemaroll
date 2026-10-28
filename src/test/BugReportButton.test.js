@@ -90,6 +90,15 @@ describe('BugReportButton', () => {
     const rule = src.match(/\.bug-report-trigger\s*\{([^}]*)\}/)[1];
     expect(rule).toMatch(/^\s*right:\s*1rem;/m);
     expect(rule).not.toMatch(/^\s*left:/m);
-    expect(rule).toMatch(/^\s*bottom:\s*calc\(1rem \+ env\(safe-area-inset-bottom/m);
+  });
+
+  // Report 2026-10-28, "the bug button is coming unhinged on scroll": iOS
+  // Safari changes env(safe-area-inset-bottom) while its toolbar collapses
+  // mid-scroll, so a bottom tied to it moved. A fixed distance can't.
+  it('sits a fixed distance from the bottom, not one tied to the safe-area inset', () => {
+    const src = readFileSync(resolve(process.cwd(), 'src/components/BugReportButton.vue'), 'utf8');
+    const rule = src.match(/\.bug-report-trigger\s*\{([^}]*)\}/)[1];
+    expect(rule).toMatch(/^\s*bottom:\s*3\.125rem;/m);
+    expect(rule).not.toMatch(/env\(/);
   });
 });
