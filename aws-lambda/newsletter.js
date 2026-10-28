@@ -679,6 +679,45 @@ const clubTitleOf = async (tmdbId) => {
   const movie = await res.json();
   return movie && movie.title ? `${movie.title}${movie.release_date ? ` (${movie.release_date.slice(0, 4)})` : ''}` : null;
 };
+// --- Stories from the log (logPaper.js): /log/<FEED_TOKEN>, built each morning --------
+
+const { dueSheets, writeStory, storyItem } = require('./logPaper.js');
+
+/** Writes the morning's stories for one account; `force` writes every kind, for a first look. */
+const runLogPaper = async (topKey, { force = false, now = Date.now() } = {}) => {
+  const log = (await dbGet(`${topKey}/movieLog`)) || {};
+  const state = (await dbGet(`${topKey}/paper/log/state`).catch(() => null)) || {};
+  const { sheets, lastRatingAt } = dueSheets(log, state, now, { force });
+  const items = (await dbGet(`${topKey}/paper/log/items`).catch(() => null)) || [];
+  const recent = [...(state.recent || [])];
+  const written = [];
+  for (const sheet of sheets.slice(0, 6)) {
+    try {
+      const story = await writeStory(client, sheet, recent.slice(-10));
+      items.unshift(storyItem(sheet, story, now));
+      recent.push({ headline: story.headline, angle: story.angle });
+      written.push(`${sheet.kind}-${sheet.key}`);
+      console.log(`Log story (${sheet.kind}): ${story.headline} [${story.angle}]`);
+    } catch (error) {
+      console.error(`Log story ${sheet.kind} ${sheet.key} failed:`, error.message);
+    }
+  }
+  const milestones = { ...(state.milestones || {}) };
+  for (const s of sheets) if (s.kind === 'milestone' && written.includes(`${s.kind}-${s.key}`)) milestones[s.key] = true;
+  await dbSet(`${topKey}/paper/log/items`, items.slice(0, 40));
+  await dbSet(`${topKey}/paper/log/state`, { lastRatingAt, milestones, recent: recent.slice(-20), written: [...(state.written || []), ...written].slice(-300), ranAt: now });
+  return { topKey, due: sheets.map((s) => s.kind), written: written.length };
+};
+
+const logFeed = async (topKey) => {
+  const items = ((await dbGet(`${topKey}/paper/log/items`).catch(() => null)) || []).map(({ _kind, _angle, ...item }) => item);
+  return {
+    statusCode: 200,
+    headers: { 'content-type': 'application/feed+json', 'cache-control': 'public, max-age=600' },
+    body: JSON.stringify({ version: 'https://jsonfeed.org/version/1.1', title: 'Your film log', home_page_url: 'https://www.cinemaroll.org', items })
+  };
+};
+
 const clubFeed = async (topKey) => {
   const feed = await buildClubFeed({ topKey, db: { get: dbGet, set: dbSet }, readExternal: clubReadExternal, titleOf: clubTitleOf, log: console.log });
   return {
@@ -798,6 +837,12 @@ exports.handler = async (event, context) => {
     }
   }
 
+  // The morning's stories from the log (EventBridge `cinemaroll-log-paper`, or by hand with { logPaper: true, force: true }).
+  if (event?.logPaper) {
+    const result = await runLogPaper(process.env.FEED_ACCOUNT || 'mattgrosso-gmail-com', { force: event.force === true });
+    console.log('Log paper:', JSON.stringify(result));
+    return { ok: true, result };
+  }
   // EventBridge sends no requestContext; API Gateway always does.
   if (!event?.requestContext) {
     const results = await runSweep();
@@ -816,6 +861,9 @@ exports.handler = async (event, context) => {
   }
   if (process.env.FEED_TOKEN && event.requestContext.http?.method === 'GET' && (event.rawPath || '') === `/feed/${process.env.FEED_TOKEN}`) {
     return paperFeed(process.env.FEED_ACCOUNT || 'mattgrosso-gmail-com');
+  }
+  if (process.env.FEED_TOKEN && event.requestContext.http?.method === 'GET' && (event.rawPath || '') === `/log/${process.env.FEED_TOKEN}`) {
+    return logFeed(process.env.FEED_ACCOUNT || 'mattgrosso-gmail-com');
   }
 
   const claims = await verifyIdToken(event.headers?.authorization || event.headers?.Authorization);
