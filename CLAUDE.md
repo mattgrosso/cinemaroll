@@ -332,3 +332,17 @@ EventBridge `cinemaroll-log-paper` (10:45 UTC, `{"logPaper":true}`), or by hand
 with `{"logPaper":true,"force":true}` (every kind at once). The first morning
 marks every round number already passed as history. The whole `movieLog`
 (~11 MB) is read once a day for it.
+
+## From the archive for Newsprinted (2026-10-28)
+`aws-lambda/archivePaper.js` (tests beside it): critics' reviews of films Matt rated 8.5+
+that are five years old or more, one story per review, served at `/archive/<FEED_TOKEN>`
+("From the archive"; Matt: "contemporaneous reviews … pop up as sort of archive entries",
+"a large pool of possibilities … like a newspaper would be publishing them"). The pool sits
+at `<account>/paper/archive/items` (150 newest) and is topped up by the same morning run as
+the log stories (one read of `movieLog`; `{"logPaper":true,"archiveOnly":true}` runs only
+the archive). The reviews themselves are the movie page's (`criticReviews.js`, table
+`cinemaroll-film-reviews`, owned by the AI Lambda), so the newsletter Lambda invokes
+`cinemaroll-ai` with `{archiveReviews: {tmdbIds, lookups}}` (its role may invoke it).
+`ARCHIVE_LOOKUPS` on the newsletter Lambda (default 0, at most 10) is how many films
+without reviews it looks up each morning, anniversaries this week first: ~20 cents each,
+so it is Matt's call. Newsprinted holds the pool and lets out a few a day (its "Pace").

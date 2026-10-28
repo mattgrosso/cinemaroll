@@ -746,6 +746,37 @@ const runReviewsJob = async (film) => {
 // For trying the prompt from a laptop without the HTTP and storage around it.
 exports.findReviews = findReviews;
 
+/**
+ * The archive for Newsprinted (archivePaper.js in the newsletter Lambda): the
+ * stored reviews for a list of films, and, only when `lookups` is above 0,
+ * that many lookups started for the films without any (in the order given,
+ * each counted against the everyone-per-day cap). Reached by the newsletter
+ * Lambda's direct invoke, never over HTTP.
+ */
+const archiveReviews = async ({ tmdbIds = [], lookups = 0 } = {}, functionName) => {
+  const ids = [...new Set(tmdbIds.map(String).filter((id) => /^\d{1,10}$/.test(id)))].slice(0, 600);
+  const stored = {};
+  const missing = [];
+  for (let i = 0; i < ids.length; i += 25) {
+    const rows = await Promise.all(ids.slice(i, i + 25).map((id) => readStoredReviews(id).catch(() => null)));
+    rows.forEach((row, j) => {
+      if (row?.status === 'ready') stored[ids[i + j]] = row.reviews;
+      else if (!row) missing.push(ids[i + j]);
+    });
+  }
+  let started = 0;
+  for (const tmdbId of missing) {
+    if (started >= Math.min(Number(lookups) || 0, 10)) break;
+    if (!(await countOne(`rv#all#${today()}`, REVIEWS_EVERYONE_PER_DAY))) break;
+    const film = await lookupFilm(tmdbId).catch(() => null);
+    if (!film || !(await claimReviewsJob(film.tmdbId))) continue;
+    await lambda.send(new InvokeCommand({ FunctionName: functionName, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ reviewsJob: film })) }));
+    started += 1;
+  }
+  console.log(`archive: ${Object.keys(stored).length} stored of ${ids.length}, ${started} lookups started`);
+  return { stored, started };
+};
+
 exports.handler = async (event, context) => {
   // A reviews job, started by getReviews with an Event invoke. Only callers
   // holding lambda:InvokeFunction can put a top-level key on the event; an
@@ -753,6 +784,9 @@ exports.handler = async (event, context) => {
   if (event && event.reviewsJob) {
     await runReviewsJob(event.reviewsJob);
     return { ok: true };
+  }
+  if (event && event.archiveReviews) {
+    return archiveReviews(event.archiveReviews, context.functionName);
   }
 
   const headers = event.headers || {};

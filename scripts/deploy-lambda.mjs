@@ -80,6 +80,7 @@ export const LAMBDAS = {
       'aws-lambda/letterboxdSync.js': 'letterboxdSync.js',
       'aws-lambda/clubPaper.js': 'clubPaper.js',
       'aws-lambda/logPaper.js': 'logPaper.js',
+      'aws-lambda/archivePaper.js': 'archivePaper.js',
       'aws-lambda/sentryLambda.js': 'sentryLambda.js',
       'aws-lambda/pushFit.js': 'pushFit.js'
     },

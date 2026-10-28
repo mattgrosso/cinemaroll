@@ -684,8 +684,8 @@ const clubTitleOf = async (tmdbId) => {
 const { dueSheets, writeStory, storyItem, milestoneSheets, flatten } = require('./logPaper.js');
 
 /** Writes the morning's stories for one account; `force` writes every kind, for a first look. */
-const runLogPaper = async (topKey, { force = false, now = Date.now() } = {}) => {
-  const log = (await dbGet(`${topKey}/movieLog`)) || {};
+const runLogPaper = async (topKey, { force = false, now = Date.now(), log: given = null } = {}) => {
+  const log = given || (await dbGet(`${topKey}/movieLog`)) || {};
   const state = (await dbGet(`${topKey}/paper/log/state`).catch(() => null)) || {};
   // The first morning: every round number already passed is history, not news.
   if (!state.milestones) {
@@ -711,6 +711,43 @@ const runLogPaper = async (topKey, { force = false, now = Date.now() } = {}) => 
   await dbSet(`${topKey}/paper/log/items`, items.slice(0, 40));
   await dbSet(`${topKey}/paper/log/state`, { lastRatingAt, milestones, recent: recent.slice(-20), written: [...(state.written || []), ...written].slice(-300), ranAt: now });
   return { topKey, due: sheets.map((s) => s.kind), written: written.length };
+};
+
+// --- From the archive (archivePaper.js): /archive/<FEED_TOKEN>, topped up each morning -----
+
+const { favorites, lookupOrder, addToPool } = require('./archivePaper.js');
+
+/**
+ * Adds the stored reviews of his favourite films to the pool. The reviews
+ * live with the AI Lambda (cinemaroll-film-reviews), so it is asked directly;
+ * ARCHIVE_LOOKUPS (default 0) is how many films without reviews it may look
+ * up each morning, about 20 cents each.
+ */
+const runArchivePaper = async (topKey, log, now = Date.now()) => {
+  const films = favorites(flatten(log), now);
+  const pool = (await dbGet(`${topKey}/paper/archive/items`).catch(() => null)) || [];
+  const ask = async (tmdbIds, lookups) => {
+    const r = await lambda.send(new InvokeCommand({ FunctionName: process.env.AI_FUNCTION || 'cinemaroll-ai', Payload: Buffer.from(JSON.stringify({ archiveReviews: { tmdbIds, lookups } })) }));
+    const out = JSON.parse(Buffer.from(r.Payload || []).toString() || '{}');
+    if (r.FunctionError) throw new Error(out.errorMessage || r.FunctionError);
+    return out;
+  };
+  const { stored = {} } = await ask(films.map((f) => f.tmdbId), 0);
+  const lookups = Math.max(0, Number(process.env.ARCHIVE_LOOKUPS) || 0);
+  let started = 0;
+  if (lookups) started = (await ask(lookupOrder(films, new Set(Object.keys(stored)), now).map((f) => f.tmdbId), lookups)).started || 0;
+  const next = addToPool(pool, films, stored, now);
+  if (next.added) await dbSet(`${topKey}/paper/archive/items`, next.items);
+  return { favorites: films.length, withReviews: Object.keys(stored).length, added: next.added, pool: next.items.length, lookupsStarted: started };
+};
+
+const archiveFeed = async (topKey) => {
+  const items = (await dbGet(`${topKey}/paper/archive/items`).catch(() => null)) || [];
+  return {
+    statusCode: 200,
+    headers: { 'content-type': 'application/feed+json', 'cache-control': 'public, max-age=600' },
+    body: JSON.stringify({ version: 'https://jsonfeed.org/version/1.1', title: 'From the archive', home_page_url: 'https://www.cinemaroll.org', items })
+  };
 };
 
 const logFeed = async (topKey) => {
@@ -843,9 +880,14 @@ exports.handler = async (event, context) => {
 
   // The morning's stories from the log (EventBridge `cinemaroll-log-paper`, or by hand with { logPaper: true, force: true }).
   if (event?.logPaper) {
-    const result = await runLogPaper(process.env.FEED_ACCOUNT || 'mattgrosso-gmail-com', { force: event.force === true });
+    const topKey = process.env.FEED_ACCOUNT || 'mattgrosso-gmail-com';
+    const log = (await dbGet(`${topKey}/movieLog`)) || {};
+    const result = event.archiveOnly ? null : await runLogPaper(topKey, { force: event.force === true, log });
     console.log('Log paper:', JSON.stringify(result));
-    return { ok: true, result };
+    // The archive's morning top-up rides on the same read of the log.
+    const archive = await runArchivePaper(topKey, log).catch((error) => ({ error: error.message }));
+    console.log('Archive paper:', JSON.stringify(archive));
+    return { ok: true, result, archive };
   }
   // EventBridge sends no requestContext; API Gateway always does.
   if (!event?.requestContext) {
@@ -868,6 +910,9 @@ exports.handler = async (event, context) => {
   }
   if (process.env.FEED_TOKEN && event.requestContext.http?.method === 'GET' && (event.rawPath || '') === `/log/${process.env.FEED_TOKEN}`) {
     return logFeed(process.env.FEED_ACCOUNT || 'mattgrosso-gmail-com');
+  }
+  if (process.env.FEED_TOKEN && event.requestContext.http?.method === 'GET' && (event.rawPath || '') === `/archive/${process.env.FEED_TOKEN}`) {
+    return archiveFeed(process.env.FEED_ACCOUNT || 'mattgrosso-gmail-com');
   }
   // His people (newsletterProfile.js buildPeopleList), for Newsprinted to
   // match casting news against. Names only, published by the app.
