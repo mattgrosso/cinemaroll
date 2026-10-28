@@ -681,12 +681,16 @@ const clubTitleOf = async (tmdbId) => {
 };
 // --- Stories from the log (logPaper.js): /log/<FEED_TOKEN>, built each morning --------
 
-const { dueSheets, writeStory, storyItem } = require('./logPaper.js');
+const { dueSheets, writeStory, storyItem, milestoneSheets, flatten } = require('./logPaper.js');
 
 /** Writes the morning's stories for one account; `force` writes every kind, for a first look. */
 const runLogPaper = async (topKey, { force = false, now = Date.now() } = {}) => {
   const log = (await dbGet(`${topKey}/movieLog`)) || {};
   const state = (await dbGet(`${topKey}/paper/log/state`).catch(() => null)) || {};
+  // The first morning: every round number already passed is history, not news.
+  if (!state.milestones) {
+    state.milestones = Object.fromEntries(milestoneSheets(flatten(log), {}, now).map((s) => [s.key, true]));
+  }
   const { sheets, lastRatingAt } = dueSheets(log, state, now, { force });
   const items = (await dbGet(`${topKey}/paper/log/items`).catch(() => null)) || [];
   const recent = [...(state.recent || [])];

@@ -266,9 +266,11 @@ function dueSheets (log, state, now = Date.now(), { force = false } = {}) {
 
 const STORY_TOOL = {
   name: 'write_story',
-  description: 'The finished story for the paper.',
+  description: 'The finished story for the paper. Call it once, with the whole story.',
+  strict: true,
   input_schema: {
     type: 'object',
+    additionalProperties: false,
     properties: {
       angle: { type: 'string', description: 'A few words naming the angle you took, for the record (e.g. "a director overtaken by his own early work")' },
       headline: { type: 'string', description: 'Under 80 characters. A newspaper headline, specific, no colon-gimmicks, no exclamation marks.' },
@@ -295,17 +297,23 @@ The hard rule: you have the fact sheet and nothing else. Use only names, titles,
 Each story takes one angle. A list of recent headlines and angles is given so you take a different one; the same shape of story twice in a row is the failure to avoid. Write 90 to 200 words. Headline under 80 characters.`;
 
 /** Writes one sheet into a story with the model; `recent` is the last few { headline, angle }. */
-async function writeStory (client, sheet, recent = [], { model = 'claude-sonnet-5-5' } = {}) {
-  const message = await client.messages.create({
+async function writeStory (client, sheet, recent = [], { model = 'claude-opus-5-5' } = {}) {
+  // Forced tool choice is refused by this model family; the prompt names the tool and `strict` keeps the shape.
+  const ask = () => client.messages.create({
     model,
-    max_tokens: 1200,
+    max_tokens: 4000,
     system: SYSTEM,
     tools: [STORY_TOOL],
-    tool_choice: { type: 'tool', name: STORY_TOOL.name },
-    messages: [{ role: 'user', content: `Kind of story: ${sheet.kind}. ${KIND_NOTES[sheet.kind] || ''}\n\nRecent stories (take a different angle):\n${recent.map((r) => `- ${r.headline} [${r.angle}]`).join('\n') || '- none yet'}\n\nFact sheet:\n${JSON.stringify(sheet.facts, null, 1)}` }]
+    tool_choice: { type: 'auto' },
+    messages: [{ role: 'user', content: `Kind of story: ${sheet.kind}. ${KIND_NOTES[sheet.kind] || ''}\n\nRecent stories (take a different angle):\n${recent.map((r) => `- ${r.headline} [${r.angle}]`).join('\n') || '- none yet'}\n\nFact sheet:\n${JSON.stringify(sheet.facts, null, 1)}\n\nWrite the story and hand it over with one write_story call; no other reply.` }]
   });
-  const call = (message?.content || []).find((b) => b?.type === 'tool_use' && b.name === STORY_TOOL.name);
-  if (!call?.input?.headline || !Array.isArray(call.input.paragraphs)) throw new Error('No story came back');
+  let message = await ask();
+  let call = (message?.content || []).find((b) => b?.type === 'tool_use' && b.name === STORY_TOOL.name);
+  if (!call) {
+    message = await ask();
+    call = (message?.content || []).find((b) => b?.type === 'tool_use' && b.name === STORY_TOOL.name);
+  }
+  if (!call?.input?.headline || !Array.isArray(call.input.paragraphs)) throw new Error(`No story came back (${message?.stop_reason || 'no reply'})`);
   return { headline: String(call.input.headline).slice(0, 120), angle: String(call.input.angle || '').slice(0, 120), paragraphs: call.input.paragraphs.map((p) => String(p)).filter(Boolean).slice(0, 5) };
 }
 
