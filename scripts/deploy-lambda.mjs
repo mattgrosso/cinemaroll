@@ -78,6 +78,7 @@ export const LAMBDAS = {
       'aws-lambda/cinemaScore.js': 'cinemaScore.js',
       'aws-lambda/letterboxd.js': 'letterboxd.js',
       'aws-lambda/letterboxdSync.js': 'letterboxdSync.js',
+      'aws-lambda/clubPaper.js': 'clubPaper.js',
       'aws-lambda/sentryLambda.js': 'sentryLambda.js',
       'aws-lambda/pushFit.js': 'pushFit.js'
     },

@@ -63,6 +63,7 @@ const {
   showtimePosts
 } = require('./newsletterCompose.js');
 const letterboxd = require('./letterboxd.js');
+const { buildClubFeed } = require('./clubPaper.js');
 const { fitNotification } = require('./pushFit.js');
 const {
   discoverReleases, enrichCandidate, anniversaryPool, trendingThisWeek, filmCard,
@@ -651,6 +652,42 @@ const paperFeed = async (topKey) => {
   };
 };
 
+// The Film Club page for Newsprinted (clubPaper.js): /club/<FEED_TOKEN>. The
+// Movie Log friends' feeds are read the frugal way the push sweep reads them
+// (revision child first, body only when it moved) and remembered under
+// <account>/paper/club, so a reader's fetch never bills the friend.
+const clubReadExternal = async (feedUrl, cached) => {
+  const head = await fetch(feedUrl.replace(/\.json(\?[^#]*)?$/, '/revision.json$1'), { cache: 'no-store', signal: AbortSignal.timeout(8000) }).catch(() => null);
+  const revision = head && head.ok ? await head.json().catch(() => null) : null;
+  const known = typeof revision === 'string' && /^[0-9a-f]{32}$/.test(revision) ? revision : null;
+  if (known && cached && cached.revision === known) return null;
+  const res = await fetch(feedUrl, { cache: 'no-store', signal: AbortSignal.timeout(20000) });
+  if (!res.ok) throw new Error(`feed responded ${res.status}`);
+  const text = await res.text();
+  if (text.length > 8 * 1024 * 1024) throw new Error('feed too large');
+  const doc = JSON.parse(text);
+  const watches = (doc && typeof doc.format === 'string' && doc.format.startsWith('film-club/') ? doc.movies || [] : [])
+    .map((m) => ({ tmdbId: Number(m && m.tmdbId) || null, title: m && m.title, watchedAt: Number(m && m.viewings && m.viewings[0] && m.viewings[0].watchedAt) || null, score: Number.isFinite(Number(m && m.rating)) ? Number(m.rating) : null }))
+    .filter((w) => w.title && w.watchedAt)
+    .sort((a, b) => b.watchedAt - a.watchedAt);
+  return { revision: known, watches };
+};
+const clubTitleOf = async (tmdbId) => {
+  if (!process.env.TMDB_API_KEY) return null;
+  const res = await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${process.env.TMDB_API_KEY}`, { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) return null;
+  const movie = await res.json();
+  return movie && movie.title ? `${movie.title}${movie.release_date ? ` (${movie.release_date.slice(0, 4)})` : ''}` : null;
+};
+const clubFeed = async (topKey) => {
+  const feed = await buildClubFeed({ topKey, db: { get: dbGet, set: dbSet }, readExternal: clubReadExternal, titleOf: clubTitleOf, log: console.log });
+  return {
+    statusCode: 200,
+    headers: { 'content-type': 'application/feed+json', 'cache-control': 'public, max-age=900' },
+    body: JSON.stringify(feed)
+  };
+};
+
 // --- Entry points -------------------------------------------------------------
 
 const runForAccount = async (topKey, { now, alwaysOn }) => {
@@ -774,6 +811,9 @@ exports.handler = async (event, context) => {
   // The paper's feed (Newsprinted): this week's issue and what's newly
   // listed at the followed theaters, for the owner's account. A secret in
   // the path, no sign-in; nothing here that isn't already pushed to his phone.
+  if (process.env.FEED_TOKEN && event.requestContext.http?.method === 'GET' && (event.rawPath || '') === `/club/${process.env.FEED_TOKEN}`) {
+    return clubFeed(process.env.FEED_ACCOUNT || 'mattgrosso-gmail-com');
+  }
   if (process.env.FEED_TOKEN && event.requestContext.http?.method === 'GET' && (event.rawPath || '') === `/feed/${process.env.FEED_TOKEN}`) {
     return paperFeed(process.env.FEED_ACCOUNT || 'mattgrosso-gmail-com');
   }
