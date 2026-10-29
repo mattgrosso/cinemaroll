@@ -903,3 +903,12 @@ need to avoid aren't actually pinned. They just happen to show up at that spot."
   `bugTabLift.test.js` (lift on pin, back on unpin and on unmount); all four fail
   against the old component and page.
 
+## The bug button goes back to the bottom left (2026-10-29, same day)
+
+Matt, on the slim tab: "Interesting workaround, but I don't care for it. Honestly, I'd
+rather we just put it back on the left bottom left corner." Back to the round 2.75rem
+button at `left: 1rem`, keeping the fixed `bottom: 3.125rem`. The lift
+(`bugTabLift.js`, `--bug-tab-lift`, the rating page's strip observer) and its test were
+removed: the strip's pin sits top right, so nothing on the left needs clearing.
+`BugReportButton.test.js` now pins left, round and the fixed bottom; both fail against
+the tab.

@@ -83,31 +83,27 @@ describe('BugReportButton', () => {
     expect(wrapper.vm.transcript).toBe('');
   });
 
-  // Matt's call (2026-10-27): the trigger lives in the bottom-RIGHT corner.
-  // Since 2026-10-29 it's a slim tab flat against that edge, no wider than
-  // the 1rem margin most screens keep, so it sits in that margin instead of over the
-  // buttons that scroll past ("some of the things that we need to avoid
-  // aren't actually pinned"). jsdom loads no scoped CSS, so this reads the
-  // rule from the source.
-  it('is a slim tab flat against the right edge', () => {
+  // Matt's call (2026-10-29, report: "I'd rather we just put it back on the
+  // left bottom left corner"): a round button in the bottom-LEFT corner, not
+  // the slim right-edge tab tried earlier that day. jsdom loads no scoped
+  // CSS, so this reads the rule from the source.
+  it('is a round button in the bottom-left corner', () => {
     const rule = triggerRule();
-    expect(rule).toMatch(/^\s*right:\s*0;/m);
-    expect(rule).not.toMatch(/^\s*left:/m);
-    expect(rule).toMatch(/^\s*border-right:\s*none;/m);
-    const width = Number(rule.match(/^\s*width:\s*([\d.]+)rem;/m)[1]);
-    const height = Number(rule.match(/^\s*height:\s*([\d.]+)rem;/m)[1]);
-    expect(width).toBeLessThanOrEqual(1);
-    expect(height).toBeGreaterThanOrEqual(2.5);
+    expect(rule).toMatch(/^\s*left:\s*1rem;/m);
+    expect(rule).not.toMatch(/^\s*right:/m);
+    expect(rule).toMatch(/^\s*border-radius:\s*50%;/m);
+    expect(rule).toMatch(/^\s*width:\s*2\.75rem;/m);
+    expect(rule).toMatch(/^\s*height:\s*2\.75rem;/m);
   });
 
   // Report 2026-10-28, "the bug button is coming unhinged on scroll": iOS
   // Safari changes env(safe-area-inset-bottom) while its toolbar collapses
-  // mid-scroll, so a bottom tied to it moved. A fixed distance can't. The
-  // only thing that moves it is a screen's own pinned strip, via the lift.
-  it('sits a fixed distance from the bottom, raised only by the lift variable', () => {
+  // mid-scroll, so a bottom tied to it moved. A fixed distance can't.
+  it('sits a fixed distance from the bottom, not one tied to the safe-area inset', () => {
     const rule = triggerRule();
-    expect(rule).toMatch(/^\s*bottom:\s*max\(3\.125rem,\s*var\(--bug-tab-lift,\s*0px\)\);/m);
+    expect(rule).toMatch(/^\s*bottom:\s*3\.125rem;/m);
     expect(rule).not.toMatch(/env\(/);
+    expect(rule).not.toMatch(/var\(/);
   });
 });
 

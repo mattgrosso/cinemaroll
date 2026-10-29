@@ -257,7 +257,7 @@
 
       <!-- Three above, this film, three below, by rating. Last, so the sticky
            strip has the whole form to ride along over. -->
-      <div v-if="movieToRate" :ref="observeStrip" class="neighbors" :class="{ unstuck: !neighborsPinned }">
+      <div v-if="movieToRate" ref="neighbors" class="neighbors" :class="{ unstuck: !neighborsPinned }">
         <!-- Cover Flow (2026-10-02): the film being rated faces you in the
              middle, and its neighbours turn closer to edge-on the further out
              they sit. Every poster is positioned from the centre, so the film
@@ -362,7 +362,6 @@ import RatingSelect from "./RatingSelect.vue";
 import DetailSection from "./DetailSection.vue";
 import notFoundImage from "../assets/images/Image_not_available.png";
 import { coverFlowLayout, coverFlowPose, neighborWindow } from "../assets/javascript/rankNeighbors.js";
-import { BUG_TAB_LIFT_GAP_PX, clearBugTabLift, setBugTabLift } from "../utils/bugTabLift.js";
 
 const NEIGHBORS_PER_SIDE = 3;
 
@@ -505,14 +504,6 @@ export default {
   beforeRouteLeave () {
     this.$store.commit("setShowHeader", true);
     document.body.style.overflow = '';
-  },
-  watch: {
-    neighborsPinned () {
-      this.liftBugTab();
-    },
-  },
-  beforeUnmount () {
-    this.observeStrip(null);
   },
   computed: {
     database () {
@@ -892,31 +883,6 @@ export default {
         this.stageWidth = Math.round(entry.contentRect.width);
       });
       this.stageObserver.observe(el);
-    },
-    // Function ref on the neighbours strip. While it's pinned to the bottom
-    // edge, the bug tab rises above it, or the tab sits on the strip's pin
-    // button (report 2026-10-29). Re-measured whenever the strip resizes.
-    observeStrip (el) {
-      if (el === this.observedStrip) return;
-      this.stripObserver?.disconnect();
-      this.stripObserver = null;
-      this.observedStrip = el;
-      this.liftBugTab();
-      if (!el || typeof ResizeObserver === 'undefined') return;
-      this.stripObserver = new ResizeObserver(() => this.liftBugTab());
-      this.stripObserver.observe(el);
-    },
-    // The footer's height is added because at the very end of the page the
-    // sticky strip comes to rest on top of the footer, a footer's height above
-    // the bottom edge, and the tab must clear its pin there too.
-    liftBugTab () {
-      const strip = this.observedStrip;
-      if (!strip || !this.neighborsPinned) {
-        clearBugTabLift();
-        return;
-      }
-      const footer = document.querySelector('footer');
-      setBugTabLift(strip.offsetHeight + (footer?.offsetHeight || 0) + BUG_TAB_LIFT_GAP_PX);
     },
     coverFlowStyle (offset) {
       const layout = this.coverFlowLayout;
