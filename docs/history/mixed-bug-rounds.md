@@ -873,3 +873,33 @@ coming unhinged on scroll."
 - **Bug button.** `bottom: calc(1rem + env(safe-area-inset-bottom))` moved whenever iOS
   Safari changed the inset as its toolbar collapsed. Now a flat `bottom: 3.125rem` (what
   the old formula gave on a home-indicator iPhone). `BugReportButton.test.js` pins it.
+
+## The bug button becomes a slim tab in the right margin (2026-10-29)
+
+Matt: "the reason we had previously moved the bug button over to the left side is
+because when it's on the right-hand side, it has bad interactions with some of our other
+buttons, like the stickiness, pin button sort of overlaps it ... I like it down there in
+the bottom right." The first plan lifted it above the rating page's pinned Cover Flow
+strip only; his reply ruled that out as the whole answer: "some of the things that we
+need to avoid aren't actually pinned. They just happen to show up at that spot."
+
+- **Shape.** `.bug-report-trigger` is a tab flat against the right edge (`right: 0`,
+  rounded on the left, no right border), 1rem wide and 3rem tall. A first cut at 22px
+  (half the old button) was measured in Playwright WebKit at 402px across Home, the
+  movie page, the rating page, four Insights tabs, Film Club, Watchlist, the Games hub
+  and five games: it still clipped 2 to 6px off Home posters, game tiles, Connections
+  tiles, Add your own award and Tune this list, because those screens keep exactly a
+  1rem right margin. At 16px nothing but sideways-scrolling poster rows (Activity's
+  years, Watchlist rows) passes under it, and those run off the edge by design.
+- **The rating page.** While the strip is pinned the page sets `--bug-tab-lift` on
+  `<html>` (`src/utils/bugTabLift.js`) to the strip's height plus the footer's plus 8px,
+  and the tab's `bottom` is `max(3.125rem, var(--bug-tab-lift, 0px))`. The footer is
+  counted because at the very end of the page the sticky strip comes to rest on top of
+  the footer, and the pin button would otherwise be under the tab there. Measured: tab
+  bottom 638px, strip top 646px at the end of the page. Unpinning, or leaving the page,
+  removes the variable. Still a fixed position, so the 2026-10-28 "unhinged on scroll"
+  fix holds.
+- Tests: `BugReportButton.test.js` (side, width, the bottom rule) and
+  `bugTabLift.test.js` (lift on pin, back on unpin and on unmount); all four fail
+  against the old component and page.
+

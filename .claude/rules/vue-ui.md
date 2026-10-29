@@ -221,6 +221,14 @@ joins `screenTopGap.test.js`. Games keep their own padding (their banner differs
 - **Never tie a fixed bottom control to `env(safe-area-inset-bottom)`.** iOS Safari
   changes the inset while its toolbar collapses mid-scroll, so the control jumps (the
   bug button, 2026-10-28). Use a fixed distance that already clears the home indicator.
+- **The bug tab lives in the right margin; keep that margin.** Since 2026-10-29 the
+  bug button is a 1rem-wide tab flat against the right edge, because content that
+  merely scrolls past the corner kept landing under the old round button. Most
+  screens keep a 1rem right margin, and that is all that protects their edge buttons
+  from it; only sideways-scrolling rows run under it. A screen with something of its
+  own pinned to the bottom edge lifts the tab clear with `setBugTabLift`
+  (`src/utils/bugTabLift.js`), as the rating page's Cover Flow strip does, and
+  clears it when unpinned or unmounted. `bugTabLift.test.js`, `BugReportButton.test.js`.
 
 ## Mid-drag state and animation
 

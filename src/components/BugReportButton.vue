@@ -91,31 +91,41 @@ export default {
 
 <style scoped>
 /* Fixed bottom-RIGHT. It was moved left on 2026-08-01 by request, then back
-   on 2026-10-27 ("I think I want it on the bottom right") — clear of every other fixed element
-   in the app (search bar / header live at the top, quick-link controls live
-   in-flow). Sized and positioned as an always-visible tap target — no hover
-   state, per the project's mobile-first UI rule. A FIXED distance from the
-   bottom, not 1rem + env(safe-area-inset-bottom): iOS Safari changes that
-   inset while its toolbar shrinks and grows during a scroll, so the button
-   jumped (report 2026-10-28, "coming unhinged on scroll"). 3.125rem is
-   where the old formula put it on a home-indicator iPhone (16px + 34px),
-   so it still clears the indicator and never moves. */
+   on 2026-10-27 ("I think I want it on the bottom right"). Since 2026-10-29
+   it's a slim tab pressed flat against the right edge, 1rem wide: the
+   width of the 1rem right margin nearly every screen keeps, so it sits in
+   that margin instead of over the buttons that happen to scroll past the
+   corner (report: "some of the things that we need to avoid aren't
+   actually pinned. They just happen to show up at that spot"). Measured
+   in WebKit at 402px: a 22px tab still clipped the edges of Home posters,
+   game tiles and award buttons; 16px clears them. 3rem tall to make up the
+   tap area. No hover state,
+   per the project's mobile-first UI rule.
+   A FIXED distance from the bottom, not 1rem + env(safe-area-inset-bottom):
+   iOS Safari changes that inset while its toolbar shrinks and grows during a
+   scroll, so the button jumped (report 2026-10-28, "coming unhinged on
+   scroll"). 3.125rem is where the old formula put it on a home-indicator
+   iPhone (16px + 34px), so it still clears the indicator and never moves.
+   A screen with its own bottom-pinned strip raises it with --bug-tab-lift
+   (src/utils/bugTabLift.js; the rating page's Cover Flow strip). */
 .bug-report-trigger {
   position: fixed;
-  right: 1rem;
-  bottom: 3.125rem;
+  right: 0;
+  bottom: max(3.125rem, var(--bug-tab-lift, 0px));
   z-index: 1200;
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: 50%;
+  width: 1rem;
+  height: 3rem;
+  padding: 0;
+  border-radius: 0.6rem 0 0 0.6rem;
   border: 2px solid #444;
+  border-right: none;
   background: #1a1a1a;
   color: #eee;
-  font-size: 1.1rem;
+  font-size: 0.7rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  box-shadow: -2px 2px 8px rgba(0, 0, 0, 0.5);
   cursor: pointer;
   opacity: 0.75;
 }
