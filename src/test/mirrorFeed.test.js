@@ -73,6 +73,22 @@ describe('buildMirrorFeed', () => {
 
   it('an empty library yields an empty but well-formed feed', () => {
     const feed = buildMirrorFeed([], ratingOf, { now: NOW })
-    expect(feed).toEqual({ updatedAt: NOW, recent: [], topThisMonth: [], ratedIds: [] })
+    expect(feed).toEqual({ updatedAt: NOW, recent: [], topThisMonth: [], ratedIds: [], board: { count: 0, ratedThisYear: 0, streakDays: 0, films: [] } })
+  })
+})
+
+describe('the board summary for the Vestaboard', () => {
+  it('carries every rated film as title and score, the counts, and the streak', () => {
+    const library = [
+      entry(1, 'Watched Today', 6, 0),
+      entry(2, 'Watched Yesterday', 9.5, 1),
+      entry(3, 'Watched Last Month', 8, 40),
+      { dbKey: 'k4', movie: { id: 4, title: 'Unrated', poster_path: null }, ratings: [] }
+    ]
+    const feed = buildMirrorFeed(library, (e) => ({ calculatedTotal: e.ratings[0]?.calculatedTotal }), { now: NOW })
+    expect(feed.board.count).toBe(4)
+    expect(feed.board.films).toEqual([['Watched Today', 6], ['Watched Yesterday', 9.5], ['Watched Last Month', 8]])
+    expect(feed.board.ratedThisYear).toBe(3)
+    expect(feed.board.streakDays).toBe(2)
   })
 })

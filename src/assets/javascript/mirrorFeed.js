@@ -60,12 +60,33 @@ export function buildMirrorFeed (entries, getRatingFn, { now = Date.now(), recen
     .slice(0, monthCount)
     .map((row) => compact(row.entry, row.rating, row.watchedAt));
 
+  // The Vestaboard's numbers (audit 2026-10-29: its server read the whole 12 MB
+  // log 37 times a day to show one of these). Every rated film as [title, score],
+  // the counts, and the rating streak, a few tens of KB in all; the server
+  // reads this node instead and never opens the log.
+  const films = rated
+    .filter((row) => Number.isFinite(row.rating) && row.entry.movie.title)
+    .map((row) => [row.entry.movie.title, Math.round(row.rating * 100) / 100]);
+  const year = new Date(now).getFullYear();
+  const ratedThisYear = withDates.filter((row) => new Date(row.watchedAt).getFullYear() === year).length;
+  const days = new Set();
+  (entries || []).forEach((entry) => (entry?.ratings || []).forEach((r) => { const t = new Date(r?.date ?? NaN).getTime(); if (Number.isFinite(t)) days.add(dayKey(t)); }));
+  let streakDays = 0;
+  for (let i = 0; i < 400; i++) { if (days.has(dayKey(now - i * DAY_MS))) streakDays++; else break; }
+
   return {
     updatedAt: now,
     recent,
     topThisMonth,
     // Lets the mirror answer "has this Movie Hat pick been rated yet?"
     // locally, without any further reads.
-    ratedIds
+    ratedIds,
+    board: { count: ratedIds.length, ratedThisYear, streakDays, films }
   };
+}
+
+/** A local calendar day, YYYY-MM-DD, in the phone's own time zone (the streak is the rater's days). */
+function dayKey (ms) {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
