@@ -16,7 +16,8 @@
 // this width with no keyboard up, kept between launches), check the current
 // height every second and on every viewport event, and when the page is cut
 // short by STUCK_MIN or more, slide the pinned things down by the difference
-// (`translate`, so each app keeps its own `bottom`). With a text box focused
+// (`translate` on each, so each app keeps its own `bottom`; `--screen-pin-gap`
+// on the root holds the same number for any app CSS that wants it). With a text box focused
 // it leaves them alone, so they still ride above the keyboard. Only in the
 // installed app: in a browser the toolbars come and go for real.
 
@@ -80,9 +81,13 @@ function apply () {
   if (gap && !report.gap) { report.stuckSeen += 1; report.lastStuck = { gap, height, at: new Date().toISOString() } }
   report.gap = gap
   const value = `${gap}px`
-  if (value === last) return
-  last = value
-  root.style.setProperty('--screen-pin-gap', value)
+  if (value !== last) { last = value; root.style.setProperty('--screen-pin-gap', value) }
+  // Only things hung from the bottom move: a bug button some app pins to the
+  // top (Thunder, Space Base's top-right one) sits in the top half and stays.
+  for (const el of document.querySelectorAll(PINNED)) {
+    const want = gap && el.getBoundingClientRect().top > height / 2 ? `0 ${gap}px` : ''
+    if (el.style.translate !== want) el.style.translate = want
+  }
 }
 
 /** Start watching. Safe to call more than once. */
@@ -90,10 +95,6 @@ export function watchScreenPin () {
   if (typeof window === 'undefined' || window.__screenPin) return
   window.__screenPin = report // for a bug report or the console: is the page cut short right now?
   read()
-  const style = document.createElement('style')
-  style.dataset.house = 'screenPin'
-  style.textContent = `${PINNED.split(', ').map(s => `html ${s}`).join(', ')} { translate: 0 var(--screen-pin-gap, 0px); }`
-  document.head.appendChild(style)
   const settle = () => { apply(); setTimeout(apply, 350) }
   apply()
   window.addEventListener('resize', apply)
