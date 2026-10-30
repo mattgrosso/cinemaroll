@@ -1834,6 +1834,7 @@ const tmdbIdCache = new Map();
 import { getRating } from "../assets/javascript/GetRating.js";
 import { awardsYearThreshold, yearsMeetingAwardsThreshold } from "../assets/javascript/personalAwards.js";
 import { promptsPerDay, dueForPrompt, lastAwardsPromptAt } from "../assets/javascript/promptQuota.js";
+import { CHORE_PAUSE_PATH, chorePauseEnd, chorePausedUntil, isChore } from "../assets/javascript/chorePause.js";
 import { stickinessCandidates } from "../assets/javascript/stickinessCandidates.js";
 import { titleMatchesValue } from "../assets/javascript/numberWords.js";
 import { pushApiConfigured, pushSupport, subscribeThisDevice, unsubscribeThisDevice, sendTestNotification } from "../utils/push.js";
@@ -4166,7 +4167,10 @@ export default {
       // A chore put away with its X counts as off for today, forced or not —
       // the X is the user's latest word — so the next chore due can take the
       // slot. A tournament in progress stays saved and comes back tomorrow.
-      const dismissed = (type) => isNoticeDismissed(this.noticeDismissals, type, type, this.promptNow);
+      // Put away on another device counts too (chorePause.js), so the card
+      // here agrees with the icon badge.
+      const dismissed = (type) => isNoticeDismissed(this.noticeDismissals, type, type, this.promptNow) ||
+        chorePausedUntil(this.$store.state.settings, type, this.promptNow) > 0;
       if (this.stickinessPromptState === 'forced' && !dismissed('stickiness')) {
         return 'stickiness';
       }
@@ -4580,6 +4584,12 @@ export default {
       if (!id) return;
       this.noticeDismissals = dismissNotice(this.noticeDismissals, id, this.noticeSignatures[id], this.promptNow);
       writeNoticeDismissals(this.noticeDismissals);
+      // A chore also goes off the icon badge and out of the pushes until
+      // tomorrow, on every device (chorePause.js, report 2026-10-30).
+      if (isChore(id)) {
+        this.$store.dispatch('writeDurably', { path: `${CHORE_PAUSE_PATH}/${id}`, value: chorePauseEnd(this.promptNow) });
+        this.$store.dispatch('refreshAppBadge');
+      }
     },
     /**
      * Opened from a chore notification (`?open=<chore>`, set by the push
@@ -4641,6 +4651,9 @@ export default {
         this.noticeDismissals = cleared;
         writeNoticeDismissals(cleared);
       }
+      Object.keys(this.$store.state.settings?.choresPausedUntil || {}).forEach((chore) => {
+        this.$store.dispatch('writeDurably', { path: `${CHORE_PAUSE_PATH}/${chore}`, value: null });
+      });
 
       // Flip rather than assign. The cards open off a watcher on `autoOpen`,
       // so a second notification in the same session — arriving while the

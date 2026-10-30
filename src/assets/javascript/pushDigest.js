@@ -41,6 +41,7 @@ import {
   mostRecentRatingOf,
   ratingDateOf
 } from './stickinessCandidates.js';
+import { withChorePause } from './chorePause.js';
 
 // How far ahead the digest bothers projecting stickiness boundaries. The
 // Lambda sweeps daily and the app republishes on every open, so the horizon
@@ -89,10 +90,11 @@ function eligibleAt (lastAt, perDay) {
  * would lead with, and when the NEXT candidates mature.
  */
 export function stickinessDigest (entries, settings, now = Date.now()) {
-  const gate = eligibleAt(
+  // Put away with the X today: not open again until tomorrow (chorePause.js).
+  const gate = withChorePause(eligibleAt(
     settings?.lastStickinessPromptAt,
     promptsPerDay(settings?.stickinessPromptsPerDay, null)
-  );
+  ), settings, 'stickiness', now);
   if (promptState(settings, 'stickinessPromptState') === 'disabled' || gate === null) {
     return { count: 0, nextTitle: null, nextRatedAt: null, dueTimes: [], upcoming: [], eligibleAt: 0 };
   }
@@ -168,7 +170,10 @@ export function tiebreakDigest (entries, settings, getRating, now = Date.now()) 
   // Home.vue's own arithmetic, mirrored exactly — including the `|| now`
   // fallback, which makes a brand-new account wait one interval for its
   // first tiebreak rather than being asked immediately.
-  const gate = (Number(settings?.lastTweak) || now) + ONE_DAY_MS / (Number(settings?.tieBreakTweak) || 1);
+  const gate = withChorePause(
+    (Number(settings?.lastTweak) || now) + ONE_DAY_MS / (Number(settings?.tieBreakTweak) || 1),
+    settings, 'tieBreak', now
+  );
 
   // Shorts sit out of tiebreaks while the setting is off, same as on screen.
   const includeShorts = settings?.includeShorts === true;
@@ -265,10 +270,10 @@ export function buildPushDigest ({ entries, settings, getRating, now = Date.now(
     tiebreak: tiebreakDigest(entries, settings, getRating, now),
     awards: {
       years: awardsYearsNeedingInput(entries, settings, now),
-      eligibleAt: eligibleAt(
+      eligibleAt: withChorePause(eligibleAt(
         lastAwardsPromptAt(settings, now),
         promptsPerDay(settings?.awardsPromptsPerDay, 1)
-      ) ?? 0
+      ), settings, 'awards', now) ?? 0
     },
     games: gamesDigest(settings)
   };

@@ -189,6 +189,36 @@ describe('Home shows one notice at a time', () => {
   });
 });
 
+describe('putting a chore away with its X (report 2026-10-30)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetNoticeLaunch();
+    markNoticesSettled();
+  });
+
+  it('pauses the chore on the account until midnight and recounts the badge', async () => {
+    const wrapper = mountHome({ pendingReconciliations: [], showtimes: 0 });
+    wrapper.vm.reportNotice('stickiness', 'stickiness');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.currentNotice).toBe('stickiness');
+
+    wrapper.vm.dismissCurrentNotice();
+    const dispatch = wrapper.vm.$store.dispatch;
+    const write = dispatch.mock.calls.find(([name, entry]) => name === 'writeDurably' && entry.path === 'settings/choresPausedUntil/stickiness');
+    expect(write).toBeTruthy();
+    expect(write[1].value).toBeGreaterThan(Date.now());
+    expect(dispatch.mock.calls.some(([name]) => name === 'refreshAppBadge')).toBe(true);
+  });
+
+  it('leaves the account alone for a card that is not a chore', async () => {
+    const wrapper = mountHome({ pendingReconciliations: [] });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.currentNotice).toBe('showtimes');
+    wrapper.vm.dismissCurrentNotice();
+    expect(wrapper.vm.$store.dispatch.mock.calls.some(([, entry]) => entry?.path?.startsWith('settings/choresPausedUntil'))).toBe(false);
+  });
+});
+
 describe('Home at launch, before every source has answered', () => {
   beforeEach(() => {
     localStorage.clear();

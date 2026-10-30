@@ -54,7 +54,13 @@ first attempt at the games scroll-to-top do nothing at all.
   reports a signature while due; the X hides it per device until tomorrow or until the
   signature changes (a numeric one, a count, only when it grows). A dismissed chore is
   skipped by `activeModalType` so the next chore can show; a tapped chore notification
-  clears chore dismissals. A new notice needs a place in `NOTICE_ORDER`, a
+  clears chore dismissals.
+  **A chore's X also pauses it on the account (2026-10-30):** the card was gone but the icon
+  badge kept counting it ("I still have a red dot on my icon"). The X writes
+  `settings/choresPausedUntil/<chore>` = next local midnight (`chorePause.js`); the push
+  digest folds it into that section's `eligibleAt`, so the badge and the push Lambda drop
+  it until tomorrow, and `activeModalType` honours it on every device. A tapped chore
+  notification clears the pauses too. `chorePause.test.js`. A new notice needs a place in `NOTICE_ORDER`, a
   `.notice-slot` wrapper with the X, and (if it owns its state) an `@notice` emit.
   `homeNoticeQueue.test.js` guards it.
   **Settle, then hold (2026-10-27):** "the content in the activity banner often shows one
