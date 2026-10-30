@@ -18,6 +18,7 @@ import "./assets/scss/fonts.css";
 
 import { createApp } from "vue";
 import App from "./App.vue";
+import "./utils/screenPin.js"; // keeps the bug button at the real bottom of the screen (iOS cuts the page short)
 import store from "./store";
 import router from './router';
 import VueClickAway from "vue3-click-away";
