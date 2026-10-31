@@ -4572,6 +4572,8 @@ export default {
     },
     snoozeFriendRequestFromCard (key) {
       this.friendRequestSnoozes = snoozeFriendRequest(key);
+      // Off the icon badge too while the snooze lasts (appBadge.js).
+      this.$store.dispatch('refreshAppBadge');
     },
     reportNotice (id, signature) {
       if (this.noticeReports[id] === signature) return;
@@ -4588,8 +4590,10 @@ export default {
       // tomorrow, on every device (chorePause.js, report 2026-10-30).
       if (isChore(id)) {
         this.$store.dispatch('writeDurably', { path: `${CHORE_PAUSE_PATH}/${id}`, value: chorePauseEnd(this.promptNow) });
-        this.$store.dispatch('refreshAppBadge');
       }
+      // Whatever was put away comes off the icon badge as well (appBadge.js,
+      // report 2026-10-30: a hidden Showtimes card kept its red number).
+      this.$store.dispatch('refreshAppBadge');
     },
     /**
      * Opened from a chore notification (`?open=<chore>`, set by the push

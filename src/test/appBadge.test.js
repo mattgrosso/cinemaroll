@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { appBadgeCount } from '../assets/javascript/appBadge.js';
+import { appBadgeCount, badgeExtrasShown } from '../assets/javascript/appBadge.js';
+import { noticeDay } from '../assets/javascript/homeNotices.js';
 import { dueFromDigest } from '../../aws-lambda/pushCadence.js';
 
 const NOW = 1_800_000_000_000;
@@ -67,5 +68,43 @@ describe('appBadgeCount', () => {
     const empty = { stickiness: { count: 0, dueTimes: [] }, tiebreak: {}, awards: { years: [] } };
     expect(appBadgeCount(empty, {}, NOW, 0, 2)).toBe(2);
     expect(appBadgeCount(digest(), { stickiness: false, tiebreak: false, awards: false }, NOW, 0, 1)).toBe(1);
+  });
+});
+
+// Bug report (Matt, 2026-10-30): "I've got a red notification that's just
+// been stuck here … and I don't know how to get rid of it." The X on the
+// Showtimes or friend-request card, or "Not now" on a request, hid the card
+// on Home while the icon kept counting it. Same rule as the cards now.
+describe('badgeExtrasShown', () => {
+  const today = noticeDay(NOW);
+  const requests = [{ key: 'b', name: 'B' }, { key: 'a', name: 'A' }];
+
+  it('counts everything when nothing has been put away', () => {
+    expect(badgeExtrasShown({ films: 3, friendRequests: requests, now: NOW })).toEqual({ films: 3, friendRequests: 2 });
+  });
+
+  it('drops Showtimes films put away with the X today, until the count grows', () => {
+    const dismissals = { showtimes: { signature: 3, day: today } };
+    expect(badgeExtrasShown({ films: 3, dismissals, now: NOW }).films).toBe(0);
+    expect(badgeExtrasShown({ films: 2, dismissals, now: NOW }).films).toBe(0);
+    expect(badgeExtrasShown({ films: 4, dismissals, now: NOW }).films).toBe(4);
+  });
+
+  it('a dismissal from yesterday no longer hides anything', () => {
+    const dismissals = { showtimes: { signature: 3, day: noticeDay(NOW - 86_400_000) } };
+    expect(badgeExtrasShown({ films: 3, dismissals, now: NOW }).films).toBe(3);
+  });
+
+  it('drops friend requests put away with the X, until a new one arrives', () => {
+    const dismissals = { friendRequest: { signature: 'a,b', day: today } };
+    expect(badgeExtrasShown({ friendRequests: requests, dismissals, now: NOW }).friendRequests).toBe(0);
+    const more = [...requests, { key: 'c', name: 'C' }];
+    expect(badgeExtrasShown({ friendRequests: more, dismissals, now: NOW }).friendRequests).toBe(3);
+  });
+
+  it('drops a request snoozed with "Not now" while the snooze lasts', () => {
+    const snoozes = { a: NOW + 1000 };
+    expect(badgeExtrasShown({ friendRequests: requests, snoozes, now: NOW }).friendRequests).toBe(1);
+    expect(badgeExtrasShown({ friendRequests: requests, snoozes, now: NOW + 2000 }).friendRequests).toBe(2);
   });
 });

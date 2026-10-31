@@ -25,6 +25,9 @@
 // Film Club activity is otherwise deliberately not counted here. A friend-log push adds
 // one to the badge; the app setting the chore count on open is what drops it.
 
+import { isNoticeDismissed } from './homeNotices.js';
+import { unsnoozedFriendRequests } from './friendRequests.js';
+
 export function appBadgeCount (digest, prefs = {}, now = Date.now(), showtimes = 0, friendRequests = 0) {
   const open = (section) => {
     const at = Number(section?.eligibleAt);
@@ -47,4 +50,24 @@ export function appBadgeCount (digest, prefs = {}, now = Date.now(), showtimes =
   const films = prefs?.showtimes === true ? (Number(showtimes) || 0) : 0;
 
   return stickiness + tiebreak + awards + films + (Number(friendRequests) || 0);
+}
+
+// What Home has put away doesn't count (bug report, Matt, 2026-10-30: "I've
+// got a red notification that's just been stuck here … and I don't know how
+// to get rid of it"). The X on the Showtimes or friend-request card, and "Not
+// now" on a request, hid the card while the icon kept counting it, so the
+// number pointed at nothing on screen. Same rule as the cards
+// (homeNotices.js): hidden until tomorrow, or until the count grows / a new
+// request arrives. Per device, like the cards; the chores go further and
+// pause on the account (chorePause.js).
+export function badgeExtrasShown ({ films = 0, friendRequests = [], dismissals = {}, snoozes = {}, now = Date.now() }) {
+  const shownRequests = unsnoozedFriendRequests(friendRequests, snoozes, now);
+  const requestSignature = shownRequests.map((request) => request.key).sort().join(',');
+  const filmCount = Number(films) || 0;
+  return {
+    films: filmCount && isNoticeDismissed(dismissals, 'showtimes', filmCount, now) ? 0 : filmCount,
+    friendRequests: shownRequests.length && isNoticeDismissed(dismissals, 'friendRequest', requestSignature, now)
+      ? 0
+      : shownRequests.length
+  };
 }

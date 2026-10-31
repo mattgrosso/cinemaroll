@@ -102,6 +102,24 @@ describe('refreshAppBadge and Showtimes', () => {
     expect(getMock).not.toHaveBeenCalled();
   });
 
+  // Bug report 2026-10-30: the X on Home's Showtimes card hid the card, but
+  // the icon kept its red number with nothing on screen to explain it.
+  it('leaves out films whose Home card was put away today, until the count grows', async () => {
+    const { NOTICE_DISMISSALS_KEY, noticeDay } = await import('@/assets/javascript/homeNotices.js');
+    localStorage.setItem(NOTICE_DISMISSALS_KEY, JSON.stringify({ showtimes: { signature: 2, day: noticeDay(Date.now()) } }));
+    try {
+      store.commit('setPushPrefs', { showtimes: true });
+      await store.dispatch('refreshAppBadge');
+      expect(setAppBadge).not.toHaveBeenCalled();
+      expect(clearAppBadge).toHaveBeenCalled();
+      localStorage.setItem(NOTICE_DISMISSALS_KEY, JSON.stringify({ showtimes: { signature: 1, day: noticeDay(Date.now()) } }));
+      await store.dispatch('refreshAppBadge');
+      expect(setAppBadge).toHaveBeenLastCalledWith(2);
+    } finally {
+      localStorage.removeItem(NOTICE_DISMISSALS_KEY);
+    }
+  });
+
   // Bug report 2026-10-06: a badge on the icon and nothing on Home saying
   // where it came from. Home's and the Watchlist's Showtimes cards read
   // showtimesBadgeCount, so it has to be the badge's own number.

@@ -60,7 +60,14 @@ first attempt at the games scroll-to-top do nothing at all.
   `settings/choresPausedUntil/<chore>` = next local midnight (`chorePause.js`); the push
   digest folds it into that section's `eligibleAt`, so the badge and the push Lambda drop
   it until tomorrow, and `activeModalType` honours it on every device. A tapped chore
-  notification clears the pauses too. `chorePause.test.js`. A new notice needs a place in `NOTICE_ORDER`, a
+  notification clears the pauses too. `chorePause.test.js`.
+  **The rest of the badge follows the cards too (2026-10-30, same evening):** "a red
+  notification … stuck … I don't know how to get rid of it." Showtimes films and friend
+  requests whose Home card was put away with the X (or a request snoozed with "Not now")
+  drop off the icon on this device under the cards' own rule (`badgeExtrasShown`,
+  `appBadge.js`): back tomorrow, or when the count grows / a new request arrives. Any X
+  re-runs `refreshAppBadge`. Not yet on the account: a Showtimes or friend push can still
+  set the number again until the next open (a possible server-side second step). A new notice needs a place in `NOTICE_ORDER`, a
   `.notice-slot` wrapper with the X, and (if it owns its state) an `@notice` emit.
   `homeNoticeQueue.test.js` guards it.
   **Settle, then hold (2026-10-27):** "the content in the activity banner often shows one

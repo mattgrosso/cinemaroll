@@ -41,8 +41,9 @@ import { isSignInDismissal, signInFailureSummary } from "../assets/javascript/mo
 import { buildSocialProfile, socialSettingsWithDefaults, countNewFriendUpdates, clubFetchesNeeded, feedBodyNeeded, EXTERNAL_FEED_MAX_AGE_MS } from "../assets/javascript/social.js";
 import { buildMirrorFeed } from "../assets/javascript/mirrorFeed.js";
 import { buildPushDigest } from "../assets/javascript/pushDigest.js";
-import { appBadgeCount } from "../assets/javascript/appBadge.js";
-import { pendingFriendRequests } from "../assets/javascript/friendRequests.js";
+import { appBadgeCount, badgeExtrasShown } from "../assets/javascript/appBadge.js";
+import { pendingFriendRequests, readFriendRequestSnoozes } from "../assets/javascript/friendRequests.js";
+import { readNoticeDismissals } from "../assets/javascript/homeNotices.js";
 import { showtimesWaiting } from "../assets/javascript/showtimesUnread.js";
 import { ticketsMark } from "../assets/javascript/showtimesTickets.js";
 import { buildNewsletterProfile, buildPeopleList } from "../assets/javascript/newsletterProfile.js";
@@ -3543,7 +3544,16 @@ export default createStore({
         }
         films = context.getters.showtimesBadgeCount;
       }
-      const count = appBadgeCount(digest, prefs, Date.now(), films, context.getters.pendingFriendRequests.length);
+      // Whatever Home has put away for today doesn't count (appBadge.js).
+      const now = Date.now();
+      const shown = badgeExtrasShown({
+        films,
+        friendRequests: context.getters.pendingFriendRequests,
+        dismissals: readNoticeDismissals(),
+        snoozes: readFriendRequestSnoozes(),
+        now
+      });
+      const count = appBadgeCount(digest, prefs, now, shown.films, shown.friendRequests);
       try {
         if (count > 0) await navigator.setAppBadge(count);
         else await navigator.clearAppBadge?.();
