@@ -324,13 +324,53 @@ describe('an honorary award to a person', () => {
     expect(names).toContain('Actor 0')
   })
 
+  const tileNames = (wrapper) => wrapper.findAll('.custom-person-options .nominee-title').map((node) => node.text())
+
   it('caps the cast so a deep billing list does not become hundreds of tiles', async () => {
     const { wrapper } = peopledFactory()
     await addPersonAward(wrapper)
 
-    const names = wrapper.vm.eligibleOptions.map((option) => option.name)
-    expect(names).toContain('Actor 9')
-    expect(names).not.toContain('Actor 10')
+    expect(tileNames(wrapper)).toContain('Actor 9')
+    expect(tileNames(wrapper)).not.toContain('Actor 10')
+  })
+
+  // Report 2026-10-31 (Natalie, "Best Non-Human Character"): voice roles are
+  // billed low, and the cap left them unreachable — no search, no "more".
+  it('finds someone billed 15th by searching, and lets you nominate them', async () => {
+    const { wrapper } = peopledFactory()
+    await addPersonAward(wrapper)
+
+    await wrapper.find('.custom-people-search').setValue('actor 15')
+    expect(tileNames(wrapper)).toEqual(['Actor 15'])
+
+    await wrapper.find('.custom-person-options .nominee-tile').trigger('click')
+    expect(wrapper.vm.awardsData['custom-honorary-award'].nominees.map((n) => n.name)).toContain('Actor 15')
+
+    // Clearing the search keeps the pick on screen, deep billing or not.
+    await wrapper.find('.custom-people-search').setValue('')
+    expect(tileNames(wrapper)).toContain('Actor 15')
+    expect(tileNames(wrapper)).not.toContain('Actor 14')
+  })
+
+  it('searches by character too', async () => {
+    const { wrapper } = peopledFactory()
+    await addPersonAward(wrapper)
+
+    await wrapper.find('.custom-people-search').setValue('Role 22')
+    expect(tileNames(wrapper)).toEqual(['Actor 22'])
+  })
+
+  it('shows ten more of a film\'s cast per "More cast" tap', async () => {
+    const { wrapper } = peopledFactory()
+    await addPersonAward(wrapper)
+
+    await wrapper.find('.custom-more-cast').trigger('click')
+    expect(tileNames(wrapper)).toContain('Actor 19')
+    expect(tileNames(wrapper)).not.toContain('Actor 20')
+
+    await wrapper.find('.custom-more-cast').trigger('click')
+    expect(tileNames(wrapper)).toContain('Actor 24')
+    expect(wrapper.find('.custom-more-cast').exists()).toBe(false)
   })
 
   it('carries the role, whether that is a character or a job', async () => {

@@ -433,6 +433,75 @@
                 </div>
               </div>
 
+              <!-- A person-type custom award: films with their people,
+                   ten billed actors each, a "More cast" per film, and a name
+                   search across every film's whole cast and crew (Natalie,
+                   2026-10-31: voice roles billed low couldn't be reached). -->
+              <div v-else-if="isCustomPersonCategory(selectedCategory)" class="custom-person-options">
+                <input
+                  v-model="customPeopleQuery"
+                  type="search"
+                  class="form-control custom-award-input custom-people-search"
+                  placeholder="Search everyone in these films"
+                  aria-label="Search cast and crew by name or role"
+                  autocomplete="off"
+                  enterkeyhint="search"
+                >
+                <p v-if="customPeopleQuery.trim() && !customPersonGroups.length" class="custom-people-empty">
+                  No one in this year's films matches "{{ customPeopleQuery.trim() }}".
+                </p>
+                <div class="movie-groups">
+                  <div
+                    v-for="group in customPersonGroups"
+                    :key="group.movieId"
+                    class="movie-group"
+                  >
+                    <div class="movie-group-header">
+                      <h6 class="movie-title">{{ group.movie.title }}</h6>
+                    </div>
+                    <div class="nominees-grid">
+                      <div
+                        v-for="option in group.people"
+                        :key="getOptionId(option)"
+                        class="nominee-tile text-bg-dark"
+                        :class="[{'winner': isWinner(option)}]"
+                        @click="toggleNominee(option)"
+                      >
+                        <div class="nominee-image">
+                          <img
+                            v-if="option.movie && option.movie.poster_path"
+                            :src="`https://image.tmdb.org/t/p/w154${option.movie.poster_path}`"
+                            :alt="getOptionTitle(option)"
+                          >
+                          <img
+                            v-else
+                            src="../assets/images/Image_not_available.png"
+                            :alt="getOptionTitle(option)"
+                          >
+                          <div class="nominee-status-overlay">
+                            <span v-if="isWinner(option)" class="status-icon winner"><i class="bi bi-trophy-fill"></i></span>
+                            <span v-else-if="isNominee(option)" class="status-icon nominee"><i class="bi bi-check"></i></span>
+                          </div>
+                        </div>
+                        <div class="nominee-info-overlay">
+                          <div class="nominee-title">{{ getOptionTitle(option) }}</div>
+                          <div v-if="getOptionRole(option)" class="nominee-role">{{ getOptionRole(option) }}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div v-if="group.hasMore" class="load-more-section">
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline-secondary load-more-btn custom-more-cast"
+                        @click="showMoreCustomCast(group.movieId)"
+                      >
+                        <i class="bi bi-plus-lg me-2"></i>More cast
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <!-- Simple grid for non-acting categories -->
               <div v-else class="simple-options">
                 <div class="nominees-grid">
@@ -522,12 +591,8 @@ import { isEligibleForActingCategory } from '../assets/javascript/genderEligibil
 import { rememberedPerson, rememberPerson } from '../utils/personIdCache.js';
 import { entriesEligibleFor, disabledReasonFor, GATED_CATEGORIES, countriesKnown } from '../assets/javascript/awardEligibility.js';
 import { backfillProductionCountries } from '../assets/javascript/backfillProductionCountries.js';
+import { customAwardPool, visibleCustomAwardGroups, CUSTOM_AWARD_CAST_DEPTH, CUSTOM_AWARD_CAST_STEP } from '../assets/javascript/customAwardPeople.js';
 import { expandNomineeFromMinimal as expandNomineeFromMinimalShared, actingSiblingConflict, samePersonNominee, personNomineeKey } from '../assets/javascript/personalAwards.js';
-
-// Top-billed cast offered for a person-type custom award, per film. Cast is
-// stored untrimmed (Six Degrees walks the full billing list on purpose), so
-// without a cap a ten-film year would render hundreds of tiles.
-const CUSTOM_AWARD_CAST_DEPTH = 10;
 
 // A pick is saved this long after the last tap, so a run of taps is one write.
 export const AWARDS_SAVE_DELAY_MS = 1000;
@@ -595,6 +660,10 @@ export default {
       // Most invented awards go to a film, so that is where the toggle starts.
       customAwardType: 'movie',
       customAwardError: null,
+      // A person-type custom award's name search and per-film "More cast"
+      // depth (customAwardPeople.js). Reset whenever a category opens.
+      customPeopleQuery: '',
+      customCastDepths: {},
       eligibleOptions: [], // For movie categories: simple array. For acting: movie-grouped array
       loadingOptions: false,
       showTrashIcon: false, // For Matt's category reset functionality
@@ -829,6 +898,16 @@ export default {
         soundtrack: 'Soundtrack'
       };
       return labels[key] || 'Rating';
+    },
+    // A person-type custom award's tiles, grouped by film. eligibleOptions
+    // holds the whole pool (every billed actor); this is the part on screen.
+    customPersonGroups () {
+      if (!this.isCustomPersonCategory(this.selectedCategory)) return [];
+      return visibleCustomAwardGroups(this.eligibleOptions, {
+        query: this.customPeopleQuery,
+        depths: this.customCastDepths,
+        isNominee: (option) => this.isNominee(option)
+      });
     },
     eligibleOptionsByMovie () {
       // Only return movie-grouped data for acting categories
@@ -1324,6 +1403,8 @@ export default {
     },
     async selectCategory (categoryKey) {
       this.selectedCategory = categoryKey;
+      this.customPeopleQuery = '';
+      this.customCastDepths = {};
       this.showTrashIcon = false; // Reset trash icon when changing categories
       this.loadingOptions = true;
       try {
@@ -1846,43 +1927,20 @@ export default {
      * double you want to single out. Crew is already trimmed to
      * KEPT_CREW_JOBS on the way into storage, so it is a dozen or so per film;
      * cast is deliberately untrimmed (Six Degrees walks the full billing
-     * list), so it is capped here or a ten-film year would render hundreds of
-     * tiles.
+     * list), so the whole of it is the pool and customPersonGroups decides
+     * how much is on screen (ten per film, "More cast", or a name search).
      *
      * The same person on two films that year appears twice, on purpose — you
      * are honouring them for a piece of work, the way the acting categories
      * already treat a person-plus-film as the unit.
      */
     extractCustomAwardPeople (movies) {
-      const people = [];
-      const seen = new Set();
-
-      movies.forEach(entry => {
-        const movie = entry.movie || {};
-        const add = (person, role) => {
-          if (!person?.name) return;
-          const dedupeKey = `${person.name}|${movie.id}`;
-          if (seen.has(dedupeKey)) return;
-          seen.add(dedupeKey);
-          people.push({
-            id: person.id || person.name,
-            name: person.name,
-            role,
-            movie,
-            movieId: movie.id,
-            // No gender check: that belongs to the four acting categories and
-            // nothing else. filterPeopleByGender passes these straight
-            // through, which is the point.
-            needsGenderCheck: false
-          });
-        };
-
-        (movie.cast || []).slice(0, CUSTOM_AWARD_CAST_DEPTH)
-          .forEach((person) => add(person, person.character || 'Cast'));
-        (movie.crew || []).forEach((person) => add(person, person.job || 'Crew'));
-      });
-
-      return people;
+      return customAwardPool(movies);
+    },
+    showMoreCustomCast (movieId) {
+      const key = String(movieId);
+      const depth = this.customCastDepths[key] ?? CUSTOM_AWARD_CAST_DEPTH;
+      this.customCastDepths = { ...this.customCastDepths, [key]: depth + CUSTOM_AWARD_CAST_STEP };
     },
     extractPeopleFromMovies (movies, categoryKey) {
       if (isCustomAwardKey(categoryKey)) {
@@ -3646,6 +3704,15 @@ export default {
   /* A UA-imposed minimum width beats width: 100% in a narrow column — see
      .claude/rules/vue-ui.md. */
   min-width: 0;
+}
+
+.custom-people-search {
+  margin-bottom: 0.8rem;
+}
+
+.custom-people-empty {
+  color: #ccc;
+  font-size: 0.85rem;
 }
 
 .custom-award-input::placeholder {

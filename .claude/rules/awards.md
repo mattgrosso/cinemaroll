@@ -142,11 +142,17 @@ rather than needing a parallel path.
 - **A person-type custom award is NOT an acting category.** `isActingCategory` returns
   false for any custom key — explicitly, not by relying on slugs being lowercase — because
   gender gating and the lead/supporting sibling conflict both hang off it and neither
-  belongs to an award someone invented. Its pool is cast (capped at
-  `CUSTOM_AWARD_CAST_DEPTH`, since cast is stored untrimmed) plus all stored crew, so the
+  belongs to an award someone invented. Its pool is the full cast (shown ten per film, see below) plus all stored crew, so the
   composer and the cinematographer are reachable; each option carries a `role` that is a
   character for cast and a job for crew. It returns a FLAT list, not the movie-grouped
   shape — that grouping exists for the acting grid's per-movie "load more cast".
+- **The person pool is the WHOLE cast; the screen shows ten per film** (2026-10-31,
+  Natalie: voice roles like Nemo's Crush are billed past tenth and were unreachable).
+  `customAwardPeople.js` (pure, tested): `customAwardPool` keeps every billed actor with
+  `castIndex`, `visibleCustomAwardGroups` groups by film and cuts to
+  `CUSTOM_AWARD_CAST_DEPTH` per film, "More cast" adds `CUSTOM_AWARD_CAST_STEP`, a name
+  search (name or role, case/accent-blind) looks through everything, and a nominee always
+  shows however deep. The modal's `customPersonGroups` is what renders.
 - **Person winners get their photo from the Trophy Case's own lookup.** Custom person
   options deliberately don't pre-fetch `details.profile_path` — that would be a
   `/search/person` call per cast+crew member of the year. The Trophy Case already falls
