@@ -3,10 +3,13 @@ import { mount } from '@vue/test-utils';
 import GameStatsScreen from '@/components/games/GameStatsScreen.vue';
 
 // Mid-month local dates — see .claude/rules/games.md on UTC drift.
+// By calendar day, not 24-hour blocks: across a clock change (2026-11-01, the
+// end of daylight time) a block-stepped "8 pm" a week back came out 9 pm.
 const daysAgo = (days, hour = 19) => {
   const date = new Date();
+  date.setDate(date.getDate() - days);
   date.setHours(hour, 0, 0, 0);
-  return date.getTime() - days * 24 * 60 * 60 * 1000;
+  return date.getTime();
 };
 
 function factory (games = {}, { back = null, movieLog = {} } = {}) {
