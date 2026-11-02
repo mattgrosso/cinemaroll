@@ -357,7 +357,7 @@
          a CSS namespace only — all the bar's styling is nested under it. -->
     <div
       v-if="!shouldShowStartSuggestions && showResultsList && paginatedSortedResults.length"
-      class="results"
+      class="results results-bar"
       :class="{ 'results-searching': searchPending }"
     >
       <div class="results-actions col-12 md-col-6 d-flex justify-content-between flex-wrap mt-1">
@@ -2406,7 +2406,14 @@ export default {
         this.activeFilters = [...this.$store.state.homePageSearchChips];
       }
       if (this.$store.state.homePageSearchValue) {
+        // Both halves of the search, not just the box. inputValue alone left
+        // searchPending true until the next keystroke, so a return to Home
+        // with typed text kept the spinner going and the rainbow faded — and
+        // the fade's opacity put the sort menu under the notice card (bug
+        // report, 2026-11-02: "The notification box is standing on top of
+        // the sort list").
         this.inputValue = this.$store.state.homePageSearchValue;
+        this.searchValue = this.$store.state.homePageSearchValue;
       }
       if (this.$store.state.homePageNumberOfResults > 25) {
         this.numberOfResultsToShow = this.$store.state.homePageNumberOfResults;
@@ -8316,6 +8323,18 @@ export default {
 
 .results.results-searching {
   opacity: 0.7;
+}
+
+/* The rainbow bar sits on its own layer above the notice space below it.
+   Its sort menu drops DOWN over the notice card, and anything that turns
+   this wrapper into a stacking context (the opacity just above does) traps
+   the menu's z-index inside it; the card, later on the page, then paints
+   over the menu (bug report, 2026-11-02). With the wrapper itself raised,
+   the menu clears the notices whatever happens inside it. Well under the
+   modals (1050+) and the fixed panels (2000). */
+.results.results-bar {
+  position: relative;
+  z-index: 3;
 }
 </style>
 
