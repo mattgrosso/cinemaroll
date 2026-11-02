@@ -66,8 +66,12 @@ first attempt at the games scroll-to-top do nothing at all.
   requests whose Home card was put away with the X (or a request snoozed with "Not now")
   drop off the icon on this device under the cards' own rule (`badgeExtrasShown`,
   `appBadge.js`): back tomorrow, or when the count grows / a new request arrives. Any X
-  re-runs `refreshAppBadge`. Not yet on the account: a Showtimes or friend push can still
-  set the number again until the next open (a possible server-side second step). A new notice needs a place in `NOTICE_ORDER`, a
+  re-runs `refreshAppBadge`. **Pushes follow it too (2026-11-02, "a 52 number on the red
+  dot"):** the push digest carries `badgeHidden.showtimes` = { upTo, until } from this
+  device's dismissal (`badgeHiddenForDigest`), the X on Showtimes republishes the digest, and
+  the Lambda's `accountBadge` applies `showtimesBadgeFilms` (pushCadence.js); pinned to the
+  app's rule in `appBadge.test.js`. Last device to publish decides. The Lambda never counts
+  friend requests, so they need nothing there. A new notice needs a place in `NOTICE_ORDER`, a
   `.notice-slot` wrapper with the X, and (if it owns its state) an `@notice` emit.
   `homeNoticeQueue.test.js` guards it.
   **Settle, then hold (2026-10-27):** "the content in the activity banner often shows one

@@ -42,6 +42,7 @@ import {
   ratingDateOf
 } from './stickinessCandidates.js';
 import { withChorePause } from './chorePause.js';
+import { badgeHiddenForDigest } from './appBadge.js';
 
 // How far ahead the digest bothers projecting stickiness boundaries. The
 // Lambda sweeps daily and the app republishes on every open, so the horizon
@@ -263,7 +264,7 @@ export function gamesDigest (settings) {
  * object (empty sections stay present) so the Lambda never has to guess
  * whether an absent key means "nothing due" or "old app version".
  */
-export function buildPushDigest ({ entries, settings, getRating, now = Date.now() }) {
+export function buildPushDigest ({ entries, settings, getRating, dismissals = {}, now = Date.now() }) {
   return {
     updatedAt: now,
     stickiness: stickinessDigest(entries, settings, now),
@@ -275,6 +276,9 @@ export function buildPushDigest ({ entries, settings, getRating, now = Date.now(
         promptsPerDay(settings?.awardsPromptsPerDay, 1)
       ), settings, 'awards', now) ?? 0
     },
-    games: gamesDigest(settings)
+    games: gamesDigest(settings),
+    // What this device's Home has put away, so a push's badge leaves it out
+    // too (appBadge.js badgeHiddenForDigest).
+    badgeHidden: badgeHiddenForDigest(dismissals, now)
   };
 }

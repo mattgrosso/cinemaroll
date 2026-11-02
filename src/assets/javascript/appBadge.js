@@ -25,7 +25,8 @@
 // Film Club activity is otherwise deliberately not counted here. A friend-log push adds
 // one to the badge; the app setting the chore count on open is what drops it.
 
-import { isNoticeDismissed } from './homeNotices.js';
+import { isNoticeDismissed, noticeDay } from './homeNotices.js';
+import { chorePauseEnd } from './chorePause.js';
 import { unsnoozedFriendRequests } from './friendRequests.js';
 
 export function appBadgeCount (digest, prefs = {}, now = Date.now(), showtimes = 0, friendRequests = 0) {
@@ -70,4 +71,18 @@ export function badgeExtrasShown ({ films = 0, friendRequests = [], dismissals =
       ? 0
       : shownRequests.length
   };
+}
+
+// The same rule, for the push Lambda (report 2026-11-02: "a 52 number on the
+// red dot … then if I click in, it goes away"). Every push carries a badge,
+// and the Lambda counted every Showtimes film, put away or not, so a push
+// set ~50 and the app's recount on open took it back down. The digest now
+// carries what this device has put away: `{ upTo, until }` = the count the
+// card was dismissed at and the local midnight it comes back. The Lambda's
+// `showtimesBadgeFilms` (pushCadence.js) applies it; appBadge.test.js pins
+// the two to the same answer. Per device: the last phone to publish decides.
+export function badgeHiddenForDigest (dismissals = {}, now = Date.now()) {
+  const record = dismissals?.showtimes;
+  if (!record || record.day !== noticeDay(now) || typeof record.signature !== 'number') return {};
+  return { showtimes: { upTo: record.signature, until: chorePauseEnd(now) } };
 }

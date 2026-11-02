@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { appBadgeCount, badgeExtrasShown } from '../assets/javascript/appBadge.js';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+import { appBadgeCount, badgeExtrasShown, badgeHiddenForDigest } from '../assets/javascript/appBadge.js';
 import { noticeDay } from '../assets/javascript/homeNotices.js';
-import { dueFromDigest } from '../../aws-lambda/pushCadence.js';
+import { dueFromDigest, showtimesBadgeFilms } from '../../aws-lambda/pushCadence.js';
 
 const NOW = 1_800_000_000_000;
 
@@ -106,5 +108,46 @@ describe('badgeExtrasShown', () => {
     const snoozes = { a: NOW + 1000 };
     expect(badgeExtrasShown({ friendRequests: requests, snoozes, now: NOW }).friendRequests).toBe(1);
     expect(badgeExtrasShown({ friendRequests: requests, snoozes, now: NOW + 2000 }).friendRequests).toBe(2);
+  });
+});
+
+// Report 2026-11-02: "a 52 number on the red dot … if I click in, it goes
+// away". A push's badge counted every Showtimes film even with the card put
+// away; the app's recount then dropped it. The digest now tells the Lambda.
+describe('a put-away Showtimes card, on the push badge', () => {
+  const HOUR = 60 * 60 * 1000;
+  const dismissedAt = (count, at) => ({ showtimes: { signature: count, day: noticeDay(at) } });
+
+  it('publishes nothing when the card was not put away today', () => {
+    expect(badgeHiddenForDigest({}, NOW)).toEqual({});
+    expect(badgeHiddenForDigest(dismissedAt(5, NOW - 2 * 24 * HOUR), NOW)).toEqual({});
+  });
+
+  it('gives the Lambda the same answer the app gives, as time passes and films arrive', () => {
+    const dismissals = dismissedAt(52, NOW);
+    const hidden = badgeHiddenForDigest(dismissals, NOW).showtimes;
+    expect(hidden.upTo).toBe(52);
+    // Later today, tomorrow, and with fewer, the same, or more films waiting.
+    for (const later of [NOW, NOW + HOUR, hidden.until - 1, hidden.until, NOW + 30 * HOUR]) {
+      for (const films of [0, 10, 52, 53]) {
+        const app = badgeExtrasShown({ films, dismissals, now: later }).films;
+        expect(showtimesBadgeFilms(films, hidden, later), `${films} films at +${later - NOW}ms`).toBe(app);
+      }
+    }
+    expect(showtimesBadgeFilms(52, hidden, NOW + HOUR)).toBe(0);
+    expect(showtimesBadgeFilms(53, hidden, NOW + HOUR)).toBe(53);
+    expect(showtimesBadgeFilms(52, hidden, hidden.until)).toBe(52);
+  });
+
+  it('counts every film when an older app published no badgeHidden', () => {
+    expect(showtimesBadgeFilms(52, undefined, NOW)).toBe(52);
+  });
+
+  it('rides in the push digest, and the Lambda badge applies it', async () => {
+    const { buildPushDigest } = await import('../assets/javascript/pushDigest.js');
+    const built = buildPushDigest({ entries: [], settings: {}, getRating: () => null, dismissals: dismissedAt(52, NOW), now: NOW });
+    expect(built.badgeHidden.showtimes.upTo).toBe(52);
+    const source = readFileSync(resolve(__dirname, '../../aws-lambda/push-notify.js'), 'utf8');
+    expect(source).toMatch(/showtimesBadgeFilms\(showtimesWaiting\([^)]*\), push && push\.digest && push\.digest\.badgeHidden/);
   });
 });

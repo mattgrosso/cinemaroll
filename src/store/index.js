@@ -3512,7 +3512,8 @@ export default createStore({
       const digest = buildPushDigest({
         entries: context.getters.allMediaAsArray,
         settings: context.state.settings || {},
-        getRating
+        getRating,
+        dismissals: readNoticeDismissals()
       });
       try {
         await set(ref(db, `${root}/push/digest`), digest);

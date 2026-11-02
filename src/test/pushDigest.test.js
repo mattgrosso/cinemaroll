@@ -213,7 +213,8 @@ describe('buildPushDigest', () => {
       // makes the first tiebreak wait one full interval.
       tiebreak: { due: false, count: 0, eligibleAt: NOW + ONE_DAY, pinned: false },
       awards: { years: [], eligibleAt: 0 },
-      games: gamesDigest({})
+      games: gamesDigest({}),
+      badgeHidden: {}
     });
   });
 });

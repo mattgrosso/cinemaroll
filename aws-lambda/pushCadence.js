@@ -1517,6 +1517,20 @@ function showtimesWaiting (board, dismissed, reminders) {
   return count;
 }
 
+// A Showtimes card the app put away (the X on Home) leaves the badge until
+// the device's midnight, or until more films are waiting than when it was
+// put away (report 2026-11-02: a push set the icon to 52, the app's recount
+// on open dropped it). `hidden` is the digest's `badgeHidden.showtimes`,
+// written by src/assets/javascript/appBadge.js badgeHiddenForDigest;
+// appBadge.test.js pins the two to the same answer.
+function showtimesBadgeFilms (films, hidden, now) {
+  const count = Number(films) || 0;
+  const upTo = Number(hidden && hidden.upTo);
+  const until = Number(hidden && hidden.until);
+  if (!count || !Number.isFinite(upTo) || !Number.isFinite(until)) return count;
+  return now < until && count <= upTo ? 0 : count;
+}
+
 function composeReminderMessage (reminder) {
   const where = reminder.theaterName ? ` at ${reminder.theaterName}` : '';
   // Swiped on the day of its first showing with more days to come: the
@@ -1589,6 +1603,7 @@ module.exports = {
   boardForApp,
   remindersDue,
   showtimesWaiting,
+  showtimesBadgeFilms,
   composeReminderMessage,
   composeListingMessages,
   SIGNUP_MAX_PER_SWEEP,
