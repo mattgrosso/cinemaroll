@@ -77,6 +77,23 @@ export function phantomBand ({ innerHeight, vvHeight, vvTop = 0, scale = 1, typi
   return band >= STUCK_MIN ? band : 0
 }
 
+/**
+ * How far one pinned thing slides. `gap` (a short page) always applies: the
+ * real screen goes on below the page. `band` (a phantom keyboard) applies
+ * only when WebKit really did hang the thing from the shrunken view - its
+ * untranslated bottom sits at or above that view's bottom. A thing already
+ * at the page's true bottom is NOT slid, or it would leave the screen: iNat
+ * ID's bug button vanished that way on Carrie's phone (2026-11-03).
+ * `bottom` is the thing's bottom as drawn now, `slid` what it is slid by now.
+ */
+export function slideFor ({ bottom, slid = 0, gap = 0, band = 0, vvTop = 0, vvHeight = 0 }) {
+  const base = bottom - slid
+  const hung = band && vvHeight ? base <= vvTop + vvHeight + 2 : false
+  return gap + (hung ? band : 0)
+}
+
+const slidBy = (el) => { const m = /^0 (-?[\d.]+)px$/.exec(el.style.translate || ''); return m ? Number(m[1]) : 0 }
+
 let tallest = {}
 let last = null
 let scrolledAt = 0
@@ -122,8 +139,13 @@ function apply () {
   if (value !== last) { last = value; root.style.setProperty('--screen-pin-gap', value) }
   // Only things hung from the bottom move: a bug button some app pins to the
   // top (Thunder, Space Base's top-right one) sits in the top half and stays.
+  const vv = window.visualViewport
   for (const el of document.querySelectorAll(PINNED)) {
-    const want = total && el.getBoundingClientRect().top > height / 2 ? `0 ${total}px` : ''
+    const rect = el.getBoundingClientRect()
+    const px = total && rect.top > height / 2
+      ? slideFor({ bottom: rect.bottom, slid: slidBy(el), gap, band, vvTop: vv?.offsetTop || 0, vvHeight: vv?.height || 0 })
+      : 0
+    const want = px ? `0 ${px}px` : ''
     if (el.style.translate !== want) el.style.translate = want
   }
 }

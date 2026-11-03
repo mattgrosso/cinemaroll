@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { gapFor, looksWhole, typing, phantomBand } from './screenPin'
+import { gapFor, looksWhole, typing, phantomBand, slideFor } from './screenPin'
 
 describe('screenPin', () => {
   it('slides down by however much iOS cut the page', () => {
@@ -36,5 +36,15 @@ describe('screenPin', () => {
   })
   it('our own hidden box is never taken for typing', () => {
     expect(typing({ tagName: 'INPUT', type: 'text', dataset: { screenPinCure: '1' } })).toBe(false)
+  })
+  it('slides a thing WebKit hung from the shrunken view, and only that', () => {
+    // The phantom: page 812, view 511 pushed 70 down; the button's bottom drawn at the view's bottom.
+    expect(slideFor({ bottom: 567, band: 231, vvTop: 70, vvHeight: 511 })).toBe(231)
+    // Already slid: measured where it is now, judged by where it would be unslid.
+    expect(slideFor({ bottom: 798, slid: 231, band: 231, vvTop: 70, vvHeight: 511 })).toBe(231)
+    // The button at the page's true bottom (798 of 812): sliding it would push it off the screen.
+    expect(slideFor({ bottom: 798, band: 231, vvTop: 70, vvHeight: 511 })).toBe(0)
+    // A short page's gap always applies.
+    expect(slideFor({ bottom: 542, gap: 256 })).toBe(256)
   })
 })
