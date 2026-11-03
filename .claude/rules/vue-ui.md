@@ -225,6 +225,11 @@ joins `screenTopGap.test.js`. Games keep their own padding (their banner differs
   in normal flow means the content moves the moment the indicator leaves. One
   `position: relative` stage + an `inset: 0` indicator over a hidden-but-present row
   costs zero layout shift.
+- **A long press on an image or link is iOS's too.** `-webkit-touch-callout: none` stops
+  the menu and link preview but NOT the drag-and-drop lift, which zooms the picture under
+  the finger around half a second in. Any hold gesture on a poster needs `draggable="false"`
+  on the `<a>` and `<img>`, `-webkit-user-drag: none`, and should act on the hold itself,
+  not the release (Showtimes' Got tickets, 2026-11-03: "it kinda like zooms in the photo").
 - **Touch targets: 40px minimum.** Anything smaller gets reported as "the button doesn't
   work."
 - **`transform` only during drag** — combining it with `filter`/shadow left visual trails

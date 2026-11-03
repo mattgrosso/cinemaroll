@@ -90,21 +90,41 @@ describe('Got tickets, on the Showtimes screen', () => {
   const card = (wrapper, id) => wrapper.find(`[data-card="${id}"]`);
   const touch = (x, y) => ({ touches: [{ clientX: x, clientY: y }] });
 
-  it('a hold lifts the card, letting go opens the sheet, and the link stays shut', async () => {
+  it('a hold opens the sheet while the finger is still down, and letting go changes nothing', async () => {
+    // Report 2026-11-03: "it kinda like zooms in the photo and then when I
+    // let go, it sort of catches on" - the sheet waited for the release, and
+    // iOS's own drag lift filled the gap. Now it opens on the hold itself.
     const wrapper = await mountScreen();
     const dune = card(wrapper, 'alamo/dune');
     await dune.trigger('touchstart', touch(100, 100));
     vi.advanceTimersByTime(520);
     await wrapper.vm.$nextTick();
-    expect(dune.classes()).toContain('pressed');
-    await dune.trigger('touchend');
     expect(dune.find('.st-sheet').exists()).toBe(true);
     expect(dune.find('.st-sheet').text()).toContain('Got tickets for Dune: Part Three?');
-    // The click iOS sends after the lift doesn't follow the poster's link.
+    expect(dune.classes()).not.toContain('pressed');
+    // A wobble after the sheet is up isn't a swipe.
+    await dune.trigger('touchmove', touch(160, 100));
+    expect(dune.attributes('style') || '').not.toContain('translateX');
+    await dune.trigger('touchend');
+    expect(dune.find('.st-sheet').exists()).toBe(true);
+    // The click iOS sends after the release doesn't follow the poster's link.
     const click = new MouseEvent('click', { bubbles: true, cancelable: true });
     dune.find('.st-card-link').element.dispatchEvent(click);
     expect(click.defaultPrevented).toBe(true);
     expect(dispatch).not.toHaveBeenCalledWith('dismissListing', expect.anything());
+  });
+
+  it('the poster and its link cannot be picked up and dragged by iOS', async () => {
+    const wrapper = await mountScreen();
+    const dune = card(wrapper, 'alamo/dune');
+    expect(dune.find('.st-card-link').attributes('draggable')).toBe('false');
+    expect(dune.find('img.st-poster').attributes('draggable')).toBe('false');
+    const drag = new Event('dragstart', { bubbles: true, cancelable: true });
+    dune.find('img.st-poster').element.dispatchEvent(drag);
+    expect(drag.defaultPrevented).toBe(true);
+    const screen = readFileSync(resolve(process.cwd(), 'src/components/ShowtimesScreen.vue'), 'utf8');
+    expect(screen).toMatch(/\.st-card-link \{[^}]*-webkit-user-drag: none/);
+    expect(screen).toMatch(/\.st-card-link \{[^}]*-webkit-tap-highlight-color: transparent/);
   });
 
   it('moving during the hold calls it off, so scrolling and swipes are unchanged', async () => {
@@ -114,7 +134,6 @@ describe('Got tickets, on the Showtimes screen', () => {
     await dune.trigger('touchmove', touch(100, 140));
     vi.advanceTimersByTime(600);
     await dune.trigger('touchend');
-    expect(dune.classes()).not.toContain('pressed');
     expect(dune.find('.st-sheet').exists()).toBe(false);
     // A quick tap is still a tap: no sheet.
     await dune.trigger('touchstart', touch(100, 100));

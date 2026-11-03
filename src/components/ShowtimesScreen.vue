@@ -57,7 +57,7 @@
             v-for="item in theater.shown"
             :key="item.slug"
             class="st-card"
-            :class="{ covered: item.coveredBy, dismissed: item.dismissed, tickets: item.tickets, waiting: item.waiting, pressed: pressed === cardId(theater, item), focused: focus === cardId(theater, item), leaving: leaving === cardId(theater, item), 'leaving-left': leavingLeft === cardId(theater, item) }"
+            :class="{ covered: item.coveredBy, dismissed: item.dismissed, tickets: item.tickets, waiting: item.waiting, focused: focus === cardId(theater, item), leaving: leaving === cardId(theater, item), 'leaving-left': leavingLeft === cardId(theater, item) }"
             :data-card="cardId(theater, item)"
             :style="cardStyle(theater, item)"
             @touchstart.passive="touchStart($event, theater, item)"
@@ -66,13 +66,14 @@
             @touchcancel="touchEnd($event, theater, item, true)"
             @contextmenu.prevent
           >
-            <a class="st-card-link" :href="hrefFor(theater, item)" :target="targetFor(hrefFor(theater, item))" rel="noopener" @click="blockIfSwiping($event)">
+            <a class="st-card-link" :href="hrefFor(theater, item)" :target="targetFor(hrefFor(theater, item))" rel="noopener" draggable="false" @click="blockIfSwiping($event)" @dragstart.prevent>
               <img
                 v-if="posterFor(item)"
                 :src="posterFor(item)"
                 :alt="item.title"
                 class="st-poster"
                 loading="lazy"
+                draggable="false"
                 @error="posterFailed(item)"
               >
               <div v-else class="st-poster st-poster-blank"><span>{{ item.title }}</span></div>
@@ -184,7 +185,10 @@ const NEW_FOR_MS = 7 * 24 * 60 * 60 * 1000;
 const SWIPE_DISMISS_PX = 110;
 // "A long press on the poster, and then it like confirms and I tap a got
 // tickets button" (2026-10-27). Held this long without moving past the
-// swipe's 8px, the card lifts; letting go opens the sheet.
+// swipe's 8px, the sheet opens right then, under the finger (2026-11-03:
+// it used to lift the card and wait for the release, and iOS's own
+// drag-the-image lift fired in that gap - "it kinda like zooms in the photo
+// and then when I let go, it sort of catches on").
 export const LONG_PRESS_MS = 500;
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -224,9 +228,8 @@ export default {
       swipe: null,
       leaving: null,
       leavingLeft: null,
-      // The long press: the card being held past LONG_PRESS_MS, and the card
-      // whose "Got tickets" sheet is open.
-      pressed: null,
+      // The card whose "Got tickets" sheet is open (a hold past
+      // LONG_PRESS_MS opens it).
       ticketSheet: null,
       // A notification tap lands here with ?focus=<theater>/<slug>: that card
       // is shown whatever its state, scrolled to and lit for a moment.
@@ -495,7 +498,6 @@ export default {
     cancelPress () {
       clearTimeout(this.pressTimer);
       this.pressTimer = null;
-      this.pressed = null;
     },
     // Swipe RIGHT to dismiss, LEFT to be reminded (the back gesture owns the
     // left 20px of the screen, and the cards start 30px in, so the two
@@ -503,8 +505,9 @@ export default {
     // Horizontal intent is decided once (a mostly vertical move is a scroll
     // and the card stays put); a release past the threshold dismisses,
     // short of it snaps back.
-    // A press that stays put for LONG_PRESS_MS lifts the card instead; any
-    // move past 8px (a scroll or a swipe deciding itself) calls it off.
+    // A press that stays put for LONG_PRESS_MS opens the tickets sheet at
+    // once; any move past 8px (a scroll or a swipe deciding itself) calls it
+    // off. After that the finger is spent: moving or letting go does nothing.
     touchStart (event, theater, item) {
       this.cancelPress();
       if (item.dismissed || item.tickets || event.touches.length !== 1) return;
@@ -518,13 +521,15 @@ export default {
       this.pressTimer = setTimeout(() => {
         this.pressTimer = null;
         if (!this.swipe || this.swipe.id !== id || this.swipe.horizontal !== null) return;
-        this.pressed = id;
+        this.swipe = { ...this.swipe, held: true };
+        this.ticketSheet = id;
         try { navigator.vibrate?.(15); } catch { /* not on iOS */ }
       }, LONG_PRESS_MS);
     },
     touchMove (event, theater, item) {
       const s = this.swipe;
       if (!s || s.id !== this.cardId(theater, item)) return;
+      if (s.held) return;
       const t = event.touches[0];
       const dx = t.clientX - s.x;
       const dy = t.clientY - s.y;
@@ -537,14 +542,12 @@ export default {
       const s = this.swipe;
       if (!s || s.id !== this.cardId(theater, item)) return;
       this.swipe = null;
-      const held = this.pressed === s.id;
       this.cancelPress();
-      if (held && !cancelled) {
-        // Letting go of a held card opens its sheet, and must not also
-        // follow the link underneath.
+      if (s.held) {
+        // The sheet is already open; letting go must not also follow the
+        // link underneath.
         if (event && event.cancelable) event.preventDefault();
         this.justSwiped = Date.now();
-        this.ticketSheet = s.id;
         return;
       }
       if (cancelled || !s.horizontal) return;
@@ -724,7 +727,6 @@ export default {
   &.covered { opacity: 0.55; }
   &.dismissed { opacity: 0.4; }
   &.tickets { opacity: 0.6; }
-  &.pressed { transform: scale(1.03); }
   &.waiting { opacity: 0.75; }
   &.focused { box-shadow: 0 0 0 3px #ffc107; }
   &.leaving { transform: translateX(120%); opacity: 0; }
@@ -735,13 +737,19 @@ export default {
   color: inherit;
   display: block;
   text-decoration: none;
-  /* The hold is ours: no iOS link preview, no image save menu, no text
-     selection under the finger. */
+  /* The hold is ours: no iOS link preview, no image save menu, no drag
+     lift of the poster, no grey tap flash, no text selection under the
+     finger. */
   -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
   user-select: none;
 
-  img { -webkit-touch-callout: none; }
+  img {
+    -webkit-touch-callout: none;
+    -webkit-user-drag: none;
+  }
 }
 
 .st-poster {
