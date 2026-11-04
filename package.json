@@ -20,6 +20,7 @@
     "restore-db": "node scripts/restore-database.mjs",
     "mint-test-token": "node scripts/mint-test-token.mjs",
     "fetch-inflation": "node scripts/fetch-inflation.mjs",
+    "fetch-janus-films": "node scripts/fetch-janus-films.mjs",
     "letterboxd-status": "node scripts/letterboxd-status.mjs",
     "import-letterboxd": "node scripts/import-letterboxd-csv.mjs",
     "deploy:newsletter": "node scripts/deploy-lambda.mjs newsletter",

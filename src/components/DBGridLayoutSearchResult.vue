@@ -284,6 +284,16 @@
           </p>
         </div>
 
+        <!-- Who released it (distributors.js): TMDB lists makers only. -->
+        <div v-if="releasedBy.length" class="released-by">
+          <h4>Released By</h4>
+          <p class="long-list">
+            <a v-for="(name, index) in releasedBy" :key="`released-${name}`" class="link" @click.stop="searchFor(name)">
+              {{ name }}<CountMark :count="countStudios(name)" /><span v-if="index !== releasedBy.length - 1">&nbsp;&nbsp;</span>
+            </a>
+          </p>
+        </div>
+
         <div v-if="getCrewMember('Producer').length" class="producers">
           <h4>Producer<span v-if="multipleEntries(getCrewMember('Producer'))">s</span></h4>
           <p class="long-list">
@@ -324,6 +334,7 @@ import LetterboxdUrlService from '../services/LetterboxdUrlService.js';
 import ErrorLogService from '../services/ErrorLogService.js';
 import { sortByAcademyCategoryOrder } from '../assets/javascript/academyAwards.js';
 import CountMark from './CountMark.vue';
+import { distributorsFor } from '../assets/javascript/distributors.js';
 
 // Same shorthand MovieDetail's ratings table uses, so one vocabulary covers
 // both places a criterion score is named.
@@ -398,6 +409,10 @@ export default {
     this.isLoading = false;
   },
   computed: {
+    // Companies that released the film without making it (distributors.js).
+    releasedBy () {
+      return this.result?.movie ? distributorsFor(this.result.movie) : [];
+    },
     // The value this list is sorted by, short enough for an 8px caption.
     // Empty for sorts that already say their own value elsewhere (rating is
     // the number on the right) or have none to say (title).

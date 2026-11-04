@@ -2,6 +2,7 @@ import uniq from 'lodash/uniq';
 import { placeNames } from './places.js';
 import { memoByIdentity } from '../../utils/memoByIdentity.js';
 import { isShort } from './shorts.js';
+import { studioNamesFor } from './distributors.js';
 
 // Pure counting logic shared by Home.vue's "add filter" dropdown counts and
 // MovieDetail.vue's parenthetical (N) badges next to cast/director/genre/
@@ -92,8 +93,9 @@ function countKeywordsUncached (entries, includeShorts) {
 function countStudiosUncached (entries, includeShorts) {
   const counts = {};
   eligibleEntries(entries, includeShorts).forEach((result) => {
-    const companies = (result.movie.production_companies || []).map((company) => company.name);
-    incrementEach(counts, companies);
+    // Releasers count as studios too (distributors.js), so a Janus Films
+    // chip, typeahead row and (N) badge agree with what the search finds.
+    incrementEach(counts, studioNamesFor(result.movie));
   });
   return counts;
 }

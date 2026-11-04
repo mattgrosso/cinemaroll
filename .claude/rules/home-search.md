@@ -166,6 +166,23 @@ price is that a numeral search names whole words ("fiv" won't reach "Five" this 
 which costs nothing: ordinary substring matching already covers every case where both
 sides spell the number the same. This path only ever ADDS matches.
 
+## Releasers count as studios (2026-11-03)
+
+TMDB's `production_companies` names who MADE a film, never who released it, so a
+company that only releases — Janus Films — was unsearchable (report: "a lot of movies
+that I see starting with Janus don't show up when I search for Janus"; TMDB credits
+Toho for Seven Samurai). `distributors.js` adds Janus from Janus's own catalogue
+(`src/assets/data/janusFilms.json`, refreshed by `yarn fetch-janus-films`), matched by
+loose title (or original title), leading article dropped, then year within one OR a
+shared director surname. Computed, never stored — no backfill. `studioNamesFor(movie)`
+is makers + releasers and feeds `buildSearchFields().companies` and `countStudios`, so
+plain search, the studio chip, grouping's Company section, the typeahead and the (N)
+badges all agree. Insights' studio stats stay on makers. MovieDetail's Studios tile and
+the search card show a "Released By" line. Wikidata's P750 "distributed by" was
+measured first and ties only 12 films in all of Wikidata to Janus — don't redo that.
+Measured against Matt's library: 0 Janus films before, 47 after.
+`distributors.test.js`, roster block in `UnfindableMovieReports.test.js`.
+
 ## Grouping and chips
 
 **Group order is also matching priority** — via `usedMovieIds`, a movie matching several

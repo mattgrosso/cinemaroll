@@ -18,6 +18,7 @@ import { normalizeSearchText, looseSearchText } from './searchText.js';
 import { numeralTokens, numeralTokensMatch, titleMatchesValue } from './numberWords.js';
 import { FILTER_KINDS, getListOfYearsFromRange } from './filterKinds.js';
 import { adjustedMovieMoney } from './inflation.js';
+import { studioNamesFor } from './distributors.js';
 
 export { normalizeSearchText, looseSearchText, getListOfYearsFromRange };
 
@@ -61,7 +62,9 @@ export function buildSearchFields (movie, ratings = []) {
       job: p.job || '',
       jobLower: normalizeSearchText(p.job)
     })),
-    companies: (movie.production_companies || []).filter(c => c.name).map(c => normalizeSearchText(c.name))
+    // Makers AND releasers (distributors.js): Janus Films only ever releases,
+    // so TMDB's makers list never names it.
+    companies: studioNamesFor(movie).map(normalizeSearchText)
   };
 }
 

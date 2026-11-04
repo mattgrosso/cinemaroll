@@ -568,13 +568,23 @@
           </p>
         </div>
         </DetailSection>
-        <DetailSection v-if="topStructure(result).production_companies && topStructure(result).production_companies.length" id="companies" tile label="Studios" tone="people" :summary="listSummary(turnArrayIntoList(topStructure(result).production_companies, 'name'), 3)">
+        <DetailSection v-if="(topStructure(result).production_companies && topStructure(result).production_companies.length) || releasedBy.length" id="companies" tile label="Studios" tone="people" :summary="listSummary(studioNames, 3)">
         <!-- Production Companies -->
         <div v-if="topStructure(result).production_companies && topStructure(result).production_companies.length" class="production-companies mb-3">
           <h4>Production <span v-if="multipleEntries(turnArrayIntoList(topStructure(result).production_companies, 'name'))">Companies</span><span v-else>Company</span></h4>
           <p class="long-list">
             <a v-for="(productionCompany, index) in topStructure(result).production_companies" :key="index" class="link" @click.stop="searchFor(productionCompany.name, 'company')">
               {{productionCompany.name}}<CountMark :count="countStudios(productionCompany.name)" /><span v-if="index !== topStructure(result).production_companies.length - 1">&nbsp;&nbsp;</span>
+            </a>
+          </p>
+        </div>
+        <!-- Who released it (distributors.js): TMDB lists makers only, so
+             Janus Films never appeared here or in search (2026-11-03). -->
+        <div v-if="releasedBy.length" class="released-by mb-3">
+          <h4 class="sub">Released By</h4>
+          <p class="long-list mb-0">
+            <a v-for="(name, index) in releasedBy" :key="`released-${name}`" class="link" @click.stop="searchFor(name, 'company')">
+              {{ name }}<CountMark :count="countStudios(name)" /><span v-if="index !== releasedBy.length - 1">&nbsp;&nbsp;</span>
             </a>
           </p>
         </div>
@@ -774,6 +784,7 @@ import { sortByAcademyCategoryOrder } from '../assets/javascript/academyAwards.j
 import { awardNameWithThe } from '../assets/javascript/personalAwards.js';
 import { warmImageCache, posterUrl, backdropUrl } from '../assets/javascript/offlinePosterCache.js';
 import { countDirectors, countCastCrew, countGenres, countKeywords, countStudios, countPlaces } from '../assets/javascript/entityCounts.js';
+import { distributorsFor, studioNamesFor } from '../assets/javascript/distributors.js';
 import { placeNames, PLACE_TYPES } from '../assets/javascript/places.js';
 import { genreIdFor } from '../assets/javascript/tmdbGenres.js';
 import { WRITER_JOBS } from '../assets/javascript/personRoleGroups.js';
@@ -971,6 +982,16 @@ export default {
         if (day) years.add(Number(day.slice(0, 4)));
       }
       return [...years].filter((y) => y >= 1970).sort();
+    },
+    // Companies that released the film without making it (distributors.js).
+    releasedBy () {
+      const movie = this.result ? this.topStructure(this.result) : null;
+      return movie ? distributorsFor(movie) : [];
+    },
+    // The Studios tile's closed summary: makers, then releasers.
+    studioNames () {
+      const movie = this.result ? this.topStructure(this.result) : null;
+      return movie ? studioNamesFor(movie) : [];
     },
     placesSummary () {
       const parts = [];

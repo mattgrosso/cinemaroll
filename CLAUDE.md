@@ -156,7 +156,9 @@ grosses by average ticket price, budgets by CPI, base year 2025 — bundled for 
 use and refreshed with `yarn fetch-inflation`), OMDb (Rotten Tomatoes + Metacritic,
 newsletter only, server-side key), `public/data/academy-awards.json` (Academy Awards; see below),
 `src/assets/data/otherAwardsWinners.json` (Golden Globes / BAFTA / Cannes / Venice,
-scraped from Wikipedia wikitext), Letterboxd (scraping + deep links).
+scraped from Wikipedia wikitext), `src/assets/data/janusFilms.json` (Janus Films' own
+catalogue, `yarn fetch-janus-films` — who RELEASED a film, which TMDB never says; see
+`.claude/rules/home-search.md`), Letterboxd (scraping + deep links).
 
 ## Layout
 

@@ -161,8 +161,26 @@ const oceansEleven = {
   dbKey: 'movie-161'
 }
 
+// Report 2026-11-03 (Janus Films): TMDB credits the makers, never Janus.
+// Undated on purpose, so the watch-number block's count is unchanged.
+const sevenSamurai = {
+  movie: {
+    id: 346,
+    title: 'Seven Samurai',
+    release_date: '1954-04-26',
+    runtime: 207,
+    genres: [{ name: 'Action' }, { name: 'Drama' }],
+    cast: [{ name: 'Toshiro Mifune' }],
+    crew: [{ name: 'Akira Kurosawa', job: 'Director' }],
+    production_companies: [{ name: 'Toho' }],
+    keywords: [{ name: 'samurai' }]
+  },
+  ratings: [{ calculatedTotal: 9.1 }],
+  dbKey: 'movie-346'
+}
+
 function mountHome ({ includeShorts = false } = {}) {
-  const movies = [vengeanceMostFowl, loafAndDeath, tripToTheMoon, grandDayOut, moonstruck, nineToFive, nineteenSeventeen, oceansEleven]
+  const movies = [vengeanceMostFowl, loafAndDeath, tripToTheMoon, grandDayOut, moonstruck, nineToFive, nineteenSeventeen, oceansEleven, sevenSamurai]
   const mockStore = {
     state: {
       dbLoaded: true,
@@ -426,5 +444,28 @@ describe('report 2026-10-11: look up my Nth watch', () => {
 
     expect(renderedTitles(wrapper)).toEqual([])
     expect(wrapper.find('.watch-lookup-line').text()).toBe("You've logged 8 dated watches so far.")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Report 2026-11-03: "a lot of movies that I see starting with Janus [Films]
+// don't show up when I search for Janus." Janus releases films it didn't
+// make, and TMDB lists only makers (Toho, for Seven Samurai), so nothing in
+// the library said Janus. distributors.js adds it from Janus's own catalogue.
+describe('report 2026-11-03: films Janus released', () => {
+  it('"janus" finds Seven Samurai', async () => {
+    const wrapper = mountHome()
+    await wrapper.vm.$nextTick()
+    await typeSearch(wrapper, 'janus')
+
+    expect(renderedTitles(wrapper)).toContain('Seven Samurai')
+  })
+
+  it('"Janus Films" finds it too, and nothing Janus never released', async () => {
+    const wrapper = mountHome()
+    await wrapper.vm.$nextTick()
+    await typeSearch(wrapper, 'Janus Films')
+
+    expect(renderedTitles(wrapper)).toEqual(['Seven Samurai'])
   })
 })
