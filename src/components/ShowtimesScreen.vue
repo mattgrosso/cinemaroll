@@ -305,8 +305,12 @@ export default {
       console.warn('Showtimes: board unavailable', error);
     }
     this.loading = false;
-    // The Insights card's "new" pill is relative to the last visit here.
-    try { localStorage.setItem(SHOWTIMES_SEEN_KEY, String(Date.now())); } catch { /* private mode */ }
+    // The Watchlist card's "new" pill and the icon badge are relative to the
+    // last visit here (report 2026-11-04): having looked, the badge clears,
+    // and the digest tells the push Lambda so a push doesn't put it back.
+    this.$store.commit('setShowtimesSeenAt', Date.now());
+    this.$store.dispatch('refreshAppBadge');
+    this.$store.dispatch('publishPushDigest');
     this.fillPosters();
     this.focusFromQuery();
   },

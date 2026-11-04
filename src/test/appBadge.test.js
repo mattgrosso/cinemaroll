@@ -148,6 +148,6 @@ describe('a put-away Showtimes card, on the push badge', () => {
     const built = buildPushDigest({ entries: [], settings: {}, getRating: () => null, dismissals: dismissedAt(52, NOW), now: NOW });
     expect(built.badgeHidden.showtimes.upTo).toBe(52);
     const source = readFileSync(resolve(__dirname, '../../aws-lambda/push-notify.js'), 'utf8');
-    expect(source).toMatch(/showtimesBadgeFilms\(showtimesWaiting\([^)]*\), push && push\.digest && push\.digest\.badgeHidden/);
+    expect(source).toMatch(/showtimesBadgeFilms\(showtimesWaiting\(b, d, r, digest\.showtimesSeenAt\), digest\.badgeHidden && digest\.badgeHidden\.showtimes/);
   });
 });

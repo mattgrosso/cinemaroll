@@ -137,6 +137,30 @@ describe('refreshAppBadge and Showtimes', () => {
     store.commit('setPushPrefs', { showtimes: false });
     expect(store.getters.showtimesBadgeCount).toBe(0);
   });
+  // Report 2026-11-04: "I just got a 53 on my notification." The badge
+  // counted the whole board; it now counts only films found since this
+  // device last opened Showtimes, and opening it clears them.
+  it('counts only films found since the last visit to Showtimes', async () => {
+    const now = Date.now();
+    store.commit('setPushPrefs', { showtimes: true });
+    store.commit('setTheaterBoard', { theaters: [{ key: 'alamo', listings: [
+      { slug: 'old1', title: 'Old 1', firstSeenAt: now - 5000 },
+      { slug: 'old2', title: 'Old 2', firstSeenAt: now - 4000 },
+      { slug: 'new1', title: 'New 1', firstSeenAt: now - 1000 }
+    ] }] });
+    store.commit('setShowtimesSeenAt', now - 2000);
+    try {
+      await store.dispatch('refreshAppBadge');
+      expect(store.getters.showtimesBadgeCount).toBe(1);
+      expect(setAppBadge).toHaveBeenLastCalledWith(1);
+      expect(localStorage.getItem('showtimesSeenAt')).toBe(String(now - 2000));
+      store.commit('setShowtimesSeenAt', now);
+      await store.dispatch('refreshAppBadge');
+      expect(clearAppBadge).toHaveBeenCalled();
+    } finally {
+      localStorage.removeItem('showtimesSeenAt');
+    }
+  });
 });
 
 // Bug report 2026-10-09: an update reloaded the Showtimes screen while Matt

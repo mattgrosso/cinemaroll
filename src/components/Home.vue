@@ -2845,8 +2845,8 @@ export default {
     showtimesPromptText () {
       const n = this.showtimesBadgeCount;
       return n === 1
-        ? '1 film at your theaters is waiting for you to dismiss it or set a reminder.'
-        : `${n} films at your theaters are waiting for you to dismiss them or set reminders.`;
+        ? '1 new film at your theaters since you last looked.'
+        : `${n} new films at your theaters since you last looked.`;
     },
     friendRequestBannerText () {
       const requests = this.friendRequestsOnCard;

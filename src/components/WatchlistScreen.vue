@@ -337,9 +337,9 @@
       <i class="bi bi-ticket-perforated"></i>
       <span class="showtimes-card-label">Showtimes</span>
       <!-- The icon badge's Showtimes number when it's counting them (the
-           same getter), so the card says how many are left to clear; the
+           same getter: films found since the last visit, 2026-11-04); the
            "new" tag only lasts until the screen is opened once. -->
-      <span v-if="showtimesBadgeCount" class="showtimes-card-new">{{ showtimesBadgeCount }} waiting</span>
+      <span v-if="showtimesBadgeCount" class="showtimes-card-new">{{ showtimesBadgeCount }} new</span>
       <span v-else-if="showtimesUnread" class="showtimes-card-new">new</span>
       <i class="bi bi-chevron-right showtimes-card-chevron"></i>
     </button>

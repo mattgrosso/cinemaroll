@@ -80,14 +80,14 @@ describe('the Showtimes card on Home', () => {
   it('says how many films the badge is counting, and taps through to Showtimes', async () => {
     const { wrapper, push } = mountHome(3);
     expect(card(wrapper).exists()).toBe(true);
-    expect(card(wrapper).text()).toContain('3 films at your theaters');
+    expect(card(wrapper).text()).toContain('3 new films at your theaters');
     await card(wrapper).trigger('click');
     expect(push).toHaveBeenCalledWith('/showtimes');
   });
 
   it('says "1 film" for one', () => {
     const { wrapper } = mountHome(1);
-    expect(card(wrapper).text()).toContain('1 film at your theaters is waiting');
+    expect(card(wrapper).text()).toContain('1 new film at your theaters since');
   });
 
   it('stays away when the badge counts no Showtimes films', () => {

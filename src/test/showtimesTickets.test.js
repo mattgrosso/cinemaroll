@@ -80,7 +80,7 @@ describe('Got tickets, on the Showtimes screen', () => {
   async function mountScreen () {
     const wrapper = mount(ShowtimesScreen, {
       global: {
-        mocks: { $store: { state, dispatch }, $route: { query: {}, path: '/showtimes' }, $router: { push: vi.fn(), replace: vi.fn(() => Promise.resolve()) } },
+        mocks: { $store: { state, dispatch, commit: vi.fn() }, $route: { query: {}, path: '/showtimes' }, $router: { push: vi.fn(), replace: vi.fn(() => Promise.resolve()) } },
         stubs: { BackLink: true, SkeletonBlock: true }
       }
     });

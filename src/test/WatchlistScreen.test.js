@@ -1079,7 +1079,7 @@ describe('WatchlistScreen Showtimes card', () => {
     window.localStorage.setItem('showtimesSeenAt', '1000');
     const { wrapper } = factory({ state: { theaterBoard: board(500) }, showtimesBadgeCount: 2 });
     await flushPromises();
-    expect(wrapper.find('.showtimes-card-new').text()).toBe('2 waiting');
+    expect(wrapper.find('.showtimes-card-new').text()).toBe('2 new');
   });
 });
 
@@ -1391,7 +1391,7 @@ describe('the Watchlist tabs', () => {
 
     const html = wrapper.html();
     expect(html.indexOf('showtimes-card')).toBeGreaterThan(html.indexOf('wl-tabs'));
-    expect(wrapper.find('.wl-panel-tonight .showtimes-card').text()).toContain('3 waiting');
+    expect(wrapper.find('.wl-panel-tonight .showtimes-card').text()).toContain('3 new');
     expect(wrapper.findAll('.showtimes-card .bi-ticket-perforated')).toHaveLength(1);
     expect(wrapper.find('.wl-panel-tonight').findComponent({ name: 'DrawFromHat' }).exists()).toBe(true);
     expect(wrapper.find('.wl-tab-tonight .wl-tab-dot').exists()).toBe(true);

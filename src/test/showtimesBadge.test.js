@@ -141,3 +141,68 @@ describe('a dismissal covers the film at that theater and worse ones', () => {
     expect(screen).toMatch(/rank > here/);
   });
 });
+
+// Report 2026-11-04: "I just got a 53 on my notification. I thought we had
+// cleared this up already." The badge counted every film still waiting on
+// the board (~50), so it came back every morning or with one more film. It
+// now counts only films found since this device last opened Showtimes, in
+// the app and in the push Lambda alike.
+describe('only films found since the last visit to Showtimes', () => {
+  const SEEN = 1_000;
+  const fresh = {
+    theaters: [
+      { key: 'alamo', listings: [
+        { slug: 'old', title: 'Old', firstSeenAt: 500 },
+        { slug: 'new', title: 'New', firstSeenAt: 2_000 },
+        { slug: 'zero', title: 'Zero', firstSeenAt: 0 },
+        { slug: 'bare', title: 'Bare' }
+      ] },
+      { key: 'afi', listings: [
+        { slug: 'newer', title: 'Newer', firstSeenAt: 3_000 },
+        { slug: 'new2', title: 'New', firstSeenAt: 2_500, coveredBy: 'alamo' }
+      ] }
+    ]
+  };
+
+  it('counts films first seen after the visit, and nothing older', () => {
+    expect(showtimesWaiting({ board: fresh, seenAt: SEEN })).toBe(2);
+    expect(showtimesWaiting({ board: fresh, seenAt: 2_000 })).toBe(1);
+    expect(showtimesWaiting({ board: fresh, seenAt: 5_000 })).toBe(0);
+  });
+
+  it('counts the whole board when this device never opened Showtimes, or the digest is older', () => {
+    expect(showtimesWaiting({ board: fresh, seenAt: 0 })).toBe(5);
+    expect(showtimesWaiting({ board: fresh })).toBe(5);
+    expect(lambdaShowtimesWaiting(fresh, {}, {})).toBe(5);
+  });
+
+  it('still leaves out dismissed and snoozed films that are new', () => {
+    expect(showtimesWaiting({ board: fresh, dismissed: { afi: { newer: 1 } }, seenAt: SEEN })).toBe(1);
+    expect(showtimesWaiting({ board: fresh, reminders: { alamo: { new: { remindAt: 9 } } }, seenAt: SEEN })).toBe(1);
+  });
+
+  it('gives the push Lambda the same answer as the app', () => {
+    for (const seenAt of [undefined, null, 0, SEEN, 2_000, 2_500, 5_000]) {
+      for (const dismissed of [{}, { afi: { newer: 1 } }]) {
+        expect(lambdaShowtimesWaiting(fresh, dismissed, {}, seenAt), `seenAt ${seenAt}`)
+          .toBe(showtimesWaiting({ board: fresh, dismissed, seenAt }));
+      }
+    }
+  });
+
+  it('rides in the push digest, so a push badge counts the same', async () => {
+    const { buildPushDigest } = await import('../assets/javascript/pushDigest.js');
+    const built = buildPushDigest({ entries: [], settings: {}, getRating: () => null, showtimesSeenAt: SEEN, now: NOW });
+    expect(built.showtimesSeenAt).toBe(SEEN);
+    expect('showtimesSeenAt' in buildPushDigest({ entries: [], settings: {}, getRating: () => null, now: NOW })).toBe(false);
+  });
+
+  it('is stamped through the store when the screen opens, which republishes the digest', () => {
+    const screen = readFileSync(resolve(__dirname, '../components/ShowtimesScreen.vue'), 'utf8');
+    expect(screen).toContain("this.$store.commit('setShowtimesSeenAt', Date.now())");
+    expect(screen).toContain("this.$store.dispatch('publishPushDigest')");
+    const storeSource = readFileSync(resolve(__dirname, '../store/index.js'), 'utf8');
+    expect(storeSource).toContain('seenAt: state.showtimesSeenAt || 0');
+    expect(storeSource).toContain('showtimesSeenAt: context.state.showtimesSeenAt || 0');
+  });
+});

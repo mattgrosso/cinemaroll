@@ -67,15 +67,37 @@ export function dismissedAtRank (gone, title, rank) {
 // theater also has. A mirror of aws-lambda/pushCadence.js showtimesWaiting,
 // which the push Lambda's badge uses; src/test/showtimesBadge.test.js pins
 // the two together.
-export function showtimesWaiting ({ board, dismissed = {}, reminders = {} }) {
+//
+// `seenAt` (when this device last opened the Showtimes screen) narrows it to
+// films found since then (report 2026-11-04: "I just got a 53 … I thought we
+// had cleared this up"). Counting every film still waiting meant a board of
+// ~50 always came back the next day or with one more film; the number never
+// meant anything you could act on. Leave it out (an older digest) and every
+// waiting film counts, as before.
+export function showtimesWaiting ({ board, dismissed = {}, reminders = {}, seenAt }) {
   const theaters = Array.isArray(board?.theaters) ? board.theaters : [];
   const gone = dismissedFilms(theaters, dismissed);
   let count = 0;
   theaters.forEach((t, rank) => (Array.isArray(t.listings) ? t.listings : []).forEach((l) => {
     if (l.coveredBy || dismissed?.[t.key]?.[l.slug] || dismissedAtRank(gone, l.title, rank)) return;
+    if (!foundSince(l, seenAt)) return;
     const r = reminders?.[t.key]?.[l.slug];
     if (r && !r.sentAt) return;
     count += 1;
   }));
   return count;
+}
+
+// Whether a listing was first found after `seenAt`. No `seenAt` (a digest
+// from before 2026-11-04) or 0 (this device has never opened Showtimes)
+// means "count everything". Mirrors aws-lambda/pushCadence.js foundSince.
+export function foundSince (listing, seenAt) {
+  const since = Number(seenAt) || 0;
+  if (!since) return true;
+  return Number(listing?.firstSeenAt) > since;
+}
+
+// This device's last visit to the Showtimes screen (0 = never).
+export function readShowtimesSeenAt () {
+  try { return Number(localStorage.getItem(SHOWTIMES_SEEN_KEY)) || 0; } catch { return 0; }
 }

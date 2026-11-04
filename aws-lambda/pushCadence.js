@@ -1502,7 +1502,18 @@ function staleTheaterEntries (node, knownByKey, boards) {
 // and not a film a better theater on the list also has. Counted only with
 // prefs.showtimes === true. Mirrored in src/assets/javascript/
 // showtimesUnread.js; src/test/showtimesBadge.test.js pins the two together.
-function showtimesWaiting (board, dismissed, reminders) {
+//
+// `seenAt` (the digest's showtimesSeenAt: when the phone last opened the
+// Showtimes screen) narrows it to films found since then (report
+// 2026-11-04, a push set the icon to 53). Absent or 0 (never opened) =
+// every waiting film, as before. Mirrors showtimesUnread.js foundSince.
+function foundSince (listing, seenAt) {
+  const since = Number(seenAt) || 0;
+  if (!since) return true;
+  return Number(listing && listing.firstSeenAt) > since;
+}
+
+function showtimesWaiting (board, dismissed, reminders, seenAt) {
   const theaters = board && Array.isArray(board.theaters) ? board.theaters : [];
   const gone = dismissedFilms(theaters, dismissed);
   let count = 0;
@@ -1510,6 +1521,7 @@ function showtimesWaiting (board, dismissed, reminders) {
     if (l.coveredBy) return;
     if (dismissed && dismissed[t.key] && dismissed[t.key][l.slug]) return;
     if (dismissedAtRank(gone, l.title, rank)) return;
+    if (!foundSince(l, seenAt)) return;
     const r = reminders && reminders[t.key] && reminders[t.key][l.slug];
     if (r && !r.sentAt) return;
     count += 1;

@@ -70,7 +70,14 @@ first attempt at the games scroll-to-top do nothing at all.
   dot"):** the push digest carries `badgeHidden.showtimes` = { upTo, until } from this
   device's dismissal (`badgeHiddenForDigest`), the X on Showtimes republishes the digest, and
   the Lambda's `accountBadge` applies `showtimesBadgeFilms` (pushCadence.js); pinned to the
-  app's rule in `appBadge.test.js`. Last device to publish decides. The Lambda never counts
+  app's rule in `appBadge.test.js`. Last device to publish decides.
+  **Only NEW films count (2026-11-04, "I just got a 53 … I thought we had cleared this
+  up"):** the hide above lasts till midnight or one more film, so a ~50-film board always
+  came back. `showtimesWaiting` now takes `seenAt` (this device's last Showtimes visit,
+  `state.showtimesSeenAt`, stamped via `setShowtimesSeenAt` on opening the screen, which
+  also republishes the digest) and counts only listings with `firstSeenAt` after it; the
+  digest carries `showtimesSeenAt` and the Lambda's copy applies it. 0 / absent = count the
+  whole board. Parity pinned in `showtimesBadge.test.js`. The Lambda never counts
   friend requests, so they need nothing there. A new notice needs a place in `NOTICE_ORDER`, a
   `.notice-slot` wrapper with the X, and (if it owns its state) an `@notice` emit.
   `homeNoticeQueue.test.js` guards it.

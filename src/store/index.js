@@ -44,7 +44,7 @@ import { buildPushDigest } from "../assets/javascript/pushDigest.js";
 import { appBadgeCount, badgeExtrasShown } from "../assets/javascript/appBadge.js";
 import { pendingFriendRequests, readFriendRequestSnoozes } from "../assets/javascript/friendRequests.js";
 import { readNoticeDismissals } from "../assets/javascript/homeNotices.js";
-import { showtimesWaiting } from "../assets/javascript/showtimesUnread.js";
+import { showtimesWaiting, readShowtimesSeenAt, SHOWTIMES_SEEN_KEY } from "../assets/javascript/showtimesUnread.js";
 import { ticketsMark } from "../assets/javascript/showtimesTickets.js";
 import { buildNewsletterProfile, buildPeopleList } from "../assets/javascript/newsletterProfile.js";
 const PEOPLE_PUBLISH_EVERY_MS = 6 * 60 * 60 * 1000;
@@ -711,6 +711,9 @@ export default createStore({
     // { [theaterKey]: { [slug]: { remindAt, sentAt?, ... } } } - films Matt swiped
     // left on; the sweep sends each and stamps sentAt.
     theaterReminders: {},
+    // When this device last opened the Showtimes screen (localStorage,
+    // stamped by ShowtimesScreen). The badge counts only films found since.
+    showtimesSeenAt: readShowtimesSeenAt(),
     // { zip, place, theaters: [{ key, name }] } - the theaters this account
     // follows, best first (ShowtimesSetup.vue). null until loaded; absent
     // for most accounts, and for Matt means "the sweep's own list".
@@ -864,8 +867,9 @@ export default createStore({
       });
       return countNewFriendUpdates(profiles, state.filmClubLastSeen);
     },
-    // Showtimes films on the icon badge: every film still waiting on the
-    // Showtimes screen, while the "Showtimes waiting" switch is on (off by
+    // Showtimes films on the icon badge: every film found since this device
+    // last opened the Showtimes screen and still waiting there (report
+    // 2026-11-04: counting the whole board kept the icon at 50+), while the "Showtimes waiting" switch is on (off by
     // default, so only `true` counts). ONE number for the badge
     // (refreshAppBadge), Home's Showtimes card and the Watchlist's - bug
     // report 2026-10-06: "there's nothing on the home screen that guides me
@@ -880,7 +884,8 @@ export default createStore({
       return showtimesWaiting({
         board: state.theaterBoard,
         dismissed: state.theaterDismissed || {},
-        reminders: state.theaterReminders || {}
+        reminders: state.theaterReminders || {},
+        seenAt: state.showtimesSeenAt || 0
       });
     },
     // One list for the whole club: native mutual friends and friends on
@@ -1105,6 +1110,10 @@ export default createStore({
     setTheaterBoard (state, value) {
       state.theaterBoard = value || null;
       state.theaterBoardLoadedAt = Date.now();
+    },
+    setShowtimesSeenAt (state, value) {
+      state.showtimesSeenAt = Number(value) || 0;
+      try { localStorage.setItem(SHOWTIMES_SEEN_KEY, String(state.showtimesSeenAt)); } catch { /* private mode */ }
     },
     setTheaterDismissed (state, value) {
       state.theaterDismissed = value && typeof value === 'object' ? value : {};
@@ -3513,7 +3522,8 @@ export default createStore({
         entries: context.getters.allMediaAsArray,
         settings: context.state.settings || {},
         getRating,
-        dismissals: readNoticeDismissals()
+        dismissals: readNoticeDismissals(),
+        showtimesSeenAt: context.state.showtimesSeenAt || 0
       });
       try {
         await set(ref(db, `${root}/push/digest`), digest);

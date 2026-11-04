@@ -264,7 +264,7 @@ export function gamesDigest (settings) {
  * object (empty sections stay present) so the Lambda never has to guess
  * whether an absent key means "nothing due" or "old app version".
  */
-export function buildPushDigest ({ entries, settings, getRating, dismissals = {}, now = Date.now() }) {
+export function buildPushDigest ({ entries, settings, getRating, dismissals = {}, showtimesSeenAt, now = Date.now() }) {
   return {
     updatedAt: now,
     stickiness: stickinessDigest(entries, settings, now),
@@ -279,6 +279,10 @@ export function buildPushDigest ({ entries, settings, getRating, dismissals = {}
     games: gamesDigest(settings),
     // What this device's Home has put away, so a push's badge leaves it out
     // too (appBadge.js badgeHiddenForDigest).
-    badgeHidden: badgeHiddenForDigest(dismissals, now)
+    badgeHidden: badgeHiddenForDigest(dismissals, now),
+    // When this device last opened Showtimes: a push's badge counts only
+    // films found since (showtimesUnread.js showtimesWaiting, report
+    // 2026-11-04). Left out when unknown, so the Lambda counts as before.
+    ...(Number.isFinite(showtimesSeenAt) ? { showtimesSeenAt } : {})
   };
 }
