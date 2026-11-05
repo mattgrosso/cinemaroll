@@ -1,173 +1,1229 @@
-// GENERATED FILE — edit scripts/generate-database-rules.mjs and re-run it.
 {
   "rules": {
-    ".read": false,
-    ".write": false,
+    // APPROVED, NOT JUST SIGNED IN (2026-11-03). Anonymous sign-in is switched
+    // on for the bug button, so `auth != null` alone lets a stranger with the
+    // public web config mint a session and walk past the approval screen,
+    // which only the apps enforce. Every friends-only node - rooms, codes,
+    // leaderboards, the crossword's rooms, chat, groups and times, the
+    // Commonwealth lobby list and playtest - also requires
+    // siteUsers/<uid>/status to be 'approved'. Left on plain auth on purpose:
+    // owner-only rows (a pending user may only touch their own), the bug
+    // report nodes, Blockout, Topple and Deck City's playtest (all anonymous
+    // by design). A new friends-only node takes the approved check too;
+    // database.rules.test.mjs in around-table-round checks each one.
+    "games": {
+      "$gameId": {
+        "meta": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".validate": "newData.hasChildren(['hostUid', 'status', 'roomCode', 'playerSlots'])"
+        },
+        "state": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'"
+        },
+        "presence": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$uid": {
+            ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid"
+          }
+        }
+      }
+    },
+
+    "gameCodes": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$code": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && !data.exists()"
+      }
+    },
+
+    "userGames": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    // auth != null AGAIN (2026-08-29), but satisfied by a SILENT anonymous
+    // session this time - each game's submitBugReport mints one when nobody
+    // is signed in (anonymous auth is enabled on this project), and every
+    // app's auth watcher filters isAnonymous so the session never LOOKS like
+    // a sign-in. History, because this rule has now flipped twice: the
+    // original auth != null silently swallowed signed-out reports (each game
+    // is its own origin, so a session on one doesn't carry; found 2026-08-28
+    // when Matt's reports never arrived); the authless create that fixed it
+    // drew Firebase's daily insecure-rules email, and Matt chose real auth
+    // over muting. The shape-fence stays regardless: create-only, string
+    // transcript, length caps. Reads stay shut - triage is the Admin SDK.
     "bugReports": {
       ".read": false,
-      ".indexOn": [
-        "resolved"
-      ],
-      "$reportId": {
-        ".write": "!data.exists() && newData.exists()",
-        ".validate": "newData.hasChildren(['transcript']) && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000 && (!newData.hasChild('appState') || (newData.child('appState').isString() && newData.child('appState').val().length <= 50000))"
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChild('transcript') && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
       }
     },
-    "social": {
-      "directory": {
-        ".read": "auth != null",
-        "$userKey": {
-          ".write": "auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')"
-        }
-      },
-      "requests": {
-        "$toKey": {
-          ".read": "auth != null && $toKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')",
-          "$fromKey": {
-            ".write": "auth != null && ($fromKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-') || $toKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-'))"
-          }
-        }
-      },
-      "friends": {
-        ".read": "auth != null",
-        "$userKey": {
-          "$friendKey": {
-            ".write": "auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')"
-          }
-        }
-      },
-      "profiles": {
-        "$userKey": {
-          ".write": "auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')",
-          ".read": "auth != null && ($userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-') || (root.child('social/friends/' + $userKey).child(auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')).exists() && root.child('social/friends/' + $userKey).child(auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')).val() !== 'day' && root.child('social/friends/' + auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')).child($userKey).exists()))"
-        }
-      },
-      "dayProfiles": {
-        "$userKey": {
-          ".write": "auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-') && !newData.exists()",
-          ".read": "auth != null && ($userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-') || (root.child('social/friends/' + $userKey).child(auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')).exists() && root.child('social/friends/' + auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')).child($userKey).exists()))"
-        }
-      },
-      "clubFeedLive": {
-        "$userKey": {
-          ".read": "auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')",
-          ".write": "auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')"
-        }
-      }
-    },
-    "clubDirectory": {
-      ".read": true,
-      "$userKey": {
-        ".write": "auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')",
-        ".validate": "!newData.exists() || (newData.hasChildren(['handle', 'name', 'inboxUrl']) && newData.child('name').val().length < 120)"
-      }
-    },
-    "clubInbox": {
-      "$userKey": {
-        ".read": "auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')",
-        ".write": "auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')",
-        "$inviteCode": {
-          "$requestId": {
-            ".write": "!data.exists() || (auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-'))",
-            ".validate": "(!newData.hasChild('kind') && newData.hasChildren(['name', 'app', 'feedUrl']) && newData.child('feedUrl').isString() && newData.child('feedUrl').val().length < 500 && newData.child('name').isString() && newData.child('name').val().length < 120) || (newData.hasChildren(['kind', 'app', 'feed', 'revision', 'at']) && (newData.child('app').val() === 'cinemaroll' || newData.child('app').val() === 'movielog') && newData.child('at').isNumber() && newData.child('at').val() <= now + 300000 && newData.child('at').val() >= now - 604800000 && !newData.hasChild('name') && !newData.hasChild('feedUrl') && !newData.hasChild('replyInboxUrl') && !newData.hasChild('notices'))",
-            "kind": {
-              ".validate": "newData.val() === 'feedChanged'"
-            },
-            "app": {
-              ".validate": "newData.isString() && newData.val().length < 60"
-            },
-            "at": {
-              ".validate": "newData.isNumber()"
-            },
-            "feed": {
-              ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,128}$/)"
-            },
-            "revision": {
-              ".validate": "newData.isString() && newData.val().matches(/^[0-9a-f]{32}$/)"
-            },
-            "notices": {
-              ".validate": "newData.isBoolean()"
-            },
-            "$other": {
-              ".validate": "!newData.parent().hasChild('kind')"
-            }
+
+    // The reply to a bug report (2026-09-21, ported from Cinema Roll): when
+    // `yarn resolve-bug-report` in ANY app on this project closes a report,
+    // it writes a plain-language notice here under the reporter's uid, and
+    // that app's BugResolutionNotice shows it on their next launch. One
+    // shared node for every app - each notice names its `app`. Only the
+    // reporter can read their own; the only client write is flipping `seen`.
+    // The notice text is written by the Admin SDK and never by a client.
+    "bugReportResolutions": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$reportId": {
+          "seen": {
+            ".write": "auth != null && auth.uid === $uid && newData.isBoolean()"
           }
         }
       }
     },
-    "clubFeed": {
-      "$userKey": {
-        ".read": false,
-        ".write": "auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')",
-        "$secret": {
-          ".read": "root.child($userKey).child('settings').child('clubFeedKey').val() === $secret"
-        }
-      }
-    },
-    "clubFeedSync": {
-      "$userKey": {
-        ".write": "auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')",
-        "$secret": {
-          "meta": {
-            ".read": "(auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')) || root.child($userKey).child('settings').child('clubFeedKey').val() === $secret",
-            ".validate": "newData.hasChildren(['version', 'epoch', 'revision', 'bodyRevision', 'sequence', 'cursor', 'minCursor', 'movieCount', 'profile', 'marker', 'snapshotComplete', 'changeCount']) && newData.child('version').val() === 2 && newData.child('epoch').val().matches(/^[0-9a-f]{32}$/) && newData.child('revision').val().matches(/^[0-9a-f]{32}$/) && newData.child('bodyRevision').val().matches(/^[0-9a-f]{32}$/) && newData.child('sequence').isNumber() && newData.child('sequence').val() >= 0 && newData.child('cursor').isString() && newData.child('minCursor').isString() && newData.child('movieCount').isNumber() && newData.child('movieCount').val() >= 0 && newData.child('movieCount').val() <= 50000 && newData.child('snapshotComplete').val() === true && newData.child('changeCount').isNumber() && newData.child('changeCount').val() >= 0 && newData.child('changeCount').val() <= 500 && newData.child('marker').isNumber() && newData.child('profile').child('name').isString() && newData.child('profile').child('name').val().length >= 1 && newData.child('profile').child('name').val().length <= 119 && newData.child('profile').child('source').isString() && newData.child('profile').child('source').val().length >= 1 && newData.child('profile').child('source').val().length <= 40"
-          },
-          "movies": {
-            ".read": "(auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')) || (root.child($userKey).child('settings').child('clubFeedKey').val() === $secret && query.orderByKey && query.limitToFirst <= 250)",
-            "$tmdbId": {
-              ".validate": "$tmdbId.matches(/^[1-9][0-9]*$/) && newData.hasChildren(['tmdbId', 'title', 'rating']) && newData.child('tmdbId').isNumber() && newData.child('tmdbId').val() > 0 && newData.child('title').isString() && newData.child('rating').isNumber() && newData.child('rating').val() >= 0 && newData.child('rating').val() <= 10 && (!newData.child('starRating').exists() || (newData.child('starRating').isNumber() && newData.child('starRating').val() >= 0 && newData.child('starRating').val() <= 5))"
-            }
-          },
-          "changes": {
-            ".read": "(auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')) || (root.child($userKey).child('settings').child('clubFeedKey').val() === $secret && query.orderByKey && query.limitToFirst <= 100)",
-            "$cursor": {
-              ".validate": "newData.hasChildren(['epoch', 'revision', 'previousRevision', 'sequence']) && newData.child('epoch').val().matches(/^[0-9a-f]{32}$/) && newData.child('revision').val().matches(/^[0-9a-f]{32}$/) && newData.child('previousRevision').val().matches(/^[0-9a-f]{32}$/) && newData.child('sequence').isNumber() && newData.child('sequence').val() >= 1",
-              "deleted": {
-                "$tmdbId": {
-                  ".validate": "$tmdbId.matches(/^[1-9][0-9]*$/) && newData.val() === true"
-                }
-              }
-            }
-          },
-          "changeIndex": {
-            ".read": "auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-') && query.orderByKey && query.limitToFirst <= 2",
-            "$cursor": {
-              ".validate": "newData.val() === true"
-            }
-          }
-        }
-      }
-    },
-    "mirrorFeed": {
-      "$userKey": {
-        ".read": false,
-        ".write": "auth != null && $userKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')",
-        "$secret": {
-          ".read": true
-        }
-      }
-    },
-    "testing-database": {
-      ".read": "auth != null && auth.token.email != null && auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-') === 'mattgrosso-gmail-com'",
-      ".write": "auth != null && auth.token.email != null && auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-') === 'mattgrosso-gmail-com'"
-    },
-    "letterboxdFilms": {
+
+    "blockoutScores": {
       ".read": "auth != null",
+      "$setup": {
+        ".indexOn": ["score"],
+        "$id": {
+          ".write": "auth != null && !data.exists() && newData.exists()",
+          ".validate": "newData.hasChildren(['name', 'score', 'at']) && newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 20 && newData.child('score').isNumber() && newData.child('score').val() > 0"
+        }
+      }
+    },
+
+    // Blockout's play counters (bug report 2026-09-02: "highlight which
+    // preset is most popular / most active / has the most achievable high
+    // score"). The leaderboard only sees top-10 runs, so popularity needs
+    // its own tally: one all-time total per preset plus a per-day bucket,
+    // each bumped with a server-side increment. The validate pins every
+    // write to exactly +1, so a client can count a game but never inflate
+    // or reset one; the key regexes keep the node to setupKey-shaped
+    // presets and real dates.
+    "blockoutPlays": {
+      ".read": "auth != null",
+      "$setup": {
+        "total": {
+          ".write": "auth != null && $setup.matches(/^[A-Z]+-[0-9]+x[0-9]+x[0-9]+(-a2)?$/)",
+          ".validate": "newData.isNumber() && newData.val() === (data.exists() ? data.val() : 0) + 1"
+        },
+        "days": {
+          "$day": {
+            ".write": "auth != null && $setup.matches(/^[A-Z]+-[0-9]+x[0-9]+x[0-9]+(-a2)?$/) && $day.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+            ".validate": "newData.isNumber() && newData.val() === (data.exists() ? data.val() : 0) + 1"
+          }
+        }
+      }
+    },
+
+    "blockoutBugReports": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists()",
+        ".validate": "newData.hasChildren(['transcript', 'createdAt']) && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "userStats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "leaderboard": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$uid": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name', 'gamesPlayed'])"
+      }
+    },
+
+    "spaceBaseLeaderboard": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$uid": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name', 'gamesPlayed'])"
+      }
+    },
+
+    "camelUpLeaderboard": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$uid": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name', 'gamesPlayed'])"
+      }
+    },
+
+    "resArcanaLeaderboard": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$uid": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name', 'gamesPlayed'])"
+      }
+    },
+
+    "cantStopLeaderboard": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$uid": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name', 'gamesPlayed'])"
+      }
+    },
+
+    "noThanksLeaderboard": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$uid": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name', 'gamesPlayed'])"
+      }
+    },
+
+    "telestrationsLeaderboard": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$uid": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name', 'gamesPlayed'])"
+      }
+    },
+
+    "cartographersLeaderboard": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$uid": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name', 'gamesPlayed'])"
+      }
+    },
+
+    "codenamesLeaderboard": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$uid": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name', 'gamesPlayed'])"
+      }
+    },
+
+    "incanGoldLeaderboard": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$uid": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name', 'gamesPlayed'])"
+      }
+    },
+
+    "forSaleLeaderboard": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$uid": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name', 'gamesPlayed'])"
+      }
+    },
+
+    "spaceBaseUserStats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "camelUpUserStats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "resArcanaUserStats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "cantStopUserStats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "noThanksUserStats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "telestrationsUserStats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "cartographersUserStats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "codenamesUserStats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "incanGoldUserStats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "forSaleUserStats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "spaceBaseGames": {
+      "$gameId": {
+        "meta": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".validate": "newData.hasChildren(['hostUid', 'status', 'roomCode', 'playerSlots'])"
+        },
+        "state": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'"
+        },
+        "presence": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$uid": {
+            ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid"
+          }
+        }
+      }
+    },
+
+    "spaceBaseGameCodes": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$code": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && !data.exists()"
+      }
+    },
+
+    "spaceBaseUserGames": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "spaceBaseBugReports": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChild('transcript') && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "commonwealthGames": {
+      "$gameId": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && data.exists() && !newData.exists() && data.child('meta/hostUid').val() === auth.uid",
+        "meta": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".validate": "newData.hasChildren(['hostUid', 'status', 'roomCode', 'playerSlots'])"
+        },
+        "state": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'"
+        },
+        "presence": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$uid": {
+            ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid"
+          }
+        }
+      }
+    },
+
+    "commonwealthGameCodes": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$code": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && (!data.exists() || !newData.exists())"
+      }
+    },
+
+    "commonwealthUserGames": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "commonwealthOpenRooms": {
+      // Friends' games (2026-10-16): a lobby's name, code, host and the uids
+      // in it, from creation until it starts or is deleted, so the landing
+      // can show friends' lobbies without anyone listing every game. Anyone
+      // approved reads; anyone approved may write or tidy an entry.
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$gameId": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+        ".validate": "newData.hasChildren(['hostUid', 'roomCode'])"
+      }
+    },
+
+    "commonwealthPlaytest": {
+      // Playtest mode (2026-09-25): what each phone's microphone heard during
+      // a game, for Claude to read live. Anyone seated may switch it on and
+      // add a line; nobody reads it back but the admin (the CLI watcher).
+      ".read": false,
+      "$gameId": {
+        "on": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".validate": "newData.isBoolean()"
+        },
+        "lines": {
+          "$lineId": {
+            ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && !data.exists() && newData.exists()",
+            ".validate": "newData.hasChildren(['text', 'uid']) && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 2000 && newData.child('uid').val() === auth.uid"
+          }
+        },
+        // Claude's replies during a playtest (yarn playtest:say), shown on
+        // the TV. Written only by the admin CLI; players read them.
+        "notes": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'"
+        },
+        // The playtest worker's heartbeat (2026-09-28): { at, lines, lastReply,
+        // state }, so the TV can say whether Claude is listening. Admin-written.
+        "listener": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'"
+        },
+        "$other": { ".validate": false }
+      }
+    },
+
+    // Topple (2026-10-31): a phone thrown like a Wii remote. The TV makes a
+    // room and shows its code as a QR; phones that join write their aim and
+    // their throws there, and the TV reads them. Short-lived; anyone signed
+    // in (anonymously) who has the code may join.
+    "topple": {
+      // Diagnostics (2026-11-01): a phone's and the TV's recordings of the aim,
+      // kept apart from the room (which goes when the TV does); write-once by
+      // anyone signed in, read only by the admin script (tools/diag.mjs).
+      "diag": {
+        "$id": {
+          ".write": "auth != null && $id.length < 60",
+          "$side": { ".validate": "$side === 'phone' || $side === 'tv'" }
+        }
+      },
+      "rooms": {
+        "$room": {
+          ".read": "auth != null",
+          ".write": "auth != null",
+          ".validate": "$room.length >= 4 && $room.length <= 8"
+        }
+      }
+    },
+    // Greens (2026-11-04): mini golf with friends. The host makes a room and
+    // shares its code; everyone in it is a player; each stroke is sent as
+    // where the ball was, its direction and power, and every screen rolls
+    // it with the same deterministic physics. Short-lived; anyone signed in
+    // (anonymously) who has the code may join.
+    "greens": {
+      "rooms": {
+        "$room": {
+          ".read": "auth != null",
+          ".write": "auth != null",
+          ".validate": "$room.length >= 4 && $room.length <= 8"
+        }
+      },
+      // A signed-in player's own record (name, best round, finished rounds).
+      // Owner-only, like the other per-uid rows: approval isn't needed to
+      // keep your own scores.
+      "players": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid",
+          "name": { ".validate": "newData.isString() && newData.val().length <= 18" },
+          "best": { ".validate": "newData.isNumber()" },
+          "rounds": {
+            "$id": {
+              ".validate": "newData.hasChildren(['at', 'total']) && newData.child('total').isNumber() && newData.child('at').isNumber()"
+            }
+          }
+        }
+      }
+    },
+    "deckCityPlaytest": {
+      // Which session the TV is recording, so the phone mic can find it.
+      "live": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".validate": "newData.isString() && newData.val().length < 40"
+      },
+      // Deck City playtest mode (2026-10-29): what the TV microphone heard
+      // while Matt played, each line tagged with where the game was, for
+      // Claude to read (yarn playtest:watch in deck-city). Same shape as
+      // commonwealthPlaytest; only the admin CLI reads lines back.
+      ".read": false,
+      "$sessionId": {
+        "on": {
+          ".read": "auth != null",
+          ".write": "auth != null",
+          ".validate": "newData.isBoolean()"
+        },
+        "lines": {
+          "$lineId": {
+            ".write": "auth != null && !data.exists() && newData.exists()",
+            ".validate": "newData.hasChildren(['text', 'uid']) && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 2000 && newData.child('uid').val() === auth.uid"
+          }
+        },
+        // Claude's replies (yarn playtest:say), shown on the TV. Admin-written.
+        "notes": {
+          ".read": "auth != null"
+        },
+        // The phone microphone (deck-city mic.html, 2026-10-29): it drops what it
+        // hears in the inbox; the TV tags each line with the game and moves it
+        // to lines. `phone` is the phone's heartbeat, so the TV mutes its own mic.
+        "inbox": {
+          ".read": "auth != null",
+          "$id": {
+            ".write": "auth != null",
+            ".validate": "!newData.exists() || (newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 2000)"
+          }
+        },
+        "phone": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "commonwealthBugReports": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChild('transcript') && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "camelUpGames": {
+      "$gameId": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && data.exists() && !newData.exists() && data.child('meta/hostUid').val() === auth.uid",
+        "meta": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".validate": "newData.hasChildren(['hostUid', 'status', 'roomCode', 'playerSlots'])"
+        },
+        "state": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'"
+        },
+        "presence": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$uid": {
+            ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid"
+          }
+        }
+      }
+    },
+
+    // ----------------------------------------------------------- res arcana
+    // Res Arcana (2026-10-22): the same room / stats / bug-report shape as
+    // every other hub game, under its own prefix.
+    "resArcanaGames": {
+      "$gameId": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && data.exists() && !newData.exists() && data.child('meta/hostUid').val() === auth.uid",
+        "meta": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".validate": "newData.hasChildren(['hostUid', 'status', 'roomCode', 'playerSlots'])"
+        },
+        "state": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'"
+        },
+        "presence": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$uid": {
+            ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid"
+          }
+        }
+      }
+    },
+
+    "camelUpGameCodes": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$code": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && (!data.exists() || !newData.exists())"
+      }
+    },
+
+    "resArcanaGameCodes": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$code": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && (!data.exists() || !newData.exists())"
+      }
+    },
+
+    "camelUpUserGames": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "resArcanaUserGames": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    // ------------------------------------------------------------ crossword
+    // The daily crossword (2026-10-09). Puzzles and the index are written by
+    // the generator with the Admin SDK only; every signed-in player reads
+    // them. Progress is private; times and rooms are shared among the
+    // signed-in (and therefore Matt-approved) crowd.
+    "crosswordPuzzles": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
       ".write": false
     },
-    "$topKey": {
-      ".read": "auth != null && auth.token.email != null && $topKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')",
-      ".write": "auth != null && auth.token.email != null && $topKey === auth.token.email.replace('!', '-').replace('$', '-').replace('%', '-').replace('@', '-').replace('^', '-').replace('&', '-').replace('*', '-').replace('(', '-').replace(')', '-').replace('_', '-').replace('+', '-').replace('|', '-').replace('~', '-').replace('=', '-').replace('`', '-').replace('{', '-').replace('}', '-').replace('[', '-').replace(']', '-').replace(':', '-').replace('\"', '-').replace(';', '-').replace(\"'\", '-').replace('<', '-').replace('>', '-').replace('?', '-').replace(',', '-').replace('.', '-').replace('/', '-')",
-      "movieLog": {
-        ".indexOn": [
-          "updatedAt"
-        ]
-      },
-      "sharedDBSearches": {
-        "$shareKey": {
-          ".read": true
+
+    "crosswordIndex": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      ".write": false
+    },
+
+    "crosswordProgress": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "crosswordUserStats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "crosswordLeaderboard": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$uid": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name', 'gamesPlayed'])"
+      }
+    },
+
+    // One row per solver per day: the day's board on the solved sheet.
+    "crosswordTimes": {
+      "$date": {
+        ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+        "$uid": {
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['name', 'seconds']) && newData.child('seconds').isNumber()"
         }
       }
+    },
+
+    // "Too easy / About right / Too hard" from the solved sheet (2026-11-02):
+    // mine alone to read and write; scripts/difficulty-report.mjs reads them
+    // all with the admin key. Dailies only - never a Giant.
+    "crosswordRatings": {
+      "$date": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid && !$date.beginsWith('giant')",
+          ".validate": "newData.hasChildren(['vote', 'at'])",
+          "vote": { ".validate": "newData.val() === 'easy' || newData.val() === 'right' || newData.val() === 'hard'" },
+          "seconds": { ".validate": "newData.isNumber()" },
+          "clean": { ".validate": "newData.isBoolean()" },
+          "together": { ".validate": "newData.isBoolean()" },
+          "at": { ".validate": "newData.isNumber()" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    // Solving together. Letters are written per cell by any member, so two
+    // phones never overwrite each other; presence rows are owner-only.
+    "crosswordRooms": {
+      "$roomId": {
+        "meta": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'"
+        },
+        // A solved room's letters are final (2026-10-19): a phone that
+        // hasn't caught up can't change them after the solve.
+        "letters": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && !root.child('crosswordRooms/' + $roomId + '/meta/solvedAt').exists()"
+        },
+        "presence": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$uid": {
+            ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid"
+          }
+        },
+        // The room's chat (2026-10-22): post-only - a message is written
+        // once, as yourself, at the server's time, and never edited or
+        // deleted. A group's room is per day, so its chat starts fresh daily.
+        "chat": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$msgId": {
+            ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && !data.exists() && newData.exists()",
+            ".validate": "newData.hasChildren(['uid', 'name', 'text', 'at']) && newData.child('uid').val() === auth.uid && newData.child('at').val() === now",
+            "uid": { ".validate": "newData.isString()" },
+            "name": { ".validate": "newData.isString() && newData.val().length <= 60" },
+            "color": { ".validate": "newData.isString() && newData.val().length <= 20" },
+            "text": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 300" },
+            "at": { ".validate": "newData.isNumber()" },
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    },
+
+    // Standing groups (2026-10-16): a name, a permanent code and members;
+    // `days/<date>` points at that day's room and is create-only, so the
+    // first member to open the group that day makes the one room.
+    "crosswordGroups": {
+      "$groupId": {
+        "meta": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'"
+        },
+        "days": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$date": {
+            ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && !data.exists() && newData.exists()",
+            ".validate": "newData.isString()"
+          }
+        }
+      }
+    },
+
+    "crosswordGroupCodes": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$code": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && !data.exists()"
+      }
+    },
+
+    // My groups, for the home screen. Owner reads and removes; anyone may
+    // add one (keeping a room as a group puts it on every solver's home).
+    "crosswordUserGroups": {
+      "$uid": {
+        ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid",
+        "$groupId": {
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && (auth.uid === $uid || newData.val() === true)"
+        }
+      }
+    },
+
+    // Rooms I made or joined by code (2026-10-27), so home can offer them
+    // again. Mine alone: { date, at } per room id.
+    "crosswordUserRooms": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$roomId": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['date', 'at']) && newData.child('date').isString() && newData.child('date').val().length <= 40"
+        }
+      }
+    },
+
+    "crosswordRoomCodes": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$code": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && !data.exists()"
+      }
+    },
+
+    "crosswordBugReports": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChild('transcript') && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "camelUpBugReports": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChild('transcript') && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "deckCityBugReports": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChild('transcript') && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "greensBugReports": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChild('transcript') && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "toppleBugReports": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChild('transcript') && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "resArcanaBugReports": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChild('transcript') && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "cantStopGames": {
+      "$gameId": {
+        // Delete-only at the room level, same as its siblings - a .write
+        // granted at a parent cascades to every child and cannot be revoked
+        // below, so anything broader hands the host powers inside the room.
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && data.exists() && !newData.exists() && data.child('meta/hostUid').val() === auth.uid",
+        "meta": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".validate": "newData.hasChildren(['hostUid', 'status', 'roomCode', 'playerSlots'])"
+        },
+        "state": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'"
+        },
+        "presence": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$uid": {
+            ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid"
+          }
+        }
+      }
+    },
+
+    "cantStopGameCodes": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$code": {
+        // Claim a free code, or release one - never repoint an existing one.
+        // See the noThanksGameCodes comment above for the history.
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && (!data.exists() || !newData.exists())"
+      }
+    },
+
+    "cantStopUserGames": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "cantStopBugReports": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChild('transcript') && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "noThanksGames": {
+      "$gameId": {
+        // Room-level write exists so an abandoned room can be deleted, and is
+        // DELETE ONLY: a .write at a parent cascades to every child and can't
+        // be revoked below, so a blanket grant here would quietly widen what
+        // the host may do inside the room. Nothing in this game currently
+        // depends on that being tight, but the telestrations equivalent did -
+        // see its comment - and the two should not differ.
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && data.exists() && !newData.exists() && data.child('meta/hostUid').val() === auth.uid",
+        "meta": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".validate": "newData.hasChildren(['hostUid', 'status', 'roomCode', 'playerSlots'])"
+        },
+        "state": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'"
+        },
+        "presence": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$uid": {
+            ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid"
+          }
+        }
+      }
+    },
+
+    "noThanksGameCodes": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$code": {
+        // Claim a free code, or release one. What is NEVER allowed is
+        // repointing an existing code at a different room - that would let
+        // someone hijack a live game's code out from under the people
+        // playing it, which is the only case here with real teeth.
+        //
+        // An earlier version also required the target room to be gone before
+        // a code could be released (root.child('noThanksGames')...). It read
+        // well and did not work: the lookup denied the delete even
+        // immediately after the room had verifiably been removed. Deleting a
+        // code for a room that still exists is a small, self-inflicted
+        // problem - the people already in that game keep playing, only new
+        // joins-by-code break - so it is not worth an unreliable guard.
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && (!data.exists() || !newData.exists())"
+      }
+    },
+
+    "hubBugReports": {
+      // The landing page still has no accounts - bug.js mints a silent
+      // anonymous session over REST to satisfy auth != null (2026-08-29,
+      // the insecure-rules-email cleanup; Blockout's lib/anonAuth.ts is the
+      // same arrangement). Write-only, create-only, capped; nothing can be
+      // read back, overwritten or deleted from a client.
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChildren(['transcript', 'createdAt']) && newData.child('transcript').isString() && newData.child('transcript').val().length > 0 && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "telestrationsGames": {
+      "$gameId": {
+        // DELETE ONLY, and the `!newData.exists()` is the whole point.
+        //
+        // A .write that grants access at a parent cascades to every child and
+        // cannot be taken back by a child rule. Granting the host blanket
+        // write here - which is what "let the host clean up their room" looks
+        // like at first - therefore silently handed the host permission to
+        // overwrite anyone's drawing, straight past the write-once rule on
+        // pages below. Caught by a live test in which the host successfully
+        // painted over another player's page.
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && data.exists() && !newData.exists() && data.child('meta/hostUid').val() === auth.uid",
+        "meta": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".validate": "newData.hasChildren(['hostUid', 'status', 'roomCode', 'playerSlots'])"
+        },
+        "round":  { ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'", ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'" },
+        "reveal": { ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'", ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'" },
+        "pages": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$book": {
+            "$step": {
+              // Write-once. A page belongs to whoever got there first, so a
+              // double tap, a second tab or a laggy retry can never paint over
+              // somebody's drawing - enforced here rather than only in the app.
+              ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && !data.exists()",
+              ".validate": "newData.isString() && newData.val().length <= 200000"
+            }
+          }
+        },
+        "presence": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$uid": { ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid" }
+        }
+      }
+    },
+
+    "telestrationsGameCodes": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$code": { ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && (!data.exists() || !newData.exists())" }
+    },
+
+    "telestrationsUserGames": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "telestrationsBugReports": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChild('transcript') && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "cartographersGames": {
+      "$gameId": {
+        // Delete-only at the room level, same as the sibling games - a .write
+        // granted at a parent cascades to every child and cannot be revoked
+        // below. See the telestrations comment above for the live test that
+        // caught this the first time.
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && data.exists() && !newData.exists() && data.child('meta/hostUid').val() === auth.uid",
+        "meta": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".validate": "newData.hasChildren(['hostUid', 'status', 'roomCode', 'playerSlots'])"
+        },
+        "game": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          // The seed is the entire deal (the card script derives from it) -
+          // written once at start, never rewritten, so the game cannot be
+          // re-dealt under anyone.
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && !data.exists()"
+        },
+        "placements": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$turn": {
+            "$map": {
+              // Write-once. A drawing belongs to whoever got there first, so
+              // a double tap, a second tab, or two clients both believing
+              // they drive the bots can never overwrite one - enforced here,
+              // not only in the app.
+              ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && !data.exists()",
+              ".validate": "newData.isString() && newData.val().length <= 2000"
+            }
+          }
+        },
+        "presence": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$uid": { ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid" }
+        }
+      }
+    },
+
+    "cartographersGameCodes": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$code": { ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && (!data.exists() || !newData.exists())" }
+    },
+
+    "cartographersUserGames": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "codenamesGames": {
+      "$gameId": {
+        // Delete-only at the room level, same as the sibling games - a .write
+        // granted at a parent cascades to every child and cannot be revoked
+        // below. See the telestrations comment above for the live test that
+        // caught this the first time.
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && data.exists() && !newData.exists() && data.child('meta/hostUid').val() === auth.uid",
+        "meta": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".validate": "newData.hasChildren(['hostUid', 'status', 'roomCode', 'playerSlots'])"
+        },
+        "state": {
+          // The whole game as one JSON string, rewritten per action through
+          // a transaction (see codenames' multiplayer.js). The key rides in
+          // it - the spymasters' screens are the only place it is RENDERED,
+          // the same family-trust level as every sibling game's state.
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".validate": "newData.isString() && newData.val().length <= 20000"
+        },
+        "presence": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$uid": { ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid" }
+        }
+      }
+    },
+
+    "codenamesGameCodes": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$code": { ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && (!data.exists() || !newData.exists())" }
+    },
+
+    "codenamesUserGames": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "codenamesBugReports": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChild('transcript') && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "cartographersBugReports": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChild('transcript') && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "noThanksBugReports": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChild('transcript') && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "incanGoldGames": {
+      "$gameId": {
+        // Delete-only at the room level, same as its two siblings above - a
+        // .write granted at a parent cascades to every child and cannot be
+        // revoked below, so anything broader hands the host powers inside the
+        // room that nobody intended. See the telestrations comment for the
+        // live test that caught this the first time.
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && data.exists() && !newData.exists() && data.child('meta/hostUid').val() === auth.uid",
+        "meta": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".validate": "newData.hasChildren(['hostUid', 'status', 'roomCode', 'playerSlots'])"
+        },
+        "state": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'"
+        },
+        "presence": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$uid": {
+            ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid"
+          }
+        }
+      }
+    },
+
+    "incanGoldGameCodes": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$code": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && (!data.exists() || !newData.exists())"
+      }
+    },
+
+    "incanGoldUserGames": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "incanGoldBugReports": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChild('transcript') && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "forSaleGames": {
+      "$gameId": {
+        // Delete-only at the room level, same as its siblings - a .write
+        // granted at a parent cascades to every child and cannot be revoked
+        // below, so anything broader hands the host powers inside the room
+        // that nobody intended. See the telestrations comment for the live
+        // test that caught this the first time.
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && data.exists() && !newData.exists() && data.child('meta/hostUid').val() === auth.uid",
+        "meta": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".validate": "newData.hasChildren(['hostUid', 'status', 'roomCode', 'playerSlots'])"
+        },
+        "state": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'"
+        },
+        "presence": {
+          ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+          "$uid": {
+            ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && auth.uid === $uid"
+          }
+        }
+      }
+    },
+
+    "forSaleGameCodes": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved'",
+      "$code": {
+        ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('status').val() === 'approved' && (!data.exists() || !newData.exists())"
+      }
+    },
+
+    "forSaleUserGames": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "forSaleBugReports": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChild('transcript') && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000"
+      }
+    },
+
+    "noThanksUserGames": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "siteUsers": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('isAdmin').val() === true",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && (
+          (auth.uid === $uid && !data.exists() && auth.token.email === 'mattgrosso@gmail.com' && newData.child('status').val() === 'approved' && newData.child('isAdmin').val() === true)
+          || (auth.uid === $uid && !data.exists() && newData.child('status').val() === 'pending' && newData.child('isAdmin').val() === false && auth.token.firebase.sign_in_provider !== 'anonymous')
+          || (auth.uid === $uid && data.exists() && newData.child('status').val() === data.child('status').val() && newData.child('isAdmin').val() === data.child('isAdmin').val())
+          || root.child('siteUsers').child(auth.uid).child('isAdmin').val() === true
+        )",
+        ".validate": "newData.hasChildren(['email', 'status', 'isAdmin']) && (newData.child('email').val() === auth.token.email || (data.exists() && newData.child('email').val() === data.child('email').val()) || root.child('siteUsers').child(auth.uid).child('isAdmin').val() === true)"
+      }
+    },
+
+    // Web-push subscriptions for site admins (2026-08-28, Matt: "notified
+    // when somebody's asking permission to access the site"). Written by the
+    // hub's admin.js when an admin turns notifications on; read by the
+    // atr-push Lambda (Admin SDK, bypasses these rules) which polls
+    // siteUsers for new pending requests and pushes to these devices.
+    // Admin-only both ways - an ordinary visitor can neither see nor plant
+    // a subscription.
+    // Async play (2026-10-04, every game): the hub's atr-push Lambda keeps each
+    // player's "Your games" list here from every <prefix>Games room with
+    // meta.async. Readable by that player only; written only by the Lambda
+    // (service account), never by a client.
+    "atrAsync": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+    // A player's "tell me when it's my turn" push subscriptions, keyed on
+    // auth.uid like fullTablePush. The Lambda prunes dead rows.
+    "atrPush": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "adminPush": {
+      ".read": "auth != null && root.child('siteUsers').child(auth.uid).child('isAdmin').val() === true",
+      ".write": "auth != null && root.child('siteUsers').child(auth.uid).child('isAdmin').val() === true"
     }
   }
 }
