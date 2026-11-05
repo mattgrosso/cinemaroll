@@ -25,6 +25,13 @@
 //        works: let go of focus, focus-and-drop a hidden read-only box (what
 //        cleared it on Matt's phone, in 0.8 s), grow the page a pixel for a
 //        frame.
+//    The phantom is also handled in Safari itself, not just the installed
+//    app (Nba Tonight, 2026-11-05: Seth's tab bar stopped mid-screen as he
+//    scrolled, in Safari). The short-page fix stays installed-only: Safari's
+//    own toolbars change the page's height on purpose.
+//
+// A pinned thing inside another pinned thing (a bug button in a pinned tab
+// bar) rides along with its parent and is not slid again.
 //
 // `window.__screenPin` says what it has seen (for a bug report or the console).
 
@@ -110,7 +117,7 @@ function keep () {
 
 function phantomNow () {
   const vv = window.visualViewport
-  if (!vv || !isStandalone()) return 0
+  if (!vv) return 0
   return phantomBand({ innerHeight: window.innerHeight, vvHeight: vv.height, vvTop: vv.offsetTop || 0, scale: vv.scale || 1, typingNow: typing() })
 }
 
@@ -141,6 +148,7 @@ function apply () {
   // top (Thunder, Space Base's top-right one) sits in the top half and stays.
   const vv = window.visualViewport
   for (const el of document.querySelectorAll(PINNED)) {
+    if (el.parentElement?.closest(PINNED)) { if (el.style.translate) el.style.translate = ''; continue }
     const rect = el.getBoundingClientRect()
     const px = total && rect.top > height / 2
       ? slideFor({ bottom: rect.bottom, slid: slidBy(el), gap, band, vvTop: vv?.offsetTop || 0, vvHeight: vv?.height || 0 })
