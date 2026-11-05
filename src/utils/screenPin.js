@@ -34,6 +34,12 @@
 // bar) rides along with its parent and is not slid again.
 //
 // `window.__screenPin` says what it has seen (for a bug report or the console).
+// `atTap` is the scene the moment a pinned thing was touched - for the bug
+// button, before the report box opens and its keyboard changes everything
+// (2026-11-05: Hello Again's bug button rode up on iOS 27.2 with this module
+// running, and the report's sizes were taken with the keyboard up, so they
+// said nothing). `leftAlone` counts the times a phantom keyboard was up and a
+// bottom-pinned thing was NOT slid, because it looked already at the bottom.
 
 const STUCK_MIN = 120 // smaller differences are toolbars and rounding, not the bug
 const SHORT = 0.75 // a page under 3/4 of the screen is never trusted as "full"
@@ -106,7 +112,7 @@ let last = null
 let scrolledAt = 0
 let curing = false
 let heldCure = null
-const report = { gap: 0, stuckSeen: 0, lastStuck: null, phantom: 0, phantomSeen: 0, lastPhantom: null, lastCure: null }
+const report = { gap: 0, stuckSeen: 0, lastStuck: null, phantom: 0, phantomSeen: 0, lastPhantom: null, lastCure: null, leftAlone: 0, lastLeftAlone: null, atTap: null }
 
 function read () {
   try { tallest = JSON.parse(window.localStorage.getItem(STORE) || '{}') || {} } catch { tallest = {} }
@@ -153,8 +159,33 @@ function apply () {
     const px = total && rect.top > height / 2
       ? slideFor({ bottom: rect.bottom, slid: slidBy(el), gap, band, vvTop: vv?.offsetTop || 0, vvHeight: vv?.height || 0 })
       : 0
+    if (band && total && rect.top > height / 2 && px === gap) {
+      report.leftAlone += 1
+      report.lastLeftAlone = scene(el)
+    }
     const want = px ? `0 ${px}px` : ''
     if (el.style.translate !== want) el.style.translate = want
+  }
+}
+
+/** The whole scene around one pinned thing, rounded, for `atTap` and `lastLeftAlone`. */
+function scene (el) {
+  const vv = window.visualViewport
+  const r = el?.getBoundingClientRect?.()
+  const n = (x) => (x == null ? null : Math.round(x))
+  return {
+    at: new Date().toISOString(),
+    standalone: isStandalone(),
+    page: `${window.innerWidth}x${window.innerHeight}`,
+    screen: n(window.screen?.height),
+    tallest: tallest[window.innerWidth] || 0,
+    vv: vv ? { h: n(vv.height), top: n(vv.offsetTop || 0), scale: vv.scale || 1 } : null,
+    gap: report.gap,
+    band: report.phantom,
+    el: r ? { top: n(r.top), bottom: n(r.bottom), slid: slidBy(el) } : null,
+    focus: document.activeElement?.tagName || null,
+    typing: typing(),
+    scrollY: n(window.scrollY),
   }
 }
 
@@ -220,6 +251,11 @@ export function watchScreenPin () {
   window.addEventListener('resize', apply)
   window.addEventListener('orientationchange', () => setTimeout(apply, 300))
   window.addEventListener('scroll', () => { scrolledAt = Date.now() }, { passive: true })
+  // Before anything a tap opens (the bug report box, its keyboard) can change the picture.
+  document.addEventListener('pointerdown', (e) => {
+    const el = e.target?.closest?.(PINNED)
+    if (el) report.atTap = scene(el)
+  }, { capture: true, passive: true })
   window.visualViewport?.addEventListener('resize', apply)
   window.visualViewport?.addEventListener('scroll', apply)
   document.addEventListener('focusin', (e) => { if (!e.target?.dataset?.screenPinCure) apply() })
