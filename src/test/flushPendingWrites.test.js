@@ -731,7 +731,69 @@ describe('write failures and the console (what reaches Sentry)', () => {
 
     await store.dispatch('writeDurably', { path: 'settings/dailyAwardsYear', value: 1999 })
 
+    // Refused (not timed out), so still an error even though it was stashed.
     expect(errorSpy.mock.calls.flat().map(String).join(' ')).toContain('device queue is unavailable')
+    localStorage.removeItem('cinemaRoll.writeStash')
+  })
+
+  // Sentry 2026-11-06 (iPhone, tiebreak): the server write timed out AND the
+  // queue's IndexedDB put stalled, so the change existed only on screen and
+  // logged "change is not saved". Now it goes to the localStorage stash, is a
+  // warning, and the next flush sends it.
+  it('a timed-out write whose queue also stalled is stashed, quietly, and sent by the next flush', async () => {
+    localStorage.removeItem('cinemaRoll.writeStash')
+    vi.useFakeTimers()
+    try {
+      store.commit('setSettings', {})
+      setMock.mockImplementation(() => new Promise(() => {}))
+      enqueueWriteMock.mockImplementationOnce(() => Promise.resolve(null))
+      const pending = store.dispatch('writeDurably', { path: 'settings/tieBreakTournament', value: { contestantIds: ['a', 'b'] } })
+      await vi.advanceTimersByTimeAsync(9000)
+      await pending
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(errorSpy.mock.calls.flat().map(String).join(' ')).not.toContain('not saved')
+    expect(warnSpy.mock.calls.flat().map(String).join(' ')).toContain('stashed for the next flush')
+
+    setMock.mockClear()
+    setMock.mockImplementation(() => Promise.resolve())
+    store.commit('setIsOnline', true)
+    await store.dispatch('flushPendingWrites')
+
+    expect(setMock).toHaveBeenCalledWith('testing-database/settings/tieBreakTournament', { contestantIds: ['a', 'b'] })
+    expect(localStorage.getItem('cinemaRoll.writeStash')).toBeNull()
+  })
+
+  it('a stashed change stays stashed when its flush fails, and a newer save supersedes it', async () => {
+    localStorage.removeItem('cinemaRoll.writeStash')
+    store.commit('setSettings', {})
+    setMock.mockImplementation(() => Promise.reject(new Error('PERMISSION_DENIED: Permission denied')))
+    enqueueWriteMock.mockImplementationOnce(() => Promise.resolve(null))
+    await store.dispatch('writeDurably', { path: 'settings/lastTweak', value: 1 })
+
+    store.commit('setIsOnline', true)
+    await store.dispatch('flushPendingWrites')
+    expect(localStorage.getItem('cinemaRoll.writeStash')).toContain('settings/lastTweak')
+
+    setMock.mockImplementation(() => Promise.resolve())
+    await store.dispatch('writeDurably', { path: 'settings/lastTweak', value: 2 })
+    expect(localStorage.getItem('cinemaRoll.writeStash')).toBeNull()
+  })
+
+  it('a change even the stash refuses is still an error', async () => {
+    localStorage.removeItem('cinemaRoll.writeStash')
+    store.commit('setSettings', {})
+    setMock.mockImplementation(() => Promise.reject(new Error('PERMISSION_DENIED: Permission denied')))
+    enqueueWriteMock.mockImplementationOnce(() => Promise.resolve(null))
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError') })
+    try {
+      await store.dispatch('writeDurably', { path: 'settings/lastTweak', value: 1 })
+    } finally {
+      setItem.mockRestore()
+    }
+    expect(errorSpy.mock.calls.flat().map(String).join(' ')).toContain('change is not saved')
   })
 
   it('a queued write that keeps timing out is reported once, on its fifth failure', async () => {

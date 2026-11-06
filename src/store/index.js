@@ -28,6 +28,7 @@ import { saveSnapshot, loadSnapshot } from "../utils/offlineStore.js";
 import { maxUpdatedAt, reconstructFromDelta, diffLibraries, describeStaleEntry, launchPlan, isWriteRaceOnly, summarizeShadowReport } from "../assets/javascript/deltaSync.js";
 import { enqueueWrite, listPendingWrites, removePendingWrite, updatePendingWrite } from "../utils/pendingWriteQueue.js";
 import { setValueAtPath } from "../utils/statePath.js";
+import { stashWrite, listStashedWrites, removeStashedWrite } from "../utils/writeStash.js";
 import { stampPlanForWrite, stampUpdatesForBatch } from "../assets/javascript/syncStamp.js";
 import { emailToDatabaseKey, isQaAccountKey } from "../assets/javascript/databaseKey.js";
 import { fetchAllHats, fetchMyHats, hatsForMember, fetchHat, fetchHatCard, readHatContents, toHatMovie, alreadyInHat, addMovieToHat, pickFromHat, commitDraw, isMovieHatAccessError } from "../assets/javascript/movieHat.js";
@@ -2181,6 +2182,19 @@ export default createStore({
           }
         }
 
+        // Last-resort stash (writeStash.js): changes that reached neither the
+        // server nor the queue. After the queue, because a stashed value is
+        // always newer than anything queued for the same path.
+        const account = context.getters.databaseTopKey;
+        for (const stashed of listStashedWrites(account)) {
+          try {
+            await performDatabaseWrite(context, stashed.dbEntry);
+            removeStashedWrite(account, stashed.dbEntry.path, stashed.stashedAt);
+          } catch {
+            // Stays stashed for the next flush; performDatabaseWrite logged it.
+          }
+        }
+
         await context.dispatch('refreshPendingReconciliations');
       } finally {
         context.commit('setIsFlushingPendingWrites', false);
@@ -2262,22 +2276,38 @@ export default createStore({
       try {
         // Offline: nothing to attempt, just make sure it's durably queued.
         if (!context.state.isOnline) {
-          await queuedPromise;
+          const queued = await queuedPromise;
+          // enqueueWrite already errored; the stash still keeps the change.
+          if (!queued) stashWrite(context.getters.databaseTopKey, dbEntry);
+          else removeStashedWrite(context.getters.databaseTopKey, dbEntry.path);
           return;
         }
 
         await context.dispatch('writeDatabaseEntryNow', dbEntry);
+        // Confirmed by the server: an older stashed value for this path
+        // must not be re-sent over it by a later flush.
+        removeStashedWrite(context.getters.databaseTopKey, dbEntry.path);
         const queuedRecord = await queuedPromise;
         if (queuedRecord) await removePendingWrite(queuedRecord.id);
       } catch (error) {
         // Normally already durably queued regardless of this failure. If the
         // queue couldn't take it either (enqueueWrite only warned, expecting
-        // the server copy), the change now exists only on this screen.
+        // the server copy), it goes to the localStorage stash (Sentry,
+        // 2026-11-06: an iPhone woke with a dead socket AND frozen IndexedDB,
+        // a tiebreak step timed out on both). Only a refused stash means the
+        // change exists only on this screen.
         const queuedRecord = await queuedPromise.catch(() => null);
         if (!queuedRecord) {
-          console.error('writeDurably: direct write failed and the device queue is unavailable, change is not saved:', dbEntry.path, error);
+          if (stashWrite(context.getters.databaseTopKey, dbEntry)) {
+            const log = isWriteTimeout(error) ? console.warn : console.error;
+            log('writeDurably: direct write failed and the device queue is unavailable, stashed for the next flush:', dbEntry.path, error);
+          } else {
+            console.error('writeDurably: direct write failed and the device queue is unavailable, change is not saved:', dbEntry.path, error);
+          }
           return;
         }
+        // Queued: that copy is newer than anything stashed for this path.
+        removeStashedWrite(context.getters.databaseTopKey, dbEntry.path);
         const log = isWriteTimeout(error) ? console.warn : console.error;
         log('writeDurably: direct write failed, will retry via the background queue:', dbEntry.path, error);
       } finally {

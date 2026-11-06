@@ -173,8 +173,16 @@ bounded too, so nothing can wait on storage forever. `enqueueWrite(entry,
 { online })`: when the caller is also sending the write to the server, a
 storage STALL is a `console.warn`; offline, or a real failure (blocked,
 refused, unclonable), it stays `console.error`. `writeDurably` errors loudly
-when a change reached neither the server nor the queue - the only case where
-it exists only on screen. A new IndexedDB store must follow the same shape.
+when a change reached neither the server nor the queue AND the localStorage
+stash refused it - the only case where it exists only on screen. A new
+IndexedDB store must follow the same shape.
+
+**The last-resort stash (Sentry, 2026-11-06).** An iPhone woke with a dead
+socket and frozen IndexedDB: a tiebreak step timed out on the server and on
+the queue's put. `writeDurably` now puts such a change in `writeStash.js`
+(localStorage, one entry per account + path, newest wins; a later confirmed
+or queued save of the path drops it), logged as a warning for a timeout. The
+flush sends the stash AFTER the queue, since a stashed value is always newer.
 
 ## Updates must never cost the offline copy (2026-09-30)
 
