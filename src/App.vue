@@ -149,6 +149,7 @@ export default {
       // (it used to clear it, which left the icon blank with work to do).
       this.$store.dispatch('refreshAppBadge');
       closeDeliveredNotifications();
+      this.$store.dispatch('uploadSwPushLog');
       await this.$store.dispatch('loadPushState');
       await refreshSubscriptionIfGranted(this.$store);
       this.$store.dispatch('publishPushDigest');

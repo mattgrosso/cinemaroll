@@ -147,7 +147,10 @@ describe('a put-away Showtimes card, on the push badge', () => {
     const { buildPushDigest } = await import('../assets/javascript/pushDigest.js');
     const built = buildPushDigest({ entries: [], settings: {}, getRating: () => null, dismissals: dismissedAt(52, NOW), now: NOW });
     expect(built.badgeHidden.showtimes.upTo).toBe(52);
-    const source = readFileSync(resolve(__dirname, '../../aws-lambda/push-notify.js'), 'utf8');
-    expect(source).toMatch(/showtimesBadgeFilms\(showtimesWaiting\(b, d, r, badgeSeenAt\(digest\.showtimesSeenAt, seen\)\), digest\.badgeHidden && digest\.badgeHidden\.showtimes/);
+    // every badge the Lambda sends goes through badgeBreakdown, which applies the put-away card
+    const sender = readFileSync(resolve(__dirname, '../../aws-lambda/push-notify.js'), 'utf8');
+    expect(sender).toMatch(/badgeBreakdown\(\{ digest, prefs, now, extra, \.\.\.reads \}\)/);
+    const cadence = readFileSync(resolve(__dirname, '../../aws-lambda/pushCadence.js'), 'utf8');
+    expect(cadence).toMatch(/showtimesBadgeFilms\(waiting, digest\.badgeHidden && digest\.badgeHidden\.showtimes, now\)/);
   });
 });

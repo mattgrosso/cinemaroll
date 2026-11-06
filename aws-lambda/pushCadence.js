@@ -1552,6 +1552,59 @@ function showtimesBadgeFilms (films, hidden, now) {
   return now < until && count <= upTo ? 0 : count;
 }
 
+/**
+ * The icon badge for an account, with its parts, so a number on the icon
+ * can always be explained (2026-11-06: three days of 52s nobody could trace).
+ * `extra` is the push carrying it (a friend's log, a request). The Showtimes
+ * part needs the board, the dismissals, the reminders and the account's
+ * "last opened" (`accountSeenAt`); `unavailable` says the reads failed and
+ * films are left out. The app's appBadge.js mirrors the chores arithmetic.
+ */
+function badgeBreakdown ({ digest = {}, prefs = {}, now = Date.now(), extra = 0, board, dismissed, reminders, accountSeenAt, unavailable } = {}) {
+  const due = dueFromDigest(digest, prefs, now);
+  const parts = { stickiness: due.stickinessCount, tiebreak: due.tiebreak ? 1 : 0, awards: due.awardYears.length, extra: Number(extra) || 0, films: 0 };
+  if (prefs.showtimes === true) {
+    if (unavailable) parts.filmsSkipped = `reads failed: ${unavailable}`;
+    else if (!board) parts.filmsSkipped = 'no board';
+    else {
+      const seenAt = badgeSeenAt(digest.showtimesSeenAt, accountSeenAt);
+      const waiting = showtimesWaiting(board, dismissed, reminders, seenAt);
+      parts.films = showtimesBadgeFilms(waiting, digest.badgeHidden && digest.badgeHidden.showtimes, now);
+      parts.filmsWaiting = waiting;
+      parts.seenAt = seenAt;
+      parts.seenFrom = Number(digest.showtimesSeenAt) >= Number(accountSeenAt) ? 'digest' : 'account';
+      parts.dismissed = dismissed ? Object.values(dismissed).reduce((n, t) => n + Object.keys(t || {}).length, 0) : 0;
+      parts.boardListings = (board.theaters || []).reduce((n, t) => n + (t.listings || []).length, 0);
+      parts.boardAt = Number(board.updatedAt) || 0;
+      if (digest.badgeHidden && digest.badgeHidden.showtimes) parts.hidden = digest.badgeHidden.showtimes;
+      // A board with films but no dismissals at all is how a whole board
+      // lands on the icon: say so, loudly, in the log.
+      if (!parts.dismissed && parts.boardListings) parts.dismissalsMissing = true;
+    }
+  }
+  const count = parts.stickiness + parts.tiebreak + parts.awards + parts.extra + parts.films;
+  return { count, parts };
+}
+
+const BADGE_LOG_KEEP = 40;
+/** The badge log with an entry appended, oldest dropped (same shape as the app's badgeLog.js). */
+function appendBadgeLog (log, entry, keep = BADGE_LOG_KEEP) {
+  const list = Array.isArray(log) ? log.slice() : Object.values(log || {});
+  list.push(entry);
+  list.sort((a, b) => (Number(a && a.at) || 0) - (Number(b && b.at) || 0));
+  return list.slice(-keep);
+}
+
+/**
+ * The declarative web push envelope: `web_push: 8030` is what tells Safari
+ * (iOS 18.4+) to render the notification and apply `app_badge` itself, no
+ * service worker. It had been missing since the start, so every push was
+ * handled by the worker instead (2026-11-06).
+ */
+function declarativePayload (notification) {
+  return { web_push: 8030, notification };
+}
+
 function composeReminderMessage (reminder) {
   const where = reminder.theaterName ? ` at ${reminder.theaterName}` : '';
   // Swiped on the day of its first showing with more days to come: the
@@ -1626,6 +1679,9 @@ module.exports = {
   showtimesWaiting,
   showtimesBadgeFilms,
   badgeSeenAt,
+  badgeBreakdown,
+  appendBadgeLog,
+  declarativePayload,
   composeReminderMessage,
   composeListingMessages,
   SIGNUP_MAX_PER_SWEEP,

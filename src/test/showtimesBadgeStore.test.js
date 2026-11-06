@@ -86,6 +86,26 @@ describe('refreshAppBadge and Showtimes', () => {
     expect(clearAppBadge).toHaveBeenCalled();
   });
 
+  it('counts no films until this device has read its dismissals (a board alone is the whole board)', async () => {
+    store.commit('setPushPrefs', { showtimes: true });
+    store.commit('setTheaterBoard', { theaters: [{ key: 'alamo', listings: [{ slug: 'a', title: 'A', firstSeenAt: 1 }, { slug: 'b', title: 'B', firstSeenAt: 1 }] }] });
+    store.state.theaterDismissedLoadedAt = 0;
+    expect(store.getters.showtimesBadgeCount).toBe(0);
+    store.commit('setTheaterDismissed', {});
+    expect(store.getters.showtimesBadgeCount).toBe(2);
+  });
+
+  it('writes down what it put on the icon, with its parts, and adds the record to the account\'s log', async () => {
+    const { set } = await import('firebase/database');
+    store.commit('setPushPrefs', { showtimes: true });
+    await store.dispatch('refreshAppBadge');
+    expect(store.state.lastBadge).toMatchObject({ by: 'app', count: 2, films: 2, dismissedLoaded: true, boardListings: 3 });
+    expect(store.state.lastBadge.device).toMatch(/browser|app/);
+    const logWrite = set.mock.calls.filter(([path]) => /\/push\/badgeLog\//.test(path)).pop(); // the latest record
+    expect(logWrite).toBeTruthy();
+    expect(logWrite[1]).toMatchObject({ count: 2, by: 'app' });
+  });
+
   it('loads the board and counts the films still waiting when on', async () => {
     store.commit('setPushPrefs', { showtimes: true });
     await store.dispatch('refreshAppBadge');
@@ -153,6 +173,7 @@ describe('refreshAppBadge and Showtimes', () => {
       { slug: 'old2', title: 'Old 2', firstSeenAt: now - 4000 },
       { slug: 'new1', title: 'New 1', firstSeenAt: now - 1000 }
     ] }] });
+    store.commit('setTheaterDismissed', {}); // the dismissals arrive with the board; without them no film counts
     store.commit('setShowtimesSeenAt', now - 2000);
     try {
       await store.dispatch('refreshAppBadge');

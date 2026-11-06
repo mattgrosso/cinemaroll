@@ -35,6 +35,15 @@ function buildAppStateSummary (store, route) {
     // snapshot could distinguish "no results matched the active filter"
     // from "the list genuinely failed to render".
     homeLive: state.homePageLiveState || null,
+    // The icon badge: the last number this device set and its parts, and the
+    // tail of the account's badge and push logs (2026-11-06, the 52s).
+    badge: {
+      last: state.lastBadge || null,
+      pushPrefsShowtimes: state.pushPrefs?.showtimes ?? null,
+      showtimesSeenAt: state.showtimesSeenAt || 0,
+      dismissedLoadedAt: state.theaterDismissedLoadedAt || 0,
+      boardLoadedAt: state.theaterBoardLoadedAt || 0
+    },
     // The update machinery's view of the world (bug report 2026-09-21, "the
     // auto refresh is stuck"): what this page is running, what the last
     // check saw deployed, what the service worker was doing, and whether a

@@ -45,6 +45,7 @@ import { appBadgeCount, badgeExtrasShown } from "../assets/javascript/appBadge.j
 import { pendingFriendRequests, readFriendRequestSnoozes } from "../assets/javascript/friendRequests.js";
 import { readNoticeDismissals } from "../assets/javascript/homeNotices.js";
 import { showtimesWaiting, readShowtimesSeenAt, resolveShowtimesSeenAt, SHOWTIMES_SEEN_KEY, SHOWTIMES_SEEN_PATH } from "../assets/javascript/showtimesUnread.js";
+import { deviceLabel, mergeLogs, worthLogging, readSwPushLog } from "../assets/javascript/badgeLog.js";
 import { ticketsMark } from "../assets/javascript/showtimesTickets.js";
 import { buildNewsletterProfile, buildPeopleList } from "../assets/javascript/newsletterProfile.js";
 const PEOPLE_PUBLISH_EVERY_MS = 6 * 60 * 60 * 1000;
@@ -705,6 +706,9 @@ export default createStore({
     // When loadTheaterBoard last committed (0 = never). The icon badge's
     // Showtimes count re-reads the board when this is older than a sweep.
     theaterBoardLoadedAt: 0,
+    theaterDismissedLoadedAt: 0, // 0 = this device hasn't read its dismissals yet: no film counts on the icon until it has (2026-11-06)
+    lastBadge: null, // the last number this device put on the icon, with its parts (badgeLog.js)
+    lastBadgeLogged: null,
     // { [theaterKey]: { [slug]: dismissedAt } } - films Matt has waved off the
     // Showtimes screen. Pruned to what is still on the board when it loads.
     theaterDismissed: {},
@@ -881,6 +885,9 @@ export default createStore({
     },
     showtimesBadgeCount (state) {
       if (state.pushPrefs?.showtimes !== true) return 0;
+      // A board with no dismissals beside it counts the whole board (~50):
+      // never that from a device that simply hasn't read them yet.
+      if (!state.theaterDismissedLoadedAt) return 0;
       return showtimesWaiting({
         board: state.theaterBoard,
         dismissed: state.theaterDismissed || {},
@@ -1117,6 +1124,10 @@ export default createStore({
     },
     setTheaterDismissed (state, value) {
       state.theaterDismissed = value && typeof value === 'object' ? value : {};
+      state.theaterDismissedLoadedAt = Date.now();
+    },
+    setLastBadge (state, value) {
+      state.lastBadge = value || null;
     },
     setTheaterFollow (state, value) {
       state.theaterFollow = value && typeof value === 'object' ? value : null;
@@ -3544,6 +3555,7 @@ export default createStore({
         dismissals: readNoticeDismissals(),
         showtimesSeenAt: context.state.showtimesSeenAt || 0
       });
+      digest.publishedBy = deviceLabel(); // which device's view the Lambda is working from (2026-11-06)
       try {
         await set(ref(db, `${root}/push/digest`), digest);
       } catch (error) {
@@ -3584,11 +3596,62 @@ export default createStore({
         now
       });
       const count = appBadgeCount(digest, prefs, now, shown.films, shown.friendRequests);
+      // Written down with its parts (badgeLog.js), so a number on the icon
+      // can always be traced to what computed it (2026-11-06).
+      const record = {
+        at: now,
+        by: 'app',
+        device: deviceLabel(),
+        count,
+        stickiness: appBadgeCount({ stickiness: digest.stickiness, tiebreak: digest.tiebreak }, { ...prefs, awards: false }, now),
+        awards: appBadgeCount({ awards: digest.awards, tiebreak: digest.tiebreak }, { ...prefs, stickiness: false }, now) - (appBadgeCount({ tiebreak: digest.tiebreak }, prefs, now)),
+        tiebreak: appBadgeCount({ tiebreak: digest.tiebreak }, prefs, now),
+        films: shown.films,
+        filmsWaiting: films,
+        friendRequests: shown.friendRequests,
+        seenAt: context.state.showtimesSeenAt || 0,
+        dismissed: Object.values(context.state.theaterDismissed || {}).reduce((n, t) => n + Object.keys(t || {}).length, 0),
+        dismissedLoaded: Boolean(context.state.theaterDismissedLoadedAt),
+        boardListings: (context.state.theaterBoard?.theaters || []).reduce((n, t) => n + (t.listings || []).length, 0),
+        boardAt: Number(context.state.theaterBoard?.updatedAt) || 0
+      };
+      context.commit('setLastBadge', record);
       try {
         if (count > 0) await navigator.setAppBadge(count);
         else await navigator.clearAppBadge?.();
       } catch {
         // Permission not granted, or the platform refused — nothing to do.
+      }
+      context.dispatch('logBadge', record).catch(() => {});
+    },
+    // push/badgeLog: the last forty badges, from this app and the push
+    // Lambda, newest last. The app only ever ADDS a record (one write, no
+    // read; the Lambda tidies the list to forty whenever it logs its own),
+    // and only when the number changes or half an hour has passed.
+    async logBadge (context, record) {
+      const root = context.getters.databaseTopKey;
+      if (!root || context.state.isOnline === false) return;
+      if (!worthLogging(context.state.lastBadgeLogged, record, record.at)) return;
+      context.state.lastBadgeLogged = record;
+      try {
+        await set(ref(db, `${root}/push/badgeLog/${record.at}`), record);
+      } catch (error) {
+        console.warn('Badge log not written:', error);
+      }
+    },
+    // push/swLog: what the service worker on this device received, uploaded
+    // when the app opens (the worker can't reach the database itself).
+    async uploadSwPushLog (context) {
+      const root = context.getters.databaseTopKey;
+      if (!root || context.state.isOnline === false) return;
+      try {
+        const entries = (await readSwPushLog()).map((e) => ({ ...e, device: deviceLabel() }));
+        if (!entries.length) return;
+        const snap = await get(ref(db, `${root}/push/swLog`));
+        const merged = mergeLogs(snap.exists() ? snap.val() : [], entries);
+        if (merged.length !== (snap.exists() ? (snap.val() || []).length : 0)) await set(ref(db, `${root}/push/swLog`), merged);
+      } catch (error) {
+        console.warn('Push log not uploaded:', error);
       }
     },
     async sendFriendRequest (context, toKey) {

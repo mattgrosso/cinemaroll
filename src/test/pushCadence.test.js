@@ -1383,3 +1383,61 @@ describe('staleTheaterEntries (forgetting dismissals and reminders)', () => {
     expect(staleTheaterEntries({ gone: { x: 1, y: 2 } }, {}, [{ theater: alamo, listings: [] }])).toEqual({ 'gone/x': null, 'gone/y': null });
   });
 });
+
+// The badge arithmetic with its parts, and the envelope (2026-11-06: badges
+// in the 50s that nothing in the code could reproduce - from now on every
+// badge sent is written down with what made it).
+import { badgeBreakdown, appendBadgeLog, declarativePayload } from '../../aws-lambda/pushCadence.js';
+
+describe('badgeBreakdown', () => {
+  const NOW = Date.parse('2026-11-06T14:00:00Z');
+  const board = {
+    updatedAt: NOW - 60000,
+    theaters: [
+      { key: 'alamo', listings: Array.from({ length: 50 }, (_, i) => ({ slug: `a${i}`, title: `Film ${i}`, firstSeenAt: NOW - 86400000 * 10 })) },
+      { key: 'afi', listings: [{ slug: 'x', title: 'Film 1', firstSeenAt: NOW - 1000, coveredBy: 'alamo' }, { slug: 'y', title: 'Only at AFI', firstSeenAt: NOW - 1000 }] }
+    ]
+  };
+  const dismissed = { alamo: Object.fromEntries(Array.from({ length: 48 }, (_, i) => [`a${i}`, NOW - 1])) };
+  const prefs = { showtimes: true };
+
+  it('counts the chores, the extra, and the films found since Showtimes was last opened, with every part named', () => {
+    const r = badgeBreakdown({ digest: { showtimesSeenAt: 0 }, prefs, now: NOW, extra: 1, board, dismissed, reminders: {}, accountSeenAt: NOW - 86400000 * 20 });
+    expect(r.count).toBe(1 + 3); // the extra, a48, a49, Only at AFI
+    expect(r.parts).toMatchObject({ stickiness: 0, tiebreak: 0, awards: 0, extra: 1, films: 3, filmsWaiting: 3, dismissed: 48, boardListings: 52, seenFrom: 'account' });
+    expect(r.parts.dismissalsMissing).toBeUndefined();
+  });
+
+  it('is the whole board when no dismissals come back, and says so', () => {
+    const r = badgeBreakdown({ digest: {}, prefs, now: NOW, board, dismissed: null, reminders: {}, accountSeenAt: NOW - 86400000 * 20 });
+    expect(r.count).toBe(51);
+    expect(r.parts.dismissalsMissing).toBe(true);
+  });
+
+  it('leaves the films out when the reads failed, or the switch is off, and says which', () => {
+    expect(badgeBreakdown({ digest: {}, prefs, now: NOW, unavailable: 'RTDB GET failed: 503' }).parts).toMatchObject({ films: 0, filmsSkipped: 'reads failed: RTDB GET failed: 503' });
+    expect(badgeBreakdown({ digest: {}, prefs, now: NOW, board: null, dismissed }).parts.filmsSkipped).toBe('no board');
+    expect(badgeBreakdown({ digest: {}, prefs: { showtimes: false }, now: NOW, board, dismissed: null }).parts).toMatchObject({ films: 0 });
+  });
+
+  it('takes the later of the digest\'s and the account\'s last visit', () => {
+    const r = badgeBreakdown({ digest: { showtimesSeenAt: NOW - 500 }, prefs, now: NOW, board, dismissed, reminders: {}, accountSeenAt: NOW - 86400000 });
+    expect(r.parts.seenAt).toBe(NOW - 500);
+    expect(r.parts.seenFrom).toBe('digest');
+    expect(r.count).toBe(0);
+  });
+});
+
+describe('the badge log and the envelope', () => {
+  it('keeps the last forty entries by time, from a list or a map the app added to', () => {
+    const map = { 1: { at: 1 }, 1793000000000: { at: 1793000000000, by: 'app' } };
+    const next = appendBadgeLog(map, { at: 500, by: 'lambda' });
+    expect(next.map((e) => e.at)).toEqual([1, 500, 1793000000000]);
+    const long = Array.from({ length: 45 }, (_, i) => ({ at: i }));
+    expect(appendBadgeLog(long, { at: 99 })).toHaveLength(40);
+  });
+
+  it('wraps every notification in the declarative web push envelope, badge included', () => {
+    expect(declarativePayload({ title: 'T', body: 'B', navigate: 'https://www.cinemaroll.org/#/', app_badge: 3 })).toEqual({ web_push: 8030, notification: { title: 'T', body: 'B', navigate: 'https://www.cinemaroll.org/#/', app_badge: 3 } });
+  });
+});

@@ -41,7 +41,7 @@ const {
   signupsDue, composeSignupMessages,
   alamoListings, veeziListings, afiListings, boxofficeListings, afiFirstShowtime,
   boardFailuresDue,
-  cinemaclockListings, uncovered, dismissedFilms, dismissedAtRank, staleTheaterEntries, boardForApp, remindersDue, showtimesWaiting, showtimesBadgeFilms, badgeSeenAt, composeReminderMessage, listingsDue, composeListingMessages,
+  cinemaclockListings, uncovered, dismissedFilms, dismissedAtRank, staleTheaterEntries, boardForApp, remindersDue, showtimesWaiting, showtimesBadgeFilms, badgeSeenAt, badgeBreakdown, appendBadgeLog, declarativePayload, composeReminderMessage, listingsDue, composeListingMessages,
   cinemaclockCitySlug, cinemaclockCityTheaters, followedTheaters
 } = require('./pushCadence');
 const { publishFeedV2 } = require('./filmClubSyncPublisher.js');
@@ -452,7 +452,7 @@ const buildPayload = ({ title, body, navigate = '/', tag, appBadge }) => {
   const notification = { ...fitNotification({ title, body }), navigate: target };
   if (tag) notification.tag = tag;
   if (typeof appBadge === 'number') notification.app_badge = appBadge;
-  return JSON.stringify({ notification });
+  return JSON.stringify(declarativePayload(notification));
 };
 
 // The icon badge for an account: its chores (the same arithmetic as the
@@ -462,10 +462,10 @@ const buildPayload = ({ title, body, navigate = '/', tag, appBadge }) => {
 // device and still waiting there, unless the app put that card away today. `board` /
 // `reminders` let a caller pass what it already holds; anything not passed
 // is read, and only when the switch is on.
-const accountBadge = async (topKey, push, now, { extra = 0, board, reminders } = {}) => {
+const accountBadge = async (topKey, push, now, { extra = 0, board, reminders, kind = 'push' } = {}) => {
   const prefs = (push && push.prefs) || {};
-  const due = dueFromDigest(push && push.digest, prefs, now);
-  let count = due.stickinessCount + (due.tiebreak ? 1 : 0) + due.awardYears.length + extra;
+  const digest = (push && push.digest) || {};
+  let reads = {};
   if (prefs.showtimes === true) {
     try {
       const [b, d, r, seen] = await Promise.all([
@@ -474,15 +474,25 @@ const accountBadge = async (topKey, push, now, { extra = 0, board, reminders } =
         reminders !== undefined ? reminders : dbGet(`${topKey}/theaters/reminders`),
         dbGet(`${topKey}/theaters/seenAt`)
       ]);
-      // Only films found since Showtimes was last opened on ANY device (the
-      // later of the digest's time and the account's theaters/seenAt,
-      // reports 2026-11-04 and 2026-11-06), less a card the app has put
-      // away until tomorrow (badgeHidden).
-      const digest = (push && push.digest) || {};
-      count += showtimesBadgeFilms(showtimesWaiting(b, d, r, badgeSeenAt(digest.showtimesSeenAt, seen)), digest.badgeHidden && digest.badgeHidden.showtimes, now);
+      reads = { board: b, dismissed: d, reminders: r, accountSeenAt: seen };
     } catch (error) {
       console.warn(`Showtimes badge for ${topKey} unavailable:`, error.message);
+      reads = { unavailable: error.message };
     }
+  }
+  // Only films found since Showtimes was last opened on ANY device (the
+  // later of the digest's time and the account's theaters/seenAt, reports
+  // 2026-11-04 and 2026-11-06), less a card the app has put away until
+  // tomorrow (badgeHidden). badgeBreakdown (pushCadence.js, tested) is the
+  // one arithmetic; the parts are logged and kept at push/badgeLog so a
+  // number on the icon can always be traced (2026-11-06).
+  const { count, parts } = badgeBreakdown({ digest, prefs, now, extra, ...reads });
+  console.log(`Badge (${topKey}, ${kind}): ${count} = ${JSON.stringify(parts)}`);
+  try {
+    const log = await dbGet(`${topKey}/push/badgeLog`);
+    await dbSet(`${topKey}/push/badgeLog`, appendBadgeLog(log, { at: now, by: 'lambda', kind, count, ...parts }));
+  } catch (error) {
+    console.warn(`Badge log for ${topKey} not written:`, error.message);
   }
   return count;
 };
@@ -641,7 +651,7 @@ const sweepAccount = async (topKey, now, results) => {
   if (decision.send) {
     const message = composeMessage(due, push.digest, decision.news, now);
     if (message) {
-      const appBadge = await accountBadge(topKey, push, now);
+      const appBadge = await accountBadge(topKey, push, now, { kind: 'chores' });
       // `?open=<chore>` lands on Home with that prompt already expanded
       // (Home.vue reads it once and strips it from the URL).
       const navigate = message.open ? `/?open=${message.open}` : '/';
@@ -880,7 +890,7 @@ const notifyAccountListings = async (topKey, boards, now, { announce = true } = 
         // With "Showtimes waiting" on, the badge is the whole count, the new
         // films included (the board below is the one about to be published).
         const appBadge = push.prefs && push.prefs.showtimes === true
-          ? await accountBadge(topKey, push, now, { board: boardForApp(boards, {}, now) })
+          ? await accountBadge(topKey, push, now, { board: boardForApp(boards, {}, now), kind: 'listings' })
           : 1;
         for (const message of composeListingMessages(announced)) {
           delivered += await sendToAccount(topKey, subscriptions, buildPayload({ ...message, appBadge }));
@@ -962,7 +972,7 @@ const notifyReminders = async (topKey, now) => {
   if (subscriptions && push.prefs && push.prefs.showtimes === true) {
     const after = JSON.parse(JSON.stringify(reminders || {}));
     due.forEach((r) => { after[r.theaterKey][r.slug].sentAt = now; });
-    appBadge = await accountBadge(topKey, push, now, { reminders: after });
+    appBadge = await accountBadge(topKey, push, now, { reminders: after, kind: 'reminder' });
   }
   let delivered = 0;
   for (const reminder of due) {
@@ -1128,7 +1138,7 @@ const notifyExternalLogs = async (topKey, push, prefs) => {
         const scoreLine = Number.isFinite(watch.score) ? `They gave it a ${watch.score.toFixed(2)}.` : null;
         // Same badge arithmetic as the native fan-out: the recipient's own
         // chores plus this log, which the app clears when it opens.
-        const appBadge = await accountBadge(topKey, push, Date.now(), { extra: 1 });
+        const appBadge = await accountBadge(topKey, push, Date.now(), { extra: 1, kind: 'external-friend-log' });
         const payload = buildPayload({
           title: `${friend.name || 'A friend'} logged`,
           body: friendLogBody(scoreLine, prefs, watch.title),
@@ -1204,7 +1214,7 @@ const notifyFriendsOfLog = async (myKey, { tmdbId, title, score }) => {
       // them until the app is opened (which clears it). The digest rides in
       // the same node just read, so this costs nothing extra (Showtimes
       // waiting, when switched on, costs a read of the board).
-      const appBadge = await accountBadge(friendKey, push, Date.now(), { extra: 1 });
+      const appBadge = await accountBadge(friendKey, push, Date.now(), { extra: 1, kind: 'friend-log' });
 
       const payload = buildPayload({
         title: `${name} logged`,
@@ -1305,7 +1315,7 @@ const releaseDayProfiles = async (now) => {
           if (!push || !push.subscriptions) return;
           const prefs = push.prefs || {};
           if (prefs.enabled === false || prefs.friendLogs === false) return;
-          const appBadge = await accountBadge(friendKey, push, now, { extra: 1 });
+          const appBadge = await accountBadge(friendKey, push, now, { extra: 1, kind: 'friend-request' });
           delivered += await sendToAccount(friendKey, push.subscriptions, buildPayload({
             ...message,
             tag: `friend-day-${owner}-${cutoff}`,
