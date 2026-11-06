@@ -44,7 +44,7 @@ import { buildPushDigest } from "../assets/javascript/pushDigest.js";
 import { appBadgeCount, badgeExtrasShown } from "../assets/javascript/appBadge.js";
 import { pendingFriendRequests, readFriendRequestSnoozes } from "../assets/javascript/friendRequests.js";
 import { readNoticeDismissals } from "../assets/javascript/homeNotices.js";
-import { showtimesWaiting, readShowtimesSeenAt, SHOWTIMES_SEEN_KEY } from "../assets/javascript/showtimesUnread.js";
+import { showtimesWaiting, readShowtimesSeenAt, resolveShowtimesSeenAt, SHOWTIMES_SEEN_KEY, SHOWTIMES_SEEN_PATH } from "../assets/javascript/showtimesUnread.js";
 import { ticketsMark } from "../assets/javascript/showtimesTickets.js";
 import { buildNewsletterProfile, buildPeopleList } from "../assets/javascript/newsletterProfile.js";
 const PEOPLE_PUBLISH_EVERY_MS = 6 * 60 * 60 * 1000;
@@ -3333,10 +3333,11 @@ export default createStore({
     async loadTheaterBoard (context) {
       const root = context.getters.databaseTopKey;
       if (!root) return null;
-      const [boardSnap, dismissedSnap, remindersSnap] = await Promise.all([
+      const [boardSnap, dismissedSnap, remindersSnap, seenSnap] = await Promise.all([
         get(ref(db, `${root}/theaters/board`)),
         get(ref(db, `${root}/theaters/dismissed`)),
-        get(ref(db, `${root}/theaters/reminders`))
+        get(ref(db, `${root}/theaters/reminders`)),
+        get(ref(db, `${root}/${SHOWTIMES_SEEN_PATH}`))
       ]);
       const board = boardSnap.exists() ? boardSnap.val() : null;
       // Only what is on this board is held in memory. Nothing is DELETED here
@@ -3361,6 +3362,16 @@ export default createStore({
       context.commit('setTheaterBoard', board);
       context.commit('setTheaterDismissed', onScreen(dismissedSnap.exists() ? dismissedSnap.val() : {}));
       context.commit('setTheaterReminders', onScreen(remindersSnap.exists() ? remindersSnap.val() : {}));
+      // "Last opened Showtimes" is the account's, not only this device's
+      // (report 2026-11-06: a device that had never opened it counted the
+      // whole board, 52, and told the push Lambda to as well). The later
+      // visit wins; never opened anywhere counts as now.
+      const seen = resolveShowtimesSeenAt({
+        local: context.state.showtimesSeenAt,
+        account: seenSnap?.exists?.() ? seenSnap.val() : 0
+      });
+      if (seen.seenAt !== context.state.showtimesSeenAt) context.commit('setShowtimesSeenAt', seen.seenAt);
+      if (seen.save) set(ref(db, `${root}/${SHOWTIMES_SEEN_PATH}`), seen.seenAt).catch(() => {});
       // A dismissal or reminder the server hasn't got yet (offline, or the
       // page reloaded mid-save) still shows as made.
       await context.dispatch('replayPendingWrites', 'theaters').catch(() => {});
@@ -3377,6 +3388,14 @@ export default createStore({
     // (2026-10-09: an update reloaded the Showtimes screen mid-dismissing,
     // and a bare update() still on its way would have been lost with the
     // page). loadTheaterBoard replays anything still queued.
+    // Opening the Showtimes screen: every device and the push Lambda count
+    // only films found after this (report 2026-11-06). Queued on the phone
+    // first, like a dismissal, so an offline visit still reaches the account.
+    async markShowtimesSeen (context, at = Date.now()) {
+      context.commit('setShowtimesSeenAt', at);
+      if (!context.getters.databaseTopKey) return;
+      await context.dispatch('writeDurably', { path: SHOWTIMES_SEEN_PATH, value: at });
+    },
     async remindListing (context, { theaterKey, slug, reminder }) {
       const root = context.getters.databaseTopKey;
       if (!root || !theaterKey || !slug) return;

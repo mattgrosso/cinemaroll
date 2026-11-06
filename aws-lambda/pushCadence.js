@@ -1513,6 +1513,15 @@ function foundSince (listing, seenAt) {
   return Number(listing && listing.firstSeenAt) > since;
 }
 
+// Which "last opened Showtimes" the push badge uses: the later of the
+// digest's (the device that last published) and the account's own copy at
+// theaters/seenAt, which every device writes (report 2026-11-06, "a 52 on my
+// dot again": a device that had never opened Showtimes published 0, and 0
+// counts the whole board). Mirrors showtimesUnread.js resolveShowtimesSeenAt.
+function badgeSeenAt (digestSeenAt, accountSeenAt) {
+  return Math.max(Number(digestSeenAt) || 0, Number(accountSeenAt) || 0);
+}
+
 function showtimesWaiting (board, dismissed, reminders, seenAt) {
   const theaters = board && Array.isArray(board.theaters) ? board.theaters : [];
   const gone = dismissedFilms(theaters, dismissed);
@@ -1616,6 +1625,7 @@ module.exports = {
   remindersDue,
   showtimesWaiting,
   showtimesBadgeFilms,
+  badgeSeenAt,
   composeReminderMessage,
   composeListingMessages,
   SIGNUP_MAX_PER_SWEEP,

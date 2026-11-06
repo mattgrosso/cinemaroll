@@ -101,3 +101,24 @@ export function foundSince (listing, seenAt) {
 export function readShowtimesSeenAt () {
   try { return Number(localStorage.getItem(SHOWTIMES_SEEN_KEY)) || 0; } catch { return 0; }
 }
+
+// The account's copy of "last opened Showtimes" (report 2026-11-06: "I just
+// had a 52 on my dot again"). Kept per device alone, any device that had
+// never opened Showtimes - the Mac, a fresh install, a cleared phone - held
+// 0, and 0 means "count every film", so its digest told the push Lambda to
+// put the whole board back on the icon. The account's copy is shared by
+// every device and the push Lambda, and the latest visit anywhere wins.
+export const SHOWTIMES_SEEN_PATH = 'theaters/seenAt';
+
+// What this device should use, given its own value and the account's:
+// the later of the two. Never opened anywhere counts as opened now, so a
+// board you've never looked at doesn't arrive as a badge of 50; only films
+// found from here on count. `save` says whether the account's copy is
+// behind (or missing) and should be written.
+export function resolveShowtimesSeenAt ({ local, account, now = Date.now() }) {
+  const mine = Number(local) || 0;
+  const theirs = Number(account) || 0;
+  const latest = Math.max(mine, theirs);
+  const seenAt = latest || now;
+  return { seenAt, save: seenAt > theirs };
+}

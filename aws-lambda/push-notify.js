@@ -41,7 +41,7 @@ const {
   signupsDue, composeSignupMessages,
   alamoListings, veeziListings, afiListings, boxofficeListings, afiFirstShowtime,
   boardFailuresDue,
-  cinemaclockListings, uncovered, dismissedFilms, dismissedAtRank, staleTheaterEntries, boardForApp, remindersDue, showtimesWaiting, showtimesBadgeFilms, composeReminderMessage, listingsDue, composeListingMessages,
+  cinemaclockListings, uncovered, dismissedFilms, dismissedAtRank, staleTheaterEntries, boardForApp, remindersDue, showtimesWaiting, showtimesBadgeFilms, badgeSeenAt, composeReminderMessage, listingsDue, composeListingMessages,
   cinemaclockCitySlug, cinemaclockCityTheaters, followedTheaters
 } = require('./pushCadence');
 const { publishFeedV2 } = require('./filmClubSyncPublisher.js');
@@ -458,8 +458,8 @@ const buildPayload = ({ title, body, navigate = '/', tag, appBadge }) => {
 // The icon badge for an account: its chores (the same arithmetic as the
 // app's appBadge.js), plus `extra` for the push carrying it, plus - only if
 // the account turned "Showtimes waiting" on (off by default, Matt
-// 2026-10-05) - every film found since the phone last opened its Showtimes
-// screen and still waiting there, unless the app put that card away today. `board` /
+// 2026-10-05) - every film found since Showtimes was last opened on any
+// device and still waiting there, unless the app put that card away today. `board` /
 // `reminders` let a caller pass what it already holds; anything not passed
 // is read, and only when the switch is on.
 const accountBadge = async (topKey, push, now, { extra = 0, board, reminders } = {}) => {
@@ -468,16 +468,18 @@ const accountBadge = async (topKey, push, now, { extra = 0, board, reminders } =
   let count = due.stickinessCount + (due.tiebreak ? 1 : 0) + due.awardYears.length + extra;
   if (prefs.showtimes === true) {
     try {
-      const [b, d, r] = await Promise.all([
+      const [b, d, r, seen] = await Promise.all([
         board !== undefined ? board : dbGet(`${topKey}/theaters/board`),
         dbGet(`${topKey}/theaters/dismissed`),
-        reminders !== undefined ? reminders : dbGet(`${topKey}/theaters/reminders`)
+        reminders !== undefined ? reminders : dbGet(`${topKey}/theaters/reminders`),
+        dbGet(`${topKey}/theaters/seenAt`)
       ]);
-      // Only films found since the phone last opened Showtimes
-      // (digest.showtimesSeenAt, report 2026-11-04), less a card the app
-      // has put away until tomorrow (badgeHidden).
+      // Only films found since Showtimes was last opened on ANY device (the
+      // later of the digest's time and the account's theaters/seenAt,
+      // reports 2026-11-04 and 2026-11-06), less a card the app has put
+      // away until tomorrow (badgeHidden).
       const digest = (push && push.digest) || {};
-      count += showtimesBadgeFilms(showtimesWaiting(b, d, r, digest.showtimesSeenAt), digest.badgeHidden && digest.badgeHidden.showtimes, now);
+      count += showtimesBadgeFilms(showtimesWaiting(b, d, r, badgeSeenAt(digest.showtimesSeenAt, seen)), digest.badgeHidden && digest.badgeHidden.showtimes, now);
     } catch (error) {
       console.warn(`Showtimes badge for ${topKey} unavailable:`, error.message);
     }

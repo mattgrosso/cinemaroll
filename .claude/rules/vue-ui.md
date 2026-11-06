@@ -77,7 +77,13 @@ first attempt at the games scroll-to-top do nothing at all.
   `state.showtimesSeenAt`, stamped via `setShowtimesSeenAt` on opening the screen, which
   also republishes the digest) and counts only listings with `firstSeenAt` after it; the
   digest carries `showtimesSeenAt` and the Lambda's copy applies it. 0 / absent = count the
-  whole board. Parity pinned in `showtimesBadge.test.js`. The Lambda never counts
+  whole board. Parity pinned in `showtimesBadge.test.js`.
+  **…and the visit is the ACCOUNT's (2026-11-06, "a 52 on my dot again"):** per device, a
+  device that had never opened Showtimes held 0 and its digest told the Lambda to count
+  everything. `theaters/seenAt` holds the latest visit on any device: `markShowtimesSeen`
+  writes it (durably) on opening the screen, `loadTheaterBoard` takes the later of it and
+  the local value (`resolveShowtimesSeenAt`), and never-opened-anywhere counts as NOW,
+  never as 0. The Lambda uses `badgeSeenAt(digest, account)`, the later of the two. The Lambda never counts
   friend requests, so they need nothing there. A new notice needs a place in `NOTICE_ORDER`, a
   `.notice-slot` wrapper with the X, and (if it owns its state) an `@notice` emit.
   `homeNoticeQueue.test.js` guards it.

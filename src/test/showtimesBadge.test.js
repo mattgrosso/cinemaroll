@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { showtimesWaiting, hasUnseenShowtimes, dismissedFilms, dismissedAtRank, titleKey } from '../assets/javascript/showtimesUnread.js';
+import { showtimesWaiting, resolveShowtimesSeenAt, hasUnseenShowtimes, dismissedFilms, dismissedAtRank, titleKey } from '../assets/javascript/showtimesUnread.js';
 import { appBadgeCount } from '../assets/javascript/appBadge.js';
 import { PUSH_PREF_DEFAULTS, pushPrefsWithDefaults } from '../assets/javascript/pushPrefs.js';
-import { showtimesWaiting as lambdaShowtimesWaiting, dismissedFilms as lambdaDismissedFilms, dismissedAtRank as lambdaDismissedAtRank, titleKey as lambdaTitleKey } from '../../aws-lambda/pushCadence.js';
+import { showtimesWaiting as lambdaShowtimesWaiting, dismissedFilms as lambdaDismissedFilms, dismissedAtRank as lambdaDismissedAtRank, titleKey as lambdaTitleKey, badgeSeenAt as lambdaBadgeSeenAt } from '../../aws-lambda/pushCadence.js';
 
 // Matt, 2026-10-05: films on the Showtimes screen he hasn't dismissed or
 // snoozed should count on the icon badge, behind a switch that's off by
@@ -199,10 +199,33 @@ describe('only films found since the last visit to Showtimes', () => {
 
   it('is stamped through the store when the screen opens, which republishes the digest', () => {
     const screen = readFileSync(resolve(__dirname, '../components/ShowtimesScreen.vue'), 'utf8');
-    expect(screen).toContain("this.$store.commit('setShowtimesSeenAt', Date.now())");
+    expect(screen).toContain("this.$store.dispatch('markShowtimesSeen', Date.now())");
     expect(screen).toContain("this.$store.dispatch('publishPushDigest')");
     const storeSource = readFileSync(resolve(__dirname, '../store/index.js'), 'utf8');
     expect(storeSource).toContain('seenAt: state.showtimesSeenAt || 0');
     expect(storeSource).toContain('showtimesSeenAt: context.state.showtimesSeenAt || 0');
+  });
+});
+
+// Report 2026-11-06: "I just had a 52 on my dot again." A device that had
+// never opened Showtimes published 0, and 0 counts the whole board.
+describe('last opened Showtimes, shared by the account', () => {
+  it('takes the later of this device and the account', () => {
+    expect(resolveShowtimesSeenAt({ local: 0, account: 500, now: 900 })).toEqual({ seenAt: 500, save: false });
+    expect(resolveShowtimesSeenAt({ local: 700, account: 500, now: 900 })).toEqual({ seenAt: 700, save: true });
+    expect(resolveShowtimesSeenAt({ local: 300, account: 500, now: 900 })).toEqual({ seenAt: 500, save: false });
+  });
+
+  it('counts never opened anywhere as opened now, and saves it', () => {
+    expect(resolveShowtimesSeenAt({ local: 0, account: null, now: 900 })).toEqual({ seenAt: 900, save: true });
+  });
+
+  it('the push Lambda takes the later of the digest and the account too', () => {
+    expect(lambdaBadgeSeenAt(0, 500)).toBe(500);
+    expect(lambdaBadgeSeenAt(700, 500)).toBe(700);
+    expect(lambdaBadgeSeenAt(undefined, null)).toBe(0);
+    const big = { theaters: [{ key: 'alamo', listings: Array.from({ length: 52 }, (_, i) => ({ slug: `f${i}`, title: `Film ${i}`, firstSeenAt: 100 + i })) }] };
+    // A never-opened device's digest (0) no longer brings the board back.
+    expect(lambdaShowtimesWaiting(big, {}, {}, lambdaBadgeSeenAt(0, 1000))).toBe(0);
   });
 });

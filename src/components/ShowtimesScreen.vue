@@ -308,7 +308,7 @@ export default {
     // The Watchlist card's "new" pill and the icon badge are relative to the
     // last visit here (report 2026-11-04): having looked, the badge clears,
     // and the digest tells the push Lambda so a push doesn't put it back.
-    this.$store.commit('setShowtimesSeenAt', Date.now());
+    this.$store.dispatch('markShowtimesSeen', Date.now()).catch(() => {});
     this.$store.dispatch('refreshAppBadge');
     this.$store.dispatch('publishPushDigest');
     this.fillPosters();

@@ -6,13 +6,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('axios');
 vi.mock('@sentry/vue');
 
+// Every film found after the account's last visit to Showtimes (seenAt 1).
 const BOARD = {
-  theaters: [{ key: 'alamo', listings: [{ slug: 'a' }, { slug: 'b' }, { slug: 'c', coveredBy: 'x' }] }]
+  theaters: [{ key: 'alamo', listings: [{ slug: 'a', firstSeenAt: 2 }, { slug: 'b', firstSeenAt: 2 }, { slug: 'c', firstSeenAt: 2, coveredBy: 'x' }] }]
 };
-const getMock = vi.fn((path) => Promise.resolve({
-  exists: () => path.endsWith('/theaters/board'),
-  val: () => (path.endsWith('/theaters/board') ? BOARD : null)
-}));
+let accountSeenAt = 1;
+const defaultGet = (path) => Promise.resolve({
+  exists: () => path.endsWith('/theaters/board') || (path.endsWith('/theaters/seenAt') && accountSeenAt != null),
+  val: () => (path.endsWith('/theaters/board') ? BOARD : path.endsWith('/theaters/seenAt') ? accountSeenAt : null)
+});
+const getMock = vi.fn(defaultGet);
 vi.mock('firebase/database', () => ({
   serverTimestamp: () => ({ '.sv': 'timestamp' }),
   getDatabase: vi.fn(() => ({})),
@@ -55,6 +58,8 @@ const clearAppBadge = vi.fn(() => Promise.resolve());
 
 beforeEach(async () => {
   vi.resetModules();
+  accountSeenAt = 1;
+  localStorage.removeItem('showtimesSeenAt');
   getMock.mockClear();
   setAppBadge.mockClear();
   clearAppBadge.mockClear();
@@ -161,6 +166,61 @@ describe('refreshAppBadge and Showtimes', () => {
       localStorage.removeItem('showtimesSeenAt');
     }
   });
+
+  // Report 2026-11-06: "I just had a 52 on my dot again." "Last opened
+  // Showtimes" lived only on each device, and a device that had never
+  // opened it held 0, which counts every film on the board - and its digest
+  // told the push Lambda the same. It's the account's now: the latest visit
+  // on any device wins, and never opened anywhere counts as opened now.
+  describe('last opened Showtimes is shared by the whole account', () => {
+    const BIG = { theaters: [{ key: 'alamo', listings: Array.from({ length: 52 }, (_, i) => ({ slug: `f${i}`, title: `Film ${i}`, firstSeenAt: 1000 + i })) }] };
+
+    it('a device that never opened Showtimes uses the account\'s visit, not the whole board', async () => {
+      accountSeenAt = 5000;
+      getMock.mockImplementation((path) => Promise.resolve({
+        exists: () => true,
+        val: () => (path.endsWith('/theaters/board') ? BIG : path.endsWith('/theaters/seenAt') ? accountSeenAt : null)
+      }));
+      store.commit('setPushPrefs', { showtimes: true });
+      await store.dispatch('refreshAppBadge');
+      expect(store.state.showtimesSeenAt).toBe(5000);
+      expect(store.getters.showtimesBadgeCount).toBe(0);
+      expect(setAppBadge).not.toHaveBeenCalled();
+    });
+
+    it('never opened anywhere counts as opened now, and saves that to the account', async () => {
+      const { set } = await import('firebase/database');
+      set.mockClear();
+      accountSeenAt = null;
+      getMock.mockImplementation((path) => Promise.resolve({
+        exists: () => path.endsWith('/theaters/board'),
+        val: () => (path.endsWith('/theaters/board') ? BIG : null)
+      }));
+      const before = Date.now();
+      store.commit('setPushPrefs', { showtimes: true });
+      await store.dispatch('refreshAppBadge');
+      expect(store.state.showtimesSeenAt).toBeGreaterThanOrEqual(before);
+      expect(store.getters.showtimesBadgeCount).toBe(0);
+      expect(set).toHaveBeenCalledWith('someone-example-com/theaters/seenAt', store.state.showtimesSeenAt);
+    });
+
+    it('a later visit on this device is kept and copied up to the account', async () => {
+      const { set } = await import('firebase/database');
+      set.mockClear();
+      store.commit('setShowtimesSeenAt', 9000);
+      await store.dispatch('loadTheaterBoard');
+      expect(store.state.showtimesSeenAt).toBe(9000);
+      expect(set).toHaveBeenCalledWith('someone-example-com/theaters/seenAt', 9000);
+    });
+
+    it('opening Showtimes saves the visit to the account, queued on the phone first', async () => {
+      const { enqueueWrite } = await import('@/utils/pendingWriteQueue.js');
+      enqueueWrite.mockClear();
+      await store.dispatch('markShowtimesSeen', 12345);
+      expect(store.state.showtimesSeenAt).toBe(12345);
+      expect(enqueueWrite).toHaveBeenCalledWith({ type: 'write', dbEntry: { path: 'theaters/seenAt', value: 12345 } }, expect.anything());
+    });
+  });
 });
 
 // Bug report 2026-10-09: an update reloaded the Showtimes screen while Matt
@@ -217,10 +277,7 @@ describe('loading a board never deletes dismissals or reminders', () => {
     try {
       await store.dispatch('loadTheaterBoard')
     } finally {
-      getMock.mockImplementation((path) => Promise.resolve({
-        exists: () => path.endsWith('/theaters/board'),
-        val: () => (path.endsWith('/theaters/board') ? BOARD : null)
-      }))
+      getMock.mockImplementation(defaultGet)
     }
     expect(update).not.toHaveBeenCalled()
     // What's on screen is still just what's on this board.
