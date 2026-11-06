@@ -5623,7 +5623,7 @@ export default {
         settings: this.$store.state.settings || {}
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-      const file = new File([blob], 'cinema-roll-export.json', { type: 'application/json' });
+      const file = new File([blob], 'cinemaroll-export.json', { type: 'application/json' });
       // Share sheet first (the reliable path on the iOS PWA), anchor as
       // the desktop fallback.
       if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
@@ -5637,7 +5637,7 @@ export default {
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = 'cinema-roll-export.json';
+      anchor.download = 'cinemaroll-export.json';
       anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     },

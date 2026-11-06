@@ -440,7 +440,7 @@ export default {
       if (!this.resultBlob) return;
       try {
         const extension = this.resultBlob.type === 'image/jpeg' ? 'jpg' : 'png';
-        const file = new File([this.resultBlob], `cinema-roll-poster.${extension}`, { type: this.resultBlob.type });
+        const file = new File([this.resultBlob], `cinemaroll-poster.${extension}`, { type: this.resultBlob.type });
         if (navigator.canShare && !navigator.canShare({ files: [file] })) {
           await navigator.share({ title: 'Cinema Roll poster' });
           return;

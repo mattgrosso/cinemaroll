@@ -1,5 +1,5 @@
-# cinema roll
-[cinema-roll.surge.sh](https://cinema-roll.surge.sh/)
+# Cinema Roll
+[www.cinemaroll.org](https://www.cinemaroll.org/)
 
 ## Project setup
 ```

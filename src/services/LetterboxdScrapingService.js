@@ -61,7 +61,7 @@ class LetterboxdScrapingService {
             method: 'GET',
             headers: {
               Accept: 'application/json, text/plain, */*',
-              'User-Agent': 'Mozilla/5.0 (compatible; CinemaRoll/1.0)'
+              'User-Agent': 'Mozilla/5.0 (compatible; cinemaroll/1.0)'
             }
           });
 
@@ -105,7 +105,7 @@ class LetterboxdScrapingService {
             method: 'GET',
             headers: {
               Accept: 'application/json, text/plain, */*',
-              'User-Agent': 'Mozilla/5.0 (compatible; CinemaRoll/1.0)'
+              'User-Agent': 'Mozilla/5.0 (compatible; cinemaroll/1.0)'
             }
           });
 
@@ -297,7 +297,7 @@ class LetterboxdScrapingService {
           method: 'GET',
           headers: {
             Accept: 'application/json',
-            'User-Agent': 'Mozilla/5.0 (compatible; CinemaRoll/1.0)'
+            'User-Agent': 'Mozilla/5.0 (compatible; cinemaroll/1.0)'
           }
         });
 
@@ -418,7 +418,7 @@ class LetterboxdScrapingService {
         method: 'GET',
         headers: {
           Accept: 'application/json, text/plain, */*',
-          'User-Agent': 'Mozilla/5.0 (compatible; CinemaRoll/1.0)'
+          'User-Agent': 'Mozilla/5.0 (compatible; cinemaroll/1.0)'
         }
       });
 
