@@ -19,6 +19,11 @@ describe('the log, flattened', () => {
     expect(rows[1].rating).toBe(7.2);
     expect(rows[3].prior).toEqual([7.2]);
   });
+
+  it('reads the score the app saves today, an object with calculatedTotal', () => {
+    const rows = flatten({ k: { movie: film(24, 'Kill Bill: Vol. 1', 2003), ratings: [{ date: t('2026-11-01T21:28:00-04:00'), rating: { calculatedTotal: 8.52, normalizedRating: 9, soundtrack: 9 }, soundtrack: '9', medium: 'Theater' }] } });
+    expect(rows.map((r) => [r.title, r.rating, r.soundtrack])).toEqual([['Kill Bill: Vol. 1', 8.52, 9]]);
+  });
 });
 
 describe('where this sits', () => {

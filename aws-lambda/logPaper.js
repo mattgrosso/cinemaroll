@@ -33,14 +33,18 @@ const when = (d) => {
   return Number.isFinite(t) ? t : null;
 };
 
-/** Every rating as a row: { film, title, year, date, rating, medium, soundtrack, prior } oldest first. */
+/**
+ * Every rating as a row: { film, title, year, date, rating, medium, soundtrack, prior } oldest first.
+ * The app saves `rating` as getRating's object ({ calculatedTotal, … }); older viewings hold a plain
+ * number. Reading only the number skipped every film logged from 2026-10-31 on (found 2026-11-06).
+ */
 function flatten (log) {
   const rows = [];
   for (const entry of Object.values(log || {})) {
     const movie = entry?.movie || {};
     const title = movie.title || entry?.ratings?.[0]?.title || '';
     const year = Number(String(movie.release_date || '').slice(0, 4)) || entry?.ratings?.[0]?.year || null;
-    const ratings = (entry?.ratings || []).map((r) => ({ date: when(r?.date), rating: num(r?.rating), medium: r?.medium || '', soundtrack: num(r?.soundtrack) })).filter((r) => r.date && r.rating != null).sort((a, b) => a.date - b.date);
+    const ratings = (entry?.ratings || []).map((r) => ({ date: when(r?.date), rating: num(r?.rating) ?? num(r?.rating?.calculatedTotal), medium: r?.medium || '', soundtrack: num(r?.soundtrack) ?? num(r?.rating?.soundtrack) })).filter((r) => r.date && r.rating != null).sort((a, b) => a.date - b.date);
     ratings.forEach((r, i) => rows.push({ film: movie.id || title, title, year, movie, date: r.date, rating: r.rating, medium: r.medium, soundtrack: r.soundtrack, prior: ratings.slice(0, i).map((p) => p.rating) }));
   }
   return rows.sort((a, b) => a.date - b.date);
