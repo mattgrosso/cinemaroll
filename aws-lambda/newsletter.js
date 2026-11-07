@@ -715,9 +715,9 @@ const runLogPaper = async (topKey, { force = false, now = Date.now(), log: given
   if (!state.milestones) {
     state.milestones = Object.fromEntries(milestoneSheets(flatten(log), {}, now).map((s) => [s.key, true]));
   }
-  // By hand, { logPaper: true, musicFor: <tmdb id> }: just that film's music story, now (its latest 7+ viewing); nothing else moves.
+  // By hand, { logPaper: true, musicFor: <tmdb id> }: just that film's music story, now (its first 7+ viewing; rewritten if it ran); nothing else moves.
   const { sheets, lastRatingAt } = musicFor
-    ? { sheets: musicSheets(flatten(log).filter((r) => String(r.film) === String(musicFor)), 0, now, state.music || {}).slice(-1), lastRatingAt: state.lastRatingAt || now }
+    ? { sheets: musicSheets(flatten(log), 0, now, {}).filter((x) => String(x.film) === String(musicFor)).slice(-1), lastRatingAt: state.lastRatingAt || now }
     : dueSheets(log, state, now, { force });
   const items = (await dbGet(`${topKey}/paper/log/items`).catch(() => null)) || [];
   const recent = [...(state.recent || [])];
@@ -729,7 +729,10 @@ const runLogPaper = async (topKey, { force = false, now = Date.now(), log: given
         sheet = enrichMusic(sheet, sound, wiki);
       }
       const story = await writeStory(client, sheet, recent.slice(-10));
-      items.unshift(storyItem(sheet, story, now));
+      const item = storyItem(sheet, story, now);
+      const was = items.findIndex((i) => i.id === item.id);
+      if (was >= 0) items.splice(was, 1);
+      items.unshift(item);
       recent.push({ headline: story.headline, angle: story.angle });
       written.push(`${sheet.kind}-${sheet.key}`);
       console.log(`Log story (${sheet.kind}): ${story.headline} [${story.angle}]`);
