@@ -86,3 +86,15 @@ export function badgeHiddenForDigest (dismissals = {}, now = Date.now()) {
   if (!record || record.day !== noticeDay(now) || typeof record.signature !== 'number') return {};
   return { showtimes: { upTo: record.signature, until: chorePauseEnd(now) } };
 }
+
+// Until the personal awards have loaded, the awards part is unknown, not
+// "every year" (report, Matt, 2026-11-07: "I just had a 52 on the red dot
+// again"). The settings arrive before the awards (state.personalAwards, its
+// own node since 2026-10-06), and in that gap every eligible year looks
+// untouched: the badge log showed the app itself setting 52 award years on
+// launch, then 0 a few seconds later - unless the phone went away first.
+// The same gap Home closed for its awards card (report 2026-10-11).
+export function withoutPendingAwards (digest, awardsPending) {
+  if (!awardsPending || !digest) return digest;
+  return { ...digest, awards: { ...(digest.awards || {}), years: [] } };
+}

@@ -42,7 +42,7 @@ import { isSignInDismissal, signInFailureSummary } from "../assets/javascript/mo
 import { buildSocialProfile, socialSettingsWithDefaults, countNewFriendUpdates, clubFetchesNeeded, feedBodyNeeded, EXTERNAL_FEED_MAX_AGE_MS } from "../assets/javascript/social.js";
 import { buildMirrorFeed } from "../assets/javascript/mirrorFeed.js";
 import { buildPushDigest } from "../assets/javascript/pushDigest.js";
-import { appBadgeCount, badgeExtrasShown } from "../assets/javascript/appBadge.js";
+import { appBadgeCount, badgeExtrasShown, withoutPendingAwards } from "../assets/javascript/appBadge.js";
 import { pendingFriendRequests, readFriendRequestSnoozes } from "../assets/javascript/friendRequests.js";
 import { readNoticeDismissals } from "../assets/javascript/homeNotices.js";
 import { showtimesWaiting, readShowtimesSeenAt, resolveShowtimesSeenAt, SHOWTIMES_SEEN_KEY, SHOWTIMES_SEEN_PATH } from "../assets/javascript/showtimesUnread.js";
@@ -3578,6 +3578,11 @@ export default createStore({
       const root = context.getters.databaseTopKey;
       if (!root || !context.state.pushSubscribed) return;
       if (!context.state.dbLoaded || !context.state.settingsLoaded) return;
+      // Not before the personal awards are known: a digest built in that gap
+      // tells the push Lambda every eligible year needs naming (52 on the
+      // icon, report 2026-11-07). Loading them changes settings, and App.vue's
+      // settings watcher publishes again.
+      if (context.state.personalAwardsPending) return;
       const digest = buildPushDigest({
         entries: context.getters.allMediaAsArray,
         settings: context.state.settings || {},
@@ -3599,11 +3604,14 @@ export default createStore({
     async refreshAppBadge (context) {
       if (typeof navigator === 'undefined' || !navigator.setAppBadge) return;
       if (!context.state.dbLoaded || !context.state.settingsLoaded) return;
-      const digest = buildPushDigest({
+      // Awards not loaded yet count as none, never as every year (appBadge.js
+      // withoutPendingAwards); App.vue recounts once they arrive.
+      const awardsPending = Boolean(context.state.personalAwardsPending);
+      const digest = withoutPendingAwards(buildPushDigest({
         entries: context.getters.allMediaAsArray,
         settings: context.state.settings || {},
         getRating
-      });
+      }), awardsPending);
       // "Showtimes waiting" (off by default): the films still waiting on the
       // Showtimes screen count too. The sweep rewrites the board every 15
       // minutes, so it's re-read at most that often, and only when online.
@@ -3639,6 +3647,7 @@ export default createStore({
         films: shown.films,
         filmsWaiting: films,
         friendRequests: shown.friendRequests,
+        awardsPending,
         seenAt: context.state.showtimesSeenAt || 0,
         dismissed: Object.values(context.state.theaterDismissed || {}).reduce((n, t) => n + Object.keys(t || {}).length, 0),
         dismissedLoaded: Boolean(context.state.theaterDismissedLoadedAt),

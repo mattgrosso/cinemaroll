@@ -428,6 +428,14 @@ and on every visibilitychange both ways. Zero clears. Film Club logs aren't coun
 friend-log push adds one, and the app's recount on open drops it. Change one badge rule,
 change both.
 
+**Awards not loaded yet count as none (report 2026-11-07, the 52s).** Personal awards
+live in their own node and arrive after settings; in that gap every eligible year looks
+unnamed. `refreshAppBadge` runs the digest through `withoutPendingAwards` while
+`personalAwardsPending`, and `publishPushDigest` doesn't publish at all until it clears
+(App.vue republishes and recounts when it does). `awardsBadgePending.test.js` guards both.
+**For any wrong number on the icon, read the log first:** `node scripts/read-badge-log.mjs`
+(Admin SDK, read-only) prints every badge the app and the push Lambda set, with its parts.
+
 **New sign-ups ping the owner only** (2026-09-28: "It would be cool if I knew when
 someone signed up"). Each sweep compares the shallow root listing against
 `mattgrosso-gmail-com/push/state/knownAccounts` (`OWNER_ACCOUNT_KEY`); `signupsDue` and

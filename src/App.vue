@@ -118,6 +118,12 @@ export default {
     '$store.state.settings' () {
       this.schedulePushDigest();
     },
+    // The badge and the digest leave awards out until they have loaded
+    // (report 2026-11-07, a 52 on the icon). Usually loading them changes
+    // settings too; before the migration it only clears the flag.
+    '$store.state.personalAwardsPending' (pending) {
+      if (!pending) this.schedulePushDigest();
+    },
     // The icon badge can count Showtimes films (a Notifications switch, off
     // by default): recount when the switch flips, the board arrives, or a
     // film is dismissed or snoozed. refreshAppBadge no-ops the films part
