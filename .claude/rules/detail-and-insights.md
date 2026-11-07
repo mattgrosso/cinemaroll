@@ -59,6 +59,16 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
   or Space. The old Cast body heading showed because its `h4` carried `d-flex`
   (`!important` beat the `:deep` hide) — the body is gone with the row.
 
+**MovieDetail fetches the club itself (2026-11-07).** The Club panel is gated on
+`clubFriends.length`, so `FriendsWhoSaw` only mounts once a friend's rating is already
+in memory and its own `ensureClubData` can't bring a NEW one in. A friend-log push
+opened the film with a profile copy older than the log: no panel, no fetch, score only
+after leaving and coming back. The page watches `clubFetchKey` (film id + user key +
+roster, immediate) and dispatches `ensureClubData` with `FRIEND_PROFILE_MAX_AGE_MS`.
+Never make the page's only club fetch live inside something gated on club data.
+`MovieDetailClubFetch.test.js` guards it. Friends on end-of-day sharing still show
+only after their evening copy is written.
+
 - **The 2026-09-30 redesign (Matt: "The movie detail page has gotten away from us.
   There's too much info for the current design.")**: hero, then a 2×2 **facts strip**
   (your score with rank — still the three-way `ToggleableRating` — the Letterboxd crowd's

@@ -757,7 +757,7 @@ import { navigationTarget, backOrFallback } from '../utils/navigationTarget.js';
 import { formatScore } from '../assets/javascript/formatScore.js';
 import axios from 'axios';
 import ToggleableRating from './ToggleableRating.vue';
-import FriendsWhoSaw from './FriendsWhoSaw.vue';
+import FriendsWhoSaw, { FRIEND_PROFILE_MAX_AGE_MS } from './FriendsWhoSaw.vue';
 import { friendsWhoRated } from '../assets/javascript/friendViewings.js';
 import DetailSection from './DetailSection.vue';
 import { criticRoleLabel, criticByline, criticsSummary } from '../assets/javascript/criticReviews.js';
@@ -866,6 +866,20 @@ export default {
       immediate: true,
       handler (id) {
         this.loadArchiveBoxOffice(id);
+      }
+    },
+    // The page asks for fresh club data itself (report, 2026-11-07: a
+    // friend-log push opened the film and their score only appeared after
+    // leaving and coming back). Since 2026-10-06 FriendsWhoSaw only mounts
+    // once a friend's rating is ALREADY in memory, so its own fetch can't be
+    // what brings a brand-new rating in: the copy in hand predates the log,
+    // the panel stays hidden, and nothing asks. Keyed on the film and the
+    // roster (the user key resolves after mount on a cold start); repeats
+    // inside five minutes are no-ops in ensureClubData.
+    clubFetchKey: {
+      immediate: true,
+      handler () {
+        this.$store.dispatch('ensureClubData', { maxAgeMs: FRIEND_PROFILE_MAX_AGE_MS });
       }
     },
     viewingYears: {
@@ -1384,6 +1398,12 @@ export default {
     bestSinceSummary () {
       if (!this.lastHigherRatedMovie) return '';
       return `${this.lastHigherRatedMovie.movie.title}, ${this.bestSinceSpan}`;
+    },
+    clubFetchKey () {
+      const me = this.$store.getters.socialUserKey || '';
+      const native = this.$store.getters.socialFriendKeys || [];
+      const external = Object.keys(this.$store.state?.settings?.externalFriends || {});
+      return [this.$route?.params?.tmdbId || '', me, ...native, ...external].join('|');
     },
     // Only to decide whether the panel shows; FriendsWhoSaw draws the lines.
     clubFriends () {
