@@ -342,7 +342,7 @@ his Liked Songs, Deezer's rank (Spotify stopped sending popularity) and Wikipedi
 article when one exists (`soundtrackWiki`; the only source the writer may use about how the music was made).
 The writer picks two or three not-yet-liked tracks (`MUSIC_TOOL.picks`, held to the list by `musicPicks`), and
 the item ends with "Try these" track links and "Open <album> on Spotify" (a Spotify search if not found).
-Adding to Liked Songs from the story would need `user-library-modify` in Twelve Months and a reconnect.
+By hand: `{"logPaper":true,"musicFor":<tmdb id>}` writes just that film's music story now. Adding to Liked Songs from the story would need `user-library-modify` in Twelve Months and a reconnect.
 
 ## From the archive for Newsprinted (2026-10-28)
 `aws-lambda/archivePaper.js` (tests beside it): critics' reviews of films Matt rated 8.5+

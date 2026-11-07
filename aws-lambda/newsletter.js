@@ -681,7 +681,7 @@ const clubTitleOf = async (tmdbId) => {
 };
 // --- Stories from the log (logPaper.js): /log/<FEED_TOKEN>, built each morning --------
 
-const { dueSheets, writeStory, storyItem, milestoneSheets, flatten, enrichMusic, soundtrackWiki } = require('./logPaper.js');
+const { dueSheets, writeStory, storyItem, milestoneSheets, flatten, enrichMusic, soundtrackWiki, musicSheets } = require('./logPaper.js');
 
 // The music story's album: Twelve Months' /soundtrack (its Spotify key; SOUNDTRACK_URL +
 // SOUNDTRACK_KEY, the key in ~/.config/twelve-months/soundtrack-key.json). Null if unset or down.
@@ -708,14 +708,17 @@ const wikiJson = async (url) => {
 };
 
 /** Writes the morning's stories for one account; `force` writes every kind, for a first look. */
-const runLogPaper = async (topKey, { force = false, now = Date.now(), log: given = null } = {}) => {
+const runLogPaper = async (topKey, { force = false, now = Date.now(), log: given = null, musicFor = null } = {}) => {
   const log = given || (await dbGet(`${topKey}/movieLog`)) || {};
   const state = (await dbGet(`${topKey}/paper/log/state`).catch(() => null)) || {};
   // The first morning: every round number already passed is history, not news.
   if (!state.milestones) {
     state.milestones = Object.fromEntries(milestoneSheets(flatten(log), {}, now).map((s) => [s.key, true]));
   }
-  const { sheets, lastRatingAt } = dueSheets(log, state, now, { force });
+  // By hand, { logPaper: true, musicFor: <tmdb id> }: just that film's music story, now (its latest 7+ viewing); nothing else moves.
+  const { sheets, lastRatingAt } = musicFor
+    ? { sheets: musicSheets(flatten(log).filter((r) => String(r.film) === String(musicFor)), 0, now, state.music || {}).slice(-1), lastRatingAt: state.lastRatingAt || now }
+    : dueSheets(log, state, now, { force });
   const items = (await dbGet(`${topKey}/paper/log/items`).catch(() => null)) || [];
   const recent = [...(state.recent || [])];
   const written = [];
@@ -912,7 +915,8 @@ exports.handler = async (event, context) => {
   if (event?.logPaper) {
     const topKey = process.env.FEED_ACCOUNT || 'mattgrosso-gmail-com';
     const log = (await dbGet(`${topKey}/movieLog`)) || {};
-    const result = event.archiveOnly ? null : await runLogPaper(topKey, { force: event.force === true, log });
+    const result = event.archiveOnly ? null : await runLogPaper(topKey, { force: event.force === true, log, musicFor: event.musicFor || null });
+    if (event.musicFor) return { ok: true, result };
     console.log('Log paper:', JSON.stringify(result));
     // The archive's morning top-up rides on the same read of the log.
     const archive = await runArchivePaper(topKey, log).catch((error) => ({ error: error.message }));
