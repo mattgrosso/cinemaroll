@@ -334,6 +334,15 @@ EventBridge `cinemaroll-log-paper` (10:45 UTC, `{"logPaper":true}`), or by hand
 with `{"logPaper":true,"force":true}` (every kind at once). The first morning
 marks every round number already passed as history. The whole `movieLog`
 (~11 MB) is read once a day for it.
+**The music** (Matt, 2026-11-06): an eighth kind, `music`, for any film logged since the last run whose
+soundtrack score on that viewing is 7+, once per film ever (`state.music`, keyed by film id). `enrichMusic`
+adds the album from Twelve Months' `POST /soundtrack` (its Spotify key; newsletter env `SOUNDTRACK_URL` +
+`SOUNDTRACK_KEY`, the key also in `~/.config/twelve-months/soundtrack-key.json`): tracks, which are already in
+his Liked Songs, Deezer's rank (Spotify stopped sending popularity) and Wikipedia's lead on the soundtrack
+article when one exists (`soundtrackWiki`; the only source the writer may use about how the music was made).
+The writer picks two or three not-yet-liked tracks (`MUSIC_TOOL.picks`, held to the list by `musicPicks`), and
+the item ends with "Try these" track links and "Open <album> on Spotify" (a Spotify search if not found).
+Adding to Liked Songs from the story would need `user-library-modify` in Twelve Months and a reconnect.
 
 ## From the archive for Newsprinted (2026-10-28)
 `aws-lambda/archivePaper.js` (tests beside it): critics' reviews of films Matt rated 8.5+

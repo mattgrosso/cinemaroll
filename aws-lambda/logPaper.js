@@ -33,15 +33,15 @@ const when = (d) => {
   return Number.isFinite(t) ? t : null;
 };
 
-/** Every rating as a row: { film, title, year, date, rating, medium, prior } oldest first. */
+/** Every rating as a row: { film, title, year, date, rating, medium, soundtrack, prior } oldest first. */
 function flatten (log) {
   const rows = [];
   for (const entry of Object.values(log || {})) {
     const movie = entry?.movie || {};
     const title = movie.title || entry?.ratings?.[0]?.title || '';
     const year = Number(String(movie.release_date || '').slice(0, 4)) || entry?.ratings?.[0]?.year || null;
-    const ratings = (entry?.ratings || []).map((r) => ({ date: when(r?.date), rating: num(r?.rating), medium: r?.medium || '' })).filter((r) => r.date && r.rating != null).sort((a, b) => a.date - b.date);
-    ratings.forEach((r, i) => rows.push({ film: movie.id || title, title, year, movie, date: r.date, rating: r.rating, medium: r.medium, prior: ratings.slice(0, i).map((p) => p.rating) }));
+    const ratings = (entry?.ratings || []).map((r) => ({ date: when(r?.date), rating: num(r?.rating), medium: r?.medium || '', soundtrack: num(r?.soundtrack) })).filter((r) => r.date && r.rating != null).sort((a, b) => a.date - b.date);
+    ratings.forEach((r, i) => rows.push({ film: movie.id || title, title, year, movie, date: r.date, rating: r.rating, medium: r.medium, soundtrack: r.soundtrack, prior: ratings.slice(0, i).map((p) => p.rating) }));
   }
   return rows.sort((a, b) => a.date - b.date);
 }
@@ -253,6 +253,109 @@ function numbersSheet (rows, now, pattern = PATTERNS[local(now).m % PATTERNS.len
 
 // --- What's due today ------------------------------------------------------------------
 
+// --- 8. The music -------------------------------------------------------------------
+
+// Matt, 2026-11-06: "whenever I rate a movie … and I give its soundtrack and score
+// a score of seven or higher, I would like to get an article the next day talking
+// about the music … suggesting that I add some things to my Spotify playlists …
+// a link to the Spotify playlist for that soundtrack". One story per film, ever
+// (`state.music`); the album, its tracks and which are already in his Liked Songs
+// come from Twelve Months' /soundtrack lookup (its Spotify key), the background
+// from Wikipedia's soundtrack article when there is one (`enrichMusic`).
+
+const MUSIC_AT_LEAST = 7;
+const composersOf = (movie) => {
+  const crew = movie?.crew || [];
+  const named = (re) => [...new Set(crew.filter((c) => c?.name && re.test(c.job || '')).map((c) => c.name))];
+  const original = named(/^Original Music Composer$/);
+  return original.length ? original : named(/^(Music|Composer|Songs)$/);
+};
+
+/** A sheet per film logged after `since` whose soundtrack got 7+ on that viewing, once per film. */
+function musicSheets (rows, since, now, done = {}) {
+  const out = [];
+  const latest = new Map(); // film → its latest soundtrack score, for the ranks
+  for (const r of rows) if (r.date <= now && r.soundtrack != null) latest.set(r.film, { score: r.soundtrack, row: r });
+  for (const r of rows.filter((x) => x.date > since && x.date <= now && x.soundtrack != null && x.soundtrack >= MUSIC_AT_LEAST)) {
+    const key = String(r.film).replace(/[.#$/[\]]/g, '_'); // a database key (a film with no id is keyed by title)
+    if (done[key] || out.some((o) => o.key === key)) continue;
+    const composers = composersOf(r.movie);
+    const scores = [...latest.values()].map((v) => v.score);
+    const priorSoundtracks = rows.filter((x) => x.film === r.film && x.date < r.date && x.soundtrack != null).map((x) => x.soundtrack);
+    const facts = {
+      film: { title: r.title, year: r.year, watchedOn: dateWords(r.date), medium: r.medium || 'unknown', overallRating: r1(r.rating), soundtrackScore: r.soundtrack, outOf: 10, earlierSoundtrackScores: priorSoundtracks },
+      composers: composers.map((name) => {
+        const theirs = new Map();
+        for (const [film, v] of latest) if (film !== r.film && composersOf(v.row.movie).includes(name)) theirs.set(film, { title: v.row.title, year: v.row.year, soundtrackScore: v.score });
+        const list = [...theirs.values()].sort((a, b) => b.soundtrackScore - a.soundtrackScore);
+        return { name, otherFilmsYouHaveSeen: list.length, theirBestByYourSoundtrackScore: list.slice(0, 6), yourAverageSoundtrackScoreForThem: avg(list.map((f) => f.soundtrackScore)) };
+      }),
+      yourSoundtrackScores: { filmsScored: scores.length, filmsAtThisScoreOrHigher: scores.filter((x) => x >= r.soundtrack).length, average: avg(scores) }
+    };
+    out.push({ kind: 'music', key, film: r.film, title: r.title, year: r.year, composers, facts, factLine: `${r.title} (${r.year || '?'}) · soundtrack ${r.soundtrack}/10${composers.length ? ` · ${composers.join(', ')}` : ''}`, expiresDays: 5 });
+  }
+  return out;
+}
+
+const PICKS = 3;
+
+/**
+ * Adds the album (Twelve Months' lookup: { found, album, tracks, also, search })
+ * and Wikipedia's account (`wiki`: { title, url, extract } or null) to a music sheet.
+ * Tracks not yet liked are offered, most played first (Deezer's rank), as the picks to choose from.
+ */
+function enrichMusic (sheet, sound, wiki) {
+  const facts = { ...sheet.facts };
+  const tracks = sound?.found ? (sound.tracks || []) : [];
+  const ranked = tracks.some((t) => t.rank != null);
+  const order = [...tracks].sort((a, b) => (ranked ? (b.rank || 0) - (a.rank || 0) : a.number - b.number));
+  const top = new Set(order.slice(0, 3).map((t) => t.name));
+  facts.album = sound?.found
+    ? {
+        name: sound.album.name,
+        by: sound.album.artists,
+        released: sound.album.year,
+        tracks: tracks.length,
+        alreadyInYourLikedSongs: tracks.filter((t) => t.liked).map((t) => t.name),
+        trackList: tracks.map((t) => ({ n: t.number, name: t.name, by: t.artists, minutes: t.minutes, ...(ranked && top.has(t.name) ? { amongTheMostPlayed: true } : {}) })),
+        otherAlbumsForThisFilm: (sound.also || []).map((a) => a.name)
+      }
+    : { notFoundOnSpotify: true };
+  if (wiki?.extract) facts.aboutTheMusic = { source: `Wikipedia, "${wiki.title}"`, text: wiki.extract };
+  const choices = order.filter((t) => t.liked !== true);
+  return { ...sheet, facts, sound: sound || null, wiki: wiki || null, choices: choices.map((t) => t.name).slice(0, 40) };
+}
+
+/** The picks the story named, held to real unliked tracks, topped up from the most played. */
+function musicPicks (sheet, named = []) {
+  const allowed = sheet.choices || [];
+  const byKey = new Map(allowed.map((n) => [n.toLowerCase().trim(), n]));
+  const picks = [];
+  for (const n of named || []) {
+    const hit = byKey.get(String(n).toLowerCase().trim());
+    if (hit && !picks.includes(hit)) picks.push(hit);
+  }
+  for (const n of allowed) { if (picks.length >= 2) break; if (!picks.includes(n)) picks.push(n); }
+  return picks.slice(0, PICKS);
+}
+
+/** Wikipedia's lead on the film's soundtrack or score album, if it has one; `getJson` fetches. */
+async function soundtrackWiki (getJson, { title, year }) {
+  const q = `${title} ${year || ''} film soundtrack album`;
+  const s = await getJson(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&srlimit=8&format=json&origin=*`);
+  const want = String(title).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const hit = (s?.query?.search || []).find((h) => {
+    const t = h.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    return t.startsWith(want) && /\b(soundtrack|score|music from)\b/.test(t);
+  });
+  if (!hit) return null;
+  const page = await getJson(`https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&titles=${encodeURIComponent(hit.title)}&format=json&redirects=1&origin=*`);
+  const p = Object.values(page?.query?.pages || {})[0];
+  const extract = String(p?.extract || '').trim();
+  if (extract.length < 80) return null;
+  return { title: p.title || hit.title, url: `https://en.wikipedia.org/wiki/${encodeURIComponent((p.title || hit.title).replace(/ /g, '_'))}`, extract: extract.slice(0, 2500) };
+}
+
 /** The sheets to write this morning, given the state of what's been written. */
 function dueSheets (log, state, now = Date.now(), { force = false } = {}) {
   const rows = flatten(log);
@@ -260,6 +363,7 @@ function dueSheets (log, state, now = Date.now(), { force = false } = {}) {
   const sheets = [];
   const since = state?.lastRatingAt || now - 36 * 3600e3;
   sheets.push(...sitsSheets(rows, since, now).slice(-4));
+  sheets.push(...musicSheets(rows, since, now, state?.music || {}).slice(-3));
   const otd = onThisDaySheet(rows, now); if (otd) sheets.push(otd);
   sheets.push(...milestoneSheets(rows, state?.milestones || {}, now));
   if (l.d === 1 || force) { const m = monthSheet(rows, now); if (m) sheets.push(m); }
@@ -288,6 +392,18 @@ const STORY_TOOL = {
   }
 };
 
+const MUSIC_TOOL = {
+  ...STORY_TOOL,
+  input_schema: {
+    ...STORY_TOOL.input_schema,
+    properties: {
+      ...STORY_TOOL.input_schema.properties,
+      picks: { type: 'array', items: { type: 'string' }, description: 'Two or three track names to try, copied exactly from the sheet\'s `tryFrom` list.' }
+    },
+    required: [...STORY_TOOL.input_schema.required, 'picks']
+  }
+};
+
 const KIND_NOTES = {
   sits: 'The reader logged this film yesterday. Say where it sits in his own viewing: the director, the year, the genre, a first, a count, a rewatch that moved. Pick the one or two most telling facts; do not march through the sheet.',
   'on-this-day': 'What he watched on this date in earlier years. Find the thread, the contrast, or the one that stands out; do not list them all unless there are only two.',
@@ -295,6 +411,7 @@ const KIND_NOTES = {
   milestone: 'A round number was just crossed. Mark it the way a paper marks a milestone: the film that crossed it, the distance travelled since the first entry, a sense of scale.',
   unfinished: 'Directors he has nearly finished. Choose one or two and make the case, in a line each, for the film left; it is fine to name the rest in passing.',
   anniversary: 'A favourite of his turns a round age this week. Tie the film\'s age to when he saw it and what he gave it. If several, pick the best one and mention the others in a sentence.',
+  music: 'He gave this film\'s soundtrack a high score last night. Write about the film\'s music: the composer and his history with them, where this score sits among his soundtrack scores, and, when the sheet has `aboutTheMusic`, what it says (that text is the only source for anything about how the music was made or received; attribute it lightly). Then suggest two or three tracks from `tryFrom` (they are not yet in his Liked Songs, most played first) for his playlists, a short reason each drawn from the sheet (its place on the album, its length, that it is among the most played, what aboutTheMusic says of it). Do not describe how a track sounds unless aboutTheMusic does. If the album was not found on Spotify, say so in a line and leave picks empty. The links are added below your text; do not write URLs.',
   numbers: 'One pattern in his data. Answer the question plainly with the figures, say what it suggests about him as a viewer, and admit what the numbers cannot tell.'
 };
 
@@ -306,26 +423,44 @@ Each story takes one angle. A list of recent headlines and angles is given so yo
 
 /** Writes one sheet into a story with the model; `recent` is the last few { headline, angle }. */
 async function writeStory (client, sheet, recent = [], { model = 'claude-opus-5-5' } = {}) {
+  const tool = sheet.kind === 'music' ? MUSIC_TOOL : STORY_TOOL;
+  const facts = sheet.kind === 'music' ? { ...sheet.facts, tryFrom: sheet.choices || [] } : sheet.facts;
   // Forced tool choice is refused by this model family; the prompt names the tool and `strict` keeps the shape.
   const ask = () => client.messages.create({
     model,
     max_tokens: 4000,
     system: SYSTEM,
-    tools: [STORY_TOOL],
+    tools: [tool],
     tool_choice: { type: 'auto' },
-    messages: [{ role: 'user', content: `Kind of story: ${sheet.kind}. ${KIND_NOTES[sheet.kind] || ''}\n\nRecent stories (take a different angle):\n${recent.map((r) => `- ${r.headline} [${r.angle}]`).join('\n') || '- none yet'}\n\nFact sheet:\n${JSON.stringify(sheet.facts, null, 1)}\n\nWrite the story and hand it over with one write_story call; no other reply.` }]
+    messages: [{ role: 'user', content: `Kind of story: ${sheet.kind}. ${KIND_NOTES[sheet.kind] || ''}\n\nRecent stories (take a different angle):\n${recent.map((r) => `- ${r.headline} [${r.angle}]`).join('\n') || '- none yet'}\n\nFact sheet:\n${JSON.stringify(facts, null, 1)}\n\nWrite the story and hand it over with one write_story call; no other reply.` }]
   });
   let message = await ask();
-  let call = (message?.content || []).find((b) => b?.type === 'tool_use' && b.name === STORY_TOOL.name);
+  let call = (message?.content || []).find((b) => b?.type === 'tool_use' && b.name === tool.name);
   if (!call) {
     message = await ask();
-    call = (message?.content || []).find((b) => b?.type === 'tool_use' && b.name === STORY_TOOL.name);
+    call = (message?.content || []).find((b) => b?.type === 'tool_use' && b.name === tool.name);
   }
   if (!call?.input?.headline || !Array.isArray(call.input.paragraphs)) throw new Error(`No story came back (${message?.stop_reason || 'no reply'})`);
-  return { headline: String(call.input.headline).slice(0, 120), angle: String(call.input.angle || '').slice(0, 120), paragraphs: call.input.paragraphs.map((p) => String(p)).filter(Boolean).slice(0, 5) };
+  return { headline: String(call.input.headline).slice(0, 120), angle: String(call.input.angle || '').slice(0, 120), paragraphs: call.input.paragraphs.map((p) => String(p)).filter(Boolean).slice(0, 5), ...(Array.isArray(call.input.picks) ? { picks: call.input.picks.map(String) } : {}) };
 }
 
-const escapeHtml = (t) => String(t || '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const escapeHtml = (t) => String(t || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/** The music story's links: the picks, the album on Spotify (or a search), Wikipedia. */
+function musicLinks (sheet, story) {
+  const sound = sheet.sound;
+  const parts = [];
+  if (sound?.found) {
+    const byName = new Map((sound.tracks || []).map((t) => [t.name, t]));
+    const picks = musicPicks(sheet, story.picks).map((n) => byName.get(n)).filter(Boolean);
+    if (picks.length) parts.push(`<p><strong>Try these</strong></p><ul>${picks.map((t) => `<li><a href="${escapeHtml(t.url)}">${escapeHtml(t.name)}</a>${t.artists?.length ? ` · ${escapeHtml(t.artists.join(', '))}` : ''}</li>`).join('')}</ul>`);
+    parts.push(`<p><a href="${escapeHtml(sound.album.url)}">Open ${escapeHtml(sound.album.name)} on Spotify</a></p>`);
+  } else if (sound?.search) {
+    parts.push(`<p><a href="${escapeHtml(sound.search)}">Look for the soundtrack on Spotify</a></p>`);
+  }
+  if (sheet.wiki?.url) parts.push(`<p><small>Background: <a href="${escapeHtml(sheet.wiki.url)}">${escapeHtml(sheet.wiki.title)}</a>, Wikipedia</small></p>`);
+  return parts.join('');
+}
 
 /** The feed item for a written sheet. */
 function storyItem (sheet, story, now = Date.now()) {
@@ -333,7 +468,8 @@ function storyItem (sheet, story, now = Date.now()) {
     id: `log-${sheet.kind}-${sheet.key}`,
     url: sheet.film ? `https://www.cinemaroll.org/movie/${sheet.film}` : 'https://www.cinemaroll.org/',
     title: story.headline,
-    content_html: `${story.paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('')}<p><small>${escapeHtml(sheet.factLine)}</small></p>`,
+    content_html: `${story.paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('')}${sheet.kind === 'music' ? musicLinks(sheet, story) : ''}<p><small>${escapeHtml(sheet.factLine)}</small></p>`,
+    ...(sheet.kind === 'music' && sheet.sound?.album?.image ? { image: sheet.sound.album.image } : {}),
     date_published: new Date(now).toISOString(),
     _newsprinted: { expires: new Date(now + (sheet.expiresDays || 3) * DAY).toISOString() },
     _kind: sheet.kind,
@@ -341,4 +477,4 @@ function storyItem (sheet, story, now = Date.now()) {
   };
 }
 
-module.exports = { flatten, sitsSheets, onThisDaySheet, monthSheet, monthStats, milestoneSheets, unfinishedSheet, anniversariesSheet, numbersSheet, dueSheets, writeStory, storyItem, totals, PATTERNS, STORY_TOOL, SYSTEM };
+module.exports = { musicSheets, enrichMusic, musicPicks, soundtrackWiki, composersOf, MUSIC_TOOL, flatten, sitsSheets, onThisDaySheet, monthSheet, monthStats, milestoneSheets, unfinishedSheet, anniversariesSheet, numbersSheet, dueSheets, writeStory, storyItem, totals, PATTERNS, STORY_TOOL, SYSTEM };

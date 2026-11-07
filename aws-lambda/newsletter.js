@@ -681,7 +681,31 @@ const clubTitleOf = async (tmdbId) => {
 };
 // --- Stories from the log (logPaper.js): /log/<FEED_TOKEN>, built each morning --------
 
-const { dueSheets, writeStory, storyItem, milestoneSheets, flatten } = require('./logPaper.js');
+const { dueSheets, writeStory, storyItem, milestoneSheets, flatten, enrichMusic, soundtrackWiki } = require('./logPaper.js');
+
+// The music story's album: Twelve Months' /soundtrack (its Spotify key; SOUNDTRACK_URL +
+// SOUNDTRACK_KEY, the key in ~/.config/twelve-months/soundtrack-key.json). Null if unset or down.
+const soundtrackFor = async (sheet) => {
+  if (!process.env.SOUNDTRACK_URL || !process.env.SOUNDTRACK_KEY) return null;
+  try {
+    const res = await fetch(process.env.SOUNDTRACK_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.SOUNDTRACK_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: sheet.title, year: sheet.year, composer: sheet.composers[0] || null }),
+      signal: AbortSignal.timeout(25000)
+    });
+    if (!res.ok) throw new Error(`${res.status}`);
+    return await res.json();
+  } catch (error) {
+    console.error(`Soundtrack lookup for ${sheet.title} failed:`, error.message);
+    return null;
+  }
+};
+const wikiJson = async (url) => {
+  const res = await fetch(url, { headers: { 'User-Agent': 'CinemaRoll/1.0 (https://www.cinemaroll.org)' }, signal: AbortSignal.timeout(10000) });
+  if (!res.ok) throw new Error(`${res.status} from Wikipedia`);
+  return res.json();
+};
 
 /** Writes the morning's stories for one account; `force` writes every kind, for a first look. */
 const runLogPaper = async (topKey, { force = false, now = Date.now(), log: given = null } = {}) => {
@@ -695,8 +719,12 @@ const runLogPaper = async (topKey, { force = false, now = Date.now(), log: given
   const items = (await dbGet(`${topKey}/paper/log/items`).catch(() => null)) || [];
   const recent = [...(state.recent || [])];
   const written = [];
-  for (const sheet of sheets.slice(0, 6)) {
+  for (let sheet of sheets.slice(0, 6)) {
     try {
+      if (sheet.kind === 'music') {
+        const [sound, wiki] = await Promise.all([soundtrackFor(sheet), soundtrackWiki(wikiJson, sheet).catch(() => null)]);
+        sheet = enrichMusic(sheet, sound, wiki);
+      }
       const story = await writeStory(client, sheet, recent.slice(-10));
       items.unshift(storyItem(sheet, story, now));
       recent.push({ headline: story.headline, angle: story.angle });
@@ -709,7 +737,9 @@ const runLogPaper = async (topKey, { force = false, now = Date.now(), log: given
   const milestones = { ...(state.milestones || {}) };
   for (const s of sheets) if (s.kind === 'milestone' && written.includes(`${s.kind}-${s.key}`)) milestones[s.key] = true;
   await dbSet(`${topKey}/paper/log/items`, items.slice(0, 40));
-  await dbSet(`${topKey}/paper/log/state`, { lastRatingAt, milestones, recent: recent.slice(-20), written: [...(state.written || []), ...written].slice(-300), ranAt: now });
+  const music = { ...(state.music || {}) };
+  for (const s of sheets) if (s.kind === 'music' && written.includes(`${s.kind}-${s.key}`)) music[s.key] = now;
+  await dbSet(`${topKey}/paper/log/state`, { lastRatingAt, milestones, music, recent: recent.slice(-20), written: [...(state.written || []), ...written].slice(-300), ranAt: now });
   return { topKey, due: sheets.map((s) => s.kind), written: written.length };
 };
 

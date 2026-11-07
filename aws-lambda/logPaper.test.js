@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { flatten, sitsSheets, onThisDaySheet, monthSheet, milestoneSheets, unfinishedSheet, anniversariesSheet, numbersSheet, dueSheets, storyItem, writeStory } from './logPaper.js';
+import { musicSheets, enrichMusic, musicPicks, soundtrackWiki, flatten, sitsSheets, onThisDaySheet, monthSheet, milestoneSheets, unfinishedSheet, anniversariesSheet, numbersSheet, dueSheets, storyItem, writeStory } from './logPaper.js';
 
 const t = (s) => Date.parse(s);
 const spielberg = { job: 'Director', name: 'Steven Spielberg', filmography: [{ id: 1, title: 'Jaws', release_date: '1975-06-20', popularity: 50 }, { id: 2, title: 'E.T.', release_date: '1982-06-11', popularity: 40 }, { id: 3, title: 'Hook', release_date: '1991-12-11', popularity: 20 }, { id: 4, title: 'Lincoln', release_date: '2012-11-09', popularity: 15 }, { id: 9, title: 'Short Thing', release_date: '1970-01-01', popularity: 0.5 }, { id: 10, title: 'Spielberg: The Complete Collection', release_date: '2001-01-01', popularity: 30 }] };
@@ -121,5 +121,76 @@ describe('asking the model', () => {
     const client = fakeClient({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Here you go' }] });
     await expect(writeStory(client, sheet)).rejects.toThrow(/end_turn/);
     expect(client.calls).toHaveLength(2);
+  });
+});
+
+describe('the music', () => {
+  const zimmer = { job: 'Original Music Composer', name: 'Hans Zimmer' };
+  const mlog = {
+    a: { movie: film(11, 'Inception', 2010, { crew: [zimmer] }), ratings: [{ date: t('2025-01-02T20:00:00-05:00'), rating: 8.5, soundtrack: '9' }] },
+    b: { movie: film(12, 'Dune: Part Two', 2024, { crew: [zimmer, spielberg] }), ratings: [{ date: t('2026-10-27T21:00:00-04:00'), rating: 9, soundtrack: '8', medium: 'Theater' }] },
+    c: { movie: film(13, 'Quiet Film', 2020, { crew: [] }), ratings: [{ date: t('2026-10-27T22:00:00-04:00'), rating: 7, soundtrack: 6 }] },
+    d: { movie: { title: 'No.Id Film', release_date: '2001-01-01' }, ratings: [{ date: t('2026-10-27T22:30:00-04:00'), rating: 7, soundtrack: 7 }] }
+  };
+  const since = t('2026-10-27T06:00:00-04:00');
+
+  it('writes one for a 7+ soundtrack last night, with the composer and where the score sits', () => {
+    const sheets = musicSheets(flatten(mlog), since, now);
+    expect(sheets.map((s) => s.title)).toEqual(['Dune: Part Two', 'No.Id Film']);
+    const [dune] = sheets;
+    expect(dune.composers).toEqual(['Hans Zimmer']);
+    expect(dune.facts.film).toMatchObject({ soundtrackScore: 8, medium: 'Theater' });
+    expect(dune.facts.composers[0]).toMatchObject({ name: 'Hans Zimmer', otherFilmsYouHaveSeen: 1, theirBestByYourSoundtrackScore: [{ title: 'Inception', year: 2010, soundtrackScore: 9 }] });
+    expect(dune.facts.yourSoundtrackScores).toEqual({ filmsScored: 4, filmsAtThisScoreOrHigher: 2, average: 7.5 });
+    expect(sheets[1].key).toBe('No_Id Film');
+  });
+
+  it('never writes a film twice', () => {
+    expect(musicSheets(flatten(mlog), since, now, { 12: 1, 'No_Id Film': 1 })).toEqual([]);
+    expect(dueSheets(mlog, { lastRatingAt: since, music: { 12: 1 }, milestones: {} }, now).sheets.filter((s) => s.kind === 'music').map((s) => s.key)).toEqual(['No_Id Film']);
+  });
+
+  const sound = {
+    found: true,
+    album: { name: 'Dune: Part Two (Original Motion Picture Soundtrack)', artists: ['Hans Zimmer'], year: 2024, url: 'https://open.spotify.com/album/x', image: 'https://i.scdn.co/a.jpg' },
+    tracks: [
+      { number: 1, name: 'Beginnings Are Such Delicate Times', artists: ['Hans Zimmer'], minutes: 2.9, url: 'https://open.spotify.com/track/1', liked: false, rank: 500 },
+      { number: 2, name: 'Eclipse', artists: ['Hans Zimmer'], minutes: 1.6, url: 'https://open.spotify.com/track/2', liked: true, rank: 900 },
+      { number: 3, name: 'The Sietch', artists: ['Hans Zimmer'], minutes: 3.1, url: 'https://open.spotify.com/track/3', liked: false, rank: 800 },
+      { number: 4, name: 'Water of Life', artists: ['Hans Zimmer'], minutes: 4, url: 'https://open.spotify.com/track/4', liked: false, rank: 100 }
+    ],
+    also: [],
+    search: 'https://open.spotify.com/search/dune'
+  };
+
+  it('offers only tracks not yet liked, most played first, and holds the picks to them', () => {
+    const [dune] = musicSheets(flatten(mlog), since, now);
+    const sheet = enrichMusic(dune, sound, { title: 'Dune: Part Two (soundtrack)', url: 'https://en.wikipedia.org/wiki/Dune', extract: 'The score was composed by Hans Zimmer.' });
+    expect(sheet.choices).toEqual(['The Sietch', 'Beginnings Are Such Delicate Times', 'Water of Life']);
+    expect(sheet.facts.album.alreadyInYourLikedSongs).toEqual(['Eclipse']);
+    expect(sheet.facts.aboutTheMusic.text).toContain('Zimmer');
+    expect(musicPicks(sheet, ['water of life', 'Eclipse', 'Made Up Song'])).toEqual(['Water of Life', 'The Sietch']);
+    const item = storyItem(sheet, { headline: 'H', angle: 'a', paragraphs: ['P'], picks: ['The Sietch'] }, now);
+    expect(item.id).toBe('log-music-12');
+    expect(item.image).toBe('https://i.scdn.co/a.jpg');
+    expect(item.content_html).toContain('<a href="https://open.spotify.com/track/3">The Sietch</a>');
+    expect(item.content_html).toContain('<a href="https://open.spotify.com/album/x">Open Dune: Part Two (Original Motion Picture Soundtrack) on Spotify</a>');
+    expect(item.content_html).not.toContain('track/2');
+  });
+
+  it('falls back to a Spotify search when the album is not found', () => {
+    const [dune] = musicSheets(flatten(mlog), since, now);
+    const sheet = enrichMusic(dune, { found: false, search: 'https://open.spotify.com/search/dune' }, null);
+    expect(sheet.facts.album).toEqual({ notFoundOnSpotify: true });
+    expect(storyItem(sheet, { headline: 'H', angle: 'a', paragraphs: ['P'], picks: [] }, now).content_html).toContain('Look for the soundtrack on Spotify');
+  });
+
+  it('finds Wikipedia\'s soundtrack article and skips the film\'s own', async () => {
+    const getJson = async (url) => url.includes('list=search')
+      ? { query: { search: [{ title: 'Dune: Part Two' }, { title: 'Dune: Part Two (soundtrack)' }] } }
+      : { query: { pages: { 1: { title: 'Dune: Part Two (soundtrack)', extract: 'Dune: Part Two (Original Motion Picture Soundtrack) is the film score composed by Hans Zimmer for the 2024 film.' } } } };
+    const wiki = await soundtrackWiki(getJson, { title: 'Dune: Part Two', year: 2024 });
+    expect(wiki.title).toBe('Dune: Part Two (soundtrack)');
+    expect(wiki.url).toBe('https://en.wikipedia.org/wiki/Dune%3A_Part_Two_(soundtrack)');
   });
 });
