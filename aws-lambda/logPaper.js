@@ -310,7 +310,8 @@ const PICKS = 3;
  */
 function enrichMusic (sheet, sound, wiki) {
   const facts = { ...sheet.facts };
-  const tracks = sound?.found ? (sound.tracks || []) : [];
+  const playlist = !sound?.found ? sound?.playlist || null : null;
+  const tracks = sound?.found || playlist ? (sound.tracks || []) : [];
   const ranked = tracks.some((t) => t.rank != null);
   const order = [...tracks].sort((a, b) => (ranked ? (b.rank || 0) - (a.rank || 0) : a.number - b.number));
   const top = new Set(order.slice(0, 3).map((t) => t.name));
@@ -324,7 +325,14 @@ function enrichMusic (sheet, sound, wiki) {
         trackList: tracks.map((t) => ({ n: t.number, name: t.name, by: t.artists, minutes: t.minutes, ...(ranked && top.has(t.name) ? { amongTheMostPlayed: true } : {}) })),
         otherAlbumsForThisFilm: (sound.also || []).map((a) => a.name)
       }
-    : { notFoundOnSpotify: true };
+    : playlist
+      // Matt, 2026-11-07: Kill Bill: Vol. 1's album isn't on Spotify, but listeners' playlists rebuild it.
+      ? {
+          notOnSpotifyAsAnAlbum: true,
+          aListenersPlaylist: { name: playlist.name, followers: playlist.followers, tracks: playlist.totalTracks },
+          ...(tracks.length ? { alreadyInYourLikedSongs: tracks.filter((t) => t.liked).map((t) => t.name), trackList: tracks.map((t) => ({ n: t.number, name: t.name, by: t.artists, minutes: t.minutes })) } : {})
+        }
+      : { notFoundOnSpotify: true };
   if (wiki?.extract) facts.aboutTheMusic = { source: `Wikipedia, "${wiki.title}"`, text: wiki.extract };
   const choices = order.filter((t) => t.liked !== true);
   return { ...sheet, facts, sound: sound || null, wiki: wiki || null, choices: choices.map((t) => t.name).slice(0, 40) };
@@ -415,7 +423,7 @@ const KIND_NOTES = {
   milestone: 'A round number was just crossed. Mark it the way a paper marks a milestone: the film that crossed it, the distance travelled since the first entry, a sense of scale.',
   unfinished: 'Directors he has nearly finished. Choose one or two and make the case, in a line each, for the film left; it is fine to name the rest in passing.',
   anniversary: 'A favourite of his turns a round age this week. Tie the film\'s age to when he saw it and what he gave it. If several, pick the best one and mention the others in a sentence.',
-  music: 'He gave this film\'s soundtrack a high score last night. Write about the film\'s music: the composer and his history with them, where this score sits among his soundtrack scores, and, when the sheet has `aboutTheMusic`, what it says (that text is the only source for anything about how the music was made or received; attribute it lightly). Then suggest two or three tracks from `tryFrom` (they are not yet in his Liked Songs, most played first) for his playlists, a short reason each drawn from the sheet (its place on the album, its length, that it is among the most played, what aboutTheMusic says of it). Do not describe how a track sounds unless aboutTheMusic does. If the album was not found on Spotify, say so in a line and leave picks empty. The links are added below your text; do not write URLs.',
+  music: 'He gave this film\'s soundtrack a high score last night. Write about the film\'s music: the composer and his history with them, where this score sits among his soundtrack scores, and, when the sheet has `aboutTheMusic`, what it says (that text is the only source for anything about how the music was made or received; attribute it lightly). Then suggest two or three tracks from `tryFrom` (they are not yet in his Liked Songs, most played first) for his playlists, a short reason each drawn from the sheet (its place on the album, its length, that it is among the most played, what aboutTheMusic says of it). Do not describe how a track sounds unless aboutTheMusic does. If the album was not found on Spotify, say so in a line; when the sheet has `aListenersPlaylist`, add that a listener\'s playlist rebuilds the soundtrack (its link is below; mention its followers only if given). Picks come only from `tryFrom`; leave picks empty when it is empty. The links are added below your text; do not write URLs.',
   numbers: 'One pattern in his data. Answer the question plainly with the figures, say what it suggests about him as a viewer, and admit what the numbers cannot tell.'
 };
 
@@ -459,6 +467,11 @@ function musicLinks (sheet, story) {
     const picks = musicPicks(sheet, story.picks).map((n) => byName.get(n)).filter(Boolean);
     if (picks.length) parts.push(`<p><strong>Try these</strong></p><ul>${picks.map((t) => `<li><a href="${escapeHtml(t.url)}">${escapeHtml(t.name)}</a>${t.artists?.length ? ` · ${escapeHtml(t.artists.join(', '))}` : ''}</li>`).join('')}</ul>`);
     parts.push(`<p><a href="${escapeHtml(sound.album.url)}">Open ${escapeHtml(sound.album.name)} on Spotify</a></p>`);
+  } else if (sound?.playlist?.url) {
+    const byName = new Map((sound.tracks || []).map((t) => [t.name, t]));
+    const picks = musicPicks(sheet, story.picks).map((n) => byName.get(n)).filter(Boolean);
+    if (picks.length) parts.push(`<p><strong>Try these</strong></p><ul>${picks.map((t) => `<li><a href="${escapeHtml(t.url)}">${escapeHtml(t.name)}</a>${t.artists?.length ? ` · ${escapeHtml(t.artists.join(', '))}` : ''}</li>`).join('')}</ul>`);
+    parts.push(`<p><a href="${escapeHtml(sound.playlist.url)}">Open ${escapeHtml(sound.playlist.name)} on Spotify</a> <small>(a listener's playlist of the soundtrack; the album itself isn't on Spotify)</small></p>`);
   } else if (sound?.search) {
     parts.push(`<p><a href="${escapeHtml(sound.search)}">Look for the soundtrack on Spotify</a></p>`);
   }
@@ -473,7 +486,7 @@ function storyItem (sheet, story, now = Date.now()) {
     url: sheet.film ? `https://www.cinemaroll.org/movie/${sheet.film}` : 'https://www.cinemaroll.org/',
     title: story.headline,
     content_html: `${story.paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('')}${sheet.kind === 'music' ? musicLinks(sheet, story) : ''}<p><small>${escapeHtml(sheet.factLine)}</small></p>`,
-    ...(sheet.kind === 'music' && sheet.sound?.album?.image ? { image: sheet.sound.album.image } : {}),
+    ...(sheet.kind === 'music' && (sheet.sound?.album?.image || sheet.sound?.playlist?.image) ? { image: sheet.sound.album?.image || sheet.sound.playlist.image } : {}),
     date_published: new Date(now).toISOString(),
     _newsprinted: { expires: new Date(now + (sheet.expiresDays || 3) * DAY).toISOString() },
     _kind: sheet.kind,

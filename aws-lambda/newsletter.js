@@ -715,7 +715,7 @@ const runLogPaper = async (topKey, { force = false, now = Date.now(), log: given
   if (!state.milestones) {
     state.milestones = Object.fromEntries(milestoneSheets(flatten(log), {}, now).map((s) => [s.key, true]));
   }
-  // By hand, { logPaper: true, musicFor: <tmdb id> }: just that film's music story, now (its first 7+ viewing; rewritten if it ran); nothing else moves.
+  // By hand, { logPaper: true, musicFor: <tmdb id> }: just that film's music story, now (its first 7+ viewing; rewritten if it ran, under a new id so the paper shows it again); nothing else moves.
   const { sheets, lastRatingAt } = musicFor
     ? { sheets: musicSheets(flatten(log), 0, now, {}).filter((x) => String(x.film) === String(musicFor)).slice(-1), lastRatingAt: state.lastRatingAt || now }
     : dueSheets(log, state, now, { force });
@@ -730,8 +730,10 @@ const runLogPaper = async (topKey, { force = false, now = Date.now(), log: given
       }
       const story = await writeStory(client, sheet, recent.slice(-10));
       const item = storyItem(sheet, story, now);
-      const was = items.findIndex((i) => i.id === item.id);
-      if (was >= 0) items.splice(was, 1);
+      const base = item.id;
+      // A by-hand rewrite gets an id of its own: Newsprinted never takes a story id it has seen again.
+      if (musicFor) item.id = `${base}-${now.toString(36)}`;
+      for (let i = items.length - 1; i >= 0; i--) if (items[i].id === base || items[i].id.startsWith(`${base}-`)) items.splice(i, 1);
       items.unshift(item);
       recent.push({ headline: story.headline, angle: story.angle });
       written.push(`${sheet.kind}-${sheet.key}`);
