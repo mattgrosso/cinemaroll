@@ -1748,6 +1748,7 @@ import { WORDING } from '../assets/javascript/inflation.js';
 import { eventName, trackWhenOnline } from '../assets/javascript/usageEvents.js';
 import { publishDue } from '../assets/javascript/social.js';
 import axios from 'axios';
+import { isStallError } from '../utils/networkHealth.js';
 import { scrollWindowTo } from '../utils/scrollWindowTo.js';
 import { crowdRating, crowdLovesList, disagreeList, cultList } from '../assets/javascript/letterboxdCompare.js';
 import { letterboxdSyncState, syncLetterboxdNow, importLetterboxdReviews } from '../utils/letterboxdData.js';
@@ -6804,8 +6805,13 @@ export default {
           limit: 18
         });
       } catch (err) {
-        console.error('Error fetching unrated movies:', err);
-        ErrorLogService.error('Failed to fetch unrated movies', {
+        // A timeout or dropped connection is the phone's signal, not a fault:
+        // the row just stays hidden (Sentry, 2026-11-08: a TMDB call ran out
+        // its 8s on one bar). Warn, so it stays in the in-app log but never
+        // reaches Sentry; a real refusal (404, 500) is still an error.
+        const stalled = isStallError(err);
+        (stalled ? console.warn : console.error)('Error fetching unrated movies:', err);
+        ErrorLogService[stalled ? 'warn' : 'error']('Failed to fetch unrated movies', {
           filters: active.map((filter) => `${filter.type}:${filter.value}`),
           error: err.message,
           stack: err.stack

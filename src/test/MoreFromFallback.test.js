@@ -241,3 +241,42 @@ describe('More from, when a typed chip resolves to nothing useful', () => {
     expect(wrapper.vm.unratedMovies.map((movie) => movie.id)).toEqual([557])
   })
 })
+
+// Sentry 2026-11-08: one bar of signal, Insights -> Home, and the More from
+// fetch ran out axios's 8s timeout. Every console.error is a Sentry event
+// (CaptureConsole), so a flaky network must warn; a server refusal still errors.
+describe('More from, when TMDB does not answer', () => {
+  let wrapper
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    wrapper = mountHome()
+  })
+
+  const failWith = (error) => axios.get.mockImplementation(() => Promise.reject(error))
+  const loggedUnrated = (spy) => spy.mock.calls.some(([msg]) => String(msg).includes('unrated movies'))
+
+  it('warns, never errors, on a timeout', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    failWith(Object.assign(new Error('timeout of 8000ms exceeded'), { code: 'ECONNABORTED' }))
+
+    await wrapper.vm.fetchUnratedMoviesForFilters([keywordChip('slow signal')])
+
+    expect(loggedUnrated(error)).toBe(false)
+    expect(loggedUnrated(warn)).toBe(true)
+    expect(wrapper.vm.unratedMovies).toEqual([])
+    error.mockRestore(); warn.mockRestore()
+  })
+
+  it('still errors when TMDB answers with a failure', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    failWith(Object.assign(new Error('Request failed with status code 404'), { response: { status: 404 } }))
+
+    await wrapper.vm.fetchUnratedMoviesForFilters([keywordChip('real refusal')])
+
+    expect(loggedUnrated(error)).toBe(true)
+    error.mockRestore(); warn.mockRestore()
+  })
+})
