@@ -681,7 +681,7 @@ const clubTitleOf = async (tmdbId) => {
 };
 // --- Stories from the log (logPaper.js): /log/<FEED_TOKEN>, built each morning --------
 
-const { dueSheets, writeStory, storyItem, milestoneSheets, flatten, enrichMusic, soundtrackWiki, musicSheets } = require('./logPaper.js');
+const { dueSheets, writeStory, storyItem, milestoneSheets, flatten, enrichMusic, soundtrackWiki, musicSheets, logAsSet, forgetUnreached } = require('./logPaper.js');
 
 // The music story's album: Twelve Months' /soundtrack (its Spotify key; SOUNDTRACK_URL +
 // SOUNDTRACK_KEY, the key in ~/.config/twelve-months/soundtrack-key.json). Null if unset or down.
@@ -715,6 +715,8 @@ const runLogPaper = async (topKey, { force = false, now = Date.now(), log: given
   if (!state.milestones) {
     state.milestones = Object.fromEntries(milestoneSheets(flatten(log), {}, now).map((s) => [s.key, true]));
   }
+  // A round number the log (as the shorts setting sees it) hasn't reached runs again when it does.
+  state.milestones = forgetUnreached(state.milestones, flatten(log), now);
   // By hand, { logPaper: true, musicFor: <tmdb id> }: just that film's music story, now (its first 7+ viewing; rewritten if it ran, under a new id so the paper shows it again); nothing else moves.
   const { sheets, lastRatingAt } = musicFor
     ? { sheets: musicSheets(flatten(log), 0, now, {}).filter((x) => String(x.film) === String(musicFor)).slice(-1), lastRatingAt: state.lastRatingAt || now }
@@ -919,7 +921,10 @@ exports.handler = async (event, context) => {
   // The morning's stories from the log (EventBridge `cinemaroll-log-paper`, or by hand with { logPaper: true, force: true }).
   if (event?.logPaper) {
     const topKey = process.env.FEED_ACCOUNT || 'mattgrosso-gmail-com';
-    const log = (await dbGet(`${topKey}/movieLog`)) || {};
+    // The log as his "Include short films" setting sees it (off unless explicitly on), so no count
+    // in the paper takes in shorts he keeps out of the app (Matt, 2026-11-08).
+    const includeShorts = (await dbGet(`${topKey}/settings/includeShorts`).catch(() => null)) === true;
+    const log = logAsSet((await dbGet(`${topKey}/movieLog`)) || {}, includeShorts);
     const result = event.archiveOnly ? null : await runLogPaper(topKey, { force: event.force === true, log, musicFor: event.musicFor || null });
     if (event.musicFor) return { ok: true, result };
     console.log('Log paper:', JSON.stringify(result));

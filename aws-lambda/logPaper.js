@@ -50,6 +50,37 @@ function flatten (log) {
   return rows.sort((a, b) => a.date - b.date);
 }
 
+// --- Shorts, as the app's setting says ------------------------------------------------
+// Matt, 2026-11-08: "Kill Bill … brings your log to 1,600 viewings" counted his short films, which
+// he keeps out of every count in the app. The app's one rule (src/assets/javascript/shorts.js): a
+// short is 40 minutes or under; an unknown runtime (missing, or TMDB's 0) is not a short. Settings
+// default to shorts OFF: only an explicit true keeps them.
+const SHORT_RUNTIME = 40;
+const isShort = (movie) => Boolean(movie?.runtime && movie.runtime <= SHORT_RUNTIME);
+
+/** The log as the "Include short films" setting says to see it. */
+function logAsSet (log, includeShorts = false) {
+  if (includeShorts === true || !log) return log || {};
+  return Object.fromEntries(Object.entries(log).filter(([, entry]) => !isShort(entry?.movie)));
+}
+
+/**
+ * Milestones the count hasn't really reached any more (shorts left out, a film removed) are
+ * forgotten, so the round number runs again when it is truly crossed. Other years' `year-` keys stay.
+ */
+function forgetUnreached (milestones, rows, now) {
+  const t = totals(rows, now);
+  const y = local(now).y;
+  const out = {};
+  for (const [key, v] of Object.entries(milestones || {})) {
+    const m = /^(?:year-(\d+)|(films|ratings|theater|hours))-(\d+)$/.exec(key);
+    if (!m) { out[key] = v; continue; }
+    if (m[1]) { if (Number(m[1]) !== y || t.year >= Number(m[3])) out[key] = v; continue; }
+    if (t[m[2]] >= Number(m[3])) out[key] = v;
+  }
+  return out;
+}
+
 const local = (t) => {
   const d = new Date(new Date(t).toLocaleString('en-US', { timeZone: TZ }));
   return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate(), dow: d.getDay(), hour: d.getHours() };
@@ -494,4 +525,4 @@ function storyItem (sheet, story, now = Date.now()) {
   };
 }
 
-module.exports = { musicSheets, enrichMusic, musicPicks, soundtrackWiki, composersOf, MUSIC_TOOL, flatten, sitsSheets, onThisDaySheet, monthSheet, monthStats, milestoneSheets, unfinishedSheet, anniversariesSheet, numbersSheet, dueSheets, writeStory, storyItem, totals, PATTERNS, STORY_TOOL, SYSTEM };
+module.exports = { logAsSet, isShort, forgetUnreached, musicSheets, enrichMusic, musicPicks, soundtrackWiki, composersOf, MUSIC_TOOL, flatten, sitsSheets, onThisDaySheet, monthSheet, monthStats, milestoneSheets, unfinishedSheet, anniversariesSheet, numbersSheet, dueSheets, writeStory, storyItem, totals, PATTERNS, STORY_TOOL, SYSTEM };

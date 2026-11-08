@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { musicSheets, enrichMusic, musicPicks, soundtrackWiki, flatten, sitsSheets, onThisDaySheet, monthSheet, milestoneSheets, unfinishedSheet, anniversariesSheet, numbersSheet, dueSheets, storyItem, writeStory } from './logPaper.js';
+import { logAsSet, isShort, forgetUnreached, musicSheets, enrichMusic, musicPicks, soundtrackWiki, flatten, sitsSheets, onThisDaySheet, monthSheet, milestoneSheets, unfinishedSheet, anniversariesSheet, numbersSheet, dueSheets, storyItem, writeStory } from './logPaper.js';
 
 const t = (s) => Date.parse(s);
+const DAY = 864e5;
 const spielberg = { job: 'Director', name: 'Steven Spielberg', filmography: [{ id: 1, title: 'Jaws', release_date: '1975-06-20', popularity: 50 }, { id: 2, title: 'E.T.', release_date: '1982-06-11', popularity: 40 }, { id: 3, title: 'Hook', release_date: '1991-12-11', popularity: 20 }, { id: 4, title: 'Lincoln', release_date: '2012-11-09', popularity: 15 }, { id: 9, title: 'Short Thing', release_date: '1970-01-01', popularity: 0.5 }, { id: 10, title: 'Spielberg: The Complete Collection', release_date: '2001-01-01', popularity: 30 }] };
 const film = (id, title, year, extra = {}) => ({ id, title, release_date: `${year}-06-01`, runtime: 120, genres: [{ name: 'Drama' }], production_countries: [{ name: 'United States of America' }], cast: [{ name: 'Tom Hanks' }], crew: [spielberg], ...extra });
 const log = {
@@ -213,5 +214,41 @@ describe('the music', () => {
     const wiki = await soundtrackWiki(getJson, { title: 'Dune: Part Two', year: 2024 });
     expect(wiki.title).toBe('Dune: Part Two (soundtrack)');
     expect(wiki.url).toBe('https://en.wikipedia.org/wiki/Dune%3A_Part_Two_(soundtrack)');
+  });
+});
+
+describe('shorts, as the setting says', () => {
+  const slog = {
+    feature: { movie: film(30, 'Kill Bill: Vol. 1', 2003, { runtime: 111 }), ratings: [{ date: t('2026-11-07T21:00:00-05:00'), rating: 8.5, medium: 'Theater' }] },
+    short: { movie: film(31, 'Paperman', 2012, { runtime: 7 }), ratings: [{ date: t('2026-11-01T21:00:00-04:00'), rating: 7, medium: 'Disney+' }] },
+    forty: { movie: film(32, 'Forty Minutes', 2010, { runtime: 40 }), ratings: [{ date: t('2026-11-02T21:00:00-05:00'), rating: 6, medium: 'Streaming' }] },
+    unknown: { movie: film(33, 'No Runtime Yet', 2026, { runtime: 0 }), ratings: [{ date: t('2026-11-03T21:00:00-05:00'), rating: 6, medium: 'Streaming' }] }
+  };
+
+  it('uses the app\'s rule: 40 minutes or under, an unknown runtime is not a short', () => {
+    expect([7, 40, 41, 0, undefined].map((runtime) => isShort({ runtime }))).toEqual([true, true, false, false, false]);
+  });
+
+  it('leaves shorts out unless the setting is explicitly on', () => {
+    expect(Object.keys(logAsSet(slog))).toEqual(['feature', 'unknown']);
+    expect(Object.keys(logAsSet(slog, false))).toEqual(['feature', 'unknown']);
+    expect(Object.keys(logAsSet(slog, true))).toEqual(['feature', 'short', 'forty', 'unknown']);
+    expect(logAsSet(null)).toEqual({});
+  });
+
+  it('counts only features in the milestones when shorts are off', () => {
+    const many = Object.fromEntries(Array.from({ length: 99 }, (_, i) => [`f${i}`, { movie: film(100 + i, `F${i}`, 1990, { runtime: 95 }), ratings: [{ date: t('2025-01-01T20:00:00-05:00') + i * DAY, rating: 6 }] }]));
+    const shorts = Object.fromEntries(Array.from({ length: 5 }, (_, i) => [`s${i}`, { movie: film(300 + i, `S${i}`, 1990, { runtime: 12 }), ratings: [{ date: t('2025-06-01T20:00:00-04:00') + i * DAY, rating: 6 }] }]));
+    const all = { ...many, ...shorts, last: { movie: film(400, 'Hundredth', 2000, { runtime: 100 }), ratings: [{ date: t('2026-10-01T20:00:00-04:00'), rating: 7 }] } };
+    const withShorts = milestoneSheets(flatten(all), {}, now).find((s) => s.key === 'ratings-100');
+    expect(withShorts.facts.crossedBy.title).not.toBe('Hundredth');
+    const featuresOnly = milestoneSheets(flatten(logAsSet(all)), {}, now).find((s) => s.key === 'ratings-100');
+    expect(featuresOnly.facts.crossedBy.title).toBe('Hundredth');
+  });
+
+  it('forgets milestones the count no longer reaches, so they run again', () => {
+    const rows = flatten(logAsSet(slog));
+    const kept = forgetUnreached({ 'ratings-1600': true, 'ratings-1': true, 'films-100': true, 'year-2025-1600': true, 'year-2026-1600': true, odd: 5 }, rows, now);
+    expect(kept).toEqual({ 'ratings-1': true, 'year-2025-1600': true, odd: 5 });
   });
 });

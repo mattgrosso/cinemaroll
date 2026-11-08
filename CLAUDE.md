@@ -347,6 +347,10 @@ loosens in rounds (main title before the colon, Vol./Volume alike, the composer'
 and saying soundtrack) and last answers with the most-followed listener's playlist rebuilding the soundtrack
 (`sound.playlist`); the sheet says `aListenersPlaylist` and the item links "Open <playlist> on Spotify". Its tracks
 come only if Spotify lets Matt's token read the playlist (the app token can't), so picks may be empty.
+**Shorts** (Matt, 2026-11-08: "brings your log to 1,600 viewings" counted his short films): the morning run reads
+`settings/includeShorts` and, unless it is explicitly on, drops shorts from the log before anything counts (`logAsSet`,
+the app's rule: 40 minutes or under, unknown runtime kept; the archive top-up gets the same log). `forgetUnreached`
+drops milestones the count no longer reaches, so a round number runs again when it is truly crossed.
 By hand: `{"logPaper":true,"musicFor":<tmdb id>}` writes just that film's music story now, under a fresh id so Newsprinted shows it again. Adding to Liked Songs from the story would need `user-library-modify` in Twelve Months and a reconnect.
 
 ## From the archive for Newsprinted (2026-10-28)
