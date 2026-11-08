@@ -439,6 +439,16 @@ library getter's identity plus the Log Score weights as JSON, because a tab swit
 remounts them. Log Score for every group, whole-library
 average as the Bayesian anchor throughout.
 
+**Panels scroll inside, never grow (2026-11-08):** "some of the panels ... are much too
+tall ... scroll within that panel." A section's title, caption and number strip stay put;
+anything that repeats (a poster row per genre / tie / standout, a ranked list) goes in a
+`.ds-scroll` box (`_stats-section.scss`: 26rem, about two poster rows, `.long-list`'s inset
+shadow). Places' `.place-list` uses the same cap; YearlyAverage, BoxOfficeYears and
+Outliers already scrolled at 15rem. A new section with a loop puts it in `.ds-scroll`
+and joins `insightsPanelHeight.test.js`, which parses each template to check the v-for sits
+inside one. No `overscroll-behavior: contain` — at the box's end a finger must carry on
+scrolling the page.
+
 **Decade Championship (2026-09-02)** buckets by RELEASE decade, not watch year — it's
 about the decade the work belongs to. Nobody qualifies on one film (`minFilms: 2`);
 Matt's worry about thin decades is answered by the Log Score's Bayesian pull, not by a

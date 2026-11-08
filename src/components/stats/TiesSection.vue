@@ -26,6 +26,7 @@
     </div>
     <template v-if="biggestTies.length">
       <h3 class="pantheon-label">Biggest ties</h3>
+      <div class="ds-scroll ties-scroll">
       <div v-for="group in biggestTies" :key="`tie-${group.score}`" class="pantheon-category tie-group">
         <h3 class="pantheon-label">
           {{ group.films.length }} films at {{ formatScore(group.score) }}
@@ -36,6 +37,7 @@
             <div v-else class="ds-poster ds-poster-blank">{{ film.movie.title }}</div>
           </div>
         </div>
+      </div>
       </div>
     </template>
   </section>

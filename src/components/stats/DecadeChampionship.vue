@@ -67,7 +67,7 @@
         {{ openCategory.label }} of the {{ championship.label }}
         <template v-if="openCategory.note"> · {{ openCategory.note }}</template>
       </p>
-      <ol class="competitor-list">
+      <ol class="competitor-list ds-scroll">
         <li
           v-for="(competitor, index) in openCategory.field"
           :key="`${openCategory.key}-${competitor.name}`"

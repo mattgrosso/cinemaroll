@@ -7,7 +7,7 @@
       Ranks, not scores — your weighted 0–10 and their 0.5–5 stars can't be subtracted, so a film
       counts as a disagreement when you place it far from where the crowd does.
     </p>
-    <div class="crowd-lists">
+    <div class="crowd-lists ds-scroll">
       <div v-if="result.youLove.length" class="crowd-list">
         <p class="crowd-list-title">You rank these far above the crowd</p>
         <div v-for="row in result.youLove" :key="row.entry.dbKey" class="crowd-row" role="button" :aria-label="row.entry.movie.title" @click="goToMovie(row.entry)">

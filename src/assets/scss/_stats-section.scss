@@ -82,3 +82,18 @@
   font-weight: 700;
   margin-top: 0.2rem;
 }
+
+/* Insights' inner-scroll box (report, 2026-11-08: "some of the panels ... are
+   much too tall ... keep them all fairly consistently height ... scroll within
+   that panel"). A section's title, caption and number strip stay put; the
+   repeating part (a poster row per genre, per tie, per standout; a ranked
+   list) goes in here and scrolls inside the card. 26rem is about two poster
+   rows. Same inset shadow as MovieDetail's .long-list. Keep the number in
+   step with .place-list in Insights.vue (the Places lists). */
+.ds-scroll {
+  border-radius: 6px;
+  box-shadow: inset 0 0 5px -2px rgb(0 0 0 / 50%);
+  max-height: 26rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}

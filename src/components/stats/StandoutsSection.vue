@@ -7,7 +7,7 @@
       each one sits, pulled back toward that average when there's little evidence, so eight films
       can beat four hundred but one lucky film can't beat anything.
     </p>
-    <div class="standouts">
+    <div class="standouts ds-scroll">
       <div v-for="standout in standoutList" :key="`${standout.facet}-${standout.value}`" class="standout">
         <div class="standout-head">
           <span class="standout-facet">{{ standout.facet }}</span>

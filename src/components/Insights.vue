@@ -3575,9 +3575,15 @@ export default {
     &:active { opacity: 0.7; }
   }
 
+  /* Twelve places run ~30rem on a phone; they scroll inside the card at the
+     same height as the stats sections' .ds-scroll (report, 2026-11-08). */
   .place-list {
+    border-radius: 6px;
+    box-shadow: inset 0 0 5px -2px rgb(0 0 0 / 50%);
     list-style: none;
     margin: 0;
+    max-height: 26rem;
+    overflow-y: auto;
     padding: 0;
 
     .place-row {

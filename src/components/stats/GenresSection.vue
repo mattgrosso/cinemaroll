@@ -2,6 +2,7 @@
   <section v-if="genres.length" class="ds-section genres">
     <h2 class="ds-section-title">Genres</h2>
     <p class="ds-section-caption">Ranked by log score — favorites rewarded, small samples humbled.</p>
+    <div class="ds-scroll genres-scroll">
     <div v-for="(genre, index) in genres" :key="genre.name" class="pantheon-category">
       <h3 class="pantheon-label">
         <span class="genre-rank">#{{ index + 1 }}</span> {{ genre.name }}
@@ -14,6 +15,7 @@
           <div v-else class="ds-poster ds-poster-blank">{{ film.movie.title }}</div>
         </div>
       </div>
+    </div>
     </div>
   </section>
 </template>

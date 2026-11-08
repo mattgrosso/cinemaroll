@@ -8,6 +8,7 @@
       <div class="ds-strip-item"><span class="ds-strip-value">{{ Math.round(rewatches.rewatchRate * 100) }}%</span><span class="ds-strip-label">rewatch rate</span></div>
       <div class="ds-strip-item"><span class="ds-strip-value">{{ rewatches.medianReturnYears.toFixed(1) }}y</span><span class="ds-strip-label">median return</span></div>
     </div>
+    <div class="ds-scroll rewatches-scroll">
     <h3 class="pantheon-label">Most rewatched</h3>
     <div class="ds-poster-row">
       <div v-for="film in rewatches.mostRewatched" :key="film.entry.dbKey" class="ds-poster-card" role="button" :aria-label="film.entry.movie.title" @click="goToMovie(film.entry)">
@@ -36,6 +37,7 @@
         </div>
       </div>
     </template>
+    </div>
   </section>
 </template>
 
