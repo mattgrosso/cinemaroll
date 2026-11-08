@@ -39,7 +39,7 @@ const {
   gamesDue, shouldSendGames, composeGamesMessage,
   externalWatches, externalLogsDue, externalFeedRead, externalCheckDue,
   signupsDue, composeSignupMessages,
-  alamoListings, veeziListings, afiListings, boxofficeListings, afiFirstShowtime,
+  alamoListings, veeziListings, veeziSaysEmpty, emptyBoardError, afiListings, boxofficeListings, afiFirstShowtime,
   boardFailuresDue,
   cinemaclockListings, uncovered, dismissedFilms, dismissedAtRank, staleTheaterEntries, boardForApp, remindersDue, showtimesWaiting, showtimesBadgeFilms, badgeSeenAt, badgeBreakdown, appendBadgeLog, declarativePayload, composeReminderMessage, listingsDue, composeListingMessages,
   cinemaclockCitySlug, cinemaclockCityTheaters, followedTheaters
@@ -139,7 +139,12 @@ const viaCinemaclock = (key, name, page, site, { smithsonian = false } = {}) => 
   cinemaclock: page,
   name,
   url: site,
-  listings: async () => cinemaclockListings(await fetchText(`${CINEMACLOCK_URL}/${page}`), { url: site }),
+  listings: async () => {
+    const html = await fetchText(`${CINEMACLOCK_URL}/${page}`);
+    const listings = cinemaclockListings(html, { url: site });
+    if (!listings.length && !smithsonian) throw emptyBoardError(html);
+    return listings;
+  },
   // The Smithsonian theaters publish in batches every few weeks; a quiet
   // board there is real, not a broken fetch.
   mayBeEmpty: smithsonian
@@ -181,10 +186,14 @@ const THEATERS = [
     cinemaclock: 'miracle-theatre',
     name: 'the Miracle Theatre',
     url: 'https://ticketing.useast.veezi.com/sessions/?siteToken=m8rg867jdpj1g3vn7sq1f1wfg4',
-    listings: async (now) => veeziListings(
-      await fetchText('https://ticketing.useast.veezi.com/sessions/?siteToken=m8rg867jdpj1g3vn7sq1f1wfg4'),
-      { now, fallbackUrl: 'https://themiracletheatre.com/' }
-    )
+    listings: async (now) => {
+      const html = await fetchText('https://ticketing.useast.veezi.com/sessions/?siteToken=m8rg867jdpj1g3vn7sq1f1wfg4');
+      const listings = veeziListings(html, { now, fallbackUrl: 'https://themiracletheatre.com/' });
+      // Empty is real only when Veezi says so; otherwise name what came back.
+      if (!listings.length && !veeziSaysEmpty(html)) throw emptyBoardError(html);
+      return listings;
+    },
+    mayBeEmpty: true
   },
   {
     key: 'cinema-arts',
@@ -204,7 +213,12 @@ const THEATERS = [
     cinemaclock: 'afi-silver-theatre-cultural-center',
     name: 'AFI Silver',
     url: 'https://silver.afi.com/now-playing/',
-    listings: async () => afiListings(await fetchText('https://silver.afi.com/now-playing/')),
+    listings: async () => {
+      const html = await fetchText('https://silver.afi.com/now-playing/');
+      const listings = afiListings(html);
+      if (!listings.length) throw emptyBoardError(html);
+      return listings;
+    },
     // The grid has no dates; the film's own page does. Fetched only for
     // listings about to be announced.
     enrich: async (listing) => ({ ...listing, firstShowTime: afiFirstShowtime(await fetchText(listing.url)) })

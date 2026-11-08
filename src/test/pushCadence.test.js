@@ -34,6 +34,9 @@ import {
   decodeEntities,
   veeziDateTime,
   veeziListings,
+  veeziSaysEmpty,
+  pageSummary,
+  emptyBoardError,
   afiListings,
   boxofficeListings,
   afiFirstShowtime,
@@ -1026,6 +1029,42 @@ describe('theater listings — the parsed sites', () => {
   it('an empty Veezi page is an empty board, not a crash', () => {
     expect(veeziListings('', { now: SEPT_28 })).toEqual([]);
     expect(veeziListings('<div class="film "><h3 class="title">No code</h3></div>', { now: SEPT_28 })).toEqual([]);
+  });
+
+  // Cut from the live page, 2026-11-08, when the Miracle had nothing on sale.
+  const VEEZI_NOTHING_SCHEDULED = `<!DOCTYPE html>
+<html>
+<head>
+    <title>The Miracle Theatre Show Times</title>
+</head>
+    <body>
+            <div id="page-body" >
+<h2 class="times-header">
+Show        <em class="highlight-foreground">Times</em>
+</h2>
+<ul id="tabs" role="tablist">
+    <li role="presentation"><a id="byFilmTab" href="#" aria-controls="sessionsByFilmConent" aria-selected="False">Sort by film</a></li>
+    <li role="presentation"><a id="byDateTab" href="#" aria-controls="sessionsByDateConent" aria-selected="false">Sort by date</a></li>
+    </ul>
+        <p class="empty">No shows currently scheduled</p>
+            </div>
+    </body>
+</html>`;
+
+  it("Veezi's 'No shows currently scheduled' is a real empty board; any other empty page is not", () => {
+    expect(veeziListings(VEEZI_NOTHING_SCHEDULED, { now: SEPT_28 })).toEqual([]);
+    expect(veeziSaysEmpty(VEEZI_NOTHING_SCHEDULED)).toBe(true);
+    expect(veeziSaysEmpty(VEEZI)).toBe(false);
+    expect(veeziSaysEmpty('')).toBe(false);
+    expect(veeziSaysEmpty('<html><title>Access denied</title></html>')).toBe(false);
+    // Film blocks beside the notice: the notice is not the whole story.
+    expect(veeziSaysEmpty(VEEZI + '<p class="empty">No shows currently scheduled</p>')).toBe(false);
+  });
+
+  it('an empty board error names the page it got: title and size', () => {
+    expect(pageSummary('<html><head><title> The Miracle &amp; Co </title></head></html>')).toBe('page "The Miracle & Co", 0.1 KB');
+    expect(pageSummary('')).toBe('page with no title, 0.0 KB');
+    expect(emptyBoardError(VEEZI_NOTHING_SCHEDULED).message).toMatch(/^returned no listings \(page "The Miracle Theatre Show Times", \d+\.\d KB\)$/);
   });
 
   const AFI = `

@@ -464,7 +464,12 @@ not. An empty board is treated as a failed fetch, never as "everything left" —
 CinemaClock page for someone's Brooklyn Alamo opened a Sentry issue). `noteBoardFailures`
 keeps each theater's streak at `mattgrosso-gmail-com/push/state/boardFailures/<key>` =
 { since, reportedAt } and `boardFailuresDue` (tested) raises a `console.error` — Sentry —
-only after a day unreadable, then once a day while it lasts; a good read clears it. Each push
+only after a day unreadable, then once a day while it lasts; a good read clears it. **An empty page names itself (2026-11-08):** the Miracle's
+Veezi page said "No shows currently scheduled" for a day and Sentry called the board unreadable.
+`veeziSaysEmpty` (tested, from the live page) makes that notice, with no film blocks, a REAL empty
+board (the Miracle entry is `mayBeEmpty` and its adapter throws on any other empty page), and the
+HTML adapters throw `emptyBoardError(html)`, "returned no listings (page "<title>", N KB)", so a
+moved page, a block page and a quiet theater read differently in Sentry. Each push
 `navigate`s straight to the listing's ticket page — `buildPayload` now passes absolute URLs
 through untouched — which is untested on iOS's declarative path; if a tap lands in the app
 instead, fall back to `/`. Adding a theater is adding a `THEATERS` entry with its own adapter.

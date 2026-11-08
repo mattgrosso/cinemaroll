@@ -1125,6 +1125,31 @@ function veeziListings (html, { now = Date.now(), fallbackUrl = null } = {}) {
 }
 
 /**
+ * Veezi's own word that nothing is on sale (2026-11-08: the Miracle's page
+ * read "No shows currently scheduled" for a day and Sentry called the board
+ * unreadable). Only that notice, with no film blocks beside it, makes an
+ * empty board real; anything else empty is still a broken read.
+ */
+function veeziSaysEmpty (html) {
+  const text = String(html || '');
+  return !/<div\s+class="film[\s"]/.test(text) &&
+    /<p class="empty">\s*No shows currently scheduled\s*<\/p>/i.test(text);
+}
+
+/**
+ * What an empty page actually was, for the error (2026-11-08): its <title>
+ * and size tell a moved page, a block page and a quiet theater apart without
+ * anyone having to go and fetch it.
+ */
+function pageSummary (html) {
+  const text = String(html || '');
+  const title = stripTags((/<title[^>]*>([\s\S]*?)<\/title>/i.exec(text) || [])[1]);
+  const kb = (new TextEncoder().encode(text).length / 1024).toFixed(1);
+  return `${title ? `page "${title}"` : 'page with no title'}, ${kb} KB`;
+}
+const emptyBoardError = (html) => new Error(`returned no listings (${pageSummary(html)})`);
+
+/**
  * AFI Silver's "Now Playing" page: one `movie_item` per film, linking to
  * movies/detail/<Vista film id>. The page carries no dates, so
  * firstShowTime is null and the push simply names the film.
@@ -1665,6 +1690,9 @@ module.exports = {
   decodeEntities,
   veeziDateTime,
   veeziListings,
+  veeziSaysEmpty,
+  pageSummary,
+  emptyBoardError,
   afiListings,
   boxofficeListings,
   afiFirstShowtime,
