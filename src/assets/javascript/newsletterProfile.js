@@ -16,6 +16,10 @@
 // whose work he seeks out, what he reaches for, what he has already seen —
 // not a dump of the library.
 
+// Matt, 2026-11-09: every count of his films leaves shorts out unless "Include short films" is on;
+// the profile's library count and the people list's three-films rule included.
+import { withoutShorts } from './shorts.js';
+
 // How many of each kind of favourite to publish. Twelve is enough for a model
 // to spot a pattern and few enough that the prompt stays cheap.
 const TOP_N = 12;
@@ -138,7 +142,8 @@ function recentHighs (entries, scoreOf, dateOf, limit = 10, now = Date.now()) {
  * `getRating` and the date accessor are injected rather than imported so this
  * stays pure and testable, matching how buildPushDigest takes getRating.
  */
-export function buildNewsletterProfile ({ entries = [], getRating, now = Date.now() } = {}) {
+export function buildNewsletterProfile ({ entries: all = [], getRating, now = Date.now(), includeShorts = false } = {}) {
+  const entries = withoutShorts(all, includeShorts);
   const scoreOf = (entry) => {
     const rating = getRating?.(entry);
     const total = rating?.calculatedTotal;
@@ -221,7 +226,8 @@ function cared (byName, libraryAverage, limit) {
   return rows.slice(0, limit);
 }
 
-export function buildPeopleList ({ entries = [], getRating, now = Date.now() } = {}) {
+export function buildPeopleList ({ entries: all = [], getRating, now = Date.now(), includeShorts = false } = {}) {
+  const entries = withoutShorts(all, includeShorts);
   const scoreOf = (entry) => {
     const total = getRating?.(entry)?.calculatedTotal;
     return typeof total === 'number' && Number.isFinite(total) ? total : null;

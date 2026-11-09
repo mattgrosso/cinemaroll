@@ -49,6 +49,7 @@ import { showtimesWaiting, readShowtimesSeenAt, resolveShowtimesSeenAt, SHOWTIME
 import { deviceLabel, mergeLogs, worthLogging, readSwPushLog } from "../assets/javascript/badgeLog.js";
 import { ticketsMark } from "../assets/javascript/showtimesTickets.js";
 import { buildNewsletterProfile, buildPeopleList } from "../assets/javascript/newsletterProfile.js";
+import { includeShortsSetting } from "../assets/javascript/shorts.js";
 const PEOPLE_PUBLISH_EVERY_MS = 6 * 60 * 60 * 1000;
 let peoplePublishedAt = 0;
 import { postToNewsletter } from "../utils/newsletterRequest.js";
@@ -3524,7 +3525,8 @@ export default createStore({
       try {
         const profile = buildNewsletterProfile({
           entries: context.getters.allMediaAsArray,
-          getRating
+          getRating,
+          includeShorts: includeShortsSetting(context.state)
         });
         await set(ref(db, `${root}/newsletter/profile`), profile);
       } catch (error) {
@@ -3567,7 +3569,8 @@ export default createStore({
       try {
         await set(ref(db, `${root}/newsletter/people`), buildPeopleList({
           entries: context.getters.allMediaAsArray,
-          getRating
+          getRating,
+          includeShorts: includeShortsSetting(context.state)
         }));
       } catch (error) {
         peoplePublishedAt = 0;

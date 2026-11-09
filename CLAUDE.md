@@ -351,6 +351,11 @@ come only if Spotify lets Matt's token read the playlist (the app token can't), 
 `settings/includeShorts` and, unless it is explicitly on, drops shorts from the log before anything counts (`logAsSet`,
 the app's rule: 40 minutes or under, unknown runtime kept; the archive top-up gets the same log). `forgetUnreached`
 drops milestones the count no longer reaches, so a round number runs again when it is truly crossed.
+A milestone story's id names the viewing that crossed the line (`log-milestone-<key>-<film>-<day>`), so a rerun
+isn't swallowed by Newsprinted's never-twice ids (2026-11-09: the pre-fix 1,500 films / 1,600 viewings / 400 this
+year stories, written that morning before the fix, had been held by Newsprinted's pacing and let out after it).
+The newsletter profile and the people list (`buildNewsletterProfile` / `buildPeopleList`) take `includeShorts`
+too, so the library count and the three-films rule leave shorts out unless the setting is on.
 By hand: `{"logPaper":true,"musicFor":<tmdb id>}` writes just that film's music story now, under a fresh id so Newsprinted shows it again. Adding to Liked Songs from the story would need `user-library-modify` in Twelve Months and a reconnect.
 
 ## From the archive for Newsprinted (2026-10-28)

@@ -203,7 +203,10 @@ function milestoneSheets (rows, done, now) {
       if (kind === 'films') { if (seen.has(r.film)) continue; seen.add(r.film); acc += 1; } else if (kind === 'hours') acc += (r.movie?.runtime || 0) / 60; else acc += 1;
       if (acc >= reached) { crosser = r; break; }
     }
-    out.push({ kind: 'milestone', key, facts: { milestone: `${reached} ${MILESTONE_WORDS[kind]}`, measure: kind, reached, crossedBy: crosser ? { title: crosser.title, year: crosser.year, rating: r1(crosser.rating), on: dateWords(crosser.date), medium: crosser.medium } : null, totals: t, firstLogged: rows[0] ? dateWords(rows[0].date) : null }, factLine: `${reached} ${MILESTONE_WORDS[kind]}${crosser ? `, crossed with ${crosser.title}` : ''}`, expiresDays: 3 });
+    // The id names the viewing that crossed the line: a round number that runs again (shorts left out
+    // moved the crossing) is a different story, and Newsprinted never shows an id it has seen twice.
+    const idKey = crosser ? `${key}-${crosser.film}-${dayKey(crosser.date)}` : key;
+    out.push({ kind: 'milestone', key, idKey, facts: { milestone: `${reached} ${MILESTONE_WORDS[kind]}`, measure: kind, reached, crossedBy: crosser ? { title: crosser.title, year: crosser.year, rating: r1(crosser.rating), on: dateWords(crosser.date), medium: crosser.medium } : null, totals: t, firstLogged: rows[0] ? dateWords(rows[0].date) : null }, factLine: `${reached} ${MILESTONE_WORDS[kind]}${crosser ? `, crossed with ${crosser.title}` : ''}`, expiresDays: 3 });
   }
   return out;
 }
@@ -513,7 +516,7 @@ function musicLinks (sheet, story) {
 /** The feed item for a written sheet. */
 function storyItem (sheet, story, now = Date.now()) {
   return {
-    id: `log-${sheet.kind}-${sheet.key}`,
+    id: `log-${sheet.kind}-${sheet.idKey || sheet.key}`,
     url: sheet.film ? `https://www.cinemaroll.org/movie/${sheet.film}` : 'https://www.cinemaroll.org/',
     title: story.headline,
     content_html: `${story.paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('')}${sheet.kind === 'music' ? musicLinks(sheet, story) : ''}<p><small>${escapeHtml(sheet.factLine)}</small></p>`,

@@ -246,6 +246,17 @@ describe('shorts, as the setting says', () => {
     expect(featuresOnly.facts.crossedBy.title).toBe('Hundredth');
   });
 
+  it('a milestone that runs again comes under a new story id, so Newsprinted shows it', () => {
+    const many = Object.fromEntries(Array.from({ length: 99 }, (_, i) => [`f${i}`, { movie: film(100 + i, `F${i}`, 1990, { runtime: 95 }), ratings: [{ date: t('2025-01-01T20:00:00-05:00') + i * DAY, rating: 6 }] }]));
+    const shorts = Object.fromEntries(Array.from({ length: 5 }, (_, i) => [`s${i}`, { movie: film(300 + i, `S${i}`, 1990, { runtime: 12 }), ratings: [{ date: t('2025-06-01T20:00:00-04:00') + i * DAY, rating: 6 }] }]));
+    const all = { ...many, ...shorts, last: { movie: film(400, 'Hundredth', 2000, { runtime: 100 }), ratings: [{ date: t('2026-10-01T20:00:00-04:00'), rating: 7 }] } };
+    const story = { headline: 'h', angle: 'a', paragraphs: ['p'] };
+    const early = storyItem(milestoneSheets(flatten(all), {}, now).find((s) => s.key === 'films-100'), story, now);
+    const real = storyItem(milestoneSheets(flatten(logAsSet(all)), {}, now).find((s) => s.key === 'films-100'), story, now);
+    expect(real.id).toBe('log-milestone-films-100-400-2026-10-01');
+    expect(early.id).not.toBe(real.id);
+  });
+
   it('forgets milestones the count no longer reaches, so they run again', () => {
     const rows = flatten(logAsSet(slog));
     const kept = forgetUnreached({ 'ratings-1600': true, 'ratings-1': true, 'films-100': true, 'year-2025-1600': true, 'year-2026-1600': true, odd: 5 }, rows, now);

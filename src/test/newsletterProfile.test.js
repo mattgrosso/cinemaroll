@@ -169,6 +169,25 @@ describe('buildPeopleList', () => {
     expect(names).not.toContain('Cameo Actor');
   });
 
+  // Matt, 2026-11-09: counts leave shorts out unless "Include short films" is on.
+  it('leaves short films out of the three-films rule unless shorts are on', () => {
+    const shorty = byDirector('Shorts Director', 3, 9, 500);
+    shorty[2].movie.runtime = 12;
+    const entries = [...shorty, ...byDirector('Low', 6, 4, 600)];
+    const off = buildPeopleList({ entries, getRating }).directors.map((d) => d.name);
+    const on = buildPeopleList({ entries, getRating, includeShorts: true }).directors.map((d) => d.name);
+    expect(off).not.toContain('Shorts Director');
+    expect(on).toContain('Shorts Director');
+  });
+
+  it('the profile counts the library without shorts unless they are on', () => {
+    const entries = byDirector('Anyone', 5, 7, 700);
+    entries[0].movie.runtime = 20;
+    entries[1].movie.runtime = 0;
+    expect(buildNewsletterProfile({ entries, getRating }).libraryCount).toBe(4);
+    expect(buildNewsletterProfile({ entries, getRating, includeShorts: true }).libraryCount).toBe(5);
+  });
+
   it('goes well past the profile\'s dozen', () => {
     const entries = [];
     for (let d = 0; d < 40; d += 1) entries.push(...byDirector(`Director ${d}`, 3, 9, d * 10 + 1));
