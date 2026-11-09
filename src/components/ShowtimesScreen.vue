@@ -38,21 +38,20 @@
       </div>
       <p class="st-updated">Checked {{ ago(board.updatedAt) }}</p>
 
-      <section v-for="theater in theaters" :key="theater.key" class="st-theater">
+      <!-- Only theaters with a card under the current toggles (2026-11-09). -->
+      <p v-if="sections.caughtUp" class="st-caught-up" role="status"><i class="bi bi-check2-circle"></i> All caught up</p>
+
+      <section v-for="theater in sections.visible" :key="theater.key" class="st-theater">
         <h2 class="st-theater-name">
           <a v-if="hrefFor(theater)" :href="hrefFor(theater)" :target="targetFor(hrefFor(theater))" rel="noopener">{{ theater.name }}</a>
           <span v-else>{{ theater.name }}</span>
           <span class="st-count">{{ theater.shown.length }}</span>
         </h2>
-        <p v-if="!theater.ok" class="st-empty">Couldn't read this board last time.</p>
-        <p v-else-if="!theater.shown.length" class="st-empty">
-          {{ theater.listings.length ? 'Nothing here you haven\'t handled or a better theater lacks.' : 'Nothing listed.' }}
-        </p>
         <!-- Posters, not names (Matt: "I like posters more than text"), one
              to a row ("make these posters be one across and swiping right
              dismisses them", 2026-09-28). A card is the film's poster with a
              thin caption; the X and a swipe to the right both dismiss it. -->
-        <div v-else class="st-grid">
+        <div class="st-grid">
           <div
             v-for="item in theater.shown"
             :key="item.slug"
@@ -140,6 +139,7 @@
           </div>
         </div>
       </section>
+      <p v-if="sections.unreadable.length" class="st-unreadable">Couldn't read {{ nameList(sections.unreadable) }} last time.</p>
     </template>
 
     <p v-else-if="following" class="st-empty">No board yet. It's built every 15 minutes; check back shortly.</p>
@@ -162,6 +162,7 @@ import SkeletonBlock from './SkeletonBlock.vue';
 import { lookupFilm, titleWithYear } from '../utils/posterLookup.js';
 import { reminderTimeFor } from '../utils/reminderTime.js';
 import { theaterHref, opensInNewTab } from '../assets/javascript/theaterLinks.js';
+import { boardSections, nameList } from '../assets/javascript/showtimesBoard.js';
 import { SHOWTIMES_SEEN_KEY, dismissedFilms, dismissedAtRank, titleKey } from '../assets/javascript/showtimesUnread.js';
 import { isTicketsMark, filmCopies, ticketFilms } from '../assets/javascript/showtimesTickets.js';
 
@@ -284,7 +285,8 @@ export default {
         const shown = listings.filter((l) => (this.showDismissed || !l.dismissed) && (this.showTickets || !l.tickets) && (this.showWaiting || !l.waiting) && (!this.onlyUnique || !l.coveredBy));
         return { ...t, listings, shown };
       });
-    }
+    },
+    sections () { return boardSections(this.theaters); }
   },
   watch: {
     onlyUnique (value) {
@@ -318,6 +320,7 @@ export default {
     clearTimeout(this.pressTimer);
   },
   methods: {
+    nameList,
     cardId (theater, item) { return `${theater.key}/${item.slug}`; },
     // Alamo opens its app, everything else the theater's page (theaterLinks.js).
     hrefFor (theater, item) { return theaterHref(theater, item, { alamoApp: this.alamoApp }); },
@@ -704,6 +707,17 @@ export default {
 }
 
 .st-empty { color: #999; font-size: 0.82rem; margin: 0.2rem 0 0; }
+
+.st-caught-up {
+  color: #ccc;
+  font-size: 0.95rem;
+  text-align: center;
+  margin: 2rem 0 1rem;
+
+  i { color: #8fd18f; margin-right: 0.3rem; }
+}
+
+.st-unreadable { color: #bbb; font-size: 0.78rem; margin: 1rem 0 0; }
 
 /* One poster to a row, the width of the section, so a swipe has room to
    be a swipe. Wider screens get two so a desktop isn't a wall of one. */
