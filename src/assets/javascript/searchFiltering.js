@@ -17,7 +17,7 @@ import { uniqueViewingTags } from '../../utils/tags.js';
 import { normalizeSearchText, looseSearchText } from './searchText.js';
 import { numeralTokens, numeralTokensMatch, titleMatchesValue } from './numberWords.js';
 import { FILTER_KINDS, getListOfYearsFromRange } from './filterKinds.js';
-import { adjustedMovieMoney } from './inflation.js';
+import { movieMoney } from './boxOfficeIndex.js';
 import { studioNamesFor } from './distributors.js';
 
 export { normalizeSearchText, looseSearchText, getListOfYearsFromRange };
@@ -103,14 +103,12 @@ export const BOX_OFFICE_SORTS = new Set(['budget', 'boxOffice', 'profit', 'retur
  * zero — a film that simply lacks a date must not be reclassified as having
  * no box office and sink out of the list.
  */
-const boxOfficeFor = (item, adjusted = false) => {
-  const budget = item?.movie?.budget || 0;
-  const revenue = item?.movie?.revenue || 0;
-  if (!adjusted) return { budget, revenue };
-  return {
-    budget: adjustedMovieMoney(item?.movie, 'budget') ?? budget,
-    revenue: adjustedMovieMoney(item?.movie, 'revenue') ?? revenue
-  };
+const boxOfficeFor = (item, adjusted = false, boxOfficeIndex = null) => {
+  // Box Office History's numbers once its index has loaded (boxOfficeIndex.js):
+  // box office is the archive's domestic gross, profit and return use its
+  // worldwide gross. Budgets are TMDB's either way.
+  const { budget, boxOffice, worldwide } = movieMoney(item?.movie, boxOfficeIndex, { adjusted });
+  return { budget, revenue: boxOffice, worldwide };
 };
 
 /**
@@ -157,12 +155,12 @@ export const isModernWithNoBoxOffice = (item) => {
  * Profit and percentage-returned need both numbers; budget and box office
  * need only their own.
  */
-export function isSortValueUnknown (item, key) {
+export function isSortValueUnknown (item, key, { boxOfficeIndex = null } = {}) {
   // The crowd's rating (Home decorates `_crowd` from letterboxdFilms); a film
   // Letterboxd hasn't rated sinks in both directions like a missing budget.
   if (key === 'letterboxd') return !Number.isFinite(item?._crowd);
   if (!BOX_OFFICE_SORTS.has(key)) return false;
-  const { budget, revenue } = boxOfficeFor(item);
+  const { budget, revenue, worldwide } = boxOfficeFor(item, false, boxOfficeIndex);
   // A budget IS known for a streaming original — but it isn't comparable to
   // one that sold tickets, which is the complaint. Sunk rather than hidden,
   // so it's still findable at the end of the list.
@@ -175,14 +173,14 @@ export function isSortValueUnknown (item, key) {
   // office rather than exactly none.
   if (key === 'budget') return budget <= 0 || isModernWithNoBoxOffice(item);
   if (key === 'boxOffice') return revenue <= 0;
-  return budget <= 0 || revenue <= 0;
+  return budget <= 0 || worldwide <= 0;
 }
 
 /**
  * The sort key value for `item`. `getRating(item)` returns the rating object
  * (the component passes its mostRecentRating, which wraps GetRating.js).
  */
-export function getSortValue (item, key, getRating, { adjusted = false } = {}) {
+export function getSortValue (item, key, getRating, { adjusted = false, boxOfficeIndex = null } = {}) {
   if (BOX_OFFICE_SORTS.has(key)) {
     // Return on budget is deliberately NOT adjusted. Budget and box office
     // are in the same year's dollars, so scaling both by the same factor
@@ -190,14 +188,14 @@ export function getSortValue (item, key, getRating, { adjusted = false } = {}) {
     // removes it passes every test, because the maths already agrees). It
     // stays as a statement of intent, and it would start mattering the day
     // the two figures were ever adjusted by different indices.
-    const { budget, revenue } = boxOfficeFor(item, adjusted && key !== 'returnPct');
+    const { budget, revenue, worldwide } = boxOfficeFor(item, adjusted && key !== 'returnPct', boxOfficeIndex);
     if (key === 'budget') return budget;
     if (key === 'boxOffice') return revenue;
-    if (key === 'profit') return revenue - budget;
+    if (key === 'profit') return worldwide - budget;
     // Percentage of budget returned: 250 means it made two and a half times
     // what it cost. Guarded against a zero budget, which would be Infinity
     // and would sort above every real film.
-    return budget > 0 ? (revenue / budget) * 100 : 0;
+    return budget > 0 ? (worldwide / budget) * 100 : 0;
   }
   if (key === 'letterboxd') {
     return Number.isFinite(item?._crowd) ? item._crowd : -1;
@@ -230,15 +228,15 @@ export function getSortValue (item, key, getRating, { adjusted = false } = {}) {
  * on the cached values with semantics identical to sortResults. Returns a NEW
  * array (does not mutate the input).
  */
-export function sortResultsFast (array, { sortValue, sortOrder, getRating, adjusted = false }) {
+export function sortResultsFast (array, { sortValue, sortOrder, getRating, adjusted = false, boxOfficeIndex = null }) {
   const key = sortValue || 'rating';
   const bestOnTop = sortOrder === 'bestOrNewestOnTop';
 
   const decorated = array.map((item) => {
     const rating = getRating(item);
     const secondary = rating.calculatedTotal;
-    const primary = key === 'rating' ? rating.calculatedTotal : getSortValue(item, key, getRating, { adjusted });
-    return { item, primary, secondary, unknown: isSortValueUnknown(item, key) };
+    const primary = key === 'rating' ? rating.calculatedTotal : getSortValue(item, key, getRating, { adjusted, boxOfficeIndex });
+    return { item, primary, secondary, unknown: isSortValueUnknown(item, key, { boxOfficeIndex }) };
   });
 
   decorated.sort((a, b) => {
@@ -274,19 +272,19 @@ export function sortResultsFast (array, { sortValue, sortOrder, getRating, adjus
  * Reference comparator (the oracle sortResultsFast is tested against). Kept
  * identical to the legacy in-component comparator.
  */
-export function sortResults (a, b, { sortValue, sortOrder, getRating, adjusted = false }) {
+export function sortResults (a, b, { sortValue, sortOrder, getRating, adjusted = false, boxOfficeIndex = null }) {
   const key = sortValue || 'rating';
 
   // Kept in lockstep with sortResultsFast — searchFiltering.test.js asserts
   // the two produce byte-identical orderings.
-  const unknownA = isSortValueUnknown(a, key);
-  const unknownB = isSortValueUnknown(b, key);
+  const unknownA = isSortValueUnknown(a, key, { boxOfficeIndex });
+  const unknownB = isSortValueUnknown(b, key, { boxOfficeIndex });
   if (unknownA !== unknownB) {
     return unknownA ? 1 : -1;
   }
 
-  const sortValueA = getSortValue(a, key, getRating, { adjusted });
-  const sortValueB = getSortValue(b, key, getRating, { adjusted });
+  const sortValueA = getSortValue(a, key, getRating, { adjusted, boxOfficeIndex });
+  const sortValueB = getSortValue(b, key, getRating, { adjusted, boxOfficeIndex });
 
   if (sortValueA === sortValueB) {
     const secondarySortValueA = getRating(a).calculatedTotal;

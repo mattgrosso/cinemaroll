@@ -785,3 +785,16 @@ no caller had to change. The Awards tab took Ratings' blue rather than gold: two
 side by side in the top row would read as one. Activity's ratings half sits under a small
 "Ratings" divider after the calendar; the other order (ratings first) was offered in case the
 tab feels long. Trophy Case is a muted text link under your own awards.
+
+## Every box office number from Box Office History (2026-11-09)
+
+Bug report from Matt on Insights: "Do all of the box office numbers in Cinema Roll now
+come from boxofficehistory.com? They really ought to." Only the movie page's tile and the
+weekend #1 line did; Home's money sorts and captions and both Insights lists still read
+TMDB's one undated worldwide number. Asking the archive film by film would have been two
+requests per film (3,000 for a 1,500-film library), so the archive grew one file,
+`index/tmdb.json` (every TMDB-bridged film's domestic, worldwide, runs and tickets), and
+Cinema Roll keeps it a month. Calls made without Matt (he approved the plan with them
+open): a film the archive doesn't know shows no box office rather than TMDB's number;
+profit and return use the archive's worldwide gross, not domestic, so hits don't shrink.
+Both are one-line changes in `boxOfficeIndex.js` if he wants them the other way.

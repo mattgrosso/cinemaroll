@@ -2,12 +2,12 @@
   <div class="box-office-years">
     <div class="box-office-card">
       <p class="box-office-title">Biggest box office years</p>
-      <p class="box-office-caption">Release years ranked by the worldwide gross of the films you've rated from them. {{ wording.inBaseYear }}, each gross is restated by average ticket price. Tap a year to see its films.</p>
+      <p class="box-office-caption">Release years ranked by the {{ grossKind }} gross of the films you've rated from them{{ fromArchive }}. {{ wording.inBaseYear }}, each gross is restated by average ticket price. Tap a year to see its films.</p>
       <div class="dollar-toggle" role="group" aria-label="Which dollars to sum">
         <button type="button" class="dollar-option" :class="{ active: adjusted }" :aria-pressed="adjusted" @click="setAdjusted(true)">{{ wording.inBaseYear }}</button>
         <button type="button" class="dollar-option" :class="{ active: !adjusted }" :aria-pressed="!adjusted" @click="setAdjusted(false)">{{ wording.asReported }}</button>
       </div>
-      <p v-if="!years.length" class="box-office-empty">No box office figures yet — the Settings panel's backfill fetches them.</p>
+      <p v-if="!years.length" class="box-office-empty">No box office figures yet.</p>
       <ul v-else>
         <li v-for="(item, index) in years" :key="item.year" class="year-row" @click="$emit('updateSearchValue', String(item.year))">
           <span class="year-rank">{{ index + 1 }}</span>
@@ -29,6 +29,7 @@
 import { boxOfficeByYear } from "../assets/javascript/boxOfficeYears.js";
 import { formatMoneyShort } from "../assets/javascript/formatMoney.js";
 import { WORDING } from "../assets/javascript/inflation.js";
+import { grossKind } from "../assets/javascript/boxOfficeIndex.js";
 
 // Which dollars the list was last read in. Persists like the Insights tab
 // itself; the base year's dollars by default, because a sum across decades in
@@ -55,12 +56,26 @@ export default {
       adjusted: remembered !== 'released'
     };
   },
+  mounted () {
+    // Box Office History's whole-library index (boxOfficeIndex.js); until it
+    // arrives the list reads TMDB, then re-ranks.
+    this.$store?.dispatch?.('ensureBoxOfficeIndex');
+  },
   computed: {
+    boxOfficeIndex () {
+      return this.$store?.state?.boxOfficeIndex || null;
+    },
+    grossKind () {
+      return grossKind(this.boxOfficeIndex);
+    },
+    fromArchive () {
+      return this.boxOfficeIndex ? ', from Box Office History' : '';
+    },
     wording () {
       return WORDING;
     },
     years () {
-      return boxOfficeByYear(this.resultsWithRatings, { adjusted: this.adjusted });
+      return boxOfficeByYear(this.resultsWithRatings, { adjusted: this.adjusted, boxOfficeIndex: this.boxOfficeIndex });
     }
   },
   methods: {

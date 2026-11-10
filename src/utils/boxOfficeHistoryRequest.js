@@ -4,6 +4,7 @@
 // the archive's data changes a few times a year. Never throws: a film page
 // must not break over box office history.
 import { ARCHIVE_API } from '../assets/javascript/boxOfficeHistory.js';
+import { loadSnapshot, saveSnapshot } from './offlineStore.js';
 
 const FOUND_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MISSING_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -92,4 +93,46 @@ export function fetchArchiveCalendar (year, { now = Date.now() } = {}) {
   if (!Number.isInteger(y) || y < 1970 || y > 2100) return Promise.resolve(null);
   const maxAge = y >= new Date(now).getFullYear() ? CURRENT_YEAR_TTL_MS : null;
   return cached(`boxOfficeHistory:calendar:${y}`, now, () => getJson(`calendar/${y}.json`), maxAge);
+}
+
+// The whole-library index (index/tmdb.json, ~300 KB gzipped, 800 KB as JSON):
+// too big for localStorage, so it lives in the offline IndexedDB store, kept
+// a month like the film lookups. A stale copy is still used when the archive
+// can't be reached: old box office beats none.
+const INDEX_SNAPSHOT = ['boxOfficeHistory', 'tmdbIndex'];
+const INDEX_TTL_MS = FOUND_TTL_MS;
+const INDEX_TIMEOUT_MS = 20000;
+let indexRequest = null;
+
+const fetchIndexFile = async () => {
+  if (typeof fetch !== 'function') return null;
+  try {
+    const response = await fetch(`${ARCHIVE_API}/index/tmdb.json`, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(INDEX_TIMEOUT_MS) });
+    if (!response.ok || !/json/i.test(response.headers.get('content-type') || '')) return null;
+    const index = await response.json();
+    return index && typeof index === 'object' && Object.keys(index).length ? index : null;
+  } catch (error) {
+    console.warn('Box Office History index fetch failed:', error?.message);
+    return null;
+  }
+};
+
+/**
+ * Box Office History's whole-library index, keyed by TMDB id (see
+ * assets/javascript/boxOfficeIndex.js), or null when it has never been
+ * fetched and can't be now. Never throws; one request at a time.
+ */
+export function fetchArchiveIndex ({ now = Date.now(), load = loadSnapshot, save = saveSnapshot, download = fetchIndexFile } = {}) {
+  if (indexRequest) return indexRequest;
+  indexRequest = (async () => {
+    const stored = await load(...INDEX_SNAPSHOT);
+    if (stored?.index && now - (stored.at || 0) <= INDEX_TTL_MS) return stored.index;
+    const fresh = await download();
+    if (fresh) {
+      await save(...INDEX_SNAPSHOT, { at: now, index: fresh });
+      return fresh;
+    }
+    return stored?.index || null;
+  })().finally(() => { indexRequest = null; });
+  return indexRequest;
 }

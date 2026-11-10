@@ -10,7 +10,8 @@
 // matches them: crew by JOB, never by position, and performers by TOP
 // BILLING only — the whole cast list would hand every big film's
 // twentieth-billed actor a billion dollars.
-import { releaseYear, adjustGross } from './inflation.js';
+import { releaseYear } from './inflation.js';
+import { movieMoney } from './boxOfficeIndex.js';
 
 export const TOP_BILLING = 5;
 
@@ -40,17 +41,17 @@ export function namesInRole (movie, roleKey) {
  * @param {{ role?: string, adjusted?: boolean }} options
  * @returns {Array<{ name, total, count, top, topGross }>}  biggest total first
  */
-export function boxOfficeByPerson (entries, { role = 'director', adjusted = false } = {}) {
+export function boxOfficeByPerson (entries, { role = 'director', adjusted = false, boxOfficeIndex = null } = {}) {
   const byName = new Map();
 
   (entries || []).forEach((entry) => {
     const movie = entry?.movie;
-    const raw = Number(movie?.revenue) || 0;
-    if (!(raw > 0)) return;
+    // Box Office History's domestic gross once its index is loaded, TMDB's
+    // until then (boxOfficeIndex.js); 0 = unknown, adds nothing.
+    const gross = movieMoney(movie, boxOfficeIndex, { adjusted }).boxOffice;
+    if (!(gross > 0)) return;
     const year = releaseYear(movie.release_date);
     if (year == null) return;
-    const gross = adjusted ? adjustGross(raw, year) : raw;
-    if (!(gross > 0)) return;
 
     namesInRole(movie, role).forEach((name) => {
       if (!byName.has(name)) byName.set(name, []);

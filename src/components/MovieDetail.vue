@@ -531,7 +531,9 @@
           <p v-else class="long-list mb-0">
             <span v-if="movieBudget">Budget: {{ formatCurrency(movieBudget) }}</span>
             <br v-if="movieBudget && movieRevenue">
-            <span v-if="movieRevenue">Box Office: {{ formatCurrency(movieRevenue) }}</span>
+            <!-- A film Box Office History doesn't know: TMDB's one worldwide
+                 number, said to be TMDB's (2026-11-09). -->
+            <span v-if="movieRevenue">Box Office: {{ formatCurrency(movieRevenue) }}<span class="box-office-note">TMDB, worldwide</span></span>
           </p>
           <p v-if="archiveBoxOffice?.tickets" class="box-office-footnote">Restated from the old site's estimate of {{ archiveBoxOffice.tickets.toLocaleString() }} tickets sold<template v-if="archiveBoxOffice.runs">, across {{ archiveBoxOffice.runs.length }} releases ({{ archiveBoxOffice.runs.map((r) => r.year).join(', ') }})</template>.</p>
           <p v-else-if="archiveBoxOffice?.domesticTodayByRuns" class="box-office-footnote">Released {{ archiveBoxOffice.runs.length }} times ({{ archiveBoxOffice.runs.map((r) => r.year).join(', ') }}): each release is restated at its own year's ticket price.</p>

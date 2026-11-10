@@ -53,6 +53,7 @@ import { includeShortsSetting } from "../assets/javascript/shorts.js";
 const PEOPLE_PUBLISH_EVERY_MS = 6 * 60 * 60 * 1000;
 let peoplePublishedAt = 0;
 import { postToNewsletter } from "../utils/newsletterRequest.js";
+import { fetchArchiveIndex } from "../utils/boxOfficeHistoryRequest.js";
 import { announceFriendRequest , closeNotificationsWhere } from "../utils/push.js";
 
 // A rebuild takes about a minute end to end (measured at ~52s against the
@@ -560,6 +561,10 @@ export default createStore({
     // library, like sort order, not a fact about it — and it should not cost
     // a write or wait on a sync to take effect.
     moneyInTodaysDollars: window.localStorage.getItem('moneyInTodaysDollars') === 'true',
+    // Box Office History's whole-library index (boxOfficeIndex.js), frozen;
+    // null until ensureBoxOfficeIndex has loaded it, and every money sort,
+    // caption and Insights list reads TMDB until then.
+    boxOfficeIndex: null,
     // { dbKey, index } while RateMovie is amending an existing viewing,
     // otherwise null — see setRatingToEdit.
     ratingToEdit: null,
@@ -1171,6 +1176,10 @@ export default createStore({
 
       state.newEntrySearchResults = sorted;
     },
+    setBoxOfficeIndex (state, index) {
+      // Frozen: 12,000 entries that never change must not be made reactive.
+      state.boxOfficeIndex = index ? Object.freeze(index) : null;
+    },
     setMoneyInTodaysDollars (state, on) {
       state.moneyInTodaysDollars = Boolean(on);
       window.localStorage.setItem('moneyInTodaysDollars', String(state.moneyInTodaysDollars));
@@ -1407,6 +1416,15 @@ export default createStore({
     }
   },
   actions: {
+    // Loads Box Office History's index once per app run, from the device if
+    // it's under a month old, else from the archive. Called by whatever
+    // first needs a library-wide box office number. Never throws.
+    async ensureBoxOfficeIndex ({ state, commit }) {
+      if (state.boxOfficeIndex) return state.boxOfficeIndex;
+      const index = await fetchArchiveIndex();
+      if (index && !state.boxOfficeIndex) commit('setBoxOfficeIndex', index);
+      return state.boxOfficeIndex;
+    },
     // Shared tail of EVERY sign-in method (Google, Apple, email/password).
     // A user's whole library is keyed by their email address, so this is the
     // one place that derives the key, persists it, and boots the database —

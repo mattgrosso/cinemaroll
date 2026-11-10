@@ -319,7 +319,7 @@ const DATE_FORMATS = {
 import { formatScore } from '../assets/javascript/formatScore.js';
 import { compactCount } from '../assets/javascript/letterboxdFormat.js';
 import { formatMoneyShort, formatProfit, formatReturn } from '../assets/javascript/formatMoney.js';
-import { adjustedMovieMoney } from '../assets/javascript/inflation.js';
+import { movieMoney } from '../assets/javascript/boxOfficeIndex.js';
 import { isModernWithNoBoxOffice } from '../assets/javascript/searchFiltering.js';
 import ordinal from "ordinal-js";
 import minBy from 'lodash/minBy';
@@ -418,34 +418,28 @@ export default {
     // the number on the right) or have none to say (title).
     sortDetail () {
       const movie = this.topStructure(this.result) || {};
-      const rawBudget = movie.budget || 0;
-      const rawRevenue = movie.revenue || 0;
 
-      // The caption has to agree with the sort, or a list ordered by today's
-      // dollars would be labelled with the original ones. Falls back to the
-      // raw figure when a film can't be adjusted (no release date), matching
-      // boxOfficeFor in searchFiltering.js. Return on budget is a ratio of
+      // The caption has to agree with the sort (searchFiltering.js), so both
+      // read movieMoney: Box Office History's domestic gross for box office,
+      // its worldwide gross for profit and return, TMDB's budget, in
+      // base-year dollars when the sort is. Return on budget is a ratio of
       // two same-year figures and is left unadjusted on purpose.
-      const adjusting = this.$store.state.moneyInTodaysDollars;
-      const budget = adjusting
-        ? (adjustedMovieMoney(movie, 'budget') ?? rawBudget)
-        : rawBudget;
-      const revenue = adjusting
-        ? (adjustedMovieMoney(movie, 'revenue') ?? rawRevenue)
-        : rawRevenue;
+      const index = this.$store.state.boxOfficeIndex;
+      const raw = movieMoney(movie, index);
+      const shown = this.$store.state.moneyInTodaysDollars ? movieMoney(movie, index, { adjusted: true }) : raw;
 
       switch (this.sortValue) {
-        // TMDB's 0 means "we don't know", which is why these show a dash
-        // rather than "$0" — see isSortValueUnknown in searchFiltering.js,
-        // where the same films sink to the bottom of the sort.
+        // 0 means "we don't know", which is why these show a dash rather
+        // than "$0" — see isSortValueUnknown in searchFiltering.js, where the
+        // same films sink to the bottom of the sort.
         case 'budget':
-          return rawBudget > 0 ? formatMoneyShort(budget) : '—';
+          return raw.budget > 0 ? formatMoneyShort(shown.budget) : '—';
         case 'boxOffice':
-          return rawRevenue > 0 ? formatMoneyShort(revenue) : '—';
+          return raw.boxOffice > 0 ? formatMoneyShort(shown.boxOffice) : '—';
         case 'profit':
-          return rawBudget > 0 && rawRevenue > 0 ? formatProfit(budget, revenue) : '—';
+          return raw.budget > 0 && raw.worldwide > 0 ? formatProfit(shown.budget, shown.worldwide) : '—';
         case 'returnPct':
-          return rawBudget > 0 && rawRevenue > 0 ? formatReturn(rawBudget, rawRevenue) : '—';
+          return raw.budget > 0 && raw.worldwide > 0 ? formatReturn(raw.budget, raw.worldwide) : '—';
         default:
           break;
       }

@@ -1850,6 +1850,7 @@ import {
   getSortValue as getSortValueUtil,
   sortResultsFast as sortResultsFastUtil,
   sortResults as sortResultsUtil,
+  BOX_OFFICE_SORTS,
   countDidYouMeanSuggestionsThatFit,
   normalizeSearchText,
   titleNamedByFilters
@@ -2102,6 +2103,15 @@ export default {
     }
   },
   watch: {
+    // A money sort reads Box Office History's whole-library index
+    // (boxOfficeIndex.js); fetch it the first time one is chosen, not on
+    // every launch.
+    sortValue: {
+      immediate: true,
+      handler (value) {
+        if (BOX_OFFICE_SORTS.has(value)) this.$store.dispatch?.('ensureBoxOfficeIndex');
+      }
+    },
     // Tapping a chore notification is NOT always a fresh launch. The push
     // Lambda's navigate URL differs from the running app's only in the hash
     // (`.../#/?open=tiebreak`), so an installed PWA that is already in
@@ -5378,14 +5388,15 @@ export default {
       this.$store.commit('setHomePageSortOrder', this.sortOrder);
     },
     getSortValue (item, key) {
-      return getSortValueUtil(item, key, this.mostRecentRating, { adjusted: this.moneyInTodaysDollars });
+      return getSortValueUtil(item, key, this.mostRecentRating, { adjusted: this.moneyInTodaysDollars, boxOfficeIndex: this.$store.state.boxOfficeIndex });
     },
     sortResultsFast (array) {
       return sortResultsFastUtil(array, {
         sortValue: this.sortValue,
         sortOrder: this.sortOrder,
         getRating: this.mostRecentRating,
-        adjusted: this.moneyInTodaysDollars
+        adjusted: this.moneyInTodaysDollars,
+        boxOfficeIndex: this.$store.state.boxOfficeIndex
       });
     },
     toggleMoneyInflation () {
@@ -5395,7 +5406,9 @@ export default {
       return sortResultsUtil(a, b, {
         sortValue: this.sortValue,
         sortOrder: this.sortOrder,
-        getRating: this.mostRecentRating
+        getRating: this.mostRecentRating,
+        adjusted: this.moneyInTodaysDollars,
+        boxOfficeIndex: this.$store.state.boxOfficeIndex
       });
     },
     toggleCountViewsAverage () {

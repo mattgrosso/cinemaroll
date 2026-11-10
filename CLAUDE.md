@@ -150,7 +150,9 @@ Firebase Realtime Database, keyed by the user's sanitized email:
 ```
 
 External data: TMDB (movie metadata), Box Office History (Matt's own, 2026-10-14:
-the Box office tile and "#1 that weekend" on viewings, fetched live with CORS; and
+the Box office tile and "#1 that weekend" on viewings, fetched live with CORS; since
+2026-11-09 EVERY library-wide box office number too, via `movieMoney` in
+`boxOfficeIndex.js` — see `.claude/rules/detail-and-insights.md`; and
 `src/assets/data/inflation.json`, the ONE money table both apps adjust dollars with —
 grosses by average ticket price, budgets by CPI, base year 2025 — bundled for offline
 use and refreshed with `yarn fetch-inflation`), OMDb (Rotten Tomatoes + Metacritic,

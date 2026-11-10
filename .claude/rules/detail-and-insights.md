@@ -29,8 +29,7 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
   `src/assets/javascript/boxOfficeArchive.js`). TMDB's budget/revenue stay as the
   fallback and the Budget line. Each viewing line gets "#1 that weekend: <film> ($X)"
   from `calendar/<year>.json`, fetched per viewing year on the `viewingYears` watcher.
-  `ARCHIVE_ORIGIN` is the CloudFront address until boxofficehistory.com is wired; change
-  it in one place. **Money words and methods are shared with the archive (same day):**
+  `HISTORY_ORIGIN` (`boxOfficeHistory.js`) is boxofficehistory.com; change it in one place. **Money words and methods are shared with the archive (same day):**
   `inflation.js` reads the bundled `inflation.json`; a gross goes by average ticket
   price (`adjustGross`), a budget by CPI (`adjustForInflation`), and every screen says
   `WORDING.inBaseYear` / `WORDING.asReported` ("In 2025 dollars" / "As reported"),
@@ -406,12 +405,37 @@ height tap target; the detail line has 40px prev/next buttons (columns are 11px)
 the year search — `new Date('2001-01-01')` is 2000 west of Greenwich. Not Chart.js: a bar
 chart on this tab was turned down in 2026-08.
 
+## Every box office number is Box Office History's (2026-11-09)
+
+Matt: "Do all of the box office numbers in Cinema Roll now come from
+boxofficehistory.com? They really ought to." Library-wide money goes through ONE
+function, `movieMoney(movie, boxOfficeIndex, { adjusted })` in
+`src/assets/javascript/boxOfficeIndex.js`: box office = the archive's **domestic**
+lifetime (restated release by release in base-year dollars, like the tile), profit
+and return = the archive's **worldwide** against TMDB's budget (a domestic profit
+would shrink every hit), budget = TMDB's. A film the archive doesn't know has no box
+office (sinks, shows a dash): no TMDB number mixed in beside the archive's. The index
+is the archive's `index/tmdb.json` (one file, ~300 KB gzipped, keyed by TMDB id),
+fetched by `fetchArchiveIndex` (`utils/boxOfficeHistoryRequest.js`, kept a month in
+the offline IndexedDB store, stale copy beats none) into `state.boxOfficeIndex`
+(frozen) by `ensureBoxOfficeIndex`, dispatched on demand: Home's `sortValue` watcher
+when a money sort is picked, and BoxOfficeYears / BoxOfficePeople on mount. Until it
+loads, `index` is null and everything reads TMDB as before. Callers: Home's sorts
+(`searchFiltering.js`, `boxOfficeIndex` option), the poster caption
+(`DBGridLayoutSearchResult`), both Insights lists. A new library-wide box office
+number must go through `movieMoney` too. The archive builds the file in
+`~/code/box-office-history/build/tmdb-index.mjs` (its `deploy:data` runs it).
+`isModernWithNoBoxOffice` deliberately still reads TMDB revenue (it asks "sold
+tickets anywhere?", and the archive is US-only). The movie page's no-archive
+fallback line is labelled "TMDB, worldwide". `boxOfficeIndex.test.js`.
+
 ## Years by box office (Eras tab since 2026-09-29; built 2026-09-13)
 
 `BoxOfficeYears.vue` sits directly under `YearlyAverage` and is its deliberate twin —
 same card, same rows, the other question: "a rank of years based on total box office
-for the movies that I brought in". Release years, summed **worldwide** gross
-(`movie.revenue`, TMDB's 0 = unknown, skipped and not counted), math in
+for the movies that I brought in". Release years, summed **domestic** gross from Box
+Office History since 2026-11-09 (`movieMoney`, see "Every box office number" below;
+0 = unknown, skipped and not counted), math in
 `boxOfficeYears.js` (pure, tested). The toggle is the point: **today's dollars** (the
 default, through `inflation.js`) or **as released**; a sum across eighty years in raw
 dollars quietly favours the recent decades. Choice persists in `localStorage`
