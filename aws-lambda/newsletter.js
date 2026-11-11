@@ -682,7 +682,8 @@ const clubTitleOf = async (tmdbId) => {
   const res = await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${process.env.TMDB_API_KEY}`, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) return null;
   const movie = await res.json();
-  return movie && movie.title ? `${movie.title}${movie.release_date ? ` (${movie.release_date.slice(0, 4)})` : ''}` : null;
+  // The title for the story's text and the poster for its grid (clubPaper.js posterGrid).
+  return movie && movie.title ? { title: `${movie.title}${movie.release_date ? ` (${movie.release_date.slice(0, 4)})` : ''}`, poster: movie.poster_path ? `https://image.tmdb.org/t/p/w342${movie.poster_path}` : null } : null;
 };
 // --- Stories from the log (logPaper.js): /log/<FEED_TOKEN>, built each morning --------
 

@@ -327,6 +327,14 @@ come too: `clubReadExternal` keeps each movie's `awards` and the feed's
 keeps `awardYears` (a summary hash per board, `y<year>-<hash>` keys); a board
 whose hash moved is told, dated when noticed. First sighting (no `awardsRead` on
 the cache) tells only the newest year.
+**Posters and the March hold** (Matt, 2026-11-11, on Knox's 2026 Ollie's): an awards story opens on a
+`posterGrid` (a `<div>` of captioned `<figure>`s, which Newsprinted sets three across): the winners of Best
+Picture, director and the four acting awards, one poster a film (≤ 6), and Best Picture's poster is the item
+`image`; `clubTitleOf` answers `{title, poster}` (TMDB w342). Movie Log boards keep `picks` (tmdbIds) beside
+the hashed categories, so the posters didn't re-tell old boards. A year is held until 1 March of the next
+year, midnight Eastern (`awardsReleaseAt`): a Cinema Roll board is told then, as of then (or its later touch);
+a Movie Log board is cached `held` and `releaseAwardYears` tells it once on the first check after (and holds
+any told before the rule).
 
 ## Stories from the log for Newsprinted (2026-10-28)
 `aws-lambda/logPaper.js` (tests beside it) turns Matt's own log into short

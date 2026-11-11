@@ -97,6 +97,44 @@ function ceremonyWord (name) {
 // Each story looks up at most this many film titles (winners first).
 const MAX_TITLE_LOOKUPS = 40;
 
+// A year's awards are still being decided until the next March (Matt,
+// 2026-11-11: "only see those awards maybe starting in March of the following
+// year"): a board for <year> is held until 1 March <year + 1>, midnight
+// Eastern (always EST then, so 05:00 UTC). A year that isn't a number is never held.
+function awardsReleaseAt (year) {
+  const y = Number(year);
+  return Number.isInteger(y) ? Date.UTC(y + 1, 2, 1, 5) : 0;
+}
+
+// The awards a story shows posters for, in order: Best Picture, then director
+// and the four acting awards (house ranks -1..5), at most this many posters.
+const MAX_POSTERS = 6;
+const isMainAward = (label) => houseCategoryRank(label) <= 5;
+
+/**
+ * The poster grid that opens an awards story: one captioned poster a winning
+ * film (a film winning several shares one poster, its awards listed). `picks`
+ * is [{ label, text, posterUrl }], `text` already escaped. Feeds lays two or
+ * more captioned pictures in a row out three across. Pure.
+ */
+function posterGrid (picks) {
+  const byPoster = new Map();
+  for (const p of picks || []) {
+    if (!p?.posterUrl || !/^https:\/\//.test(p.posterUrl)) continue;
+    const seen = byPoster.get(p.posterUrl);
+    if (seen) { seen.lines.push(p); continue; }
+    if (byPoster.size >= MAX_POSTERS) continue;
+    byPoster.set(p.posterUrl, { lines: [p] });
+  }
+  if (!byPoster.size) return '';
+  const figures = [...byPoster].map(([src, { lines }]) => {
+    const film = lines[0].film || '';
+    const caption = lines.map((l) => `<b>${esc(l.label)}</b>${l.person ? `<br>${l.person}` : ''}`).join('<br>');
+    return `<figure><img src="${esc(src)}" alt="${esc(film)}" loading="lazy"><figcaption>${caption}</figcaption></figure>`;
+  });
+  return `<div>${figures.join('')}</div>`;
+}
+
 /**
  * One year's board as HTML: categories in order, the winner after the name,
  * the other nominees on a line beneath. `categories` is
@@ -195,9 +233,13 @@ function boardMovieIds (board) {
  * category in the app's order, the winner and the other nominees.
  * `titleOf` names a TMDB id; `awardsName` is what the friend calls them. Pure.
  */
-function awardsItem ({ key, name, year, board, awardsName }, titleOf) {
-  const at = Number(board?.lastUpdated);
-  if (!Number.isFinite(at)) return null;
+function awardsItem ({ key, name, year, board, awardsName, now = Date.now() }, titleOf, posterOf = () => null) {
+  const touched = Number(board?.lastUpdated);
+  if (!Number.isFinite(touched)) return null;
+  // Held until the March after; a board last touched before then is told as of then.
+  const release = awardsReleaseAt(year);
+  if (now < release) return null;
+  const at = Math.max(touched, release);
   const pickText = (p) => {
     if (!p) return null;
     const film = titleOf(p.movieId) || null;
@@ -205,24 +247,34 @@ function awardsItem ({ key, name, year, board, awardsName }, titleOf) {
     return film ? esc(film) : null;
   };
   const categories = [];
+  const picks = [];
   let picture = null;
+  let pictureId = null;
   for (const { key: cat, label, data } of boardCategories(board)) {
     if (data.noNominees) continue;
     const winner = pickText(data.winner);
     const nominees = [...new Set(listOf(data.nominees).map(pickText).filter(Boolean))];
     if (!winner && !nominees.length) continue;
-    if (cat === 'bestPicture' && data.winner) picture = titleOf(data.winner.movieId) || null;
+    if (cat === 'bestPicture' && data.winner) { picture = titleOf(data.winner.movieId) || null; pictureId = data.winner.movieId; }
+    if (winner && MAIN_KEYS.has(cat)) {
+      const w = data.winner;
+      const isPerson = w.type === 'person' || w.name;
+      picks.push({ label, film: titleOf(w.movieId) || '', person: isPerson && (w.name || w.id) ? esc(w.name || w.id) : '', posterUrl: posterOf(w.movieId) });
+    }
     categories.push({ label, winners: winner ? [winner] : [], nominees });
   }
   if (!categories.length) return null;
+  const image = (pictureId != null && posterOf(pictureId)) || picks.map((p) => p.posterUrl).find(Boolean) || undefined;
   return {
     id: `awards-${key}-${year}-${at}`,
     url: `https://www.cinemaroll.org/awards?year=${encodeURIComponent(year)}`,
     title: `${firstName(name)}'s ${year} ${ceremonyWord(awardsName)}${picture ? `: ${picture} for Best Picture` : ''}${board.completed ? '' : ' (so far)'}`,
-    content_html: boardHtml(categories),
+    content_html: posterGrid(picks) + boardHtml(categories),
+    image,
     date_published: iso(at)
   };
 }
+const MAIN_KEYS = new Set(['bestPicture', 'bestDirector', 'bestActor', 'bestActress', 'bestSupportingActor', 'bestSupportingActress']);
 
 /** A Movie Log friend's recent logs from their film-club feed watches. Pure. */
 function externalItems ({ id, name, watches }, since) {
@@ -278,11 +330,14 @@ function externalBoards (movies, awardsName) {
       let label = String(award.label);
       if (ceremony && label.toLowerCase().startsWith(`${ceremony.toLowerCase()}: `)) label = label.slice(ceremony.length + 2).trim() || label;
       const boardKey = `${ceremony || ''}|${award.year}`;
-      const board = boards[boardKey] || (boards[boardKey] = { ceremony, year: award.year, byLabel: {} });
+      const board = boards[boardKey] || (boards[boardKey] = { ceremony, year: award.year, byLabel: {}, picks: [] });
       const cat = board.byLabel[award.category || label] || (board.byLabel[award.category || label] = { label, winners: [], nominees: [] });
       const text = labelKind(label) === 'person' && award.name ? `${esc(award.name)} <i>(${esc(film)})</i>` : esc(film);
       const list = award.result === 'won' ? cat.winners : cat.nominees;
       if (!list.includes(text)) list.push(text);
+      if (award.result === 'won' && isMainAward(label) && Number(m.tmdbId) > 0 && !board.picks.some((p) => p.label === label)) {
+        board.picks.push({ label, film, person: labelKind(label) === 'person' && award.name ? esc(award.name) : '', tmdbId: Number(m.tmdbId) });
+      }
     }
   }
   for (const board of Object.values(boards)) {
@@ -290,6 +345,7 @@ function externalBoards (movies, awardsName) {
       .map((c) => ({ ...c, nominees: c.nominees.filter((n) => !c.winners.includes(n)) }))
       .sort((x, y) => houseCategoryRank(x.label) - houseCategoryRank(y.label) || x.label.localeCompare(y.label));
     delete board.byLabel;
+    board.picks.sort((x, y) => houseCategoryRank(x.label) - houseCategoryRank(y.label));
   }
   return boards;
 }
@@ -306,33 +362,58 @@ const boardSlot = (board) => `y${board.year}-${shortHash(board.ceremony || '')}`
 function externalAwardYears (boards, prior, now) {
   const next = {};
   const list = Object.values(boards || {});
-  const newest = list.reduce((top, b) => Math.max(top, b.year), -Infinity);
+  const released = (b) => now >= awardsReleaseAt(b.year);
+  const newest = list.filter(released).reduce((top, b) => Math.max(top, b.year), -Infinity);
   for (const board of list) {
     const slot = boardSlot(board);
+    // The hash covers the categories only (the posters came later and mustn't re-tell every board).
     const sig = shortHash(JSON.stringify(board.categories));
     const before = prior ? prior[slot] : null;
-    const told = prior ? !before || before.sig !== sig : board.year === newest && board.categories.some((c) => c.winners.length);
-    if (told) next[slot] = { ceremony: board.ceremony, year: board.year, sig, at: now, categories: board.categories };
-    else if (before && before.at) next[slot] = { ...before, sig, categories: board.categories };
+    const story = { ceremony: board.ceremony, year: board.year, sig, categories: board.categories, picks: board.picks || [] };
+    // A year still under way waits, whole, until its March.
+    if (!released(board)) { next[slot] = { ...story, held: true }; continue; }
+    const told = prior ? !before || before.sig !== sig || Boolean(before.held) : board.year === newest && board.categories.some((c) => c.winners.length);
+    if (told) next[slot] = { ...story, at: now };
+    else if (before && before.at) next[slot] = { ...before, ...story, at: before.at };
     else next[slot] = { year: board.year, sig };
   }
   return next;
 }
 
+/**
+ * The remembered boards on a check with no fresh read: a held year whose March
+ * has come is told now (once); a told year not yet released (from before the
+ * hold) is held. Hands back the same object when nothing changed. Pure.
+ */
+function releaseAwardYears (years, now) {
+  if (!years) return years;
+  let changed = false;
+  const next = {};
+  for (const [slot, y] of Object.entries(years)) {
+    const due = now >= awardsReleaseAt(y?.year);
+    if (y?.held && due) { const { held, ...rest } = y; next[slot] = { ...rest, at: now }; changed = true; } // eslint-disable-line no-unused-vars
+    else if (!due && y?.at) { const { at, ...rest } = y; next[slot] = { ...rest, held: true }; changed = true; } // eslint-disable-line no-unused-vars
+    else next[slot] = y;
+  }
+  return changed ? next : years;
+}
+
 /** Stories for a Movie Log friend's boards that moved in the window. Pure. */
-function externalAwardItems ({ id, name, years }, since) {
+function externalAwardItems ({ id, name, years }, since, posterOf = () => null) {
   const out = [];
   for (const [slot, y] of Object.entries(years || {})) {
     const at = Number(y?.at);
-    if (!Number.isFinite(at) || at < since || !Array.isArray(y.categories) || !y.categories.length) continue;
+    if (y?.held || !Number.isFinite(at) || at < since || !Array.isArray(y.categories) || !y.categories.length) continue;
     const categories = y.categories.map((c) => ({ label: c.label, winners: c.winners || [], nominees: c.nominees || [] }));
     const best = categories.find((c) => houseCategoryRank(c.label) === -1 && c.winners.length);
+    const picks = (Array.isArray(y.picks) ? y.picks : []).map((p) => ({ ...p, posterUrl: posterOf(p.tmdbId) }));
     const picture = best ? best.winners[0].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"') : null;
     out.push({
       id: `external-awards-${id}-${slot}-${at}`,
       url: 'https://www.cinemaroll.org/awards',
       title: `${firstName(name)}'s ${y.year} ${ceremonyWord(y.ceremony)}${picture ? `: ${picture} for ${best.label}` : ''}`,
-      content_html: boardHtml(categories),
+      content_html: posterGrid(picks) + boardHtml(categories),
+      image: picks.map((p) => p.posterUrl).find(Boolean) || undefined,
       date_published: iso(at)
     });
   }
@@ -380,24 +461,31 @@ async function buildClubFeed ({ topKey, db, readExternal, titleOf, now = Date.no
   }
 
   // Awards boards touched in the window.
-  const titles = {};
+  // titleOf may answer a title or { title, poster }.
+  const films = {};
   const awardsNames = {};
-  const nameOf = async (id) => {
+  const filmOf = async (id) => {
     if (!Number.isFinite(Number(id))) return null;
-    if (!(id in titles)) titles[id] = await titleOf(Number(id)).catch(() => null);
-    return titles[id];
+    if (!(id in films)) {
+      const found = await titleOf(Number(id)).catch(() => null);
+      films[id] = typeof found === 'string' ? { title: found } : found && typeof found === 'object' ? found : null;
+    }
+    return films[id];
   };
+  const posterOf = (id) => films[id]?.poster || null;
   for (const key of friendKeys) {
     try {
       const years = Object.keys((await db.get(`${key}/personalAwards`, 'shallow=true')) || {});
       for (const year of years) {
-        const at = Number(await db.get(`${key}/personalAwards/${year}/lastUpdated`));
+        // Told as of the later of its last touch and its March (awardsReleaseAt).
+        const release = awardsReleaseAt(year);
+        if (now < release) continue;
+        const at = Math.max(Number(await db.get(`${key}/personalAwards/${year}/lastUpdated`)), release);
         if (!Number.isFinite(at) || at < since) continue;
         const board = await db.get(`${key}/personalAwards/${year}`);
-        const resolved = {};
-        for (const id of boardMovieIds(board)) resolved[id] = await nameOf(id);
+        for (const id of boardMovieIds(board)) await filmOf(id);
         if (awardsNames[key] === undefined) awardsNames[key] = (await db.get(`${key}/settings/personalAwardName`).catch(() => null)) || null;
-        const item = awardsItem({ key, name: names[key], year, board, awardsName: awardsNames[key] }, (id) => resolved[id] || null);
+        const item = awardsItem({ key, name: names[key], year, board, awardsName: awardsNames[key], now }, (id) => films[id]?.title || null, posterOf);
         if (item) items.push(item);
       }
     } catch (error) {
@@ -426,8 +514,14 @@ async function buildClubFeed ({ topKey, db, readExternal, titleOf, now = Date.no
           await db.set(`${cachePath}/checkedAt`, now);
         }
       }
+      // A held year whose March came (or a told one from before the hold) moves without a fresh read.
+      const settled = releaseAwardYears(awardYears, now);
+      if (settled !== awardYears) { awardYears = settled; await db.set(`${cachePath}/awardYears`, awardYears); }
       items.push(...externalItems({ id, name: friend.name, watches }, since));
-      items.push(...externalAwardItems({ id, name: friend.name, years: awardYears }, since));
+      for (const y of Object.values(awardYears || {})) {
+        if (!y?.held && Number(y?.at) >= since) for (const p of (y.picks || []).slice(0, MAX_POSTERS)) await filmOf(p.tmdbId);
+      }
+      items.push(...externalAwardItems({ id, name: friend.name, years: awardYears }, since, posterOf));
     } catch (error) {
       log(`club paper: external ${id} failed: ${error.message}`);
     }
@@ -441,4 +535,4 @@ async function buildClubFeed ({ topKey, db, readExternal, titleOf, now = Date.no
   };
 }
 
-module.exports = { buildClubFeed, logItems, reviewItems, awardsItem, boardMovieIds, externalItems, externalBoards, externalAwardYears, externalAwardItems, categoryMatchKey, houseCategoryRank, CATEGORIES, WINDOW_DAYS };
+module.exports = { buildClubFeed, logItems, reviewItems, awardsItem, boardMovieIds, externalItems, externalBoards, externalAwardYears, externalAwardItems, releaseAwardYears, awardsReleaseAt, posterGrid, categoryMatchKey, houseCategoryRank, CATEGORIES, WINDOW_DAYS };
