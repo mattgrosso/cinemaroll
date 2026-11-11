@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { gapFor, looksWhole, typing, phantomBand, slideFor } from './screenPin'
+import { gapFor, looksWhole, typing, phantomBand, slideFor, heldHeight, fixedWindow } from './screenPin'
 
 describe('screenPin', () => {
   it('slides down by however much iOS cut the page', () => {
@@ -46,5 +46,23 @@ describe('screenPin', () => {
     expect(slideFor({ bottom: 798, band: 231, vvTop: 70, vvHeight: 511 })).toBe(0)
     // A short page's gap always applies.
     expect(slideFor({ bottom: 542, gap: 256 })).toBe(256)
+  })
+  it('measures a page on its side against the screen on its side', () => {
+    // iOS says 820 x 1180 for an iPad Air however it is held.
+    expect(heldHeight({ screenWidth: 820, screenHeight: 1180, landscape: true })).toBe(820)
+    expect(heldHeight({ screenWidth: 820, screenHeight: 1180, landscape: false })).toBe(1180)
+    // An iPhone on its side: 402 of a "874" screen is the whole page, not a cut one.
+    const held = heldHeight({ screenWidth: 402, screenHeight: 874, landscape: true })
+    expect(looksWhole({ height: 381, screenHeight: held })).toBe(true)
+    expect(gapFor({ tallest: 0, height: 381, screenHeight: held })).toBe(0)
+    // What it used to do (Nba Tonight's tab bar, 2026-11-11): 298px off the bottom of an iPad.
+    expect(gapFor({ tallest: 0, height: 820, screenHeight: 1180 })).toBe(298)
+    expect(heldHeight({ screenHeight: 874 })).toBe(874)
+  })
+  it('the short-page fix is for phones: an iPad window can be any size', () => {
+    expect(fixedWindow({ screenWidth: 402, screenHeight: 874 })).toBe(true)
+    expect(fixedWindow({ screenWidth: 744, screenHeight: 1133 })).toBe(false) // iPad mini, the smallest
+    expect(fixedWindow({ screenWidth: 1024, screenHeight: 1366 })).toBe(false)
+    expect(fixedWindow({})).toBe(true)
   })
 })

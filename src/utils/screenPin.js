@@ -30,6 +30,17 @@
 //    scrolled, in Safari). The short-page fix stays installed-only: Safari's
 //    own toolbars change the page's height on purpose.
 //
+// THE SHORT-PAGE FIX IS FOR A PHONE HELD AS IT IS (2026-11-11: Nba Tonight's
+// tab bar was gone on Matt's iPad). iOS keeps screen.width and screen.height
+// at the PORTRAIT numbers however the thing is held, so a page on its side
+// (820 tall on an "1180" screen) was read as cut short and its pinned things
+// were slid 298px below the screen. Two rules now: the page is measured
+// against the screen as it is held (`heldHeight`), and on anything bigger
+// than a phone the short-page fix is off (`fixedWindow`): an iPad's window
+// can be any size (Split View, Slide Over, its own windows), so a short
+// window says nothing, and the fault has only ever been seen on phones. The
+// phantom keyboard is still handled everywhere.
+//
 // A pinned thing inside another pinned thing (a bug button in a pinned tab
 // bar) rides along with its parent and is not slid again.
 //
@@ -44,6 +55,7 @@
 const STUCK_MIN = 120 // smaller differences are toolbars and rounding, not the bug
 const SHORT = 0.75 // a page under 3/4 of the screen is never trusted as "full"
 const STATUS_BAR = 62 // with nothing remembered yet: the screen less the status bar
+const PHONE_MAX = 600 // a screen's shorter side: phones are under this, every iPad is over
 const STORE = 'house:screenPin:tallest'
 const PINNED = '.bug-trigger, .bug-report-trigger, [data-pin-bottom]'
 const STILL = 300 // the cures wait until the page hasn't scrolled for this long
@@ -58,6 +70,24 @@ export function typing (el = document.activeElement) {
   if (!el || el.dataset?.screenPinCure) return false
   if (el.isContentEditable || el.tagName === 'TEXTAREA') return true
   return el.tagName === 'INPUT' && TEXT_TYPES.test(el.type || 'text')
+}
+
+/**
+ * The screen's height as it is held now. iOS reports the portrait width and
+ * height whichever way up it is; on its side the height is the shorter one.
+ */
+export function heldHeight ({ screenWidth = 0, screenHeight = 0, landscape = false }) {
+  if (!screenWidth || !screenHeight) return screenHeight || 0
+  return landscape ? Math.min(screenWidth, screenHeight) : Math.max(screenWidth, screenHeight)
+}
+
+/**
+ * Does the page always fill the screen here (a phone)? Only then can a short
+ * page be told from a small window. Unknown screen: assume a phone.
+ */
+export function fixedWindow ({ screenWidth = 0, screenHeight = 0 }) {
+  if (!screenWidth || !screenHeight) return true
+  return Math.min(screenWidth, screenHeight) < PHONE_MAX
 }
 
 /**
@@ -121,6 +151,22 @@ function keep () {
   try { window.localStorage.setItem(STORE, JSON.stringify(tallest)) } catch { /* private mode: memory only */ }
 }
 
+function landscapeNow () {
+  const type = window.screen?.orientation?.type
+  if (type) return type.startsWith('landscape')
+  if (typeof window.orientation === 'number') return Math.abs(window.orientation) === 90
+  return window.innerWidth > window.innerHeight
+}
+/** The screen's height as held, and whether the short-page fix applies on this screen at all. */
+function screenNow () {
+  const screenWidth = window.screen?.width || 0
+  const screenHeight = window.screen?.height || 0
+  return {
+    screenHeight: heldHeight({ screenWidth, screenHeight, landscape: landscapeNow() }),
+    fixed: fixedWindow({ screenWidth, screenHeight }),
+  }
+}
+
 function phantomNow () {
   const vv = window.visualViewport
   if (!vv) return 0
@@ -132,9 +178,9 @@ function apply () {
   const standalone = isStandalone()
   const width = window.innerWidth
   const height = window.innerHeight
-  const screenHeight = window.screen?.height || 0
+  const { screenHeight, fixed } = screenNow()
   let gap = 0
-  if (standalone && !typing()) {
+  if (standalone && fixed && !typing()) {
     if (height > (tallest[width] || 0) && looksWhole({ height, screenHeight, standalone })) { tallest[width] = height; keep() }
     gap = gapFor({ tallest: tallest[width] || 0, height, screenHeight, standalone })
   }
@@ -178,6 +224,8 @@ function scene (el) {
     standalone: isStandalone(),
     page: `${window.innerWidth}x${window.innerHeight}`,
     screen: n(window.screen?.height),
+    held: n(screenNow().screenHeight),
+    fixed: screenNow().fixed,
     tallest: tallest[window.innerWidth] || 0,
     vv: vv ? { h: n(vv.height), top: n(vv.offsetTop || 0), scale: vv.scale || 1 } : null,
     gap: report.gap,
