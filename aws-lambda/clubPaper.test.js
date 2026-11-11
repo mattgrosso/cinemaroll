@@ -82,6 +82,9 @@ describe('club paper items', () => {
     expect(b2016.categories.map((c) => c.label)).toEqual(['Best Film', 'Best Actress']);
     expect(b2016.categories[0]).toEqual({ label: 'Best Film', winners: ['Arrival'], nominees: ['Moonlight'] });
     expect(b2016.categories[1].winners).toEqual(['Amy Adams <i>(Arrival)</i>']);
+    // Every category's winner is a poster pick, not only the main six.
+    const edited = externalBoards([{ tmdbId: 3, title: 'Hell or High Water', awards: [{ year: 2016, category: 'ed', label: 'Brians: Best Editing', result: 'won' }] }, ...movies], null);
+    expect(edited['Brians|2016'].picks.map((p) => p.label)).toEqual(['Best Film', 'Best Actress', 'Best Editing']);
 
     const T = Date.parse('2026-11-11T00:00:00Z');
     const first = externalAwardYears(boards, null, T + 100);
@@ -144,7 +147,7 @@ describe('club paper items', () => {
     expect(externalAwardYears(externalBoards(movies, null), fresh, mar + 5000)[slot].at).toBe(mar);
   });
 
-  it('an awards story opens on the main winners\' posters, a film winning twice on one poster', () => {
+  it('an awards story opens on every category winner\'s poster, a film winning twice on one poster', () => {
     const board = { lastUpdated: Date.parse('2026-10-10T00:00:00Z'), completed: true, categories: {
       bestPicture: { winner: { movieId: 745, type: 'movie' } },
       bestActor: { winner: { name: 'Bruce Willis', movieId: 745, type: 'person' } },
@@ -158,8 +161,13 @@ describe('club paper items', () => {
     expect(grid).toBe('<div>' +
       '<figure><img src="https://image.tmdb.org/t/p/w342/ss.jpg" alt="The Sixth Sense" loading="lazy"><figcaption><b>Best Picture</b><br><b>Best Actor</b><br>Bruce Willis</figcaption></figure>' +
       '<figure><img src="https://image.tmdb.org/t/p/w342/b.jpg" alt="Boys Don\'t Cry" loading="lazy"><figcaption><b>Best Actress</b><br>Hilary Swank</figcaption></figure>' +
+      '<figure><img src="https://image.tmdb.org/t/p/w342/m.jpg" alt="Magnolia" loading="lazy"><figcaption><b>Best Screenplay or Writing</b></figcaption></figure>' +
       '</div>');
-    expect(grid).not.toContain('m.jpg');
+    // Nominees stay names in the text, never posters.
+    const nominated = { ...board, categories: { ...board.categories, bestScreenplay: { winner: { movieId: 2 }, nominees: { a: { movieId: 9 } } } } };
+    const withNominee = awardsItem({ key: 'nat', name: 'Natalie', year: '1999', board: nominated }, (id) => ({ ...titles, 9: 'Election' })[id], (id) => ({ ...posters, 9: 'https://image.tmdb.org/t/p/w342/e.jpg' })[id]);
+    expect(withNominee.content_html).not.toContain('e.jpg');
+    expect(withNominee.content_html).toContain('Also nominated: Election');
     // No posters known: the story is the list alone, as before.
     expect(awardsItem({ key: 'nat', name: 'Natalie', year: '1999', board }, (id) => titles[id]).content_html.startsWith('<p>')).toBe(true);
     expect(posterGrid([{ label: 'Best Picture', posterUrl: 'javascript:alert(1)' }])).toBe('');

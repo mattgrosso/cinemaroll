@@ -106,14 +106,13 @@ function awardsReleaseAt (year) {
   return Number.isInteger(y) ? Date.UTC(y + 1, 2, 1, 5) : 0;
 }
 
-// The awards a story shows posters for, in order: Best Picture, then director
-// and the four acting awards (house ranks -1..5), at most this many posters.
-const MAX_POSTERS = 6;
-const isMainAward = (label) => houseCategoryRank(label) <= 5;
+// Every category's winner gets a poster, in the board's order (Matt, 2026-11-11:
+// "posters for the winners in every category, and then the nominees can just be
+// the names in the text"); before that only picture, director and acting did.
 
 /**
  * The poster grid that opens an awards story: one captioned poster a winning
- * film (a film winning several shares one poster, its awards listed). `picks`
+ * film, every category (a film winning several shares one poster, its awards listed). `picks`
  * is [{ label, text, posterUrl }], `text` already escaped. Feeds lays two or
  * more captioned pictures in a row out three across. Pure.
  */
@@ -123,7 +122,6 @@ function posterGrid (picks) {
     if (!p?.posterUrl || !/^https:\/\//.test(p.posterUrl)) continue;
     const seen = byPoster.get(p.posterUrl);
     if (seen) { seen.lines.push(p); continue; }
-    if (byPoster.size >= MAX_POSTERS) continue;
     byPoster.set(p.posterUrl, { lines: [p] });
   }
   if (!byPoster.size) return '';
@@ -256,7 +254,7 @@ function awardsItem ({ key, name, year, board, awardsName, now = Date.now() }, t
     const nominees = [...new Set(listOf(data.nominees).map(pickText).filter(Boolean))];
     if (!winner && !nominees.length) continue;
     if (cat === 'bestPicture' && data.winner) { picture = titleOf(data.winner.movieId) || null; pictureId = data.winner.movieId; }
-    if (winner && MAIN_KEYS.has(cat)) {
+    if (winner) {
       const w = data.winner;
       const isPerson = w.type === 'person' || w.name;
       picks.push({ label, film: titleOf(w.movieId) || '', person: isPerson && (w.name || w.id) ? esc(w.name || w.id) : '', posterUrl: posterOf(w.movieId) });
@@ -274,7 +272,6 @@ function awardsItem ({ key, name, year, board, awardsName, now = Date.now() }, t
     date_published: iso(at)
   };
 }
-const MAIN_KEYS = new Set(['bestPicture', 'bestDirector', 'bestActor', 'bestActress', 'bestSupportingActor', 'bestSupportingActress']);
 
 /** A Movie Log friend's recent logs from their film-club feed watches. Pure. */
 function externalItems ({ id, name, watches }, since) {
@@ -335,7 +332,7 @@ function externalBoards (movies, awardsName) {
       const text = labelKind(label) === 'person' && award.name ? `${esc(award.name)} <i>(${esc(film)})</i>` : esc(film);
       const list = award.result === 'won' ? cat.winners : cat.nominees;
       if (!list.includes(text)) list.push(text);
-      if (award.result === 'won' && isMainAward(label) && Number(m.tmdbId) > 0 && !board.picks.some((p) => p.label === label)) {
+      if (award.result === 'won' && Number(m.tmdbId) > 0 && !board.picks.some((p) => p.label === label)) {
         board.picks.push({ label, film, person: labelKind(label) === 'person' && award.name ? esc(award.name) : '', tmdbId: Number(m.tmdbId) });
       }
     }
@@ -519,7 +516,7 @@ async function buildClubFeed ({ topKey, db, readExternal, titleOf, now = Date.no
       if (settled !== awardYears) { awardYears = settled; await db.set(`${cachePath}/awardYears`, awardYears); }
       items.push(...externalItems({ id, name: friend.name, watches }, since));
       for (const y of Object.values(awardYears || {})) {
-        if (!y?.held && Number(y?.at) >= since) for (const p of (y.picks || []).slice(0, MAX_POSTERS)) await filmOf(p.tmdbId);
+        if (!y?.held && Number(y?.at) >= since) for (const p of (y.picks || []).slice(0, MAX_TITLE_LOOKUPS)) await filmOf(p.tmdbId);
       }
       items.push(...externalAwardItems({ id, name: friend.name, years: awardYears }, since, posterOf));
     } catch (error) {

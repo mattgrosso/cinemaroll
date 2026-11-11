@@ -328,8 +328,10 @@ keeps `awardYears` (a summary hash per board, `y<year>-<hash>` keys); a board
 whose hash moved is told, dated when noticed. First sighting (no `awardsRead` on
 the cache) tells only the newest year.
 **Posters and the March hold** (Matt, 2026-11-11, on Knox's 2026 Ollie's): an awards story opens on a
-`posterGrid` (a `<div>` of captioned `<figure>`s, which Newsprinted sets three across): the winners of Best
-Picture, director and the four acting awards, one poster a film (≤ 6), and Best Picture's poster is the item
+`posterGrid` (a `<div>` of captioned `<figure>`s, which Newsprinted sets three across): every category's winner
+in the board's order (Matt, same day, on Natalie's 2003 Roses: "posters for the winners in every category … the
+nominees can just be the names in the text"; it was only picture, director and acting, ≤ 6), one poster a film
+with its wins listed, nominees only in the text, and Best Picture's poster is the item
 `image`; `clubTitleOf` answers `{title, poster}` (TMDB w342). Movie Log boards keep `picks` (tmdbIds) beside
 the hashed categories, so the posters didn't re-tell old boards. A year is held until 1 March of the next
 year, midnight Eastern (`awardsReleaseAt`): a Cinema Roll board is told then, as of then (or its later touch);
