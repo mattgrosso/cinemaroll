@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { archiveFacts, archiveSummary, weekendForDate, weekendLine, threeDayWeekends, archiveMovieUrl } from '@/assets/javascript/boxOfficeHistory.js';
-import { fetchArchiveFilm, fetchArchiveCalendar } from '@/utils/boxOfficeHistoryRequest.js';
+import { archiveFacts, archiveSummary, threeDayWeekends, archiveMovieUrl } from '@/assets/javascript/boxOfficeHistory.js';
+import { fetchArchiveFilm } from '@/utils/boxOfficeHistoryRequest.js';
 
 const darkKnight = {
   id: 'darkknight',
@@ -53,46 +53,6 @@ describe('boxOfficeHistory — facts for the Box office tile', () => {
   });
 });
 
-const calendar = {
-  year: 2015,
-  weekends: [
-    { k: '2015-26', s: '2015-06-26', e: '2015-06-28', top: 'Jurassic World', id: 'jurassicpark4', g: 54530874 },
-    { k: '2015-27', s: '2015-07-03', e: '2015-07-05', top: 'Inside Out', id: 'pixar2014', g: 29771224 },
-    { k: '2015-28', s: '2015-07-10', e: '2015-07-12', top: 'Minions', id: 'minions', g: 115718405 }
-  ]
-};
-
-describe('boxOfficeHistory — the weekend a viewing belongs to', () => {
-  it('finds the weekend holding the date, else the one just gone', () => {
-    expect(weekendForDate(calendar, '2015-07-04').k).toBe('2015-27');
-    expect(weekendForDate(calendar, '2015-07-08').k).toBe('2015-27');
-    expect(weekendForDate(calendar, '2015-07-10').k).toBe('2015-28');
-  });
-  it('gives up before the first weekend, on bad dates and empty files', () => {
-    expect(weekendForDate(calendar, '2015-06-20')).toBeNull();
-    expect(weekendForDate(calendar, 'yesterday')).toBeNull();
-    expect(weekendForDate(null, '2015-07-04')).toBeNull();
-  });
-  // Report 2026-10-21: an October 21, 2026 viewing said "#1 that weekend:
-  // Avengers Endgame: Encore" — the archive's 2026 file ended at Sep 25–27,
-  // and the last weekend before the date was taken however old it was.
-  it('never reaches back past the weekend just gone', () => {
-    const behind = { year: 2026, weekends: [{ k: '2026W39', s: '2026-09-25', e: '2026-09-27', top: 'Avengers Endgame: Encore', g: 26106643 }] };
-    expect(weekendForDate(behind, '2026-10-21')).toBeNull();
-    expect(weekendForDate(behind, '2026-09-29')).toBe(behind.weekends[0]);
-    expect(weekendForDate(behind, '2026-10-01')).toBe(behind.weekends[0]);
-    expect(weekendForDate(behind, '2026-10-02')).toBeNull();
-    expect(weekendForDate(calendar, '2015-07-16').k).toBe('2015-28');
-    expect(weekendForDate(calendar, '2015-07-17')).toBeNull();
-  });
-  it('writes the line with the weekend\'s dates', () => {
-    expect(weekendLine(calendar.weekends[1])).toBe('#1 the weekend of Jul 3–5: Inside Out ($30M)');
-    expect(weekendLine({ s: '2026-10-30', e: '2026-11-01', top: 'Halloween', g: 7061513 })).toBe('#1 the weekend of Oct 30–Nov 1: Halloween ($7.1M)');
-    expect(weekendLine({ top: 'Jaws', g: 7061513 })).toBe('#1 that weekend: Jaws ($7.1M)');
-    expect(weekendLine(null)).toBe('');
-  });
-});
-
 describe('boxOfficeHistoryRequest — two hops, cached, never throws', () => {
   const json = (body, type = 'application/json') => ({ ok: true, headers: { get: () => type }, json: async () => body });
   let fetchMock;
@@ -122,32 +82,9 @@ describe('boxOfficeHistoryRequest — two hops, cached, never throws', () => {
     expect(await fetchArchiveFilm(999999, { now: 1000 })).toBeNull();
   });
 
-  it('answers null on a network failure and asks again later', async () => {
+  it('answers null on a network failure', async () => {
     fetchMock.mockRejectedValueOnce(new Error('offline'));
     expect(await fetchArchiveFilm(155, { now: 1000 })).toBeNull();
-    fetchMock.mockResolvedValueOnce(json(calendar));
-    expect((await fetchArchiveCalendar(2015, { now: 1000 })).year).toBe(2015);
-    expect(await fetchArchiveCalendar('not a year')).toBeNull();
-  });
-
-  // The archive adds a weekend every week; a month-old copy of this year's
-  // calendar hid every weekend since it was saved (report 2026-10-21).
-  it("asks again for this year's calendar after a day, a past year's after a month", async () => {
-    const day = 24 * 60 * 60 * 1000;
-    const now = Date.parse('2026-10-21T12:00:00');
-    fetchMock.mockResolvedValue(json({ year: 2026, weekends: [] }));
-    await fetchArchiveCalendar(2026, { now });
-    await fetchArchiveCalendar(2026, { now: now + day / 2 });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    await fetchArchiveCalendar(2026, { now: now + day + 1 });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-
-    fetchMock.mockResolvedValue(json(calendar));
-    await fetchArchiveCalendar(2015, { now });
-    await fetchArchiveCalendar(2015, { now: now + 20 * day });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    await fetchArchiveCalendar(2015, { now: now + 31 * day });
-    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });
 

@@ -16,6 +16,9 @@ vi.mock('@/utils/criticReviewsRequest.js', async () => {
   return { ...actual, fetchCriticReviews: vi.fn(async () => ({ status: 'ready', reviews: [] })) };
 });
 
+// The weekend calendar stays in the mock on purpose: if anything on the page
+// still asked for it, the old line would render and the test below would fail.
+const calendar2015 = { year: 2015, weekends: [{ k: '2015-27', s: '2015-07-03', e: '2015-07-05', top: 'Inside Out', id: 'pixar2014', g: 29771224 }] };
 const archive = vi.hoisted(() => ({ fetchArchiveFilm: vi.fn(async () => null), fetchArchiveCalendar: vi.fn(async () => null) }));
 vi.mock('@/utils/boxOfficeHistoryRequest.js', () => archive);
 
@@ -34,13 +37,14 @@ const film = {
     { start: '2008-08-01', end: '2008-08-03', days: 3, rank: 2, gross: 42664219, week: 3 }
   ]
 };
-const calendar2015 = { year: 2015, weekends: [{ k: '2015-27', s: '2015-07-03', e: '2015-07-05', top: 'Inside Out', id: 'pixar2014', g: 29771224 }] };
 
 const movie = (id, title) => ({ id, title, release_date: '2008-07-18', genres: [], crew: [], budget: 185000000, revenue: 1004934033 });
 
 // Matt, 2026-10-14: "get some interesting things into Cinema Roll" from Box
 // Office Archive. The Box office tile reads the domestic run from the
-// archive; each viewing says what was #1 that weekend.
+// archive. Each viewing used to say what was #1 that weekend; that line
+// went 2026-11-11 (Matt: it read as this film's own rank, out of place
+// under the score — the opening rank lives in the tile).
 describe('MovieDetail — Box Office History', () => {
   let wrapper;
 
@@ -67,9 +71,7 @@ describe('MovieDetail — Box Office History', () => {
 
   beforeEach(() => {
     archive.fetchArchiveFilm.mockReset();
-    archive.fetchArchiveCalendar.mockReset();
     archive.fetchArchiveFilm.mockResolvedValue(null);
-    archive.fetchArchiveCalendar.mockResolvedValue(null);
   });
 
   it('asks the archive for the film by TMDB id and shows the domestic run in the tile', async () => {
@@ -94,47 +96,17 @@ describe('MovieDetail — Box Office History', () => {
     expect(tile.find('.box-office-link').exists()).toBe(false);
   });
 
-  it('says what was #1 the weekend of each viewing, linked to the chart', async () => {
-    archive.fetchArchiveCalendar.mockImplementation(async (year) => (year === 2015 ? calendar2015 : null));
+  // Report, 2026-11-11: the line under each viewing ("#1 the weekend of …")
+  // read as this film's own opening rank. It's gone, and so is the calendar
+  // download that fed it; the opening rank stays in the tile.
+  it('puts no box office line under a theater viewing', async () => {
+    archive.fetchArchiveFilm.mockResolvedValue(film);
+    archive.fetchArchiveCalendar.mockResolvedValue(calendar2015);
     await mountFor(movie(155, 'The Dark Knight'), [{ date: '2015-07-04T20:00:00', calculatedTotal: 8.1, medium: 'Theater' }]);
-    await flushPromises();
-    expect(archive.fetchArchiveCalendar).toHaveBeenCalledWith(2015);
-    const line = wrapper.find('.viewing-weekend');
-    expect(line.exists()).toBe(true);
-    expect(line.text()).toBe('#1 the weekend of Jul 3–5: Inside Out ($30M)');
-    expect(line.attributes('href')).toContain('/weekend/2015-27');
-  });
-
-  it("shows no weekend line when the archive hasn't reached the viewing's weekend yet", async () => {
-    archive.fetchArchiveCalendar.mockResolvedValue({ year: 2026, weekends: [{ k: '2026W39', s: '2026-09-25', e: '2026-09-27', top: 'Avengers Endgame: Encore', g: 26106643 }] });
-    await mountFor(movie(155, 'The Dark Knight'), [{ date: '2026-10-21T20:00:00', calculatedTotal: 8.1, medium: 'Theater' }]);
-    await flushPromises();
-    expect(archive.fetchArchiveCalendar).toHaveBeenCalledWith(2026);
+    const viewings = wrapper.find('.ratings-section');
+    expect(viewings.exists()).toBe(true);
+    expect(viewings.text()).not.toMatch(/#1|weekend/i);
     expect(wrapper.find('.viewing-weekend').exists()).toBe(false);
-  });
-
-  // Report, 2026-10-21: "only ... if I watched that movie in a theater".
-  it('shows no weekend line, and fetches no chart, for a viewing not in a theater', async () => {
-    archive.fetchArchiveCalendar.mockImplementation(async (year) => (year === 2015 ? calendar2015 : null));
-    await mountFor(movie(155, 'The Dark Knight'), [{ date: '2015-07-04T20:00:00', calculatedTotal: 8.1, medium: 'Streaming' }]);
-    await flushPromises();
-    expect(archive.fetchArchiveCalendar).not.toHaveBeenCalled();
-    expect(wrapper.find('.viewing-weekend').exists()).toBe(false);
-  });
-
-  it('shows the line on the theater viewing only, whatever the medium\'s capitals', async () => {
-    archive.fetchArchiveCalendar.mockImplementation(async (year) => (year === 2015 ? calendar2015 : null));
-    await mountFor(movie(155, 'The Dark Knight'), [
-      { date: '2015-07-04T20:00:00', calculatedTotal: 8.1, medium: 'theater' },
-      { date: '2015-07-05T20:00:00', calculatedTotal: 8.0, medium: 'Physical Media' },
-      { date: '2015-07-03T20:00:00', calculatedTotal: 7.9 }
-    ]);
-    await flushPromises();
-    expect(wrapper.findAll('.viewing-weekend')).toHaveLength(1);
-  });
-
-  it('shows no weekend line when the archive has no chart for that year', async () => {
-    await mountFor(movie(155, 'The Dark Knight'), [{ date: '1969-07-04T20:00:00', calculatedTotal: 8.1, medium: 'Theater' }]);
-    expect(wrapper.find('.viewing-weekend').exists()).toBe(false);
+    expect(wrapper.find('#boxoffice .box-office-history').text()).toContain('Opening weekend');
   });
 });

@@ -8,18 +8,15 @@ import { loadSnapshot, saveSnapshot } from './offlineStore.js';
 
 const FOUND_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MISSING_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-// This year's weekend calendar grows every week (the archive refreshes on
-// Wednesdays), so a month-old copy hides every weekend since (2026-10-21).
-const CURRENT_YEAR_TTL_MS = 24 * 60 * 60 * 1000;
 const LOOKUP_TIMEOUT_MS = 10000;
 const pending = new Map();
 
-const readCache = (key, now, maxAge = null) => {
+const readCache = (key, now) => {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return undefined;
     const cached = JSON.parse(raw);
-    const ttl = maxAge ?? (cached.value ? FOUND_TTL_MS : MISSING_TTL_MS);
+    const ttl = cached.value ? FOUND_TTL_MS : MISSING_TTL_MS;
     if (now - (cached.at || 0) > ttl) return undefined;
     return cached.value || null;
   } catch {
@@ -52,8 +49,8 @@ const getJson = async (path) => {
   }
 };
 
-const cached = (key, now, load, maxAge = null) => {
-  const hit = readCache(key, now, maxAge);
+const cached = (key, now, load) => {
+  const hit = readCache(key, now);
   if (hit !== undefined) return Promise.resolve(hit);
   if (pending.has(key)) return pending.get(key);
   const request = (async () => {
@@ -82,17 +79,6 @@ export function fetchArchiveFilm (tmdbId, { now = Date.now() } = {}) {
     if (!hit?.id) return null;
     return getJson(`movies/${encodeURIComponent(hit.id)}.json`);
   });
-}
-
-/**
- * The archive's weekends of one year (calendar/<year>.json), or null. This
- * year's file is kept a day, since new weekends land weekly; past years a month.
- */
-export function fetchArchiveCalendar (year, { now = Date.now() } = {}) {
-  const y = Number(year);
-  if (!Number.isInteger(y) || y < 1970 || y > 2100) return Promise.resolve(null);
-  const maxAge = y >= new Date(now).getFullYear() ? CURRENT_YEAR_TTL_MS : null;
-  return cached(`boxOfficeHistory:calendar:${y}`, now, () => getJson(`calendar/${y}.json`), maxAge);
 }
 
 // The whole-library index (index/tmdb.json, ~300 KB gzipped, 800 KB as JSON):

@@ -27,8 +27,8 @@ Full narrative: `docs/history/ui-and-layout.md`, `docs/history/search-and-home.m
   TMDB id → `lookup/tmdb/<id>.json` → `movies/<id>.json`, device-cached a month, own
   10s timeout, never throws; pure helpers and the summary wording in
   `src/assets/javascript/boxOfficeArchive.js`). TMDB's budget/revenue stay as the
-  fallback and the Budget line. Each viewing line gets "#1 that weekend: <film> ($X)"
-  from `calendar/<year>.json`, fetched per viewing year on the `viewingYears` watcher.
+  fallback and the Budget line. (Each viewing line used to get "#1 the weekend of …"
+  from `calendar/<year>.json`; removed 2026-11-11, see the end of this file.)
   `HISTORY_ORIGIN` (`boxOfficeHistory.js`) is boxofficehistory.com; change it in one place. **Money words and methods are shared with the archive (same day):**
   `inflation.js` reads the bundled `inflation.json`; a gross goes by average ticket
   price (`adjustGross`), a budget by CPI (`adjustForInflation`), and every screen says
@@ -690,15 +690,16 @@ scroll and a filmography in progress. The panels are plain divs (no `d-*`), so
 ("the Watchlist tabs" in `WatchlistScreen.test.js`); every older test still finds its
 section because all panels are mounted.
 
-## "#1 the weekend of …" on each viewing (Box Office History, fixed 2026-10-21)
+## No box office line under the viewings (removed 2026-11-11)
 
-Box Office History runs a few weeks behind (it's rebuilt from Wayback Machine
-captures every Wednesday). `weekendForDate` takes the weekend holding the date or
-the one just gone (Sunday at most four days back) and otherwise answers null:
-the old "latest weekend before the date" put September's #1 under an October
-viewing. The line names its dates, and this year's calendar is cached a day
-(past years a month) so new weekends show up.
-
-**Theater viewings only (2026-10-21, report: "only ... if I watched that movie in a
-theater").** `seenInTheater` (medium "Theater", case blind) gates both the line and
-`viewingYears`, so a film never seen in a theater fetches no calendar at all.
+Each theater viewing used to carry "#1 the weekend of <dates>: <film> ($X)" from
+Box Office History's weekend calendars (2026-10-14, theater-only and never older
+than the weekend just gone since 2026-10-21). Matt read it as the film's OWN
+opening-weekend rank, sitting oddly under his score with the Box office tile below:
+"I don't think we really need that. Let's just move this information down into the
+box office section." The tile already holds the opening rank ("Opening weekend …
+#N", closed summary "opened #N") for films the archive knows, so the line, its
+helpers and the calendar fetch (`fetchArchiveCalendar`) all went; nothing on the
+page asks for `calendar/<year>.json` now. `MovieDetailBoxOffice.test.js` keeps a
+calendar in its mock so the line would show if anything fetched it again. A film
+too new for the archive shows only TMDB's worldwide number, without an opening rank.

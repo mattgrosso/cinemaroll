@@ -156,10 +156,6 @@
                     <i class="bi bi-chevron-down viewing-chevron"></i>
                   </button>
                 </h2>
-                <!-- What the country was watching that weekend, from Box
-                     Office Archive (2026-10-14). A quiet line, tap for the chart.
-                     Theater viewings only (2026-10-21). -->
-                <a v-if="viewingWeekend(rating)" class="viewing-weekend" :href="archiveWeekendUrl(viewingWeekend(rating).k)" target="_blank" rel="noopener">{{ weekendLine(viewingWeekend(rating)) }}</a>
                 <div :id="`collapse-${index}`" class="accordion-collapse collapse" :aria-labelledby="`heading-${index}`">
                   <div class="accordion-body">
                     <!-- The eight criteria as small tiles, four across, each
@@ -766,8 +762,8 @@ import { criticRoleLabel, criticByline, criticsSummary } from '../assets/javascr
 import { fetchCriticReviews, criticErrorMessage } from '../utils/criticReviewsRequest.js';
 import { cinemaScoreReading, CINEMASCORE_SITE } from '../assets/javascript/cinemaScore.js';
 import { fetchCinemaScore } from '../utils/cinemaScoreRequest.js';
-import { fetchArchiveFilm, fetchArchiveCalendar } from '../utils/boxOfficeHistoryRequest.js';
-import { archiveFacts, archiveSummary, weekendForDate, seenInTheater, weekendLine, archiveWeekendUrl, todaysDollarsLabel, todaysBudgetLabel, budgetToday, DOLLARS_EXPLANATION } from '../assets/javascript/boxOfficeHistory.js';
+import { fetchArchiveFilm } from '../utils/boxOfficeHistoryRequest.js';
+import { archiveFacts, archiveSummary, todaysDollarsLabel, todaysBudgetLabel, budgetToday, DOLLARS_EXPLANATION } from '../assets/javascript/boxOfficeHistory.js';
 import NameRow from './NameRow.vue';
 import { formatMoneyShort } from '../assets/javascript/formatMoney.js';
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
@@ -827,9 +823,10 @@ export default {
       critics: { tmdbId: null, state: 'idle', reviews: [], message: '' },
       // CinemaScore, looked up alongside the critics: null until known.
       cinemaScore: { tmdbId: null, score: null },
-      // Box Office History: the film's domestic run, and the weekend charts
-      // of the years you saw it (for "#1 that weekend" on each viewing).
-      archive: { tmdbId: null, film: null, calendars: {} },
+      // Box Office History: the film's domestic run, for the Box office tile.
+      // (Each viewing's "#1 the weekend of …" line went 2026-11-11: it read
+      // as this film's own rank, out of place under the score.)
+      archive: { tmdbId: null, film: null },
       cinemaScoreSite: CINEMASCORE_SITE,
       // The cast line: one line of whole names until "+N more" is tapped.
       castExpanded: false,
@@ -882,12 +879,6 @@ export default {
       immediate: true,
       handler () {
         this.$store.dispatch('ensureClubData', { maxAgeMs: FRIEND_PROFILE_MAX_AGE_MS });
-      }
-    },
-    viewingYears: {
-      immediate: true,
-      handler (years) {
-        this.loadArchiveCalendars(years);
       }
     },
     '$route.params.tmdbId': {
@@ -986,18 +977,6 @@ export default {
     archiveBudgetToday () {
       const today = budgetToday(this.movieBudget, this.archiveBoxOffice?.year);
       return today && Math.round(today) !== Math.round(this.movieBudget) ? today : null;
-    },
-    // The years of your viewings, for the archive's weekend calendars.
-    viewingYears () {
-      const ratings = this.getAllRatings(this.previousEntry) || [];
-      const years = new Set();
-      for (const rating of ratings) {
-        // Only theater viewings show a weekend's #1, so only their years are fetched.
-        if (!seenInTheater(rating)) continue;
-        const day = LetterboxdUrlService.toLocalISODate(rating?.date);
-        if (day) years.add(Number(day.slice(0, 4)));
-      }
-      return [...years].filter((y) => y >= 1970).sort();
     },
     // Companies that released the film without making it (distributors.js).
     releasedBy () {
@@ -1439,30 +1418,13 @@ export default {
     cinemaScoreReading,
     async loadArchiveBoxOffice (tmdbId) {
       if (!tmdbId) return;
-      this.archive = { tmdbId, film: null, calendars: this.archive.calendars };
+      this.archive = { tmdbId, film: null };
       const film = await fetchArchiveFilm(tmdbId);
       // MovieDetail is reused film to film; a slow answer for the last film
       // must not land on this one.
       if (this.movie?.id !== tmdbId) return;
       this.archive = { ...this.archive, film };
     },
-    async loadArchiveCalendars (years) {
-      for (const year of years || []) {
-        if (this.archive.calendars[year] !== undefined) continue;
-        this.archive = { ...this.archive, calendars: { ...this.archive.calendars, [year]: null } };
-        const calendar = await fetchArchiveCalendar(year);
-        this.archive = { ...this.archive, calendars: { ...this.archive.calendars, [year]: calendar } };
-      }
-    },
-    /** The archive's weekend chart a viewing falls in, or null while unknown. */
-    viewingWeekend (rating) {
-      if (!seenInTheater(rating)) return null;
-      const day = LetterboxdUrlService.toLocalISODate(rating?.date);
-      if (!day) return null;
-      return weekendForDate(this.archive.calendars[Number(day.slice(0, 4))], day);
-    },
-    weekendLine,
-    archiveWeekendUrl,
     formatMoneyShort,
     async loadCinemaScore () {
       const movie = this.movie;
@@ -3587,14 +3549,6 @@ export default {
     }
 
     .viewing-date { white-space: nowrap; }
-    .viewing-weekend {
-      display: block;
-      color: #ccc;
-      font-size: ds(0.72rem);
-      padding: 0 0.75rem 0.4rem;
-      text-decoration: none;
-      &:active { color: white; }
-    }
 
     .viewing-watch-number {
       color: #bbb;

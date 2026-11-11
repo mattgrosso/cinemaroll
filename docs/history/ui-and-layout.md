@@ -798,3 +798,14 @@ Cinema Roll keeps it a month. Calls made without Matt (he approved the plan with
 open): a film the archive doesn't know shows no box office rather than TMDB's number;
 profit and return use the archive's worldwide gross, not domestic, so hits don't shrink.
 Both are one-line changes in `boxOfficeIndex.js` if he wants them the other way.
+
+## The weekend's #1 under each viewing, removed (2026-11-11)
+
+Each theater viewing on the movie page showed which film was #1 at the box office
+that weekend (Box Office History's calendars, added 2026-10-14). Matt, from his
+phone on a 2026 film: it read as the film's own opening-weekend rank, an odd thing
+to find under his score when the Box office tile sits further down. Asked whether
+he wanted the "what else was playing" fact kept anywhere, he took the plan to drop
+it: the line, its helpers and the per-year calendar download are gone; the tile's
+own opening rank (for films the archive knows) is unchanged. Offered and not yet
+answered: a "Not in Box Office History yet" note in the tile for films too new.
