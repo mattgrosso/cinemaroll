@@ -25,6 +25,7 @@ import { placeholdersReadyToFinish, finalizePlaceholder } from '../assets/javasc
 
 let autoReconcileRunning = false;
 import { saveSnapshot, loadSnapshot } from "../utils/offlineStore.js";
+import { letterboxdPlan } from "../utils/letterboxdCache.js";
 import { maxUpdatedAt, reconstructFromDelta, diffLibraries, describeStaleEntry, launchPlan, isWriteRaceOnly, summarizeShadowReport } from "../assets/javascript/deltaSync.js";
 import { enqueueWrite, listPendingWrites, removePendingWrite, updatePendingWrite } from "../utils/pendingWriteQueue.js";
 import { setValueAtPath } from "../utils/statePath.js";
@@ -2754,18 +2755,39 @@ export default createStore({
     // One read each of the shared film cache and my synced diary, remembered
     // for the session (re-read after maxAgeMs). Never throws: a screen that
     // asked simply has no Letterboxd data yet.
-    async ensureLetterboxdData (context, { maxAgeMs = 10 * 60 * 1000 } = {}) {
+    async ensureLetterboxdData (context, { maxAgeMs = 10 * 60 * 1000, reviewsChanged = false } = {}) {
       const topKey = context.getters.databaseTopKey;
-      if (!topKey || !context.state.isOnline) return;
-      if (context.state.letterboxdLoadedAt && Date.now() - context.state.letterboxdLoadedAt < maxAgeMs) return;
+      if (!topKey) return;
+      if (!reviewsChanged && context.state.letterboxdLoadedAt && Date.now() - context.state.letterboxdLoadedAt < maxAgeMs) return;
       if (letterboxdLoadInFlight) return letterboxdLoadInFlight;
       letterboxdLoadInFlight = (async () => {
         try {
+          // The phone's last copy first (2026-11-11): screens get their
+          // crowd ratings at once, and online or not.
+          const cached = await loadSnapshot(topKey, 'letterboxd');
+          if (cached && !context.state.letterboxdLoadedAt) {
+            context.commit('setLetterboxdData', { films: cached.films, reviews: cached.reviews, at: 0 });
+          }
+          if (!context.state.isOnline) return;
+          // Then only what can have changed (utils/letterboxdCache.js). The
+          // sync stamp is a few bytes; the two tables are ~700 KB.
+          const sync = await get(ref(db, `${topKey}/letterboxd/sync/lastAt`)).then((snapshot) => snapshot.val()).catch(() => null);
+          const now = Date.now();
+          const plan = letterboxdPlan({ cached, syncLastAt: sync, now, reviewsChanged });
           const [films, reviews] = await Promise.all([
-            get(ref(db, 'letterboxdFilms')).then((snapshot) => snapshot.val()),
-            get(ref(db, `${topKey}/letterboxd/reviews`)).then((snapshot) => snapshot.val())
+            plan.films ? get(ref(db, 'letterboxdFilms')).then((snapshot) => snapshot.val()) : cached.films,
+            plan.reviews ? get(ref(db, `${topKey}/letterboxd/reviews`)).then((snapshot) => snapshot.val()) : cached.reviews
           ]);
-          context.commit('setLetterboxdData', { films, reviews, at: Date.now() });
+          context.commit('setLetterboxdData', { films, reviews, at: now });
+          if (plan.films || plan.reviews) {
+            saveSnapshot(topKey, 'letterboxd', {
+              films,
+              filmsAt: plan.films ? now : cached.filmsAt,
+              reviews,
+              reviewsAt: plan.reviews ? now : cached.reviewsAt,
+              reviewsSyncAt: plan.reviews ? sync : cached.reviewsSyncAt
+            });
+          }
         } catch (error) {
           console.warn('Letterboxd data unavailable:', error?.message);
         } finally {

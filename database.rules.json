@@ -163,6 +163,11 @@
           "updatedAt"
         ]
       },
+      "bugReportResolutions": {
+        ".indexOn": [
+          "seen"
+        ]
+      },
       "sharedDBSearches": {
         "$shareKey": {
           ".read": true

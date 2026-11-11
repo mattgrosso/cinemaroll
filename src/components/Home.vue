@@ -5737,6 +5737,8 @@ export default {
         }
         const { updates, matched, unmatched } = reviewsCsvToUpdates(rows, this.$store.getters.allMediaAsArray || []);
         await importLetterboxdReviews(this.$store.getters.databaseTopKey, updates);
+        // The phone keeps a copy of the diary; this import just changed it.
+        this.$store.dispatch('ensureLetterboxdData', { reviewsChanged: true });
         const withReviews = Object.values(updates).filter((record) => record.review).length;
         this.letterboxdSync.message = `Imported ${matched} of ${rows.length} entries (${withReviews} with reviews).`;
         this.letterboxdSync.unmatched = unmatched;

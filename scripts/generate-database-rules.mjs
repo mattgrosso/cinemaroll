@@ -313,6 +313,14 @@ const rules = {
         '.indexOn': ['updatedAt']
       },
 
+      // The bug-fix notices (2026-11-11): the app asks only for the unseen
+      // ones (orderByChild('seen').equalTo(null), utils/bugResolutions.js).
+      // Same trap as above: without this index the whole list, ~170 KB,
+      // still comes down on every open.
+      bugReportResolutions: {
+        '.indexOn': ['seen']
+      },
+
       // /share/:userDBKey/:shareKey is deliberately a logged-out route
       // (requiresLogin: false in the router), so a share link has to be
       // readable by someone with no session at all. Grants read on ONE share

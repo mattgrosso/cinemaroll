@@ -1,4 +1,4 @@
-import { getDatabase, ref, get, update } from 'firebase/database';
+import { getDatabase, ref, get, update, query, orderByChild, equalTo } from 'firebase/database';
 
 // The other half of the bug-report loop: when a report is resolved,
 // `yarn resolve-bug-report` writes a plain-language notice into the
@@ -27,7 +27,11 @@ export async function fetchUnseenResolutions (store) {
   if (!topKey) return [];
 
   try {
-    const snapshot = await get(ref(getDatabase(), `${topKey}/bugReportResolutions`));
+    // Only the unseen ones come down (2026-11-11): a seen notice has
+    // `seen: true` and an unseen one no `seen` at all. The whole list had
+    // grown to ~170 KB and was read on every open; database.rules.json
+    // indexes `seen` so the database does the filtering.
+    const snapshot = await get(query(ref(getDatabase(), `${topKey}/bugReportResolutions`), orderByChild('seen'), equalTo(null)));
     return unseenResolutions(snapshot.val());
   } catch {
     // Offline or refused — the notice simply waits for another launch.
