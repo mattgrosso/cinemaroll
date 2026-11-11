@@ -316,6 +316,17 @@ Log friends' logs (revision child first, body only when it moved, remembered
 under `<account>/paper/club/external`). Served by the newsletter Lambda at
 `/club/<FEED_TOKEN>` for `FEED_ACCOUNT` only (Matt, 2026-10-27: "Letterboxd
 reviews … and awards … a lot of stuff in Cinema Roll we could bring over").
+Awards stories (Matt, 2026-11-11, on Natalie's 1999 board): titled with the
+friend's own name for their awards (`settings/personalAwardName`, "The Roses" →
+"Natalie's 1999 Roses"; placeholders read "awards"), every category in the app's
+order (`CATEGORIES`, a copy of `PERSONAL_AWARD_CATEGORIES`, then the year's custom
+awards by `createdAt`; the test holds the copies together), the winner and an
+"Also nominated" line; at most 40 title lookups a story. Movie Log friends' awards
+come too: `clubReadExternal` keeps each movie's `awards` and the feed's
+`awardsName`, `externalBoards` folds them per ceremony + year, and the cache
+keeps `awardYears` (a summary hash per board, `y<year>-<hash>` keys); a board
+whose hash moved is told, dated when noticed. First sighting (no `awardsRead` on
+the cache) tells only the newest year.
 
 ## Stories from the log for Newsprinted (2026-10-28)
 `aws-lambda/logPaper.js` (tests beside it) turns Matt's own log into short

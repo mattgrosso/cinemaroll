@@ -12,10 +12,13 @@
 //            a rewatch added to an old entry is the one thing this misses)
 //   review   a friend's Letterboxd review (their synced letterboxd/reviews,
 //            only entries with words)
-//   awards   a friend's awards board for a year, when they last touched it
+//   awards   a friend's awards board for a year, when they last touched it:
+//            every category in the app's order, winner and nominees, under
+//            the name they gave their awards (Natalie's Roses)
 //   external a Movie Log friend's log (their film-club feed, read only when
 //            its revision changed, and remembered under paper/club so the
-//            friend's Firebase bill isn't charged for every reader fetch)
+//            friend's Firebase bill isn't charged for every reader fetch),
+//            and their awards: a year whose board changed is told like ours
 //
 // Pure builders take data and hand back items; `buildClubFeed` does the I/O
 // through the handles it is given, so the tests need no network.
@@ -34,14 +37,80 @@ const stars = (n) => {
   if (!Number.isFinite(v) || v <= 0) return '';
   return `${'★'.repeat(Math.floor(v))}${v % 1 >= 0.5 ? '½' : ''}`;
 };
-const CATEGORY_LABEL = {
-  bestPicture: 'Best Picture', bestDirector: 'Best Director', bestActor: 'Best Actor', bestActress: 'Best Actress',
-  bestSupportingActor: 'Best Supporting Actor', bestSupportingActress: 'Best Supporting Actress', bestScreenplay: 'Best Screenplay',
-  bestCinematography: 'Best Cinematography', bestEditing: 'Best Editing', bestScore: 'Best Score', bestVisualEffects: 'Best Visual Effects',
-  bestAnimatedFeature: 'Best Animated Feature', bestDocumentaryFeature: 'Best Documentary', bestInternationalFeature: 'Best International Feature',
-  mostImportantMovie: 'Most Important Movie'
-};
-const categoryLabel = (key) => CATEGORY_LABEL[key] || key.replace(/^best/, 'Best ').replace(/([a-z])([A-Z])/g, '$1 $2');
+// The app's own categories, in the order its awards page shows them. A copy of
+// PERSONAL_AWARD_CATEGORIES (src/assets/javascript/personalAwardsCategories.js);
+// clubPaper.test.js fails if the two drift.
+const CATEGORIES = [
+  ['bestPicture', 'Best Picture', 'movie'], ['bestDirector', 'Best Director', 'person'], ['bestActor', 'Best Actor', 'person'],
+  ['bestActress', 'Best Actress', 'person'], ['bestSupportingActor', 'Best Supporting Actor', 'person'],
+  ['bestSupportingActress', 'Best Supporting Actress', 'person'], ['bestScreenplay', 'Best Screenplay or Writing', 'movie'],
+  ['bestCinematography', 'Best Cinematography', 'movie'], ['bestEditing', 'Best Editing', 'movie'], ['bestScore', 'Best Score or Music', 'movie'],
+  ['bestVisualEffects', 'Best Visual Effects or Production Design', 'movie'], ['bestAnimatedFeature', 'Best Animated Feature', 'movie'],
+  ['bestDocumentaryFeature', 'Best Documentary Feature', 'movie'], ['bestInternationalFeature', 'Best International Feature', 'movie'],
+  ['mostImportantMovie', 'Most Important Movie', 'movie']
+].map(([key, name, type]) => ({ key, name, type }));
+const CATEGORY_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.key, c.name]));
+const categoryLabel = (key) => CATEGORY_LABEL[key] || key.replace(/^custom-/, '').replace(/^best/, 'Best ').replace(/([a-z])([A-Z])/g, '$1 $2');
+
+// Another app's label onto the house order: a copy of categoryMatchKey and
+// houseCategoryRank in src/assets/javascript/awardsShare.js (tested together).
+const ALIASES = [
+  [/^best (film|motion picture|feature film)$/, 'best picture'],
+  [/^best (screenplay|writing)( or (writing|screenplay))?$/, 'best screenplay'],
+  [/^best (film )?editing$/, 'best editing'],
+  [/^best (original )?(score|music)( or music)?$/, 'best score'],
+  [/^best visual effects( or production design)?$/, 'best visual effects'],
+  [/^best animated( feature| film| feature film)?$/, 'best animated feature'],
+  [/^best documentary( feature| film)?$/, 'best documentary'],
+  [/^best (foreign( language)?|international)( feature)?( film)?$/, 'best international feature'],
+  [/^best (actor|actress) in a (leading|supporting) role$/, (m, who, role) => `best ${role === 'supporting' ? 'supporting ' : ''}${who}`],
+  [/^(best )?(directing|director)$/, 'best director']
+];
+function categoryMatchKey (label) {
+  const base = String(label || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
+  for (const [pattern, replacement] of ALIASES) {
+    const match = base.match(pattern);
+    if (match) return typeof replacement === 'function' ? replacement(...match) : replacement;
+  }
+  return base;
+}
+const HOUSE_ORDER = CATEGORIES.map((c) => categoryMatchKey(c.name));
+function houseCategoryRank (label) {
+  const key = categoryMatchKey(label);
+  if (/^best (picture|motion picture|film)\b/.test(key)) return -1;
+  const index = HOUSE_ORDER.indexOf(key);
+  return index === -1 ? HOUSE_ORDER.length : index;
+}
+const PERSON_LABEL = /actor|actress|performance|director|directing|honorary|humanitarian|memorial|special award|breakthrough|newcomer|debut|star of/i;
+const HOUSE_KIND = Object.fromEntries(CATEGORIES.map((c) => [categoryMatchKey(c.name), c.type]));
+const labelKind = (label) => HOUSE_KIND[categoryMatchKey(label)] || (PERSON_LABEL.test(String(label || '')) ? 'person' : 'movie');
+
+// What a friend calls their awards (Natalie's are "The Roses"): "Roses" for
+// "Natalie's 1999 Roses". Placeholders and nothing at all read "awards".
+const PLACEHOLDER_CEREMONY = /^(the |my )?(personal )?(awards?|oscars?)$/i;
+function ceremonyWord (name) {
+  const text = typeof name === 'string' ? name.trim().slice(0, 80) : '';
+  if (!text || PLACEHOLDER_CEREMONY.test(text)) return 'awards';
+  return text.replace(/^the\s+/i, '');
+}
+
+// Each story looks up at most this many film titles (winners first).
+const MAX_TITLE_LOOKUPS = 40;
+
+/**
+ * One year's board as HTML: categories in order, the winner after the name,
+ * the other nominees on a line beneath. `categories` is
+ * [{ label, winners: [text], nominees: [text] }], texts already escaped.
+ */
+function boardHtml (categories) {
+  return categories.map((c) => {
+    const won = c.winners.join(', ');
+    const rest = c.nominees.filter((n) => !c.winners.includes(n));
+    const head = `<b>${esc(c.label)}</b>${won ? ` · ${won}` : ''}`;
+    const nominated = rest.length ? `<br><small>${won ? 'Also nominated' : 'Nominees'}: ${rest.join(', ')}</small>` : '';
+    return `<p>${head}${nominated}</p>`;
+  }).join('');
+}
 const movieUrl = (tmdbId) => (Number.isFinite(Number(tmdbId)) && Number(tmdbId) > 0 ? `https://www.cinemaroll.org/movie/${Number(tmdbId)}` : 'https://www.cinemaroll.org/film-club');
 
 /** A friend's Cinema Roll log entries rated since `since`: one item per viewing. Pure. */
@@ -96,27 +165,61 @@ function reviewItems ({ key, name, reviews }, since) {
   return out;
 }
 
-/** A friend's awards board for one year, as touched at `lastUpdated`. `titleOf` names a TMDB id. Pure. */
-function awardsItem ({ key, name, year, board }, titleOf) {
+/** A board's categories in the app's order: the standard ones, then the year's own (oldest first). Pure. */
+function boardCategories (board) {
+  const cats = board?.categories || {};
+  const custom = Object.entries(board?.customCategories || {}).filter(([, c]) => c?.name)
+    .sort(([, x], [, y]) => (Number(x.createdAt) || 0) - (Number(y.createdAt) || 0) || String(x.name).localeCompare(String(y.name)));
+  const order = [...CATEGORIES.map((c) => c.key), ...custom.map(([key]) => key)];
+  const names = Object.fromEntries(custom.map(([key, c]) => [key, String(c.name)]));
+  const rest = Object.keys(cats).filter((k) => !order.includes(k)).sort();
+  return [...order, ...rest].filter((k) => cats[k]).map((key) => ({ key, label: names[key] || categoryLabel(key), data: cats[key] }));
+}
+
+const listOf = (v) => (Array.isArray(v) ? v : v && typeof v === 'object' ? Object.values(v) : []).filter((x) => x && typeof x === 'object');
+
+/** The TMDB ids a board names, winners first, at most MAX_TITLE_LOOKUPS. Pure. */
+function boardMovieIds (board) {
+  const winners = [];
+  const nominees = [];
+  for (const { data } of boardCategories(board)) {
+    if (data.noNominees) continue;
+    if (data.winner) winners.push(data.winner.movieId);
+    listOf(data.nominees).forEach((n) => nominees.push(n.movieId));
+  }
+  return [...new Set([...winners, ...nominees].filter((v) => Number.isFinite(Number(v))).map(Number))].slice(0, MAX_TITLE_LOOKUPS);
+}
+
+/**
+ * A friend's awards board for one year, as touched at `lastUpdated`: every
+ * category in the app's order, the winner and the other nominees.
+ * `titleOf` names a TMDB id; `awardsName` is what the friend calls them. Pure.
+ */
+function awardsItem ({ key, name, year, board, awardsName }, titleOf) {
   const at = Number(board?.lastUpdated);
   if (!Number.isFinite(at)) return null;
-  const lines = [];
+  const pickText = (p) => {
+    if (!p) return null;
+    const film = titleOf(p.movieId) || null;
+    if (p.type === 'person' || p.name) return p.name || p.id ? `${esc(p.name || p.id)}${film ? ` <i>(${esc(film)})</i>` : ''}` : null;
+    return film ? esc(film) : null;
+  };
+  const categories = [];
   let picture = null;
-  for (const [cat, c] of Object.entries(board.categories || {})) {
-    const w = c?.winner;
-    if (!w || c.noNominees) continue;
-    const film = titleOf(w.movieId) || null;
-    const who = w.type === 'person' || w.name ? `${esc(w.name || w.id)}${film ? ` <i>(${esc(film)})</i>` : ''}` : film ? esc(film) : null;
-    if (!who) continue;
-    if (cat === 'bestPicture') picture = film;
-    lines.push(`<p><b>${esc(categoryLabel(cat))}</b> · ${who}</p>`);
+  for (const { key: cat, label, data } of boardCategories(board)) {
+    if (data.noNominees) continue;
+    const winner = pickText(data.winner);
+    const nominees = [...new Set(listOf(data.nominees).map(pickText).filter(Boolean))];
+    if (!winner && !nominees.length) continue;
+    if (cat === 'bestPicture' && data.winner) picture = titleOf(data.winner.movieId) || null;
+    categories.push({ label, winners: winner ? [winner] : [], nominees });
   }
-  if (!lines.length) return null;
+  if (!categories.length) return null;
   return {
     id: `awards-${key}-${year}-${at}`,
     url: `https://www.cinemaroll.org/awards?year=${encodeURIComponent(year)}`,
-    title: `${firstName(name)}'s ${year} awards${picture ? `: ${picture} for Best Picture` : ''}${board.completed ? '' : ' (so far)'}`,
-    content_html: lines.join(''),
+    title: `${firstName(name)}'s ${year} ${ceremonyWord(awardsName)}${picture ? `: ${picture} for Best Picture` : ''}${board.completed ? '' : ' (so far)'}`,
+    content_html: boardHtml(categories),
     date_published: iso(at)
   };
 }
@@ -130,6 +233,110 @@ function externalItems ({ id, name, watches }, since) {
     content_html: `<p>${Number.isFinite(Number(w.score)) ? `Rated it ${Number(w.score).toFixed(2)} out of 10.` : 'Logged it.'}</p>`,
     date_published: iso(Number(w.watchedAt))
   }));
+}
+
+// --- a Movie Log friend's awards -------------------------------------------
+// Their feed carries each film's awards ({ year, category, label, result,
+// name?, ceremony? }) and the ceremony's name. Folded into one board a
+// ceremony and year; a short summary of each is remembered with the cached
+// feed, and a board whose summary moved becomes a story. The first time a
+// friend's awards are seen only their newest year is told, so a new friend
+// doesn't arrive as a flood of every year they ever did.
+
+/** The feed's ceremony: its awardsName, else a "Name: " prefix most labels share. Pure. */
+function externalCeremony (awardsName, movies) {
+  const named = typeof awardsName === 'string' ? awardsName.trim().slice(0, 80) : '';
+  if (named && !PLACEHOLDER_CEREMONY.test(named)) return named;
+  const counts = new Map();
+  let total = 0;
+  for (const m of movies || []) {
+    for (const award of m.awards || []) {
+      if (award.ceremony) continue;
+      total += 1;
+      const at = String(award.label || '').indexOf(': ');
+      if (at > 0) { const p = award.label.slice(0, at).trim(); counts.set(p, (counts.get(p) || 0) + 1); }
+    }
+  }
+  const [prefix, count] = [...counts].sort((x, y) => y[1] - x[1])[0] || [];
+  return prefix && count * 2 > total ? prefix : null;
+}
+
+/**
+ * Boards from a Movie Log feed's movies ([{ tmdbId, title, awards }]):
+ * { '<ceremony>|<year>': { ceremony, year, categories: [{ label, winners, nominees }] } },
+ * categories in the house order, texts escaped. Pure.
+ */
+function externalBoards (movies, awardsName) {
+  const feedCeremony = externalCeremony(awardsName, movies);
+  const boards = {};
+  for (const m of movies || []) {
+    const film = m?.title ? String(m.title) : null;
+    if (!film) continue;
+    for (const award of m.awards || []) {
+      if (!Number.isInteger(award?.year) || !award.label || !['won', 'nominated'].includes(award.result)) continue;
+      const ceremony = award.ceremony || feedCeremony || null;
+      let label = String(award.label);
+      if (ceremony && label.toLowerCase().startsWith(`${ceremony.toLowerCase()}: `)) label = label.slice(ceremony.length + 2).trim() || label;
+      const boardKey = `${ceremony || ''}|${award.year}`;
+      const board = boards[boardKey] || (boards[boardKey] = { ceremony, year: award.year, byLabel: {} });
+      const cat = board.byLabel[award.category || label] || (board.byLabel[award.category || label] = { label, winners: [], nominees: [] });
+      const text = labelKind(label) === 'person' && award.name ? `${esc(award.name)} <i>(${esc(film)})</i>` : esc(film);
+      const list = award.result === 'won' ? cat.winners : cat.nominees;
+      if (!list.includes(text)) list.push(text);
+    }
+  }
+  for (const board of Object.values(boards)) {
+    board.categories = Object.values(board.byLabel)
+      .map((c) => ({ ...c, nominees: c.nominees.filter((n) => !c.winners.includes(n)) }))
+      .sort((x, y) => houseCategoryRank(x.label) - houseCategoryRank(y.label) || x.label.localeCompare(y.label));
+    delete board.byLabel;
+  }
+  return boards;
+}
+
+const shortHash = (text) => require('crypto').createHash('sha1').update(String(text)).digest('hex').slice(0, 12);
+// A Firebase-safe key for a board: ceremony names may hold . # $ / [ ].
+const boardSlot = (board) => `y${board.year}-${shortHash(board.ceremony || '')}`;
+
+/**
+ * The remembered summaries after a fresh read: a board whose summary moved is
+ * stamped `at: now` and keeps its categories for the story; on the first
+ * sighting (`prior` null) only the newest year is stamped. Pure.
+ */
+function externalAwardYears (boards, prior, now) {
+  const next = {};
+  const list = Object.values(boards || {});
+  const newest = list.reduce((top, b) => Math.max(top, b.year), -Infinity);
+  for (const board of list) {
+    const slot = boardSlot(board);
+    const sig = shortHash(JSON.stringify(board.categories));
+    const before = prior ? prior[slot] : null;
+    const told = prior ? !before || before.sig !== sig : board.year === newest && board.categories.some((c) => c.winners.length);
+    if (told) next[slot] = { ceremony: board.ceremony, year: board.year, sig, at: now, categories: board.categories };
+    else if (before && before.at) next[slot] = { ...before, sig, categories: board.categories };
+    else next[slot] = { year: board.year, sig };
+  }
+  return next;
+}
+
+/** Stories for a Movie Log friend's boards that moved in the window. Pure. */
+function externalAwardItems ({ id, name, years }, since) {
+  const out = [];
+  for (const [slot, y] of Object.entries(years || {})) {
+    const at = Number(y?.at);
+    if (!Number.isFinite(at) || at < since || !Array.isArray(y.categories) || !y.categories.length) continue;
+    const categories = y.categories.map((c) => ({ label: c.label, winners: c.winners || [], nominees: c.nominees || [] }));
+    const best = categories.find((c) => houseCategoryRank(c.label) === -1 && c.winners.length);
+    const picture = best ? best.winners[0].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"') : null;
+    out.push({
+      id: `external-awards-${id}-${slot}-${at}`,
+      url: 'https://www.cinemaroll.org/awards',
+      title: `${firstName(name)}'s ${y.year} ${ceremonyWord(y.ceremony)}${picture ? `: ${picture} for ${best.label}` : ''}`,
+      content_html: boardHtml(categories),
+      date_published: iso(at)
+    });
+  }
+  return out;
 }
 
 const sortNewest = (items) => items.sort((a, b) => String(b.date_published).localeCompare(String(a.date_published)));
@@ -174,6 +381,7 @@ async function buildClubFeed ({ topKey, db, readExternal, titleOf, now = Date.no
 
   // Awards boards touched in the window.
   const titles = {};
+  const awardsNames = {};
   const nameOf = async (id) => {
     if (!Number.isFinite(Number(id))) return null;
     if (!(id in titles)) titles[id] = await titleOf(Number(id)).catch(() => null);
@@ -186,10 +394,10 @@ async function buildClubFeed ({ topKey, db, readExternal, titleOf, now = Date.no
         const at = Number(await db.get(`${key}/personalAwards/${year}/lastUpdated`));
         if (!Number.isFinite(at) || at < since) continue;
         const board = await db.get(`${key}/personalAwards/${year}`);
-        const ids = new Set(Object.values(board?.categories || {}).map((c) => c?.winner?.movieId).filter((v) => Number.isFinite(Number(v))));
         const resolved = {};
-        for (const id of ids) resolved[id] = await nameOf(id);
-        const item = awardsItem({ key, name: names[key], year, board }, (id) => resolved[id] || null);
+        for (const id of boardMovieIds(board)) resolved[id] = await nameOf(id);
+        if (awardsNames[key] === undefined) awardsNames[key] = (await db.get(`${key}/settings/personalAwardName`).catch(() => null)) || null;
+        const item = awardsItem({ key, name: names[key], year, board, awardsName: awardsNames[key] }, (id) => resolved[id] || null);
         if (item) items.push(item);
       }
     } catch (error) {
@@ -205,16 +413,21 @@ async function buildClubFeed ({ topKey, db, readExternal, titleOf, now = Date.no
       const cachePath = `${topKey}/paper/club/external/${id}`;
       const cached = (await db.get(cachePath).catch(() => null)) || null;
       let watches = cached?.watches || [];
-      if (!cached || now - Number(cached.checkedAt || 0) > EXTERNAL_RECHECK_MS) {
-        const read = await readExternal(friend.feedUrl, cached);
+      let awardYears = cached?.awardYears || null;
+      // A cache from before the awards were read is read afresh once.
+      const awardsRead = Boolean(cached?.awardsRead);
+      if (!cached || !awardsRead || now - Number(cached.checkedAt || 0) > EXTERNAL_RECHECK_MS) {
+        const read = await readExternal(friend.feedUrl, awardsRead ? cached : null);
         if (read) {
           watches = read.watches;
-          await db.set(cachePath, { revision: read.revision || null, watches: watches.slice(0, 40), checkedAt: now });
+          awardYears = externalAwardYears(externalBoards(read.awards || [], read.awardsName), awardsRead ? cached.awardYears || {} : null, now);
+          await db.set(cachePath, { revision: read.revision || null, watches: watches.slice(0, 40), awardYears, awardsRead: true, checkedAt: now });
         } else if (cached) {
           await db.set(`${cachePath}/checkedAt`, now);
         }
       }
       items.push(...externalItems({ id, name: friend.name, watches }, since));
+      items.push(...externalAwardItems({ id, name: friend.name, years: awardYears }, since));
     } catch (error) {
       log(`club paper: external ${id} failed: ${error.message}`);
     }
@@ -228,4 +441,4 @@ async function buildClubFeed ({ topKey, db, readExternal, titleOf, now = Date.no
   };
 }
 
-module.exports = { buildClubFeed, logItems, reviewItems, awardsItem, externalItems, WINDOW_DAYS };
+module.exports = { buildClubFeed, logItems, reviewItems, awardsItem, boardMovieIds, externalItems, externalBoards, externalAwardYears, externalAwardItems, categoryMatchKey, houseCategoryRank, CATEGORIES, WINDOW_DAYS };

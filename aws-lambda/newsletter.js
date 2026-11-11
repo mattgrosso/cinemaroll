@@ -670,7 +670,12 @@ const clubReadExternal = async (feedUrl, cached) => {
     .map((m) => ({ tmdbId: Number(m && m.tmdbId) || null, title: m && m.title, watchedAt: Number(m && m.viewings && m.viewings[0] && m.viewings[0].watchedAt) || null, score: Number.isFinite(Number(m && m.rating)) ? Number(m.rating) : null }))
     .filter((w) => w.title && w.watchedAt)
     .sort((a, b) => b.watchedAt - a.watchedAt);
-  return { revision: known, watches };
+  // Their awards too (clubPaper's externalBoards folds them into years).
+  const awards = (doc && Array.isArray(doc.movies) ? doc.movies : [])
+    .filter((m) => m && m.title && Array.isArray(m.awards) && m.awards.length)
+    .map((m) => ({ tmdbId: Number(m.tmdbId) || null, title: String(m.title), awards: m.awards.filter((a) => a && typeof a === 'object').slice(0, 60) }));
+  const awardsName = doc && typeof doc.awardsName === 'string' ? doc.awardsName : null;
+  return { revision: known, watches, awards, awardsName };
 };
 const clubTitleOf = async (tmdbId) => {
   if (!process.env.TMDB_API_KEY) return null;

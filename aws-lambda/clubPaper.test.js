@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { awardsItem, buildClubFeed, externalItems, logItems, reviewItems } from './clubPaper.js';
+import { awardsItem, boardMovieIds, buildClubFeed, CATEGORIES, categoryMatchKey, externalAwardItems, externalAwardYears, externalBoards, externalItems, houseCategoryRank, logItems, reviewItems } from './clubPaper.js';
+import { PERSONAL_AWARD_CATEGORIES } from '../src/assets/javascript/personalAwardsCategories.js';
+import { categoryMatchKey as appMatchKey, houseCategoryRank as appRank } from '../src/assets/javascript/awardsShare.js';
 
 const since = Date.parse('2026-10-06T00:00:00Z');
 
@@ -34,6 +36,70 @@ describe('club paper items', () => {
     expect(awardsItem({ key: 'n', name: 'N', year: '1', board: { lastUpdated: 1, categories: {} } }, () => null)).toBeNull();
   });
 
+  it('an awards board carries its name, the nominees, and the app\'s order with custom awards last', () => {
+    // Stored in the database's (alphabetical) order, as Firebase hands it back.
+    const board = {
+      lastUpdated: 5, completed: true,
+      customCategories: { 'custom-b': { name: 'Best Dog', createdAt: 2 }, 'custom-a': { name: 'Biggest Scare', createdAt: 1 } },
+      categories: {
+        'custom-a': { winner: { movieId: 745, type: 'movie' }, nominees: [{ movieId: 745 }] },
+        'custom-b': { nominees: { 0: { movieId: 2 } } },
+        bestActress: { winner: { name: 'Toni Collette', movieId: 745, type: 'person' }, nominees: [{ name: 'Toni Collette', movieId: 745, type: 'person' }, { name: 'Hilary Swank', movieId: 3, type: 'person' }] },
+        bestPicture: { winner: { movieId: 745, type: 'movie' }, nominees: [{ movieId: 2 }, { movieId: 745 }, { movieId: 99 }] },
+        bestScreenplay: { winner: { movieId: 2 }, nominees: [{ movieId: 2 }] }
+      }
+    };
+    const titles = { 745: 'The Sixth Sense', 2: 'Magnolia', 3: 'Boys Don\'t Cry' };
+    const item = awardsItem({ key: 'nat', name: 'Natalie Grosso', year: '1999', board, awardsName: 'The Roses' }, (id) => titles[id] || null);
+    expect(item.title).toBe("Natalie's 1999 Roses: The Sixth Sense for Best Picture");
+    expect(item.content_html).toBe(
+      '<p><b>Best Picture</b> · The Sixth Sense<br><small>Also nominated: Magnolia</small></p>' +
+      '<p><b>Best Actress</b> · Toni Collette <i>(The Sixth Sense)</i><br><small>Also nominated: Hilary Swank <i>(Boys Don&#39;t Cry)</i></small></p>'.replace('&#39;', "'") +
+      '<p><b>Best Screenplay or Writing</b> · Magnolia</p>' +
+      '<p><b>Biggest Scare</b> · The Sixth Sense</p>' +
+      '<p><b>Best Dog</b><br><small>Nominees: Magnolia</small></p>'
+    );
+    expect(awardsItem({ key: 'n', name: 'N', year: '1', board: { ...board }, awardsName: 'Oscar' }, () => 'X').title).toBe("N's 1 awards: X for Best Picture");
+    expect(boardMovieIds(board)).toEqual([745, 2, 99, 3]);
+  });
+
+  it('the Lambda\'s copy of the categories and their order matches the app', () => {
+    expect(CATEGORIES).toEqual(PERSONAL_AWARD_CATEGORIES.map(({ key, name, type }) => ({ key, name, type })));
+    for (const label of ['Best Film', 'Best Writing', 'Best Actress in a Supporting Role', 'Directing', 'Best Motion Picture – Drama', 'Best Original Score', 'Worst Hair', 'Most Important Movie']) {
+      expect(categoryMatchKey(label)).toBe(appMatchKey(label));
+      expect(houseCategoryRank(label)).toBe(appRank(label));
+    }
+  });
+
+  it('a Movie Log friend\'s awards fold into boards and are told when a year changes, the newest only at first', () => {
+    const movies = [
+      { tmdbId: 1, title: 'Arrival', awards: [{ year: 2016, category: 'pic', label: 'Brians: Best Film', result: 'won' }, { year: 2016, category: 'act', label: 'Brians: Best Actress', result: 'won', name: 'Amy Adams' }] },
+      { tmdbId: 2, title: 'Moonlight', awards: [{ year: 2016, category: 'pic', label: 'Brians: Best Film', result: 'nominated', name: 'A Producer' }, { year: 2015, category: 'pic', label: 'Brians: Best Film', result: 'won' }] }
+    ];
+    const boards = externalBoards(movies, null);
+    const b2016 = boards['Brians|2016'];
+    expect(b2016.categories.map((c) => c.label)).toEqual(['Best Film', 'Best Actress']);
+    expect(b2016.categories[0]).toEqual({ label: 'Best Film', winners: ['Arrival'], nominees: ['Moonlight'] });
+    expect(b2016.categories[1].winners).toEqual(['Amy Adams <i>(Arrival)</i>']);
+
+    const first = externalAwardYears(boards, null, 100);
+    const told = Object.values(first).filter((y) => y.at);
+    expect(told.map((y) => y.year)).toEqual([2016]);
+    const items = externalAwardItems({ id: 'ext-1', name: 'Brian Goegan', years: first }, 50);
+    expect(items).toHaveLength(1);
+    expect(items[0].title).toBe("Brian's 2016 Brians: Arrival for Best Film");
+    expect(items[0].content_html).toBe('<p><b>Best Film</b> · Arrival<br><small>Also nominated: Moonlight</small></p><p><b>Best Actress</b> · Amy Adams <i>(Arrival)</i></p>');
+
+    // Nothing moved: nothing new. 2015 changes: told, 2016 keeps its old story.
+    const same = externalAwardYears(boards, first, 200);
+    expect(Object.values(same).filter((y) => y.at === 200)).toHaveLength(0);
+    movies[1].awards.push({ year: 2015, category: 'act', label: 'Brians: Best Actor', result: 'won', name: 'Someone' });
+    const moved = externalAwardYears(externalBoards(movies, null), same, 300);
+    expect(Object.values(moved).filter((y) => y.at === 300).map((y) => y.year)).toEqual([2015]);
+    expect(Object.values(moved).filter((y) => y.at === 100).map((y) => y.year)).toEqual([2016]);
+    expect(Object.keys(moved).every((k) => /^[A-Za-z0-9-]+$/.test(k))).toBe(true);
+  });
+
   it('a Movie Log friend\'s watches in the window become logs', () => {
     const items = externalItems({ id: 'ext-1', name: 'Brian Goegan', watches: [{ tmdbId: 568, title: 'Apollo 13', watchedAt: Date.parse('2026-10-21T00:00:00Z'), score: 9.97 }, { tmdbId: 1, title: 'Old', watchedAt: 1, score: 1 }] }, since);
     expect(items.map((i) => i.title)).toEqual(['Brian logged Apollo 13']);
@@ -56,11 +122,13 @@ describe('club paper items', () => {
     const reads = [];
     const writes = {};
     const db = { get: async (p, q) => { reads.push(q ? `${p}?${q}` : p); return p in writes ? writes[p] : data[p] ?? null; }, set: async (p, v) => { writes[p] = v; } };
-    const feed = await buildClubFeed({ topKey: 'me', db, now, readExternal: async () => ({ revision: 'r1', watches: [{ tmdbId: 568, title: 'Apollo 13', watchedAt: now - 2000, score: 9.9 }] }), titleOf: async (id) => (id === 745 ? 'The Sixth Sense' : null) });
-    expect(feed.items.map((i) => i.title)).toEqual(['Seth watched Film', 'Brian logged Apollo 13', "Seth's 1999 awards: The Sixth Sense for Best Picture"]);
+    const feed = await buildClubFeed({ topKey: 'me', db, now, readExternal: async () => ({ revision: 'r1', watches: [{ tmdbId: 568, title: 'Apollo 13', watchedAt: now - 2000, score: 9.9 }], awardsName: 'The Briannies', awards: [{ tmdbId: 568, title: 'Apollo 13', awards: [{ year: 1995, category: 'p', label: 'Best Picture', result: 'won' }] }] }), titleOf: async (id) => (id === 745 ? 'The Sixth Sense' : null) });
+    expect(feed.items.map((i) => i.title)).toEqual(["Brian's 1995 Briannies: Apollo 13 for Best Picture", 'Seth watched Film', 'Brian logged Apollo 13', "Seth's 1999 awards: The Sixth Sense for Best Picture"]);
     expect(reads).toContain('seth/movieLog?shallow=true');
     expect(reads).not.toContain('seth/movieLog/1709866106769-y-Old');
     expect(reads.some((r) => r.startsWith('cinemaroll-tester-example-com'))).toBe(false);
     expect(writes['me/paper/club/external/ext-1'].revision).toBe('r1');
+    expect(writes['me/paper/club/external/ext-1'].awardsRead).toBe(true);
+    expect(reads).toContain('seth/settings/personalAwardName');
   });
 });
