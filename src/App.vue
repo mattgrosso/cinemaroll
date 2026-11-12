@@ -433,6 +433,15 @@ export default {
 </script>
 
 <style lang="scss">
+  /* The status bar / Dynamic Island band (bug report 2026-11-12: the movie
+     page's back button sat behind the clock). index.html's viewport-fit=cover
+     draws the installed app full-bleed under it, so anything pinned to the
+     very top of a screen without the header adds this. 0 in Safari and on
+     anything without a notch. safeTop.test.js holds the screens to it. */
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+  }
+
   body {
     font-family: "Roboto Condensed", sans-serif;
 

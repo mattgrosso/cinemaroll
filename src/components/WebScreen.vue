@@ -912,7 +912,7 @@ export default {
     /* Room on the left for BackLink, which sits in the top corner now that
        there is no header above it. */
     flex: 0 0 auto;
-    padding: 10px 16px 6px 56px;
+    padding: calc(10px + var(--safe-top, 0px)) 16px 6px 56px;
   }
   .web-title {
     font-size: 1.15rem;

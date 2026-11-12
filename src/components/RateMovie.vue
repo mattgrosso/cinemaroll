@@ -1168,7 +1168,7 @@ export default {
         left: 12px;
         position: absolute;
         text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
-        top: 12px;
+        top: calc(12px + var(--safe-top, 0px));
         z-index: 10;
 
         &:active { opacity: 0.6; }

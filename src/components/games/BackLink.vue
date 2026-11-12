@@ -140,7 +140,8 @@ export default {
   min-height: 40px;
   padding: 8px 14px;
   position: absolute;
-  top: 6px;
+  /* Below the status bar: the header banner runs up under the Dynamic Island. */
+  top: calc(6px + var(--safe-top, 0px));
   /* Kept above the header banner underneath, which is itself tap-to-home, so
      a near-miss on this link doesn't navigate somewhere else. */
   z-index: 600;

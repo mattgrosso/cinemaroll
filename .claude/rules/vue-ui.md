@@ -282,3 +282,11 @@ Force the mobile header and a ~390px container when checking fit.
 in `public/img/launch/` (not precached), drawn by `scripts/generate-launch-images.mjs`
 to the same layout; re-run it (it prints the `<link>` tags) if the icon, name or
 background ever changes. `launchSplash.test.js` guards it.
+
+## The status bar band: `--safe-top` (2026-11-12)
+
+`viewport-fit=cover` draws the installed app under the clock and Dynamic Island,
+and iOS now blurs that band. Anything pinned to the very top of a screen (back
+buttons on the headerless movie and Rate pages, BackLink over the header banner,
+the Web screen's head) adds `var(--safe-top, 0px)` (defined in App.vue; 0 in
+Safari). Backdrops may still fill in behind the island. `safeTop.test.js` lists them.
