@@ -76,6 +76,81 @@
         </div>
       </section>
 
+      <!-- Their whole library, searchable and cut by year, genre, director
+           (Matt, 2026-11-13: "look through one of my friends … whole library
+           and … search by year or by genre or by whatever category I want").
+           Rows and filtering live in friendLibrary.js. -->
+      <section v-if="libraryRows.length" class="fc-section fc-library">
+        <h2 class="fc-section-title">{{ profile.name }}'s library</h2>
+        <p class="fc-caption">{{ libraryResults.length }} of {{ visibleLibraryCount }} {{ visibleLibraryCount === 1 ? 'film' : 'films' }}</p>
+        <input
+          v-model="libraryQuery"
+          type="search"
+          class="form-control fc-library-search"
+          placeholder="Search titles, years, genres, directors"
+          aria-label="Search their library"
+        >
+        <div class="fc-facet-row">
+          <button
+            v-for="facet in facets"
+            :key="facet.key"
+            type="button"
+            class="fc-facet"
+            :class="{ open: openFacet === facet.key }"
+            @click="toggleFacet(facet.key)"
+          >{{ facet.label }}</button>
+        </div>
+        <div v-if="openFacet" class="fc-option-row">
+          <span v-if="!openFacetOptions.length" class="fc-caption">Nothing to pick from yet.</span>
+          <button
+            v-for="option in openFacetOptions"
+            :key="`${openFacet}-${option.value}`"
+            type="button"
+            class="fc-option"
+            :class="{ picked: isChipPicked(openFacet, option.value) }"
+            @click="toggleChip(openFacet, option.value)"
+          >{{ option.label }} <span class="fc-option-count">{{ option.count }}</span></button>
+        </div>
+        <div v-if="libraryChips.length" class="fc-chip-row">
+          <button
+            v-for="chip in libraryChips"
+            :key="`chip-${chip.facet}-${chip.value}`"
+            type="button"
+            class="fc-chip"
+            :aria-label="`Remove ${chipLabel(chip)}`"
+            @click="toggleChip(chip.facet, chip.value)"
+          >{{ chipLabel(chip) }} <i class="bi bi-x-lg" aria-hidden="true"></i></button>
+        </div>
+        <label class="fc-sort">
+          <span>Sort by</span>
+          <select v-model="librarySort" class="form-select form-select-sm">
+            <option v-for="option in sorts" :key="option.key" :value="option.key">{{ option.label }}</option>
+          </select>
+        </label>
+        <p v-if="!libraryResults.length" class="fc-empty">Nothing in {{ profile.name }}'s library matches that.</p>
+        <div
+          v-for="row in libraryResults.slice(0, libraryShown)"
+          :key="`lib-${row.id}`"
+          class="fc-versus-row fc-library-row"
+          @click="goToMovie(row.id)"
+        >
+          <img v-if="row.poster" :src="poster(row.poster)" :alt="row.title" class="fc-thumb" loading="lazy">
+          <div v-else class="fc-thumb fc-poster-blank"></div>
+          <div class="fc-versus-info">
+            <span class="fc-row-name">{{ row.title }}<span v-if="row.year" class="fc-row-year"> ({{ row.year }})</span></span>
+            <span v-if="libraryRowDetail(row)" class="fc-versus-scores">{{ libraryRowDetail(row) }}</span>
+            <span v-if="row.at" class="fc-versus-scores">Watched {{ watchedOn(row.at) }}</span>
+          </div>
+          <span class="fc-gap-badge">{{ formatScore(row.score) }}</span>
+        </div>
+        <button
+          v-if="libraryResults.length > libraryShown"
+          type="button"
+          class="btn btn-outline-light btn-sm fc-more"
+          @click="libraryShown += LIBRARY_PAGE"
+        >Show more ({{ libraryResults.length - libraryShown }} left)</button>
+      </section>
+
       <!-- Criterion tendencies -->
       <section v-if="comparison && comparison.criterionGaps" class="fc-section">
         <h2 class="fc-section-title">Where your tastes differ</h2>
@@ -158,13 +233,25 @@ import { getRating } from '../assets/javascript/GetRating.js';
 import { compareWithFriend, CRITERIA } from '../assets/javascript/social.js';
 import { logScoreSettings } from '../assets/javascript/logScore.js';
 import { formatScore, formatScoreGap } from '../assets/javascript/formatScore.js';
+import { includeShortsSetting } from '../assets/javascript/shorts.js';
+import { friendLibraryRows, filterFriendLibrary, facetOptions, facetValueLabel, FACETS, SORTS } from '../assets/javascript/friendLibrary.js';
+
+const LIBRARY_PAGE = 40;
 
 export default {
   name: 'FriendComparison',
   components: { BackLink },
   data () {
     return {
-      expandedKey: null
+      expandedKey: null,
+      libraryQuery: '',
+      libraryChips: [],
+      librarySort: 'score',
+      libraryShown: LIBRARY_PAGE,
+      openFacet: null,
+      facets: FACETS,
+      sorts: SORTS,
+      LIBRARY_PAGE
     };
   },
   computed: {
@@ -195,6 +282,33 @@ export default {
         weights: logScoreSettings(this.$store.state.settings)
       });
     },
+    // Every film the friend has published, joined to my library for the
+    // year/genre/director a not-yet-updated friend doesn't send.
+    libraryRows () {
+      return friendLibraryRows(this.profile, this.library);
+    },
+    includeShorts () {
+      return includeShortsSetting(this.$store.state);
+    },
+    visibleLibraryCount () {
+      return this.includeShorts ? this.libraryRows.length : this.libraryRows.filter((row) => !row.short).length;
+    },
+    libraryResults () {
+      return filterFriendLibrary(this.libraryRows, {
+        query: this.libraryQuery,
+        chips: this.libraryChips,
+        includeShorts: this.includeShorts,
+        sort: this.librarySort
+      });
+    },
+    // Options counted within what the other chips already leave, so a pick
+    // never offers a dead end.
+    openFacetOptions () {
+      if (!this.openFacet) return [];
+      const others = this.libraryChips.filter((chip) => chip.facet !== this.openFacet);
+      const pool = filterFriendLibrary(this.libraryRows, { query: this.libraryQuery, chips: others, includeShorts: this.includeShorts });
+      return facetOptions(pool, this.openFacet);
+    },
     anyCriteriaDetail () {
       return (this.comparison?.biggestDisagreements || []).some((item) =>
         this.detailFor(item) || item.myViewings?.length || item.theirViewings?.length);
@@ -214,6 +328,31 @@ export default {
     // `d`: from a friend's end-of-day copy — a day, never "3 hours ago".
     watchedAgo (item) {
       return timeAgo(item.at, Date.now(), { dayOnly: Boolean(item.d) });
+    },
+    toggleFacet (key) {
+      this.openFacet = this.openFacet === key ? null : key;
+    },
+    isChipPicked (facet, value) {
+      return this.libraryChips.some((chip) => chip.facet === facet && chip.value === value);
+    },
+    toggleChip (facet, value) {
+      this.libraryChips = this.isChipPicked(facet, value)
+        ? this.libraryChips.filter((chip) => !(chip.facet === facet && chip.value === value))
+        : [...this.libraryChips, { facet, value }];
+      this.libraryShown = LIBRARY_PAGE;
+    },
+    chipLabel (chip) {
+      const label = facetValueLabel(chip.facet, chip.value);
+      return chip.facet === 'watched' ? `Watched in ${label}` : label;
+    },
+    libraryRowDetail (row) {
+      const parts = [];
+      if (row.genres.length) parts.push(row.genres.slice(0, 2).join(', '));
+      if (row.directors.length) parts.push(row.directors.join(' & '));
+      return parts.join(' · ');
+    },
+    watchedOn (at) {
+      return new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
     },
     criterionLabel (key) {
       return key.charAt(0).toUpperCase() + key.slice(1);
@@ -480,6 +619,65 @@ export default {
   margin-top: 0.2rem;
   text-align: center;
 }
+
+.fc-library-search {
+  background: #222;
+  border-color: #3a3a3a;
+  color: #eee;
+  margin-bottom: 0.5rem;
+
+  &:focus { background: #222; color: #eee; }
+  /* ~6:1 on #222; Bootstrap's default placeholder grey fails here. */
+  &::placeholder { color: #9a9a9a; }
+}
+
+.fc-facet-row,
+.fc-option-row,
+.fc-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Option lists can run to dozens of years or directors: cap and scroll. */
+.fc-option-row { max-height: 9.5rem; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+.fc-facet,
+.fc-option,
+.fc-chip {
+  background: #222;
+  border: 1px solid #3a3a3a;
+  border-radius: 999px;
+  color: #eee;
+  font-size: 0.8rem;
+  min-height: 40px;
+  padding: 0.3rem 0.8rem;
+
+  &:active { background: #333; }
+}
+
+.fc-facet.open { border-color: #ffc107; color: #ffc107; }
+.fc-option.picked { background: #ffc107; border-color: #ffc107; color: #161616; }
+.fc-option.picked .fc-option-count { color: #333; }
+.fc-option-count { color: #b9b9b9; font-size: 0.7rem; margin-left: 0.2rem; }
+.fc-chip { background: #ffc107; border-color: #ffc107; color: #161616; font-weight: 600; }
+
+.fc-sort {
+  align-items: center;
+  color: #ccc;
+  display: flex;
+  font-size: 0.8rem;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+
+  .form-select { background-color: #222; border-color: #3a3a3a; color: #eee; min-width: 0; width: auto; }
+}
+
+.fc-library-row { cursor: pointer; }
+.fc-row-year { color: #ccc; font-weight: 400; }
+
+.fc-more { display: block; margin: 0.5rem auto 0; }
 
 .fc-remove {
   display: flex;

@@ -9,7 +9,8 @@
 //   { name, updatedAt, counts: {titles, viewings},
 //     topShelf: [{id,t,p,r} x10], crown: {t,p,r,year}|null,
 //     recent: [{id,t,p,r,at,s?,m?} x40],
-//     ratings: { [tmdbId]: {r, at, t, p, s?, c?} } }
+//     ratings: { [tmdbId]: {r, at, t, p, s?, c?, v?, a?, y?, g?, d?, sh?} } }
+// y/g/d/sh: release year, TMDB genre ids, directors, short flag (friendLibrary.js).
 // `s` is the star rating — half-star steps, a presentation of the NORMALIZED
 // score, and the only number in here that means the same thing across people
 // (starRating.js). Optional on both: a profile published before 2026-08-31
@@ -21,6 +22,7 @@
 import { logScore } from './logScore.js';
 import { validAwards } from './awardsShare.js';
 import { normalizedRatingToStars } from './starRating.js';
+import { filmFacetsFrom } from './friendLibrary.js';
 
 // Fixed publishing order for the compact criteria array. Index-coupled with
 // anything reading `c` — append, never reorder.
@@ -136,7 +138,8 @@ export function buildSocialProfile (entries, getRatingFn, { name, shareRatings =
       at: times.length ? Math.max(...times) : null,
       c: shareCriteria ? criteriaArrayFrom(mostRecent) : null,
       v: viewingsFrom(entry),
-      releaseYear: new Date(entry.movie.release_date ?? NaN).getFullYear() || null
+      releaseYear: new Date(entry.movie.release_date ?? NaN).getFullYear() || null,
+      facets: filmFacetsFrom(entry.movie)
     });
   });
 
@@ -177,8 +180,10 @@ export function buildSocialProfile (entries, getRatingFn, { name, shareRatings =
 
   if (shareRatings) {
     const ratings = {};
-    rated.forEach(({ id, t, p, r, s: stars, at, c, v }) => {
-      ratings[id] = { r, at, t, p };
+    rated.forEach(({ id, t, p, r, s: stars, at, c, v, facets }) => {
+      // y/g/d/sh (2026-11-13): release year, genre ids, directors, short —
+      // what a friend's "Their library" browses by (friendLibrary.js).
+      ratings[id] = { r, at, t, p, ...facets };
       // Optional: a rating below half a star, or one with no normalized value
       // yet, has no stars to publish. Absent rather than zero.
       if (Number.isFinite(stars)) ratings[id].s = stars;

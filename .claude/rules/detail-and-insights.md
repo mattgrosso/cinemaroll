@@ -651,6 +651,21 @@ redirects to `?tab=charts`). A `$route.query.tab` watcher handles links while
 the screen is already mounted.
 Tests pass `tab:` to the factory; the remembered tab is cleared between tests.
 
+## A friend's library (2026-11-13)
+
+A friend's page (`FriendComparison`) has "<name>'s library": every film in their
+published `ratings` map, with a search box, Watched in / Decade / Year / Genre /
+Director chips and four sorts. Matt: "look through one of my friends … whole
+library and … search by year or by genre or by whatever category I want". Rows,
+facets and filtering are pure in `friendLibrary.js` (`friendLibraryRows`,
+`filterFriendLibrary`, `facetOptions`). The publisher adds `y` (year), `g` (TMDB
+genre ids, named by `GENRE_NAMES`), `d` (up to two directors) and `sh` (short) to
+each ratings row via `filmFacetsFrom`; a friend who hasn't republished falls back
+to MY library's copy of the same film, and otherwise just has no facts. Shorts
+follow the reader's own setting. Movie Log raw records bring year/genres/directors
+from `tmdb`; interchange feeds bring `year`. Shelf-only friends get no section.
+`friendLibrary.test.js`, `FriendComparison.test.js`.
+
 ## Friend requests outside Film Club (2026-10-09)
 
 `friendRequests.js` is the one rule for "waiting for an answer" (not already

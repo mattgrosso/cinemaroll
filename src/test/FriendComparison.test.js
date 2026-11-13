@@ -103,4 +103,42 @@ describe('FriendComparison', () => {
 
     expect(wrapper.vm.recentViews).toEqual([]);
   });
+
+  // Matt, 2026-11-13: "look through one of my friends … whole library and …
+  // search by year or by genre or by whatever category I want".
+  describe("their library", () => {
+    const LIB = {
+      name: 'Seth',
+      counts: { titles: 3 },
+      ratings: {
+        949: { r: 9.1, t: 'Heat', at: Date.UTC(2024, 0, 5), y: 1995, g: [80], d: ['Michael Mann'] },
+        603: { r: 8, t: 'The Matrix', at: Date.UTC(2023, 0, 5) },
+        5: { r: 6, t: 'Tiny', at: Date.UTC(2023, 0, 5), y: 2010, sh: 1 }
+      }
+    };
+
+    it('lists every film they share, best first, shorts left out', () => {
+      const { wrapper } = factory({ profile: LIB });
+      const titles = wrapper.findAll('.fc-library-row .fc-row-name').map((el) => el.text());
+      expect(titles).toEqual(['Heat (1995)', 'The Matrix']);
+    });
+
+    it('narrows by a chip and by the search box', async () => {
+      const { wrapper } = factory({ profile: LIB, myEntries: [{ movie: { id: 603, release_date: '1999-03-31', genres: [{ id: 878 }] }, ratings: [] }] });
+      const genre = wrapper.findAll('.fc-facet').find((b) => b.text() === 'Genre');
+      await genre.trigger('click');
+      const scifi = wrapper.findAll('.fc-option').find((b) => b.text().startsWith('Science Fiction'));
+      await scifi.trigger('click');
+      expect(wrapper.findAll('.fc-library-row .fc-row-name').map((el) => el.text())).toEqual(['The Matrix (1999)']);
+
+      await wrapper.find('.fc-chip').trigger('click');
+      await wrapper.find('.fc-library-search').setValue('mann');
+      expect(wrapper.findAll('.fc-library-row .fc-row-name').map((el) => el.text())).toEqual(['Heat (1995)']);
+    });
+
+    it('is absent for a friend who shares only their shelf', () => {
+      const { wrapper } = factory({ profile: { ...PROFILE, ratings: undefined } });
+      expect(wrapper.find('.fc-library').exists()).toBe(false);
+    });
+  });
 });

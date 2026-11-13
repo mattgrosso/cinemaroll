@@ -142,6 +142,11 @@ function profileFromMovies (movies, { name, source, marker, revision = null, awa
     if (movie.criteria) row.c = CRITERIA_KEYS.map((key) => (Number.isFinite(movie.criteria[key]) ? movie.criteria[key] : -1));
     const awards = validAwards(movie.awards);
     if (awards) row.a = awards;
+    // Year, genres, directors for "Their library" (2026-11-13): whatever the
+    // feed carries; the reader falls back to its own library for the rest.
+    if (Number.isFinite(movie.year) && movie.year > 0) row.y = movie.year;
+    if (movie.genreIds?.length) row.g = movie.genreIds;
+    if (movie.directors?.length) row.d = movie.directors;
     if (movie.viewings?.length) {
       row.v = movie.viewings.map((viewing) => (viewing.medium ? { at: viewing.watchedAt, m: viewing.medium } : { at: viewing.watchedAt }));
     }
@@ -180,6 +185,7 @@ export function fromInterchange (payload) {
       tmdbId: Number(movie?.tmdbId),
       title: movie?.title || '',
       posterPath: movie?.posterPath || null,
+      year: num(movie?.year),
       rating: num(movie?.rating),
       // The sender's OWN star rating. Never recomputed from `rating` here:
       // stars are a presentation of the normalized, library-relative,
@@ -227,6 +233,9 @@ export function fromMovieLog (payload, { name = 'A Movie Log friend' } = {}) {
       tmdbId,
       title: inner?.title || '',
       posterPath: inner?.tmdb?.poster_path || null,
+      year: num(inner?.year) || (new Date(inner?.tmdb?.release_date ?? NaN).getFullYear() || null),
+      genreIds: (inner?.tmdb?.genres || []).map((genre) => Number(genre?.id)).filter((id) => Number.isFinite(id) && id > 0),
+      directors: (inner?.tmdb?.crew || []).filter((person) => person?.job === 'Director' && person.name).map((person) => person.name).slice(0, 2),
       rating,
       criteria: criteriaFrom(latest, { stickinessKey: FOREIGN_STICKINESS }),
       viewings: viewings.map(({ watchedAt, medium }) => ({ watchedAt, medium }))
