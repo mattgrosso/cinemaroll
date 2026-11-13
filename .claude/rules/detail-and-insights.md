@@ -665,6 +665,17 @@ to MY library's copy of the same film, and otherwise just has no facts. Shorts
 follow the reader's own setting. Movie Log raw records bring year/genres/directors
 from `tmdb`; interchange feeds bring `year`. Shelf-only friends get no section.
 `friendLibrary.test.js`, `FriendComparison.test.js`.
+**Scrolls in place (2026-11-13, same evening):** "fit it into the same size vertical
+space and internally scroll". Search, chips and sort stay on top; the rows sit in
+`.fc-scroll-list` (18rem, like the criteria list), 40 drawn at a time, the next 40
+loading within 300px of the box's bottom. No Show more. A new query, chip or sort
+resets the page and scrolls the box to the top.
+**What it costs (Matt: "double extra confirm"):** browsing downloads nothing, and Movie
+Log feeds are fetched exactly as before (revision preflight). The one cost is the
+profile itself: measured on Matt's 1,513 films, 593 KB grows ~72 KB (12%; directors
+~36 KB of it), re-downloaded by each friend only when its `updatedAt` moves. A budget
+test in `friendLibrary.test.js` holds it (≤140 bytes for a heavy film, ≤60 a film on
+average). Dropping `d` halves the cost if it ever matters; Matt's call.
 
 ## Friend requests outside Film Club (2026-10-09)
 

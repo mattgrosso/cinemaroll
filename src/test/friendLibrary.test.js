@@ -100,3 +100,38 @@ describe('friends on other apps', () => {
     expect(profile.ratings[949].y).toBe(1995)
   })
 })
+
+// Size guard (Matt, 2026-11-13: "really careful … that we're not pulling down
+// too much data"). Every friend downloads this profile whole after each change
+// to the library, so the facts per film are a budget. Measured on his 1,513
+// films the same day: 593 KB profile, +72 KB for y/g/d/sh (about 48 bytes a film).
+describe('what the library facts cost a profile', () => {
+  const bytes = (value) => new TextEncoder().encode(JSON.stringify(value)).length
+
+  it('stays small for even a heavy film: two directors at most', () => {
+    const heavy = {
+      release_date: '2010-07-16',
+      runtime: 30,
+      genres: [878, 28, 12, 53, 9648].map((id) => ({ id })),
+      crew: ['Christopher Edward Nolan-Longname', 'Second Very Long Director Name', 'A Third Co-Director'].map((name) => ({ job: 'Director', name }))
+    }
+    const facets = filmFacetsFrom(heavy)
+    expect(facets.d).toHaveLength(2)
+    expect(bytes(facets)).toBeLessThanOrEqual(140)
+  })
+
+  it('adds no more than about 60 bytes a film across an ordinary library', () => {
+    const library = Array.from({ length: 1500 }, (_, i) => ({
+      dbKey: `k${i}`,
+      movie: { id: 10000 + i, title: `Film number ${i}`, poster_path: '/abcdefghijklmnopqrstuvwxyz1.jpg', release_date: '1995-06-15', runtime: 110, genres: [{ id: 18 }, { id: 80 }], crew: [{ job: 'Director', name: 'Michael Mann' }] },
+      ratings: [{ date: Date.UTC(2024, 5, 15), love: 8 }]
+    }))
+    const rating = () => ({ calculatedTotal: 8, normalized: 0.8 })
+    const profile = buildSocialProfile(library, rating, { name: 'M', shareRatings: true })
+    const bare = (row) => { const copy = { ...row }; ['y', 'g', 'd', 'sh'].forEach((key) => delete copy[key]); return copy }
+    const without = { ...profile, ratings: Object.fromEntries(Object.entries(profile.ratings).map(([id, row]) => [id, bare(row)])) }
+    const perFilm = (bytes(profile) - bytes(without)) / library.length
+    expect(perFilm).toBeGreaterThan(0)
+    expect(perFilm).toBeLessThanOrEqual(60)
+  })
+})

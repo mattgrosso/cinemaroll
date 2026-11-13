@@ -128,27 +128,32 @@
           </select>
         </label>
         <p v-if="!libraryResults.length" class="fc-empty">Nothing in {{ profile.name }}'s library matches that.</p>
+        <!-- The list scrolls inside a fixed-height box, controls stay above it
+             (Matt, 2026-11-13: "fit it into the same size vertical space and
+             internally scroll"). Forty rows at a time; the next forty load as
+             the box nears its bottom. -->
         <div
-          v-for="row in libraryResults.slice(0, libraryShown)"
-          :key="`lib-${row.id}`"
-          class="fc-versus-row fc-library-row"
-          @click="goToMovie(row.id)"
+          v-else
+          ref="libraryList"
+          class="fc-scroll-list fc-library-list"
+          @scroll.passive="onLibraryScroll"
         >
-          <img v-if="row.poster" :src="poster(row.poster)" :alt="row.title" class="fc-thumb" loading="lazy">
-          <div v-else class="fc-thumb fc-poster-blank"></div>
-          <div class="fc-versus-info">
-            <span class="fc-row-name">{{ row.title }}<span v-if="row.year" class="fc-row-year"> ({{ row.year }})</span></span>
-            <span v-if="libraryRowDetail(row)" class="fc-versus-scores">{{ libraryRowDetail(row) }}</span>
-            <span v-if="row.at" class="fc-versus-scores">Watched {{ watchedOn(row.at) }}</span>
+          <div
+            v-for="row in libraryResults.slice(0, libraryShown)"
+            :key="`lib-${row.id}`"
+            class="fc-versus-row fc-library-row"
+            @click="goToMovie(row.id)"
+          >
+            <img v-if="row.poster" :src="poster(row.poster)" :alt="row.title" class="fc-thumb" loading="lazy">
+            <div v-else class="fc-thumb fc-poster-blank"></div>
+            <div class="fc-versus-info">
+              <span class="fc-row-name">{{ row.title }}<span v-if="row.year" class="fc-row-year"> ({{ row.year }})</span></span>
+              <span v-if="libraryRowDetail(row)" class="fc-versus-scores">{{ libraryRowDetail(row) }}</span>
+              <span v-if="row.at" class="fc-versus-scores">Watched {{ watchedOn(row.at) }}</span>
+            </div>
+            <span class="fc-gap-badge">{{ formatScore(row.score) }}</span>
           </div>
-          <span class="fc-gap-badge">{{ formatScore(row.score) }}</span>
         </div>
-        <button
-          v-if="libraryResults.length > libraryShown"
-          type="button"
-          class="btn btn-outline-light btn-sm fc-more"
-          @click="libraryShown += LIBRARY_PAGE"
-        >Show more ({{ libraryResults.length - libraryShown }} left)</button>
       </section>
 
       <!-- Criterion tendencies -->
@@ -237,6 +242,8 @@ import { includeShortsSetting } from '../assets/javascript/shorts.js';
 import { friendLibraryRows, filterFriendLibrary, facetOptions, facetValueLabel, FACETS, SORTS } from '../assets/javascript/friendLibrary.js';
 
 const LIBRARY_PAGE = 40;
+// How close to the bottom of the library box (px) the next page loads.
+const LIBRARY_LOAD_MARGIN = 300;
 
 export default {
   name: 'FriendComparison',
@@ -250,8 +257,7 @@ export default {
       libraryShown: LIBRARY_PAGE,
       openFacet: null,
       facets: FACETS,
-      sorts: SORTS,
-      LIBRARY_PAGE
+      sorts: SORTS
     };
   },
   computed: {
@@ -321,6 +327,11 @@ export default {
       this.$store.dispatch('syncExternalFriends');
     }
   },
+  watch: {
+    libraryQuery () { this.restartLibraryList(); },
+    libraryChips () { this.restartLibraryList(); },
+    librarySort () { this.restartLibraryList(); }
+  },
   methods: {
     // Template-exposed; two decimals on every score (bug report).
     formatScore,
@@ -339,7 +350,20 @@ export default {
       this.libraryChips = this.isChipPicked(facet, value)
         ? this.libraryChips.filter((chip) => !(chip.facet === facet && chip.value === value))
         : [...this.libraryChips, { facet, value }];
+    },
+    // Near the bottom of the box: draw the next page.
+    onLibraryScroll (event) {
+      const box = event?.target;
+      if (!box || this.libraryShown >= this.libraryResults.length) return;
+      if (box.scrollTop + box.clientHeight >= box.scrollHeight - LIBRARY_LOAD_MARGIN) {
+        this.libraryShown += LIBRARY_PAGE;
+      }
+    },
+    // A new search, filter or sort starts the box over at the top.
+    restartLibraryList () {
       this.libraryShown = LIBRARY_PAGE;
+      const box = this.$refs.libraryList;
+      if (box) box.scrollTop = 0;
     },
     chipLabel (chip) {
       const label = facetValueLabel(chip.facet, chip.value);
@@ -677,7 +701,8 @@ export default {
 .fc-library-row { cursor: pointer; }
 .fc-row-year { color: #ccc; font-weight: 400; }
 
-.fc-more { display: block; margin: 0.5rem auto 0; }
+/* Same height as the other scroll list; the box itself is the scroller. */
+.fc-library-list { margin-top: 0.25rem; overscroll-behavior: contain; }
 
 .fc-remove {
   display: flex;

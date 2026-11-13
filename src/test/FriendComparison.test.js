@@ -136,6 +136,57 @@ describe('FriendComparison', () => {
       expect(wrapper.findAll('.fc-library-row .fc-row-name').map((el) => el.text())).toEqual(['Heat (1995)']);
     });
 
+    // Matt, 2026-11-13: "fit it into the same size vertical space and
+    // internally scroll" — the rows live in the capped scroll box, and the
+    // next page loads near its bottom instead of behind a Show more button.
+    describe('the scrolling box', () => {
+      const BIG = {
+        name: 'Seth',
+        counts: { titles: 95 },
+        ratings: Object.fromEntries(Array.from({ length: 95 }, (_, i) => [1000 + i, { r: 9 - i / 100, t: `Film ${i}`, at: Date.UTC(2024, 0, 1) }]))
+      };
+      const scrollTo = async (box, { top, client = 300, height = 2000 }) => {
+        Object.defineProperty(box.element, 'clientHeight', { value: client, configurable: true });
+        Object.defineProperty(box.element, 'scrollHeight', { value: height, configurable: true });
+        box.element.scrollTop = top;
+        await box.trigger('scroll');
+      };
+
+      it('holds every row inside the capped scroll list, with no Show more button', () => {
+        const { wrapper } = factory({ profile: BIG });
+        const box = wrapper.find('.fc-library .fc-scroll-list');
+        expect(box.exists()).toBe(true);
+        expect(box.findAll('.fc-library-row')).toHaveLength(40);
+        expect(wrapper.findAll('.fc-library-row')).toHaveLength(40);
+        expect(wrapper.find('.fc-library').text()).not.toMatch(/Show more/);
+      });
+
+      it('loads the next forty near the bottom, and only there', async () => {
+        const { wrapper } = factory({ profile: BIG });
+        const box = wrapper.find('.fc-library-list');
+        await scrollTo(box, { top: 100 });
+        expect(wrapper.findAll('.fc-library-row')).toHaveLength(40);
+        await scrollTo(box, { top: 1500 });
+        expect(wrapper.findAll('.fc-library-row')).toHaveLength(80);
+        await scrollTo(box, { top: 3500, height: 4000 });
+        expect(wrapper.findAll('.fc-library-row')).toHaveLength(95);
+      });
+
+      it('starts over at the top when the search or sort changes', async () => {
+        const { wrapper } = factory({ profile: BIG });
+        const box = wrapper.find('.fc-library-list');
+        await scrollTo(box, { top: 1500 });
+        expect(wrapper.findAll('.fc-library-row')).toHaveLength(80);
+        await wrapper.find('.fc-library-search').setValue('Film');
+        expect(wrapper.findAll('.fc-library-row')).toHaveLength(40);
+        expect(box.element.scrollTop).toBe(0);
+        await scrollTo(box, { top: 1500 });
+        await wrapper.find('.fc-sort select').setValue('title');
+        expect(box.element.scrollTop).toBe(0);
+        expect(wrapper.findAll('.fc-library-row')).toHaveLength(40);
+      });
+    });
+
     it('is absent for a friend who shares only their shelf', () => {
       const { wrapper } = factory({ profile: { ...PROFILE, ratings: undefined } });
       expect(wrapper.find('.fc-library').exists()).toBe(false);
