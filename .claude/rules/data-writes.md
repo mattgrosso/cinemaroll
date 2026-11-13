@@ -74,6 +74,15 @@ collapses to 0 and its date vanishes. This survived a long time because Firebase
 normalises sequential numeric keys back into an array on the round trip — it only became
 visible once writes committed locally first. Use `.map()`.
 
+## A null write removes the key locally too (Sentry, 2026-11-13)
+
+Firebase treats writing `null` as a delete. `setValueAtPath` (`utils/statePath.js`),
+behind `applyDbPathLocally` and the in-flight re-top, now drops the key on a null or
+undefined leaf instead of storing null. Before, deleting a film's only viewing
+(`movieLog/<key>` = null) left the key holding null and `allMediaAsArray` crashed
+setting `dbKey` on it. Both library getters also skip empty entries.
+`deleteLastViewing.test.js`.
+
 ## In-flight write protection
 
 `state.inFlightWrites` holds `{path: value}` from local commit until the server settles.

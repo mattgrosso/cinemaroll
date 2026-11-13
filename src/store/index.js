@@ -801,16 +801,18 @@ export default createStore({
         return [];
       }
 
-      return Object.keys(state.movieLog).map((key) => {
-        const movie = state.movieLog[key];
-        movie.dbKey = key;
-        return movie;
-      });
+      // Skips empty entries: a deleted film must never crash the library
+      // (Sentry, 2026-11-13; applyDbPathLocally now removes the key too).
+      return Object.keys(state.movieLog)
+        .filter((key) => state.movieLog[key])
+        .map((key) => {
+          const movie = state.movieLog[key];
+          movie.dbKey = key;
+          return movie;
+        });
     },
     allMoviesAsArray: (state) => {
-      return Object.keys(state.movieLog).map((key) => {
-        return state.movieLog[key];
-      })
+      return Object.values(state.movieLog).filter(Boolean);
     },
     allMediaSortedByRating: (state, getters) => {
       // A COPY, decorated once. This used to sort allMediaAsArray in place
@@ -1233,20 +1235,18 @@ export default createStore({
     // mutation at all before this (unlike movieLog, which got one during the
     // original offline-rating work) - without it, an offline write to e.g.
     // settings/tieBreakTournament wouldn't show up anywhere until the queue
-    // actually flushed. Reuses setMovieLogEntry's exact shape for the common
-    // movieLog/<key> case (freeze + reactivity trigger) rather than routing
-    // it through the generic recursive path, since that's already proven and
-    // used by every existing movieLog writer.
+    // actually flushed. Every movieLog path, whole entry or deeper, goes
+    // through setValueAtPath and is refrozen.
     applyDbPathLocally (state, { path, value }) {
       const segments = (path || '').split('/').filter(Boolean);
       const [root, ...rest] = segments;
       if (!root || !rest.length) return;
 
-      if (root === 'movieLog' && rest.length === 1) {
-        state.movieLog = Object.freeze({ ...state.movieLog, [rest[0]]: value });
-        return;
-      }
       if (root === 'movieLog') {
+        // setValueAtPath drops a key written as null, the way Firebase does:
+        // deleting a film's last viewing writes null at movieLog/<key>.
+        // Keeping the key holding null crashed allMediaAsArray (Sentry,
+        // 2026-11-13).
         state.movieLog = Object.freeze(setValueAtPath(state.movieLog, rest, value));
         return;
       }
