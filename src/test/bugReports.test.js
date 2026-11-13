@@ -94,4 +94,18 @@ describe('bugReports', () => {
     const report = set.mock.calls[0][1];
     expect(JSON.parse(report.appState).headerTouches).toEqual([expect.objectContaining({ route: '/awards', landed: true, lifted: 'tap' })]);
   });
+  // Report 2026-11-12: the bug button crept halfway up on Showtimes, and the
+  // report couldn't say why - screenPin's own notes (short page? phantom
+  // keyboard? the scene the moment the button was tapped) weren't in it.
+  it("carries screenPin's notes, including the scene at the tap", async () => {
+    const was = window.__screenPin;
+    window.__screenPin = { gap: 0, phantom: 180, phantomSeen: 2, atTap: { page: '402x812', band: 180, el: { top: 400, bottom: 444, slid: 0 } } };
+    try {
+      await submitBugReport(store, 'bug button rode up', route);
+      const report = set.mock.calls[0][1];
+      expect(JSON.parse(report.appState).screenPin).toEqual(expect.objectContaining({ phantom: 180, phantomSeen: 2, atTap: expect.objectContaining({ band: 180 }) }));
+    } finally {
+      window.__screenPin = was;
+    }
+  });
 });

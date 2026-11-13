@@ -70,7 +70,14 @@ function buildAppStateSummary (store, route) {
     // second time", never reproduced). Each says whether the finger landed
     // and lifted as a tap, whether iOS's click came, how the trip home
     // started, and whether it arrived, stalled, or was cancelled.
-    headerTouches: getHeaderTouches()
+    headerTouches: getHeaderTouches(),
+    // What the bug-button pinner (utils/screenPin.js) has seen: a page cut
+    // short, a phantom keyboard, the cures tried, and `atTap`, the scene the
+    // moment the bug button was touched (before this report's keyboard).
+    // Report 2026-11-12, "the bug button crept halfway up the screen again",
+    // carried none of it, so nothing could say which fault it was. Hello
+    // Again, Nba Tonight and iNat ID already send it.
+    screenPin: (typeof window !== 'undefined' && window.__screenPin) || null
   };
 }
 

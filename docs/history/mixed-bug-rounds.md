@@ -912,3 +912,16 @@ button at `left: 1rem`, keeping the fixed `bottom: 3.125rem`. The lift
 removed: the strip's pin sits top right, so nothing on the left needs clearing.
 `BugReportButton.test.js` now pins left, round and the fixed bottom; both fail against
 the tab.
+
+## The bug button rode up on Showtimes, and the report couldn't say why (2026-11-12)
+
+Matt: "The bug button … just crept a halfway up the screen again. I'm here scrolling
+on the Showtime screen." Nothing on Showtimes touches the button (fixed, bottom-left,
+3.125rem), `viewport-fit=cover` predates it, and `screenPin.js` was the current house
+copy, so it's one of screenPin's two iOS faults (short page or phantom keyboard)
+that the module failed to correct. Which one, nobody could tell: unlike Hello Again,
+Nba Tonight and iNat ID, Cinema Roll's reports never carried `window.__screenPin`.
+They do now (`appState.screenPin`, with `atTap`: the scene the moment the button was
+touched, before the report's keyboard). `bugReports.test.js` guards it. The fix to
+screenPin itself waits for the next report from a ridden-up button, and then goes
+into every app's copy.
