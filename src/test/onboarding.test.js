@@ -97,3 +97,16 @@ describe('a Settings row that is one action', () => {
     expect(wrapper.find('.settings-section-body').exists()).toBe(false);
   });
 });
+
+describe('where Home mounts the tour', () => {
+  // v1.134.0: the tag landed inside the movie-info modal's v-if, so Tutorial
+  // did nothing unless that modal happened to be open.
+  it('sits at the top level of the template, not inside a modal', () => {
+    const home = readFileSync(resolve(__dirname, '../components/Home.vue'), 'utf8');
+    const template = home.slice(0, home.indexOf('\n</template>'));
+    const tag = template.lastIndexOf('<AppTour');
+    expect(tag).toBeGreaterThan(-1);
+    expect(template.slice(tag)).not.toMatch(/<\/div>/);
+    expect(template.slice(template.lastIndexOf('\n', tag) + 1, tag)).toBe('  ');
+  });
+});

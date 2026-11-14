@@ -1788,8 +1788,11 @@
         </div>
       </div>
     </div>
-    <AppTour v-if="tourOpen" @close="closeTour"/>
   </div>
+
+  <!-- The first-look tour (onboarding.js). Top level, beside the modals:
+       inside one of them it only rendered while that modal was open. -->
+  <AppTour v-if="tourOpen" @close="closeTour"/>
 </template>
 
 <script>
