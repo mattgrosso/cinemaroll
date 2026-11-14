@@ -569,6 +569,10 @@ export default createStore({
     // { dbKey, index } while RateMovie is amending an existing viewing,
     // otherwise null — see setRatingToEdit.
     ratingToEdit: null,
+    // Bumped to load a fresh Rate page in place (App.vue keys /rate-movie on
+    // it): "Next imported film" moves from one film to the next without
+    // leaving the screen (importedQueue.js).
+    rateSession: 0,
     DBSearchValue: null,
     DBSortValue: null,
     DBSortOrder: null,
@@ -1203,6 +1207,9 @@ export default createStore({
     // maps 1:1 over it, so what the accordion shows at row N is ratings[N].
     setRatingToEdit (state, target) {
       state.ratingToEdit = target;
+    },
+    bumpRateSession (state) {
+      state.rateSession += 1;
     },
     // Applies a single movieLog write to local state immediately, regardless
     // of connectivity - the optimistic-commit half of offline rating support

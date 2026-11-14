@@ -377,3 +377,52 @@ describe('rating an imported Letterboxd viewing properly', () => {
     expect(wrapper.vm.stickiness).toBe(4)
   })
 })
+
+// From Home's "Rate properly" card (importedQueue.js): after saving, the
+// Rate page offers the next imported film instead of going straight Home.
+describe('rating through the imported queue', () => {
+  const imported = (stars) => ({
+    ...firstViewing(),
+    direction: stars * 2, imagery: stars * 2, story: stars * 2, performance: stars * 2,
+    soundtrack: stars * 2, love: stars * 2, overall: stars * 2, stickiness: stars,
+    importedFrom: 'letterboxd', letterboxdStars: stars
+  })
+
+  it('offers the next film after saving one from the queue', async () => {
+    const { wrapper, mockStore } = mountEditing({ ratingToEdit: { dbKey: 'key-555', index: 0, fromQueue: true }, ratings: [imported(4)] })
+    mockStore.state.movieLog['key-777'] = { movie: { id: 777, title: 'Next One' }, ratings: [imported(3)] }
+    // AddRating's optimistic commit: the saved film is no longer imported.
+    addRatingMock.mockImplementation((ratings) => {
+      mockStore.state.movieLog['key-555'] = { ...mockStore.state.movieLog['key-555'], ratings }
+      return Promise.resolve({ path: 'test-user/movieLog/key-555' })
+    })
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.addRating()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.vm.importedSaved).toEqual({ left: 1 })
+    expect(wrapper.vm.$router.push).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Next imported film')
+
+    await wrapper.find('.imported-next').trigger('click')
+    expect(mockStore.commit).toHaveBeenCalledWith('setRatingToEdit', { dbKey: 'key-777', index: 0, fromQueue: true })
+    expect(mockStore.commit).toHaveBeenCalledWith('bumpRateSession')
+  })
+
+  it('"Done for now" goes Home', async () => {
+    const { wrapper } = mountEditing({ ratingToEdit: { dbKey: 'key-555', index: 0, fromQueue: true }, ratings: [imported(4)] })
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.addRating()
+    await wrapper.vm.$nextTick()
+    await wrapper.find('.imported-done').trigger('click')
+    expect(wrapper.vm.$router.push).toHaveBeenCalled()
+  })
+
+  it('an ordinary edit still goes straight Home', async () => {
+    const { wrapper } = mountEditing({ ratingToEdit: { dbKey: 'key-555', index: 0 }, ratings: [imported(4)] })
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.addRating()
+    expect(wrapper.vm.importedSaved).toBeNull()
+    expect(wrapper.vm.$router.push).toHaveBeenCalled()
+  })
+})

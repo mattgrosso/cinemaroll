@@ -103,6 +103,14 @@ first attempt at the games scroll-to-top do nothing at all.
   Tests that mount Home for a card's content call `resetNoticeLaunch()` +
   `markNoticesSettled()` in `beforeEach`.
 
+  **Rate properly (2026-11-14)** is a notice, NOT a chore: imported Letterboxd films
+  (`importedQueue.js`), one at a time, best-loved first. Matt: "definitely don't make it
+  a badge icon" — keep it out of `CHORE_NOTICES`, `appBadge.js` and the push digest
+  (`importedQueue.test.js` checks). "Stop asking" writes `settings/importedReminders` =
+  false; Settings → Letterboxd's switch deletes it. A save from the queue
+  (`ratingToEdit.fromQueue`) shows "Next imported film / Done for now" on the Rate page;
+  Next reloads it in place by bumping `rateSession`, which App.vue keys `/rate-movie` on.
+
 - **Don't build a feature on a permission the OS can revoke behind your back.**
   Banner tilt parallax was built 2026-08-21 and **removed 2026-08-24**. Read this before
   proposing anything that needs `requestPermission()`.

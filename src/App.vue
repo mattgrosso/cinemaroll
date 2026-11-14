@@ -22,7 +22,9 @@
            delayed (no leave phase), the arrival just stops being a cut. -->
       <router-view v-slot="slot">
         <transition name="screen" appear>
-          <component :is="slot && slot.Component"/>
+          <!-- The Rate page alone is keyed, so "Next imported film" can
+               load a fresh one without leaving it (rateSession). -->
+          <component :is="slot && slot.Component" :key="slot && slot.route && slot.route.path === '/rate-movie' ? `rate-${$store.state.rateSession}` : undefined"/>
         </transition>
       </router-view>
     </main>

@@ -688,6 +688,26 @@
         <button type="button" class="notice-dismiss" aria-label="Hide this for today" title="Hide for today" @click="dismissCurrentNotice"><i class="bi bi-x-lg"></i></button>
       </div>
 
+      <!-- Rate properly (2026-11-14): the films a Letterboxd import scored at
+           their stars, one at a time, best-loved first (importedQueue.js).
+           Never on the icon badge or in a push; "Stop asking" turns it off on
+           every device, and Settings → Letterboxd turns it back on. -->
+      <div v-if="currentNotice === 'importedRatings'" class="notice-slot">
+        <div class="prompt-card imported-ratings-prompt" @click="rateNextImported">
+          <span class="prompt-badge prompt-badge-app"><i class="bi bi-sliders"></i></span>
+          <span class="prompt-body">
+            <span class="prompt-label">Rate properly</span>
+            <p class="prompt-text">{{ importedRatingsText }}</p>
+            <p class="imported-ratings-explainer">One at a time, best-loved first. Each takes a minute.</p>
+            <span class="imported-ratings-actions">
+              <a class="prompt-action prompt-action-app" @click.stop="rateNextImported">Rate the next one</a>
+              <button type="button" class="imported-ratings-stop" @click.stop="stopImportedReminders">Stop asking</button>
+            </span>
+          </span>
+        </div>
+        <button type="button" class="notice-dismiss" aria-label="Hide this for today" title="Hide for today" @click="dismissCurrentNotice"><i class="bi bi-x-lg"></i></button>
+      </div>
+
       <!-- The chores. activeModalType already names at most one of them
            (and skips any put away for today); they show only when nothing
            above outranks them. -->
@@ -1138,6 +1158,11 @@
                 <!-- The whole export, diary and ratings, as films (2026-11-14). -->
                 <h6 class="settings-subhead">Import your Letterboxd history</h6>
                 <LetterboxdImport variant="settings" class="mb-3"/>
+                <div v-if="importedViewingCount || !importRemindersOn" class="form-check form-switch mb-3">
+                  <input class="form-check-input" type="checkbox" id="importedRemindersToggle" :checked="importRemindersOn" @change="updateImportedReminders($event.target.checked)">
+                  <label class="form-check-label" for="importedRemindersToggle">Remind me about imported films</label>
+                  <small class="form-text d-block" style="color: #ccc;">A card on Home that serves up films still scored only by their Letterboxd stars<span v-if="importedViewingCount"> ({{ importedViewingCount.toLocaleString() }} left)</span>. Never a badge or a notification.</small>
+                </div>
                 <div class="mb-3">
                                 <label for="letterboxdUsername" class="form-label">Letterboxd Username:</label>
                                 <div class="input-group">
@@ -1821,6 +1846,8 @@ import TweakInline from "./TweakInline.vue";
 import StickinessInline from "./StickinessInline.vue";
 import PersonalAwardsModal from "./PersonalAwardsModal.vue";
 import BugResolutionNotice from "./BugResolutionNotice.vue";
+import { importedViewings, importRemindersOn, importedNoticeSignature, importedNoticeText, IMPORTED_REMINDERS_PATH } from "../assets/javascript/importedQueue.js";
+import { queueImportedRating } from "../utils/rateImported.js";
 import {
   pickNotice, holdNotice, noticeSourcesSettled, NOTICE_SETTLE_MS, noticesSettledThisLaunch, markNoticesSettled,
   heldNoticeThisLaunch, rememberHeldNotice, isNoticeDismissed, dismissNotice, clearChoreDismissals, readNoticeDismissals, writeNoticeDismissals
@@ -4250,6 +4277,7 @@ export default {
         reconcile: (this.pendingReconciliations.length && this.$store.state.isOnline) ? this.pendingReconciliations.length : null,
         letterboxdImport: importNoticeSignature(this.letterboxdImport),
         setup: setupNoticeSignature(this.onboarding, this.setupList),
+        importedRatings: importedNoticeSignature(this.importedViewingCount, this.$store.state.settings),
         showtimes: this.showtimesBadgeCount || null,
         ...this.noticeReports
       };
@@ -4680,6 +4708,20 @@ export default {
     tourDueNow () {
       return this.$store.state.dbLoaded && tourDue(this.onboarding);
     },
+    // Rate properly (importedQueue.js): imported films still scored only by
+    // their Letterboxd stars, in the order the card serves them.
+    importedViewingList () {
+      return importedViewings(this.$store.state.movieLog);
+    },
+    importedViewingCount () {
+      return this.importedViewingList.length;
+    },
+    importRemindersOn () {
+      return importRemindersOn(this.$store.state.settings);
+    },
+    importedRatingsText () {
+      return importedNoticeText(this.importedViewingCount);
+    },
     // Only worked out for an account that started here: nobody else sees it.
     setupList () {
       if (!this.onboarding?.startedAt) return [];
@@ -4739,6 +4781,18 @@ export default {
       if (this.onboarding?.startedAt && !this.onboarding.tourSeenAt) {
         this.$store.dispatch('writeDurably', { path: `${ONBOARDING_PATH}/tourSeenAt`, value: Date.now() });
       }
+    },
+    rateNextImported () {
+      if (queueImportedRating(this.$store, this.importedViewingList[0])) this.$router.push('/rate-movie');
+    },
+    // "Stop asking": off for good, on every device (Settings turns it back on).
+    stopImportedReminders () {
+      this.updateImportedReminders(false);
+      this.$store.commit('flashSaved', 'Turned off. Settings → Letterboxd brings it back.');
+    },
+    updateImportedReminders (on) {
+      // Absent is on, so turning it back on deletes the flag.
+      this.$store.dispatch('writeDurably', { path: IMPORTED_REMINDERS_PATH, value: on ? null : false });
     },
     finishSetupList () {
       this.$store.dispatch('writeDurably', { path: `${ONBOARDING_PATH}/setupDismissedAt`, value: Date.now() });
@@ -7199,6 +7253,33 @@ export default {
    40px for a thumb, and the card's text keeps clear of it. Once a chore
    expands into its working UI there is no .prompt-card in the slot, and
    the X goes away with it. */
+.imported-ratings-explainer {
+  margin: 0.15rem 0 0.4rem;
+  font-size: 0.85rem;
+  color: #ccc;
+}
+
+.imported-ratings-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.imported-ratings-stop {
+  min-height: 40px;
+  padding: 0 0.25rem;
+  background: none;
+  border: none;
+  color: #ccc;
+  font-size: 0.85rem;
+  text-decoration: underline;
+
+  &:active {
+    color: #fff;
+  }
+}
+
 .notice-slot {
   position: relative;
 

@@ -222,12 +222,26 @@
 
       <p v-if="submitError" class="submit-error">{{ submitError }}</p>
 
+      <!-- After a film from Home's "Rate properly" card (importedQueue.js). -->
+      <div v-if="importedSaved" class="imported-saved" role="status">
+        <p class="imported-saved-text">
+          Saved.
+          <span v-if="importedSaved.left">{{ importedSaved.left.toLocaleString() }} imported film{{ importedSaved.left === 1 ? '' : 's' }} left.</span>
+          <span v-else>That was the last imported film.</span>
+        </p>
+        <div class="imported-saved-actions">
+          <button v-if="importedSaved.left" type="button" class="imported-next" @click="nextImportedFilm">Next imported film</button>
+          <button type="button" class="imported-done" @click="returnHome">Done for now</button>
+        </div>
+      </div>
+
       <button
         class="submit-button"
         @click.prevent="addRating"
         type="submit"
         value="Submit"
         :disabled="loading"
+        v-show="!importedSaved"
       >
         <span v-if="!loading">{{ isEditing ? 'Save Changes' : 'Submit' }}</span>
         <span v-if="loading" class="disabled-show spinner-border spinner-border-sm mx-2" role="status" aria-hidden="true"></span>
@@ -351,6 +365,8 @@ import addRating from "../assets/javascript/AddRating.js";
 import { trackEvent } from "../utils/usage.js";
 import { trackWhenOnline } from "../assets/javascript/usageEvents.js";
 import { withoutImportMarks } from "../assets/javascript/letterboxdImport.js";
+import { importedViewings } from "../assets/javascript/importedQueue.js";
+import { queueImportedRating } from "../utils/rateImported.js";
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import { ratingBreakdown } from "../assets/javascript/ratingMath.js";
 import ErrorLogService from "../services/ErrorLogService.js";
@@ -471,7 +487,10 @@ export default {
       tagToDelete: null,
       ratingFields: RATING_FIELDS,
       previousCriteria: PREVIOUS_CRITERIA,
-      submitError: null
+      submitError: null,
+      // Saved a film from Home's "Rate properly" card: { left } imported
+      // films still waiting, and the sheet offering the next (importedQueue.js).
+      importedSaved: null
     }
   },
   mounted () {
@@ -1032,8 +1051,25 @@ export default {
         behavior: 'smooth'
       })
 
+      // Rated from the "Rate properly" queue: offer the next one instead of
+      // going straight Home. The library already holds this save
+      // (AddRating's optimistic commit), so it's no longer in the count.
+      if (editing?.fromQueue) {
+        this.loading = false;
+        this.importedSaved = { left: importedViewings(this.$store.state.movieLog).length };
+        return;
+      }
+
       this.$store.commit("setShowHeader", true);
       this.returnHome();
+    },
+    nextImportedFilm () {
+      const next = importedViewings(this.$store.state.movieLog)[0];
+      if (!next || !queueImportedRating(this.$store, next)) {
+        this.returnHome();
+        return;
+      }
+      this.$store.commit('bumpRateSession');
     },
     returnHome () {
       this.$store.commit("setShowHeader", true);
@@ -1619,6 +1655,51 @@ export default {
 
       &:active { background: rgba(255, 255, 255, 0.12); }
       &:disabled { color: #9a9a9a; }
+    }
+
+    .imported-saved {
+      background: #1c1c1c;
+      border: 1px solid #2e2e2e;
+      border-radius: 8px;
+      margin: 8px 0 18px;
+      padding: 14px;
+      text-align: center;
+    }
+
+    .imported-saved-text {
+      color: #f0f0f0;
+      font-size: ds(1rem);
+      margin: 0 0 12px;
+    }
+
+    .imported-saved-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .imported-next,
+    .imported-done {
+      border: 0;
+      border-radius: 8px;
+      font-size: ds(1rem);
+      font-weight: 700;
+      min-height: ds(48px);
+      width: 100%;
+    }
+
+    .imported-next {
+      background: #6fd39b;
+      color: #0d0d0d;
+
+      &:active { background: #5bbf87; }
+    }
+
+    .imported-done {
+      background: rgba(255, 255, 255, 0.08);
+      color: #f0f0f0;
+
+      &:active { background: rgba(255, 255, 255, 0.16); }
     }
 
     .submit-error {

@@ -28,6 +28,10 @@ export const NOTICE_ORDER = [
   // Getting set up (2026-11-14): a new account's setup list, after the news
   // and before the chores.
   'setup',
+  // Rate properly (2026-11-14): films a Letterboxd import scored at their
+  // stars, served one at a time (importedQueue.js). Homework, but not a
+  // chore: never on the icon badge or in a push, and "Stop asking" ends it.
+  'importedRatings',
   // The chores. Home's activeModalType names at most one of them at a time.
   'stickiness',
   'tieBreak',
