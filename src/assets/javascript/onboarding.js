@@ -90,10 +90,66 @@ export const TOUR_CARDS = [
   }
 ];
 
+// Putting the app on the Home Screen (Matt, 2026-11-14: "make sure that the
+// tour at the beginning includes how to add the app to your home screen").
+// First card, because everything after works better installed: on iPhone,
+// notifications only exist for an installed app. Skipped where it already
+// is installed, and on a computer, where there's no Home Screen to put it on.
+const INSTALL_LINES = {
+  ios: [
+    'In Safari, tap Share, then Add to Home Screen, then Add. On newer iPhones Share is in the three-dot menu.',
+    'It opens like an app, full screen, and can send you notifications.'
+  ],
+  // A link opened inside Gmail, Instagram, Messenger, Google's app…: their
+  // built-in browsers have no Add to Home Screen at all.
+  'ios-inapp': [
+    'You\'re in another app\'s browser, which can\'t do this. Open cinemaroll.org in Safari first.',
+    'Then tap Share, then Add to Home Screen, then Add.'
+  ],
+  android: [
+    'In Chrome, tap the three-dot menu, then Add to Home screen (or Install app).',
+    'It opens like an app, full screen, and can send you notifications.'
+  ]
+};
+
+// iPadOS asks for desktop sites, so an iPad says "Macintosh"; touch gives it
+// away. An app's own web view drops "Safari/" from the agent or names itself
+// (FBAN/FBAV Facebook and Messenger, Instagram, GSA the Google app, LinkedIn).
+// Chrome, Firefox and Edge on iOS (CriOS/FxiOS/EdgiOS) can add to the Home
+// Screen through Share, so they count as ordinary iOS.
+export function phonePlatform (userAgent = '', maxTouchPoints = 0) {
+  const ios = /iPhone|iPad|iPod/.test(userAgent) || (/Macintosh/.test(userAgent) && maxTouchPoints > 1);
+  if (ios) {
+    const otherBrowser = /CriOS|FxiOS|EdgiOS/.test(userAgent);
+    const inApp = /FBAN|FBAV|Instagram|GSA\/|LinkedInApp|Line\//.test(userAgent) || (!otherBrowser && !/Safari\//.test(userAgent));
+    return inApp ? 'ios-inapp' : 'ios';
+  }
+  if (/Android/.test(userAgent)) return 'android';
+  return 'other';
+}
+
+export function installCard (platform) {
+  return {
+    key: 'install',
+    title: 'Put it on your Home Screen',
+    lines: INSTALL_LINES[platform] || INSTALL_LINES.ios,
+    picture: platform === 'android' ? 'install-android' : 'install-ios',
+    // Chrome can raise its own install sheet from a button (installPrompt.js).
+    oneTap: platform === 'android'
+  };
+}
+
+// The cards for this device: the Home Screen card first when it applies.
+export function tourCards ({ platform = 'other', standalone = false } = {}) {
+  if (standalone || !INSTALL_LINES[platform]) return TOUR_CARDS;
+  return [installCard(platform), ...TOUR_CARDS];
+}
+
 /**
  * What Home knows, in plain values:
  *   ratedCount, letterboxdLinked (username or an import), pushAvailable,
- *   pushOn, theatersChosen, clubProfile (sharing on with a name), awardsNamed
+ *   pushOn, theatersChosen, clubProfile (sharing on with a name), awardsNamed,
+ *   phone (an iPhone, iPad or Android), standalone (running from the Home Screen)
  * Returns the setup list in order, each { id, label, hint, done }.
  */
 export function setupItems (facts = {}) {
@@ -104,6 +160,14 @@ export function setupItems (facts = {}) {
       hint: 'Search for something you\'ve seen.',
       done: (facts.ratedCount || 0) > 0
     },
+    facts.phone
+      ? {
+        id: 'install',
+        label: 'Add Cinema Roll to your Home Screen',
+        hint: 'It opens like an app.',
+        done: Boolean(facts.standalone)
+      }
+      : null,
     {
       id: 'letterboxd',
       label: 'Bring in your Letterboxd history',

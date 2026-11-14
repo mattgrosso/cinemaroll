@@ -16,7 +16,24 @@
         </div>
 
         <div class="tour-picture" aria-hidden="true">
-          <div v-if="card.picture === 'parts'" class="pic-parts">
+          <div v-if="card.picture === 'install-ios' || card.picture === 'install-android'" class="pic-install">
+            <div class="pic-install-step">
+              <span class="pic-install-key"><i class="bi" :class="card.picture === 'install-ios' ? 'bi-box-arrow-up' : 'bi-three-dots-vertical'"></i></span>
+              <span>{{ card.picture === 'install-ios' ? 'Share' : 'Menu' }}</span>
+            </div>
+            <i class="bi bi-arrow-right pic-install-arrow"></i>
+            <div class="pic-install-step">
+              <span class="pic-install-key"><i class="bi bi-plus-square"></i></span>
+              <span>Add to Home Screen</span>
+            </div>
+            <i class="bi bi-arrow-right pic-install-arrow"></i>
+            <div class="pic-install-step">
+              <img src="/icon.png" alt="" class="pic-install-icon">
+              <span>Cinema Roll</span>
+            </div>
+          </div>
+
+          <div v-else-if="card.picture === 'parts'" class="pic-parts">
             <div v-for="(part, i) in parts" :key="part" class="pic-part">
               <span class="pic-part-name">{{ part }}</span>
               <span class="pic-part-bar"><span :style="{ width: `${partWidths[i]}%` }"></span></span>
@@ -72,6 +89,16 @@
           <p v-for="(line, i) in card.lines" :key="i" class="tour-line">{{ line }}</p>
         </div>
 
+        <button
+          v-if="card.oneTap && install.available"
+          type="button"
+          class="tour-install"
+          @click="installNow"
+        ><i class="bi bi-download"></i> Install Cinema Roll</button>
+        <p v-else-if="card.key === 'install' && install.installed" class="tour-line tour-installed">
+          <i class="bi bi-check-circle-fill"></i> Installed. Open it from your Home Screen.
+        </p>
+
         <div class="tour-dots" aria-hidden="true">
           <span v-for="(c, i) in cards" :key="c.key" :class="{ on: i === index }"></span>
         </div>
@@ -88,6 +115,7 @@
 
 <script>
 import { TOUR_CARDS, RAINBOW_CHIPS, RATING_PARTS } from '../assets/javascript/onboarding.js';
+import { installState, promptInstall } from '../utils/installPrompt.js';
 
 // Bar lengths for the rating picture: a made-up film, never the user's.
 const PART_WIDTHS = [80, 70, 85, 75, 55, 90, 85, 65];
@@ -95,15 +123,20 @@ const SWIPE_PX = 50;
 
 export default {
   name: 'AppTour',
+  props: {
+    // This device's cards (onboarding.js `tourCards`), and where to open.
+    cards: { type: Array, default: () => TOUR_CARDS },
+    startKey: { type: String, default: '' }
+  },
   emits: ['close'],
   data () {
     return {
-      index: 0,
-      cards: TOUR_CARDS,
+      index: Math.max(0, this.cards.findIndex((card) => card.key === this.startKey)),
       chips: RAINBOW_CHIPS,
       parts: RATING_PARTS,
       partWidths: PART_WIDTHS,
-      touchX: null
+      touchX: null,
+      install: installState
     };
   },
   computed: {
@@ -123,6 +156,9 @@ export default {
   methods: {
     close () {
       this.$emit('close');
+    },
+    installNow () {
+      promptInstall();
     },
     onKey (event) {
       if (event.key === 'Escape') this.close();
@@ -200,6 +236,48 @@ export default {
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+
+.pic-install {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.pic-install-step {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: #ddd;
+}
+
+.pic-install-key {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: #2a2a2a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  color: #4aa3f5;
+}
+
+.pic-install-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+
+.pic-install-arrow {
+  color: #888;
+  flex: none;
 }
 
 .pic-parts {
@@ -360,6 +438,22 @@ export default {
   color: #ddd;
   margin: 0 0 6px;
 }
+
+.tour-install {
+  width: 100%;
+  margin-top: 6px;
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+  background: #24d776;
+  color: #000;
+  font-weight: 600;
+  font-size: 1rem;
+
+  &:active { background: #4be08f; }
+}
+
+.tour-installed i { color: #24d776; }
 
 .tour-dots {
   display: flex;

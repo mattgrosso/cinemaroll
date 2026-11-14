@@ -35,6 +35,10 @@ import { installNetworkHealth } from './utils/networkHealth.js';
 import { setBuildInfo } from './assets/javascript/buildStamp.js';
 import { trackUsage } from './utils/usage.js';
 import { startUsageEvents } from './assets/javascript/usageEvents.js';
+import { startInstallPrompt } from './utils/installPrompt.js';
+
+// Before anything else: Chrome's install event can fire very early.
+startInstallPrompt();
 
 // One anonymous ping per open → Bug Desk's Visitors tab (house module).
 trackUsage('cinemaroll');

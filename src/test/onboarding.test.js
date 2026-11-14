@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import {
-  setupItems, setupNoticeSignature, tourDue, shouldStartOnboarding, TOUR_CARDS, RAINBOW_CHIPS
+  setupItems, setupNoticeSignature, tourDue, shouldStartOnboarding, TOUR_CARDS, RAINBOW_CHIPS,
+  tourCards, phonePlatform
 } from '@/assets/javascript/onboarding.js';
 import AppTour from '@/components/AppTour.vue';
 import SettingsSection from '@/components/SettingsSection.vue';
@@ -108,5 +109,97 @@ describe('where Home mounts the tour', () => {
     expect(tag).toBeGreaterThan(-1);
     expect(template.slice(tag)).not.toMatch(/<\/div>/);
     expect(template.slice(template.lastIndexOf('\n', tag) + 1, tag)).toBe('  ');
+  });
+});
+
+// Matt, 2026-11-14: "make sure that the tour at the beginning includes how to
+// add the app to your home screen".
+describe('the Home Screen card', () => {
+  const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1';
+  const IPAD = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15';
+  const ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36';
+
+  it('knows the phone', () => {
+    expect(phonePlatform(IPHONE, 5)).toBe('ios');
+    expect(phonePlatform(IPAD, 5)).toBe('ios');
+    expect(phonePlatform(IPAD, 0)).toBe('other');
+    expect(phonePlatform(ANDROID, 5)).toBe('android');
+  });
+
+  it('opens the tour on a phone that has not installed it, with that phone\'s steps', () => {
+    const ios = tourCards({ platform: 'ios', standalone: false });
+    expect(ios[0].key).toBe('install');
+    expect(ios[0].lines.join(' ')).toMatch(/Share.*Add to Home Screen/);
+    expect(tourCards({ platform: 'android' })[0].lines.join(' ')).toMatch(/Chrome.*Add to Home screen/);
+    expect(ios.slice(1)).toEqual(TOUR_CARDS);
+  });
+
+  it('is left out once installed, and on a computer', () => {
+    expect(tourCards({ platform: 'ios', standalone: true })).toEqual(TOUR_CARDS);
+    expect(tourCards({ platform: 'other' })).toEqual(TOUR_CARDS);
+  });
+
+  it('is on the setup list on a phone, ticked when running from the Home Screen', () => {
+    expect(setupItems({ phone: true }).map((item) => item.id)[1]).toBe('install');
+    expect(setupItems({ phone: true, standalone: true }).find((item) => item.id === 'install').done).toBe(true);
+    expect(setupItems({ phone: false }).map((item) => item.id)).not.toContain('install');
+  });
+
+  it('opens straight at the card the setup row asks for', () => {
+    const cards = tourCards({ platform: 'ios' });
+    const wrapper = mount(AppTour, { props: { cards, startKey: 'install' }, global: { stubs: { Teleport: true } } });
+    expect(wrapper.find('.tour-title').text()).toBe('Put it on your Home Screen');
+    expect(wrapper.find('.pic-install').exists()).toBe(true);
+    wrapper.unmount();
+  });
+});
+
+// Matt, 2026-11-14: "Is there anything we can do to streamline the process of
+// adding the home screen?" Android Chrome: one tap. iPhone: no shortcut
+// exists, but an app's built-in browser (Gmail, Instagram…) can't add to the
+// Home Screen at all, so the card says to open Safari first.
+describe('streamlining the install', () => {
+  const GMAIL_WEBVIEW = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148';
+  const INSTAGRAM = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Instagram 300.0';
+  const CHROME_IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 CriOS/130.0 Mobile/15E148 Safari/604.1';
+
+  it('tells an app\'s built-in browser to open Safari first', () => {
+    expect(phonePlatform(GMAIL_WEBVIEW, 5)).toBe('ios-inapp');
+    expect(phonePlatform(INSTAGRAM, 5)).toBe('ios-inapp');
+    expect(phonePlatform(CHROME_IOS, 5)).toBe('ios');
+    expect(tourCards({ platform: 'ios-inapp' })[0].lines[0]).toMatch(/Open cinemaroll\.org in Safari/);
+  });
+
+  it('offers one tap on Android only', () => {
+    expect(tourCards({ platform: 'android' })[0].oneTap).toBe(true);
+    expect(tourCards({ platform: 'ios' })[0].oneTap).toBe(false);
+  });
+
+  it('raises Chrome\'s own install sheet from the held event', async () => {
+    const { startInstallPrompt, promptInstall, installState } = await import('@/utils/installPrompt.js');
+    const target = new EventTarget();
+    startInstallPrompt(target);
+    const event = new Event('beforeinstallprompt', { cancelable: true });
+    event.prompt = vi.fn().mockResolvedValue(undefined);
+    event.userChoice = Promise.resolve({ outcome: 'accepted' });
+    target.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(installState.available).toBe(true);
+    expect(await promptInstall()).toBe('accepted');
+    expect(event.prompt).toHaveBeenCalledOnce();
+    expect(installState).toMatchObject({ available: false, installed: true });
+    expect(await promptInstall()).toBe('unavailable');
+  });
+
+  it('shows the Install button on the card when Chrome allows it', async () => {
+    const { installState } = await import('@/utils/installPrompt.js');
+    installState.available = true;
+    installState.installed = false;
+    const wrapper = mount(AppTour, { props: { cards: tourCards({ platform: 'android' }) }, global: { stubs: { Teleport: true } } });
+    expect(wrapper.find('.tour-install').exists()).toBe(true);
+    installState.available = false;
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.tour-install').exists()).toBe(false);
+    wrapper.unmount();
   });
 });

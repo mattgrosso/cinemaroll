@@ -1792,7 +1792,7 @@
 
   <!-- The first-look tour (onboarding.js). Top level, beside the modals:
        inside one of them it only rendered while that modal was open. -->
-  <AppTour v-if="tourOpen" @close="closeTour"/>
+  <AppTour v-if="tourOpen" :cards="tourCardList" :startKey="tourStartKey" @close="closeTour"/>
 </template>
 
 <script>
@@ -1806,7 +1806,8 @@ import { scrollWindowTo } from '../utils/scrollWindowTo.js';
 import { crowdRating, crowdLovesList, disagreeList, cultList } from '../assets/javascript/letterboxdCompare.js';
 import { letterboxdSyncState, syncLetterboxdNow, importLetterboxdReviews } from '../utils/letterboxdData.js';
 import { importState, importNoticeSignature, hasSavedImport } from '../utils/letterboxdImportState.js';
-import { ONBOARDING_PATH, setupItems, setupNoticeSignature, tourDue, shouldStartOnboarding } from '../assets/javascript/onboarding.js';
+import { installState, promptInstall } from '../utils/installPrompt.js';
+import { ONBOARDING_PATH, setupItems, setupNoticeSignature, tourDue, shouldStartOnboarding, tourCards, phonePlatform } from '../assets/javascript/onboarding.js';
 import { defineAsyncComponent } from 'vue';
 import { parseCsv, reviewsCsvToUpdates, relativeTimeFrom } from '../assets/javascript/letterboxdFormat.js';
 import { indexOfMovie, resultElementId, resultsNeededToReveal, scrollOffsetFor } from '../assets/javascript/revealInList.js';
@@ -2123,6 +2124,7 @@ export default {
       quickLinksSortType: "count",
       letterboxdImport: importState,
       tourOpen: false,
+      tourStartKey: '',
       onboardingStartWritten: false,
       letterboxdSync: {
         loading: false,
@@ -4669,6 +4671,12 @@ export default {
         onboarding: this.onboarding
       });
     },
+    devicePlatform () {
+      return phonePlatform(navigator.userAgent, navigator.maxTouchPoints || 0);
+    },
+    tourCardList () {
+      return tourCards({ platform: this.devicePlatform, standalone: this.pushSupportInfo.standalone });
+    },
     tourDueNow () {
       return this.$store.state.dbLoaded && tourDue(this.onboarding);
     },
@@ -4687,7 +4695,9 @@ export default {
         pushOn: this.pushDeviceSubscribed,
         theatersChosen: Boolean(state.theaterFollow?.theaters?.length),
         clubProfile: Boolean(social.enabled && social.displayName),
-        awardsNamed: typeof settings.personalAwardName === 'string' && settings.personalAwardName.length > 0
+        awardsNamed: typeof settings.personalAwardName === 'string' && settings.personalAwardName.length > 0,
+        phone: this.devicePlatform !== 'other',
+        standalone: this.pushSupportInfo.standalone
       });
     },
     setupDoneCount () {
@@ -4719,11 +4729,13 @@ export default {
     },
   },
   methods: {
-    openTour () {
+    openTour (startKey = '') {
+      this.tourStartKey = typeof startKey === 'string' ? startKey : '';
       this.tourOpen = true;
     },
     closeTour () {
       this.tourOpen = false;
+      this.tourStartKey = '';
       if (this.onboarding?.startedAt && !this.onboarding.tourSeenAt) {
         this.$store.dispatch('writeDurably', { path: `${ONBOARDING_PATH}/tourSeenAt`, value: Date.now() });
       }
@@ -4743,7 +4755,11 @@ export default {
       if (focusId) document.getElementById(focusId)?.focus({ preventScroll: true });
     },
     openSetupItem (id) {
-      if (id === 'rate') {
+      if (id === 'install') {
+        // Chrome can install in one tap; elsewhere, the tour's steps.
+        if (installState.available) promptInstall();
+        else this.openTour('install');
+      } else if (id === 'rate') {
         this.showSettingsPanel = false;
         window.scrollTo({ top: 0, behavior: 'smooth' });
         this.$refs.searchInput?.focus();
