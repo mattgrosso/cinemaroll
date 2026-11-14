@@ -416,7 +416,7 @@ export default {
 }
 
 .tour-words {
-  min-height: 9.5rem;
+  min-height: 12.5rem;
 }
 
 .tour-title {
