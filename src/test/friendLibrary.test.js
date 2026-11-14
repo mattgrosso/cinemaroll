@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { filmFacetsFrom, friendLibraryRows, filterFriendLibrary, facetOptions } from '@/assets/javascript/friendLibrary.js'
+import { filmFacetsFrom, friendLibraryRows, filterFriendLibrary, filmsWithUnknownFacts, facetOptions } from '@/assets/javascript/friendLibrary.js'
 import { buildSocialProfile } from '@/assets/javascript/social.js'
 import { fromInterchange, fromMovieLog } from '@/assets/javascript/interchange.js'
 
@@ -133,5 +133,35 @@ describe('what the library facts cost a profile', () => {
     const perFilm = (bytes(profile) - bytes(without)) / library.length
     expect(perFilm).toBeGreaterThan(0)
     expect(perFilm).toBeLessThanOrEqual(60)
+  })
+})
+
+// Report, 2026-11-13: "I'm only seeing movies on Matt's list that I have also
+// seen." Matt's profile predated the facts, so only films in the READER's
+// library had a year or genre, and every chip kept just those.
+describe('films a chip could not place', () => {
+  const profile = {
+    ratings: {
+      1: { r: 9, t: 'Seen By Both', at: at(2024) },
+      2: { r: 8, t: 'Only Theirs', at: at(2024) },
+      3: { r: 7, t: 'Only Theirs Too', at: at(2023) },
+      4: { r: 6, t: 'Theirs With Facts', at: at(2023), y: 1975, g: [18] }
+    }
+  }
+  const mine = [{ movie: { id: 1, release_date: '1994-06-15', genres: [{ id: 18 }] } }]
+  const rows = friendLibraryRows(profile, mine)
+
+  it('are counted, not silently dropped', () => {
+    const chips = [{ facet: 'genre', value: 'Drama' }]
+    expect(filterFriendLibrary(rows, { chips }).map((r) => r.id).sort()).toEqual([1, 4])
+    expect(filmsWithUnknownFacts(rows, { chips })).toBe(2)
+  })
+
+  it('leave out films whose known facts rule them out, and need a chip at all', () => {
+    expect(filmsWithUnknownFacts(rows, { chips: [{ facet: 'decade', value: 1990 }, { facet: 'genre', value: 'Comedy' }] })).toBe(2)
+    expect(filmsWithUnknownFacts(rows, { chips: [{ facet: 'decade', value: 1970 }, { facet: 'genre', value: 'Comedy' }] })).toBe(2)
+    expect(filmsWithUnknownFacts(rows, { chips: [{ facet: 'decade', value: 1970 }, { facet: 'genre', value: 'Drama' }] })).toBe(2)
+    expect(filmsWithUnknownFacts(rows, { chips: [] })).toBe(0)
+    expect(filmsWithUnknownFacts(rows, { chips: [{ facet: 'genre', value: 'Drama' }], query: 'too' })).toBe(1)
   })
 })

@@ -127,6 +127,13 @@
             <option v-for="option in sorts" :key="option.key" :value="option.key">{{ option.label }}</option>
           </select>
         </label>
+        <!-- Films a chip couldn't place because their year, genre or director
+             hasn't reached this phone yet (report, 2026-11-13: only films
+             the reader had also seen were showing). Said, not hidden. -->
+        <p v-if="libraryUnknownCount" class="fc-caption fc-library-unknown">
+          {{ libraryUnknownCount }} more {{ libraryUnknownCount === 1 ? 'film' : 'films' }} might fit, but {{ profile.name }}'s
+          app hasn't sent {{ libraryUnknownCount === 1 ? 'its' : 'their' }} {{ unknownFactsLabel }} yet. They'll appear once {{ profile.name }} next opens Cinema Roll.
+        </p>
         <p v-if="!libraryResults.length" class="fc-empty">Nothing in {{ profile.name }}'s library matches that.</p>
         <!-- The list scrolls inside a fixed-height box, controls stay above it
              (Matt, 2026-11-13: "fit it into the same size vertical space and
@@ -150,6 +157,7 @@
               <span class="fc-row-name">{{ row.title }}<span v-if="row.year" class="fc-row-year"> ({{ row.year }})</span></span>
               <span v-if="libraryRowDetail(row)" class="fc-versus-scores">{{ libraryRowDetail(row) }}</span>
               <span v-if="row.at" class="fc-versus-scores">Watched {{ watchedOn(row.at) }}</span>
+              <span v-if="myScores.has(row.id)" class="fc-versus-scores fc-library-mine">You: {{ formatScore(myScores.get(row.id)) }}</span>
             </div>
             <span class="fc-gap-badge">{{ formatScore(row.score) }}</span>
           </div>
@@ -239,7 +247,7 @@ import { compareWithFriend, CRITERIA } from '../assets/javascript/social.js';
 import { logScoreSettings } from '../assets/javascript/logScore.js';
 import { formatScore, formatScoreGap } from '../assets/javascript/formatScore.js';
 import { includeShortsSetting } from '../assets/javascript/shorts.js';
-import { friendLibraryRows, filterFriendLibrary, facetOptions, facetValueLabel, FACETS, SORTS } from '../assets/javascript/friendLibrary.js';
+import { friendLibraryRows, filterFriendLibrary, filmsWithUnknownFacts, facetOptions, facetValueLabel, FACETS, SORTS } from '../assets/javascript/friendLibrary.js';
 
 const LIBRARY_PAGE = 40;
 // How close to the bottom of the library box (px) the next page loads.
@@ -295,6 +303,29 @@ export default {
     },
     includeShorts () {
       return includeShortsSetting(this.$store.state);
+    },
+    // My score per TMDB id, so each of their rows can say whether I've seen
+    // it — the list is all of theirs, and this makes that plain.
+    myScores () {
+      const scores = new Map();
+      this.library.forEach((entry) => {
+        const id = entry?.movie?.id;
+        const score = id == null ? null : getRating(entry)?.calculatedTotal;
+        if (Number.isFinite(score)) scores.set(Number(id), score);
+      });
+      return scores;
+    },
+    libraryUnknownCount () {
+      return filmsWithUnknownFacts(this.libraryRows, {
+        query: this.libraryQuery,
+        chips: this.libraryChips,
+        includeShorts: this.includeShorts
+      });
+    },
+    unknownFactsLabel () {
+      const names = { decade: 'release year', year: 'release year', genre: 'genre', director: 'director', watched: 'viewing date' };
+      const picked = [...new Set(this.libraryChips.map((chip) => names[chip.facet]).filter(Boolean))];
+      return picked.length > 1 ? `${picked.slice(0, -1).join(', ')} or ${picked[picked.length - 1]}` : (picked[0] || 'details');
     },
     visibleLibraryCount () {
       return this.includeShorts ? this.libraryRows.length : this.libraryRows.filter((row) => !row.short).length;

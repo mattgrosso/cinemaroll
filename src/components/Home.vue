@@ -1746,7 +1746,7 @@
 import { isShort, withoutShorts } from '../assets/javascript/shorts.js';
 import { WORDING } from '../assets/javascript/inflation.js';
 import { eventName, trackWhenOnline } from '../assets/javascript/usageEvents.js';
-import { publishDue } from '../assets/javascript/social.js';
+import { publishDue, SOCIAL_PROFILE_FORMAT } from '../assets/javascript/social.js';
 import axios from 'axios';
 import { isStallError } from '../utils/networkHealth.js';
 import { scrollWindowTo } from '../utils/scrollWindowTo.js';
@@ -2277,10 +2277,13 @@ export default {
         // (2026-08-20) still on screen. Same for anyone signing in on a new
         // device, where the stamp is absent and this publishes anyway.
         const lastName = localStorage.getItem('cinemaRoll.social.lastPublishName');
-        if (!publishDue({ lastPublish: localStorage.getItem('cinemaRoll.social.lastPublish'), lastName, name: social.displayName })) return;
+        // A new profile shape (SOCIAL_PROFILE_FORMAT) republishes at once too.
+        const lastFormat = localStorage.getItem('cinemaRoll.social.lastPublishFormat');
+        if (!publishDue({ lastPublish: localStorage.getItem('cinemaRoll.social.lastPublish'), lastName, name: social.displayName, lastFormat, format: SOCIAL_PROFILE_FORMAT })) return;
         this.$store.dispatch('publishSocialProfile');
         localStorage.setItem('cinemaRoll.social.lastPublish', String(Date.now()));
         localStorage.setItem('cinemaRoll.social.lastPublishName', social.displayName);
+        localStorage.setItem('cinemaRoll.social.lastPublishFormat', String(SOCIAL_PROFILE_FORMAT));
       }
     },
     // Publishes a small summary of what's actually on screen to the store,

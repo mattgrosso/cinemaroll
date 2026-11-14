@@ -89,6 +89,12 @@ export function socialSettingsWithDefaults (raw, userEmail, realName) {
 
 export const PUBLISH_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
+// The shape of the published Film Club profile. Bump it whenever the profile
+// gains something friends' screens read, so every device republishes on its
+// next launch instead of waiting out the six-hour throttle.
+// 2: y/g/d/sh library facts in the ratings map (2026-11-13).
+export const SOCIAL_PROFILE_FORMAT = 2;
+
 /**
  * Is a launch republish due? The six-hour throttle is about not re-sending
  * a large body for no reason; a changed display name is a reason, because
@@ -97,8 +103,13 @@ export const PUBLISH_MAX_AGE_MS = 6 * 60 * 60 * 1000;
  * kept calling Matt "mattgrosso" for a day after the profile had moved on
  * (2026-10-09). A missing stamp (new device) is due too.
  */
-export function publishDue ({ lastPublish = 0, lastName = null, name, now = Date.now(), maxAge = PUBLISH_MAX_AGE_MS } = {}) {
+export function publishDue ({ lastPublish = 0, lastName = null, name, lastFormat = null, format = null, now = Date.now(), maxAge = PUBLISH_MAX_AGE_MS } = {}) {
   if (name != null && name !== lastName) return true;
+  // A new profile shape is a reason too (report, 2026-11-13): friends read
+  // whatever was last published, so a profile from before the library facts
+  // left a friend's year/genre/director chips matching only films they had
+  // rated themselves, for up to six hours after the update landed.
+  if (format != null && String(format) !== String(lastFormat ?? '')) return true;
   return now - Number(lastPublish || 0) >= maxAge;
 }
 

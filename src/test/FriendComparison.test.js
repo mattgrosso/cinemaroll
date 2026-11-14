@@ -187,6 +187,25 @@ describe('FriendComparison', () => {
       });
     });
 
+    // Report, 2026-11-13: "I'm only seeing movies on Matt's list that I have
+    // also seen." The rows are all theirs; say which I've rated, and say when
+    // a chip couldn't place films rather than hiding them.
+    it('marks the films I have rated with my score', () => {
+      const { wrapper } = factory({ profile: LIB, myEntries: [movie(603, 'The Matrix', 7.85)] });
+      const rows = wrapper.findAll('.fc-library-row');
+      expect(rows[0].find('.fc-library-mine').exists()).toBe(false);
+      expect(rows[1].find('.fc-library-mine').text()).toBe('You: 7.85');
+    });
+
+    it('says how many films a chip could not place yet', async () => {
+      const { wrapper } = factory({ profile: LIB });
+      expect(wrapper.find('.fc-library-unknown').exists()).toBe(false);
+      await wrapper.findAll('.fc-facet').find((b) => b.text() === 'Genre').trigger('click');
+      await wrapper.findAll('.fc-option').find((b) => b.text().startsWith('Crime')).trigger('click');
+      expect(wrapper.findAll('.fc-library-row .fc-row-name').map((el) => el.text())).toEqual(['Heat (1995)']);
+      expect(wrapper.find('.fc-library-unknown').text()).toMatch(/1 more film might fit.*Seth's\s+app hasn't sent its genre yet/s);
+    });
+
     it('is absent for a friend who shares only their shelf', () => {
       const { wrapper } = factory({ profile: { ...PROFILE, ratings: undefined } });
       expect(wrapper.find('.fc-library').exists()).toBe(false);

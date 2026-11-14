@@ -676,6 +676,16 @@ profile itself: measured on Matt's 1,513 films, 593 KB grows ~72 KB (12%; direct
 ~36 KB of it), re-downloaded by each friend only when its `updatedAt` moves. A budget
 test in `friendLibrary.test.js` holds it (≤140 bytes for a heavy film, ≤60 a film on
 average). Dropping `d` halves the cost if it ever matters; Matt's call.
+**A friend's profile from before the facts (report, 2026-11-13):** Seth saw "only
+movies … I have also seen" on Matt's page. Matt's live profile (1,513 films) had been
+published ten minutes before the facts shipped, so only films in Seth's own library got
+a year/genre/director (the fallback), and every chip kept just those. Three fixes:
+`SOCIAL_PROFILE_FORMAT` (`social.js`) — `publishDue` republishes at once when the
+device last published an older format (Home stores `cinemaRoll.social.lastPublishFormat`);
+**bump it whenever friends' screens start reading a new profile field.**
+`filmsWithUnknownFacts` counts films a chip dropped only for a missing fact, and the
+page says "N more films might fit, but <name>'s app hasn't sent their genre yet"
+(`.fc-library-unknown`). Each row I've rated reads "You: 7.85" (`.fc-library-mine`).
 
 ## Friend requests outside Film Club (2026-10-09)
 

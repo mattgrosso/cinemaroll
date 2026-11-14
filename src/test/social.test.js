@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildSocialProfile, compareWithFriend, filmClubSummary, socialSettingsWithDefaults, publishDue, countNewFriendUpdates, friendsLoveUnseen , friendRatingsFor ,
+import { buildSocialProfile, compareWithFriend, filmClubSummary, socialSettingsWithDefaults, publishDue, SOCIAL_PROFILE_FORMAT, countNewFriendUpdates, friendsLoveUnseen , friendRatingsFor ,
   friendSnapshot,
   myRatingsById,
   clubFetchesNeeded
@@ -31,6 +31,16 @@ describe('publishDue', () => {
     expect(publishDue({ name: 'Matt Grosso', now })).toBe(true)
     // Publishers without a name in play keep the plain timer.
     expect(publishDue({ lastPublish: now - 2 * hour, now })).toBe(false)
+  })
+
+  // Report, 2026-11-13: a profile published just before the library facts
+  // shipped kept friends' chips blind for six hours.
+  it('republishes at once when the profile shape moved on', () => {
+    const now = 100 * hour
+    const recent = { lastPublish: now - 2 * hour, lastName: 'Matt', name: 'Matt', now }
+    expect(publishDue({ ...recent, lastFormat: null, format: SOCIAL_PROFILE_FORMAT })).toBe(true)
+    expect(publishDue({ ...recent, lastFormat: '1', format: SOCIAL_PROFILE_FORMAT })).toBe(true)
+    expect(publishDue({ ...recent, lastFormat: String(SOCIAL_PROFILE_FORMAT), format: SOCIAL_PROFILE_FORMAT })).toBe(false)
   })
 })
 

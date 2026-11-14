@@ -212,3 +212,27 @@ export function filterFriendLibrary (rows, { query = '', chips = [], includeShor
   };
   return kept.sort(comparators[sort] || comparators.score);
 }
+
+/**
+ * How many films a chip left out only because we don't know that fact about
+ * them (no year, genre or director yet), rather than because they don't
+ * match. A friend's app adds those facts when it next publishes; until then
+ * the only films we can place are the ones in MY library (report, 2026-11-13:
+ * "I'm only seeing movies on Matt's list that I have also seen"). The screen
+ * says so instead of quietly dropping them.
+ */
+export function filmsWithUnknownFacts (rows, { query = '', chips = [], includeShorts = false } = {}) {
+  if (!chips.length) return 0;
+  const needle = normalizeSearchText(String(query || '').trim());
+  return (rows || []).filter((row) => {
+    if (!includeShorts && row.short) return false;
+    if (!matchesQuery(row, needle)) return false;
+    let unknown = false;
+    for (const chip of chips) {
+      const values = valuesFor(row, chip.facet);
+      if (!values.length) unknown = true;
+      else if (!values.includes(chip.value)) return false;
+    }
+    return unknown;
+  }).length;
+}
