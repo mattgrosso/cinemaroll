@@ -853,6 +853,34 @@ function signupsDue ({ known, current, now = Date.now() }) {
   return { fresh, nextKnown, seeded: false };
 }
 
+// The sign-in list, not only the database (2026-11-14, Matt: "I have not
+// received any notifications in the last month or two of a new user signing
+// up"). An account only gets a database node once it saves something, so
+// someone who signs up and looks around was never announced (one did, the
+// night of 2026-11-13). Firebase Auth knows them the moment they sign in.
+// Only sign-ins from the last week count: older accounts that never saved
+// anything were here before this check and aren't news.
+const SIGNUP_AUTH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * users: Identity Toolkit accounts ({ email, displayName, createdAt } with
+ * createdAt in ms, as a string). toKey: email -> database key. Returns
+ * [{ key, email, name }] for accounts created within the window.
+ */
+function recentAuthSignups (users, { now = Date.now(), toKey, skip = new Set() } = {}) {
+  const seen = new Set();
+  const out = [];
+  for (const user of users || []) {
+    const created = Number(user?.createdAt);
+    if (!user?.email || !Number.isFinite(created) || now - created > SIGNUP_AUTH_WINDOW_MS) continue;
+    const key = toKey(user.email);
+    if (!key || skip.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ key, email: user.email, name: typeof user.displayName === 'string' ? user.displayName.trim() : '' });
+  }
+  return out;
+}
+
 // Account keys are the email with every unsafe character turned into '-', so
 // the address can't be recovered in general. For the common providers the
 // domain is certain, which is enough to make the key readable.
@@ -876,8 +904,8 @@ function emailGuessFromKey (key) {
 function composeSignupMessages (fresh) {
   const list = (fresh || []).filter((entry) => entry && entry.key);
   if (!list.length) return [];
-  const label = ({ key, name }) => {
-    const email = emailGuessFromKey(key);
+  const label = ({ key, name, email: known }) => {
+    const email = known || emailGuessFromKey(key);
     return name ? `${name} (${email})` : email;
   };
   if (list.length > SIGNUP_MAX_PER_SWEEP) {
@@ -1714,6 +1742,8 @@ module.exports = {
   composeListingMessages,
   SIGNUP_MAX_PER_SWEEP,
   signupsDue,
+  recentAuthSignups,
+  SIGNUP_AUTH_WINDOW_MS,
   emailGuessFromKey,
   composeSignupMessages,
   friendLogBody,

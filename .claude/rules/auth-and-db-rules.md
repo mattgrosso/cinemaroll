@@ -444,8 +444,13 @@ someone signed up"). Each sweep compares the shallow root listing against
 three at once becomes one summary. The key can't be turned back into an email in
 general, so `emailGuessFromKey` restores common providers (gmail, icloud, Apple relay…)
 and shows the raw key otherwise; the name is `settings/social/displayName` or the
-directory name when a brand-new account has one. The sign-in (Identity Toolkit) user
-list would give real emails, but was not wired up — the SA's scope for it is untested.
+directory name when a brand-new account has one. **The sign-in list counts too
+(2026-11-14, Matt: "I have not received any notifications in the last month or two"):**
+an account gets a database node only once it saves something, and one who signed up and
+saved nothing (2026-11-13) was never announced. `listAuthUsers` reads Identity Toolkit's
+`accounts:batchGet` with the same SA (scope `identitytoolkit`, verified), and
+`recentAuthSignups` adds accounts created in the last 7 days to the listing, with their
+real email and display name. If the sign-in list fails, the database listing works alone.
 
 **New Alamo listings ping the owner only** (2026-09-28: "notify me when new movies are
 listed for my local Alamo" — DC Bryant Street; he refreshes the showtimes page by hand to

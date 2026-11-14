@@ -24,6 +24,8 @@ import {
   emailGuessFromKey,
   composeSignupMessages,
   SIGNUP_MAX_PER_SWEEP,
+  recentAuthSignups,
+  SIGNUP_AUTH_WINDOW_MS,
   alamoListings,
   listingsDue,
   staleTheaterEntries,
@@ -795,6 +797,36 @@ describe('new sign-ups', () => {
     const messages = composeSignupMessages(fresh);
     expect(messages).toHaveLength(1);
     expect(messages[0].title).toBe(`${fresh.length} new sign-ups`);
+  });
+
+  // 2026-11-14: someone signed up and saved nothing, so they had no database
+  // node and the sweep never saw them. The sign-in list knows them at once.
+  const toKey = (email) => email.replace(/[.@_+-]/g, '-');
+
+  it('finds an account in the sign-in list before it has saved anything', () => {
+    const users = [
+      { email: 'new.person@gmail.com', displayName: 'New Person', createdAt: String(NOW - 60 * 60 * 1000) },
+      { email: 'old@gmail.com', createdAt: String(NOW - SIGNUP_AUTH_WINDOW_MS - 1) }
+    ];
+    expect(recentAuthSignups(users, { now: NOW, toKey })).toEqual([
+      { key: 'new-person-gmail-com', email: 'new.person@gmail.com', name: 'New Person' }
+    ]);
+    const due = signupsDue({ known: { 'a-gmail-com': 1 }, current: ['a-gmail-com', 'new-person-gmail-com'], now: NOW });
+    expect(due.fresh).toEqual(['new-person-gmail-com']);
+  });
+
+  it('skips the tester, phone-number sign-ins and bad dates', () => {
+    const users = [
+      { email: 'cinemaroll-tester@example.com', createdAt: String(NOW) },
+      { phoneNumber: '+1', createdAt: String(NOW) },
+      { email: 'x@gmail.com', createdAt: 'soon' }
+    ];
+    expect(recentAuthSignups(users, { now: NOW, toKey, skip: new Set(['cinemaroll-tester-example-com']) })).toEqual([]);
+  });
+
+  it('shows the real address when the sign-in list gave one', () => {
+    const [message] = composeSignupMessages([{ key: 'odd-key', name: '', email: 'odd@fastmail.com' }]);
+    expect(message.body).toBe('odd@fastmail.com');
   });
 });
 

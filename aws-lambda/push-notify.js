@@ -38,7 +38,7 @@ const {
   DAY_FRIEND, localDayStart, dayProfileFrom, dayFeedFrom, dayFeedMarker, dayFriendsByOwner, dayCopyDue, dayNews, composeDayMessage,
   gamesDue, shouldSendGames, composeGamesMessage,
   externalWatches, externalLogsDue, externalFeedRead, externalCheckDue,
-  signupsDue, composeSignupMessages,
+  signupsDue, composeSignupMessages, recentAuthSignups,
   alamoListings, veeziListings, veeziSaysEmpty, emptyBoardError, afiListings, boxofficeListings, afiFirstShowtime,
   boardFailuresDue,
   cinemaclockListings, uncovered, dismissedFilms, dismissedAtRank, staleTheaterEntries, boardForApp, remindersDue, showtimesWaiting, showtimesBadgeFilms, badgeSeenAt, badgeBreakdown, appendBadgeLog, declarativePayload, composeReminderMessage, listingsDue, composeListingMessages,
@@ -355,7 +355,8 @@ const getDbToken = async () => {
   const header = toBase64Url(Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
   const claims = toBase64Url(Buffer.from(JSON.stringify({
     iss: sa.client_email,
-    scope: 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/firebase.database',
+    // identitytoolkit: the sign-in list, for new sign-ups (2026-11-14).
+    scope: 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/identitytoolkit',
     aud: 'https://oauth2.googleapis.com/token',
     iat: now,
     exp: now + 3600
@@ -715,9 +716,43 @@ const sweepAccount = async (topKey, now, results) => {
 // account key the sweep hasn't seen before is a sign-up; signupsDue (tested)
 // decides, including the silent first run. Send first, then record, so a
 // failed write repeats the news rather than losing it.
+// The sign-in list (Identity Toolkit), newest accounts included even before
+// they save anything. One page of 1,000 covers this app many times over; a
+// failure leaves the database listing to do the job alone, as it did before.
+const listAuthUsers = async () => {
+  const sa = JSON.parse(process.env.FIREBASE_SA);
+  const token = await getDbToken();
+  const users = [];
+  let pageToken = '';
+  for (let page = 0; page < 5; page++) {
+    const query = `maxResults=1000${pageToken ? `&nextPageToken=${encodeURIComponent(pageToken)}` : ''}`;
+    const res = await timedFetch(`https://identitytoolkit.googleapis.com/v1/projects/${sa.project_id}/accounts:batchGet?${query}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }, DB_TIMEOUT_MS);
+    if (!res.ok) throw httpError(`Sign-in list failed: ${res.status}`, res.status);
+    const data = await res.json();
+    users.push(...(data.users || []));
+    if (!data.nextPageToken) break;
+    pageToken = data.nextPageToken;
+  }
+  return users;
+};
+
 const notifySignups = async (accounts, now) => {
   const known = await dbGet(`${OWNER_ACCOUNT_KEY}/push/state/knownAccounts`);
-  const { fresh, nextKnown, seeded } = signupsDue({ known, current: accounts, now });
+  let fromAuth = [];
+  try {
+    fromAuth = recentAuthSignups(await listAuthUsers(), {
+      now,
+      toKey: emailToDatabaseKey,
+      skip: new Set([...QA_ACCOUNT_KEYS, ...NON_ACCOUNT_ROOTS])
+    });
+  } catch (error) {
+    console.warn('Sign-ups: sign-in list unavailable, using the database alone:', error.message);
+  }
+  const authByKey = new Map(fromAuth.map((entry) => [entry.key, entry]));
+  const current = [...new Set([...accounts, ...authByKey.keys()])];
+  const { fresh, nextKnown, seeded } = signupsDue({ known, current, now });
   if (seeded) {
     await dbSet(`${OWNER_ACCOUNT_KEY}/push/state/knownAccounts`, nextKnown);
     console.log(`Sign-ups: first run, recorded ${Object.keys(nextKnown).length} existing account(s)`);
@@ -731,8 +766,9 @@ const notifySignups = async (accounts, now) => {
       dbGet(`${key}/settings/social/displayName`).catch(() => null),
       dbGet(`social/directory/${key}/name`).catch(() => null)
     ]);
-    const name = [social, directory].find((value) => typeof value === 'string' && value.trim());
-    return { key, name: name ? name.trim() : '' };
+    const auth = authByKey.get(key);
+    const name = [social, directory, auth?.name].find((value) => typeof value === 'string' && value.trim());
+    return { key, name: name ? name.trim() : '', email: auth?.email || '' };
   }));
 
   let delivered = 0;
