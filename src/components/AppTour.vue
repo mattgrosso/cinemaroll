@@ -67,8 +67,10 @@
           </div>
         </div>
 
-        <h2 class="tour-title">{{ card.title }}</h2>
-        <p v-for="(line, i) in card.lines" :key="i" class="tour-line">{{ line }}</p>
+        <div class="tour-words">
+          <h2 class="tour-title">{{ card.title }}</h2>
+          <p v-for="(line, i) in card.lines" :key="i" class="tour-line">{{ line }}</p>
+        </div>
 
         <div class="tour-dots" aria-hidden="true">
           <span v-for="(c, i) in cards" :key="c.key" :class="{ on: i === index }"></span>
@@ -193,7 +195,8 @@ export default {
   border-radius: 10px;
   padding: 14px;
   margin-bottom: 16px;
-  min-height: 150px;
+  /* One height for every card, so Next stays under the thumb. */
+  height: 13.5rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -339,6 +342,10 @@ export default {
   justify-content: center;
   font-size: 0.8rem;
   flex: none;
+}
+
+.tour-words {
+  min-height: 9.5rem;
 }
 
 .tour-title {

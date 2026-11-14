@@ -56,7 +56,7 @@ export const TOUR_CARDS = [
   {
     key: 'rainbow',
     title: 'The rainbow bar',
-    lines: ['Under the search box. Each colour opens one part of the app.'],
+    lines: ['Under the search box. Each color opens one part of the app.'],
     picture: 'rainbow'
   },
   {
