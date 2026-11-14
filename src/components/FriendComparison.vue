@@ -44,7 +44,7 @@
       <section v-if="recentViews.length" class="fc-section">
         <h2 class="fc-section-title">{{ profile.name }} recently watched</h2>
         <div class="fc-poster-row">
-          <div v-for="item in recentViews" :key="`recent-${item.id}-${item.at}`" class="fc-poster-card" @click="goToMovie(item.id)">
+          <div v-for="item in recentViews" :key="`recent-${item.id}-${item.at}`" class="fc-poster-card" @click="openFilm(item.id, item.t, item.p)">
             <img v-if="item.p" :src="poster(item.p)" :alt="item.t" class="fc-poster">
             <div v-else class="fc-poster fc-poster-blank">{{ item.t }}</div>
             <span class="fc-poster-note">{{ formatScore(item.r) }}</span>
@@ -68,7 +68,7 @@
       <section v-if="comparison && comparison.theyLoveUnseen && comparison.theyLoveUnseen.length" class="fc-section">
         <h2 class="fc-section-title">{{ profile.name }} loves these — you haven't rated them</h2>
         <div class="fc-poster-row">
-          <div v-for="item in comparison.theyLoveUnseen" :key="item.id" class="fc-poster-card" @click="goToMovie(item.id)">
+          <div v-for="item in comparison.theyLoveUnseen" :key="item.id" class="fc-poster-card" @click="openFilm(item.id, item.t, item.p)">
             <img v-if="item.p" :src="poster(item.p)" :alt="item.t" class="fc-poster">
             <div v-else class="fc-poster fc-poster-blank">{{ item.t }}</div>
             <span class="fc-poster-note">{{ formatScore(item.r) }}</span>
@@ -149,7 +149,7 @@
             v-for="row in libraryResults.slice(0, libraryShown)"
             :key="`lib-${row.id}`"
             class="fc-versus-row fc-library-row"
-            @click="goToMovie(row.id)"
+            @click="openFilm(row.id, row.title, row.poster)"
           >
             <img v-if="row.poster" :src="poster(row.poster)" :alt="row.title" class="fc-thumb" loading="lazy">
             <div v-else class="fc-thumb fc-poster-blank"></div>
@@ -216,7 +216,7 @@
       <section v-if="profile.topShelf && profile.topShelf.length" class="fc-section">
         <h2 class="fc-section-title">Their top shelf</h2>
         <div class="fc-poster-row">
-          <div v-for="item in profile.topShelf" :key="item.id" class="fc-poster-card" @click="goToMovie(item.id)">
+          <div v-for="item in profile.topShelf" :key="item.id" class="fc-poster-card" @click="openFilm(item.id, item.t, item.p)">
             <img v-if="item.p" :src="poster(item.p)" :alt="item.t" class="fc-poster">
             <div v-else class="fc-poster fc-poster-blank">{{ item.t }}</div>
             <span class="fc-poster-note">{{ formatScore(item.r) }}</span>
@@ -231,6 +231,12 @@
       <div class="fc-remove">
         <button type="button" class="btn btn-outline-danger btn-sm" @click="unfriend">Remove friend</button>
       </div>
+
+      <!-- A film I have not rated opens this sheet, as the Film Club feed does:
+           MovieDetail only knows my own library and bounces anything else to
+           /film-club (report, 2026-11-14: tapping a film in Matt's 2026 list
+           "just took me back to the friends list"). -->
+      <MoviePreview :movie="previewing" @close="previewing = null" @rate="rateFromPreview"/>
     </template>
   </div>
 </template>
@@ -241,6 +247,7 @@
 // both sides have a breakdown — theirs exists only behind their own
 // shareCriteria opt-in.
 import BackLink from './games/BackLink.vue';
+import MoviePreview from './MoviePreview.vue';
 import { timeAgo } from '../assets/javascript/timeAgo.js';
 import { getRating } from '../assets/javascript/GetRating.js';
 import { compareWithFriend, CRITERIA } from '../assets/javascript/social.js';
@@ -255,10 +262,12 @@ const LIBRARY_LOAD_MARGIN = 300;
 
 export default {
   name: 'FriendComparison',
-  components: { BackLink },
+  components: { BackLink, MoviePreview },
   data () {
     return {
       expandedKey: null,
+      // The film being previewed (not in my library), or null.
+      previewing: null,
       libraryQuery: '',
       libraryChips: [],
       librarySort: 'score',
@@ -306,6 +315,12 @@ export default {
     },
     // My score per TMDB id, so each of their rows can say whether I've seen
     // it — the list is all of theirs, and this makes that plain.
+    // Every TMDB id in my library (films and TV), the same set MovieDetail
+    // looks a film up in.
+    myIds () {
+      const all = this.$store.getters.allMediaAsArray || this.library;
+      return new Set(all.map((entry) => entry?.movie?.id).filter((id) => id != null).map(Number));
+    },
     myScores () {
       const scores = new Map();
       this.library.forEach((entry) => {
@@ -448,6 +463,22 @@ export default {
     goToMovie (tmdbId) {
       if (tmdbId == null) return;
       this.$router.push(`/movie/${tmdbId}`);
+    },
+    // A film of theirs: my own page if I have rated it, otherwise the preview
+    // sheet (summary, where to watch, the club's scores, "rate it").
+    openFilm (tmdbId, title, posterPath) {
+      if (tmdbId == null) return;
+      if (this.myIds.has(Number(tmdbId))) {
+        this.goToMovie(tmdbId);
+        return;
+      }
+      const source = { id: Number(tmdbId), title: title || '', poster_path: posterPath || null, release_date: '', overview: '' };
+      this.previewing = { id: source.id, title: source.title, poster_path: source.poster_path, source };
+    },
+    rateFromPreview (media) {
+      this.previewing = null;
+      this.$store.commit('setMovieToRate', media);
+      this.$router.push('/rate-movie');
     },
     unfriend () {
       this.$store.dispatch('removeFriend', this.friendKey);

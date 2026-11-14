@@ -212,3 +212,52 @@ describe('FriendComparison', () => {
     });
   });
 });
+
+// Report, 2026-11-14: tapping a film in a friend's library "just took me back
+// to the friends list". MovieDetail only knows MY library and bounces any other
+// film to /film-club, so a film I haven't rated must open the preview sheet.
+describe("FriendComparison: tapping a friend's film", () => {
+  const LIBRARY_PROFILE = {
+    name: 'Matt',
+    counts: { titles: 2 },
+    ratings: {
+      1: { r: 9, t: 'Heat', p: '/1.jpg', at: Date.now() - DAY },
+      7: { r: 8, t: 'Sinners', p: '/7.jpg', at: Date.now() - 2 * DAY }
+    }
+  };
+
+  function rowFor (wrapper, title) {
+    return wrapper.findAll('.fc-library-row').find((row) => row.text().includes(title));
+  }
+
+  it('opens the preview sheet for a film I have not rated, not my movie page', async () => {
+    const { wrapper } = factory({ profile: LIBRARY_PROFILE, myEntries: [movie(1, 'Heat', 8)] });
+
+    await rowFor(wrapper, 'Sinners').trigger('click');
+
+    expect(wrapper.vm.$router.push).not.toHaveBeenCalled();
+    const preview = wrapper.findComponent({ name: 'MoviePreview' });
+    expect(preview.props('movie')).toMatchObject({ id: 7, title: 'Sinners', poster_path: '/7.jpg' });
+  });
+
+  it('still opens my own movie page for a film I have rated', async () => {
+    const { wrapper } = factory({ profile: LIBRARY_PROFILE, myEntries: [movie(1, 'Heat', 8)] });
+
+    await rowFor(wrapper, 'Heat').trigger('click');
+
+    expect(wrapper.vm.$router.push).toHaveBeenCalledWith('/movie/1');
+    expect(wrapper.vm.previewing).toBeNull();
+  });
+
+  it('rating from the sheet goes to the rating page with that film', () => {
+    const { wrapper } = factory({ profile: LIBRARY_PROFILE, myEntries: [] });
+    wrapper.vm.$store.commit = vi.fn();
+
+    wrapper.vm.openFilm(7, 'Sinners', '/7.jpg');
+    wrapper.vm.rateFromPreview(wrapper.vm.previewing.source);
+
+    expect(wrapper.vm.$store.commit).toHaveBeenCalledWith('setMovieToRate', expect.objectContaining({ id: 7, title: 'Sinners' }));
+    expect(wrapper.vm.$router.push).toHaveBeenCalledWith('/rate-movie');
+    expect(wrapper.vm.previewing).toBeNull();
+  });
+});
