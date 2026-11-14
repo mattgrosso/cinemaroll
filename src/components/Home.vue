@@ -662,6 +662,32 @@
         <button type="button" class="notice-dismiss" aria-label="Hide this for today" title="Hide for today" @click="dismissCurrentNotice"><i class="bi bi-x-lg"></i></button>
       </div>
 
+      <!-- Getting set up (2026-11-14): for an account that started here, the
+           settings worth a minute, each ticking itself off when done
+           (onboarding.js). "I'm all set" puts it away for good. -->
+      <div v-if="currentNotice === 'setup'" class="notice-slot">
+        <div class="prompt-card setup-prompt">
+          <span class="prompt-badge prompt-badge-app"><i class="bi bi-list-check"></i></span>
+          <span class="prompt-body">
+            <span class="prompt-label">Getting set up · {{ setupDoneCount }} of {{ setupList.length }}</span>
+            <ul class="setup-list">
+              <li v-for="item in setupList" :key="item.id">
+                <button type="button" class="setup-item" :class="{ done: item.done }" :disabled="item.done" @click="openSetupItem(item.id)">
+                  <i class="bi setup-mark" :class="item.done ? 'bi-check-circle-fill' : 'bi-circle'"></i>
+                  <span class="setup-text">
+                    <span class="setup-label">{{ item.label }}</span>
+                    <span v-if="!item.done" class="setup-hint">{{ item.hint }}</span>
+                  </span>
+                  <i v-if="!item.done" class="bi bi-chevron-right setup-go"></i>
+                </button>
+              </li>
+            </ul>
+            <a class="prompt-action prompt-action-app" @click="finishSetupList">I'm all set</a>
+          </span>
+        </div>
+        <button type="button" class="notice-dismiss" aria-label="Hide this for today" title="Hide for today" @click="dismissCurrentNotice"><i class="bi bi-x-lg"></i></button>
+      </div>
+
       <!-- The chores. activeModalType already names at most one of them
            (and skips any put away for today); they show only when nothing
            above outranks them. -->
@@ -753,7 +779,10 @@
                    (moved from the Insights directory, 2026-10-24). -->
               <SettingsSection title="Year in Review" hint="Your year in films, as a recap" to="/year-in-review"/>
               <SettingsSection title="Library Poster" hint="Your whole library as one printable poster" to="/library-poster"/>
-              <SettingsSection title="Library" hint="Short films, your rating curve, and personal awards" collapsible :startOpen="false">
+              <!-- Here, not in the header (Matt, 2026-11-14: "I like our
+                   headers the way they are"). -->
+              <SettingsSection title="Tutorial" hint="Replay the quick tour of Cinema Roll" action @tap="openTour"/>
+              <SettingsSection ref="settingsLibrary" title="Library" hint="Short films, your rating curve, and personal awards" collapsible :startOpen="false">
 
                 <!-- "I should be able to set a default sort order somewhere in
                      settings" (2026-08-17). Home already remembered a sort for
@@ -807,7 +836,7 @@
                               </div>
               </SettingsSection>
 
-              <SettingsSection title="Friends &amp; sharing" hint="Your Film Club profile and who can find you" collapsible :startOpen="false">
+              <SettingsSection ref="settingsFriends" title="Friends &amp; sharing" hint="Your Film Club profile and who can find you" collapsible :startOpen="false">
                 <small class="form-text text-white d-block mb-2">
                   Friends see your ratings only after you both accept a request. The Film Club lives in the rainbow bar.
                 </small>
@@ -968,7 +997,7 @@
                 </template>
               </SettingsSection>
 
-              <SettingsSection v-if="pushConfigured" title="Notifications" hint="Push notifications for prompts and friends" collapsible :startOpen="false">
+              <SettingsSection v-if="pushConfigured" ref="settingsNotifications" title="Notifications" hint="Push notifications for prompts and friends" collapsible :startOpen="false">
                 <!-- iOS only allows web push for Home-Screen-installed apps,
                      and permission may only be requested from a real tap
                      (see the parallax post-mortem in vue-ui.md: never ask
@@ -1105,7 +1134,7 @@
                 </template>
               </SettingsSection>
 
-              <SettingsSection title="Letterboxd" hint="Link your account for deep links and imports" collapsible :startOpen="false">
+              <SettingsSection ref="settingsLetterboxd" title="Letterboxd" hint="Link your account for deep links and imports" collapsible :startOpen="false">
                 <!-- The whole export, diary and ratings, as films (2026-11-14). -->
                 <h6 class="settings-subhead">Import your Letterboxd history</h6>
                 <LetterboxdImport variant="settings" class="mb-3"/>
@@ -1759,6 +1788,7 @@
         </div>
       </div>
     </div>
+    <AppTour v-if="tourOpen" @close="closeTour"/>
   </div>
 </template>
 
@@ -1773,6 +1803,7 @@ import { scrollWindowTo } from '../utils/scrollWindowTo.js';
 import { crowdRating, crowdLovesList, disagreeList, cultList } from '../assets/javascript/letterboxdCompare.js';
 import { letterboxdSyncState, syncLetterboxdNow, importLetterboxdReviews } from '../utils/letterboxdData.js';
 import { importState, importNoticeSignature, hasSavedImport } from '../utils/letterboxdImportState.js';
+import { ONBOARDING_PATH, setupItems, setupNoticeSignature, tourDue, shouldStartOnboarding } from '../assets/javascript/onboarding.js';
 import { defineAsyncComponent } from 'vue';
 import { parseCsv, reviewsCsvToUpdates, relativeTimeFrom } from '../assets/javascript/letterboxdFormat.js';
 import { indexOfMovie, resultElementId, resultsNeededToReveal, scrollOffsetFor } from '../assets/javascript/revealInList.js';
@@ -1954,6 +1985,7 @@ export const LOADING_SPINNER_DELAY_MS = 700;
 export default {
   components: {
     LetterboxdImport: defineAsyncComponent(() => import('./LetterboxdImport.vue')),
+    AppTour: defineAsyncComponent(() => import('./AppTour.vue')),
     DBGridLayoutSearchResult,
     InsetBrowserModal,
     TweakInline,
@@ -2087,6 +2119,8 @@ export default {
       syncStampBackfill: { status: 'idle', completed: 0, total: 0, failed: 0 },
       quickLinksSortType: "count",
       letterboxdImport: importState,
+      tourOpen: false,
+      onboardingStartWritten: false,
       letterboxdSync: {
         loading: false,
         state: null,
@@ -2127,6 +2161,31 @@ export default {
     }
   },
   watch: {
+    // A brand-new account starts the first look: stamped once on the account,
+    // so the tour and the setup list follow it to every device.
+    onboardingShouldStart: {
+      immediate: true,
+      handler (start) {
+        if (!start || this.onboardingStartWritten) return;
+        this.onboardingStartWritten = true;
+        this.$store.dispatch('writeDurably', { path: `${ONBOARDING_PATH}/startedAt`, value: Date.now() });
+      }
+    },
+    tourDueNow: {
+      immediate: true,
+      handler (due) {
+        if (due) this.tourOpen = true;
+      }
+    },
+    // The theaters item needs the follow list, which only Showtimes loads.
+    'onboarding.startedAt': {
+      immediate: true,
+      handler (startedAt) {
+        if (startedAt && !this.$store.state.theaterFollow) {
+          this.$store.dispatch('loadTheaterFollow').catch(() => {});
+        }
+      }
+    },
     // A money sort reads Box Office History's whole-library index
     // (boxOfficeIndex.js); fetch it the first time one is chosen, not on
     // every launch.
@@ -4185,6 +4244,7 @@ export default {
           : null,
         reconcile: (this.pendingReconciliations.length && this.$store.state.isOnline) ? this.pendingReconciliations.length : null,
         letterboxdImport: importNoticeSignature(this.letterboxdImport),
+        setup: setupNoticeSignature(this.onboarding, this.setupList),
         showtimes: this.showtimesBadgeCount || null,
         ...this.noticeReports
       };
@@ -4596,6 +4656,40 @@ export default {
     letterboxdImportNoticeDue () {
       return importNoticeSignature(this.letterboxdImport) !== null || this.letterboxdImport.phase === 'reading';
     },
+    onboarding () {
+      return this.$store.state.settings?.onboarding || null;
+    },
+    onboardingShouldStart () {
+      return shouldStartOnboarding({
+        settingsLoaded: this.$store.state.settingsLoaded,
+        brandNew: this.isBrandNewUser,
+        onboarding: this.onboarding
+      });
+    },
+    tourDueNow () {
+      return this.$store.state.dbLoaded && tourDue(this.onboarding);
+    },
+    // Only worked out for an account that started here: nobody else sees it.
+    setupList () {
+      if (!this.onboarding?.startedAt) return [];
+      const state = this.$store.state;
+      const settings = state.settings || {};
+      const imported = Object.values(state.movieLog || {}).some((entry) =>
+        entry?.ratings && Object.values(entry.ratings).some((rating) => rating?.importedFrom === 'letterboxd'));
+      const social = this.socialSettings;
+      return setupItems({
+        ratedCount: this.userRatedMovieCount,
+        letterboxdLinked: Boolean(settings.letterboxdUsername) || imported || hasSavedImport(this.$store.getters.databaseTopKey),
+        pushAvailable: this.pushConfigured && (this.pushSupportInfo.supported || this.pushSupportInfo.needsInstall),
+        pushOn: this.pushDeviceSubscribed,
+        theatersChosen: Boolean(state.theaterFollow?.theaters?.length),
+        clubProfile: Boolean(social.enabled && social.displayName),
+        awardsNamed: typeof settings.personalAwardName === 'string' && settings.personalAwardName.length > 0
+      });
+    },
+    setupDoneCount () {
+      return this.setupList.filter((item) => item.done).length;
+    },
     isBrandNewUser () {
       // dbLoaded is load-bearing, not belt-and-braces: until the library
       // arrives userRatedMovieCount is 0, which is indistinguishable from a
@@ -4622,6 +4716,46 @@ export default {
     },
   },
   methods: {
+    openTour () {
+      this.tourOpen = true;
+    },
+    closeTour () {
+      this.tourOpen = false;
+      if (this.onboarding?.startedAt && !this.onboarding.tourSeenAt) {
+        this.$store.dispatch('writeDurably', { path: `${ONBOARDING_PATH}/tourSeenAt`, value: Date.now() });
+      }
+    },
+    finishSetupList () {
+      this.$store.dispatch('writeDurably', { path: `${ONBOARDING_PATH}/setupDismissedAt`, value: Date.now() });
+    },
+    // Opens one Settings group and brings it into view.
+    async openSettingsSection (refName, focusId = null) {
+      this.showSettingsPanel = true;
+      await this.$nextTick();
+      const section = this.$refs[refName];
+      if (!section) return;
+      section.open = true;
+      await this.$nextTick();
+      section.$el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (focusId) document.getElementById(focusId)?.focus({ preventScroll: true });
+    },
+    openSetupItem (id) {
+      if (id === 'rate') {
+        this.showSettingsPanel = false;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        this.$refs.searchInput?.focus();
+      } else if (id === 'letterboxd') {
+        this.openSettingsSection('settingsLetterboxd');
+      } else if (id === 'notifications') {
+        this.openSettingsSection('settingsNotifications');
+      } else if (id === 'club') {
+        this.openSettingsSection('settingsFriends');
+      } else if (id === 'theaters') {
+        this.$router.push('/showtimes/theaters');
+      } else if (id === 'awards') {
+        this.openSettingsSection('settingsLibrary', 'personalAwardName');
+      }
+    },
     acceptFriendRequestFromCard (key) {
       this.$store.dispatch('acceptFriendRequest', key);
     },
@@ -7864,6 +7998,72 @@ export default {
 </style>
 
 <style scoped>
+/* Getting set up (2026-11-14): one row per item, the whole row the button. */
+.setup-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.4rem 0 0.5rem;
+  display: grid;
+  gap: 2px;
+}
+
+.setup-item {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 0.35rem 0.3rem;
+  color: #f2f2f2;
+  text-align: left;
+}
+
+.setup-item:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.setup-item.done {
+  color: #ccc;
+}
+
+.setup-mark {
+  font-size: 1.1rem;
+  color: #ccc;
+  flex: none;
+}
+
+.setup-item.done .setup-mark {
+  color: #24d776;
+}
+
+.setup-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.setup-label {
+  font-size: 0.92rem;
+}
+
+.setup-item.done .setup-label {
+  text-decoration: line-through;
+}
+
+.setup-hint {
+  font-size: 0.8rem;
+  color: #ccc;
+}
+
+.setup-go {
+  color: #ccc;
+  flex: none;
+}
+
 /* A toggle that only applies while its parent toggle is on: indented under it. */
 .push-sub-toggle {
   margin-left: 1.75rem;

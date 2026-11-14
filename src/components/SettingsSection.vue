@@ -1,20 +1,20 @@
 <template>
   <section class="settings-section">
     <component
-      :is="collapsible || to ? 'button' : 'div'"
-      :type="collapsible || to ? 'button' : null"
+      :is="collapsible || to || action ? 'button' : 'div'"
+      :type="collapsible || to || action ? 'button' : null"
       class="settings-section-header"
-      :class="{ collapsible: collapsible || to }"
+      :class="{ collapsible: collapsible || to || action }"
       @click="headerTapped"
     >
       <span class="settings-section-heading">
         <span class="settings-section-title">{{ title }}</span>
         <span v-if="hint" class="settings-section-hint">{{ hint }}</span>
       </span>
-      <i v-if="to" class="bi bi-chevron-right settings-section-chevron"></i>
+      <i v-if="to || action" class="bi bi-chevron-right settings-section-chevron"></i>
       <i v-else-if="collapsible" class="bi bi-chevron-down settings-section-chevron" :class="{ open }"></i>
     </component>
-    <div v-if="!to" v-show="open" class="settings-section-body">
+    <div v-if="!to && !action" v-show="open" class="settings-section-body">
       <slot></slot>
     </div>
   </section>
@@ -39,8 +39,12 @@ export default {
     // (the Newsletter, 2026-09-29): the header becomes a link to this route
     // and there is no body.
     to: { type: String, default: '' },
-    startOpen: { type: Boolean, default: true }
+    startOpen: { type: Boolean, default: true },
+    // A group that is one thing to do (Tutorial, 2026-11-14): the header is
+    // the button, it emits `tap`, and there is no body.
+    action: { type: Boolean, default: false }
   },
+  emits: ['tap'],
   data () {
     return {
       open: this.collapsible ? this.startOpen : true
@@ -49,6 +53,7 @@ export default {
   methods: {
     headerTapped () {
       if (this.to) this.$router.push(this.to);
+      else if (this.action) this.$emit('tap');
       else if (this.collapsible) this.open = !this.open;
     }
   }

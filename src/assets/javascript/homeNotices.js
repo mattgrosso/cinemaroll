@@ -25,6 +25,9 @@ export const NOTICE_ORDER = [
   'bugFix',
   'showtimes',
   'newsletter',
+  // Getting set up (2026-11-14): a new account's setup list, after the news
+  // and before the chores.
+  'setup',
   // The chores. Home's activeModalType names at most one of them at a time.
   'stickiness',
   'tieBreak',
