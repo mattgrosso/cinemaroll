@@ -91,58 +91,175 @@ export const TOUR_CARDS = [
 ];
 
 // Putting the app on the Home Screen (Matt, 2026-11-14: "make sure that the
-// tour at the beginning includes how to add the app to your home screen").
-// First card, because everything after works better installed: on iPhone,
-// notifications only exist for an installed app. Skipped where it already
-// is installed, and on a computer, where there's no Home Screen to put it on.
-const INSTALL_LINES = {
-  ios: [
-    'In Safari, tap Share, then Add to Home Screen, then Add. On newer iPhones Share is in the three-dot menu.',
-    'It opens like an app, full screen, and can send you notifications.'
-  ],
-  // A link opened inside Gmail, Instagram, Messenger, Google's app…: their
-  // built-in browsers have no Add to Home Screen at all.
-  'ios-inapp': [
-    'You\'re in another app\'s browser, which can\'t do this. Open cinemaroll.org in Safari first.',
-    'Then tap Share, then Add to Home Screen, then Add.'
-  ],
-  android: [
-    'In Chrome, tap the three-dot menu, then Add to Home screen (or Install app).',
-    'It opens like an app, full screen, and can send you notifications.'
-  ]
-};
+// tour at the beginning includes how to add the app to your home screen",
+// then "Apple does make this sort of a moving target ... make sure that the
+// info we share is correct for that person's system").
+//
+// Every set of steps below is copied from the vendor's own help page, read
+// 2026-11-14, and each person gets only the steps for their device:
+//   iPhone, iOS 27  support.apple.com/guide/iphone/open-as-web-app-iphea86e5236/27/ios/27
+//     Page Menu button (three lines) > Share > Add to Home Screen > Open as Web App > Add
+//   iPhone, iOS 26  .../26/ios/26: the More button (three dots) instead of Page Menu
+//     Both: "If your Tabs layout is Bottom or Top, tap [Share]"; if Add to Home
+//     Screen is missing, Edit Actions at the bottom of the list adds it.
+//   iPhone, iOS 18  .../bookmark-a-website-iph42ab2f3a7/18.0/ios/18.0
+//     Share in the menu bar > Add to Home Screen (no Open as Web App switch)
+//   iPad, iPadOS 27 support.apple.com/guide/ipad/open-as-web-app-ipad8f1f7a29/27/ipados/27
+//     Share > View More > Add to Home Screen > Open as Web App > Add
+//   iPad, iPadOS 26 .../26/ipados/26: Share > More (three dots) > Add to Home Screen
+//   Chrome on iPhone/iPad support.google.com/chrome/answer/15085120 (iOS)
+//     Share, right of the address bar > Add to Home Screen > Add
+//   Chrome on Android support.google.com/chrome/answer/9658361 (Android)
+//     More (three dots) > Install and create shortcut > Install. Chrome 150
+//     (June 2026) renamed "Add to Home screen"; the rollout is server-side, so
+//     some 150+ phones still show the old name, and older Chrome always does
+//     (developer.chrome.com: More > Add to Home screen > Install app).
+// Anything else (an app's built-in browser, Firefox, Edge, Samsung Internet)
+// is sent to Safari or Chrome rather than given steps nobody checked.
+//
+// Safari's version comes from `Version/NN`: since Safari 26 the "OS 18_x" part
+// of the user agent is frozen, but Version/ still says the real major release
+// (webkit.org bug 298260). Safari has no other way to ask.
 
-// iPadOS asks for desktop sites, so an iPad says "Macintosh"; touch gives it
-// away. An app's own web view drops "Safari/" from the agent or names itself
-// (FBAN/FBAV Facebook and Messenger, Instagram, GSA the Google app, LinkedIn).
-// Chrome, Firefox and Edge on iOS (CriOS/FxiOS/EdgiOS) can add to the Home
-// Screen through Share, so they count as ordinary iOS.
-export function phonePlatform (userAgent = '', maxTouchPoints = 0) {
-  const ios = /iPhone|iPad|iPod/.test(userAgent) || (/Macintosh/.test(userAgent) && maxTouchPoints > 1);
-  if (ios) {
-    const otherBrowser = /CriOS|FxiOS|EdgiOS/.test(userAgent);
-    const inApp = /FBAN|FBAV|Instagram|GSA\/|LinkedInApp|Line\//.test(userAgent) || (!otherBrowser && !/Safari\//.test(userAgent));
-    return inApp ? 'ios-inapp' : 'ios';
-  }
-  if (/Android/.test(userAgent)) return 'android';
-  return 'other';
+const IPHONE_SHARE_FALLBACK = 'If your Share button is at the bottom or top of the screen, tap it directly.';
+const MISSING_ACTION = 'No Add to Home Screen in the list? Scroll to the bottom, tap Edit Actions, and add it.';
+const WEB_APP_ON = 'Leave Open as Web App on, then tap Add.';
+
+const step = (icon, label) => ({ icon, label });
+const SHARE = step('bi-box-arrow-up', 'Share');
+const ADD = step('bi-plus-square', 'Add to Home Screen');
+
+function safariMajor (userAgent) {
+  const match = /Version\/(\d+)/.exec(userAgent);
+  return match ? Number(match[1]) : null;
 }
 
-export function installCard (platform) {
+function chromeMajor (userAgent) {
+  const match = /Chrome\/(\d+)/.exec(userAgent);
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * This device's install steps, or null where there is no Home Screen to add
+ * to (a computer). { kind, lines, steps, oneTap }: `steps` draw the picture,
+ * `oneTap` means Chrome may offer its own install sheet (installPrompt.js).
+ * iPadOS asks for desktop sites, so an iPad says "Macintosh"; touch gives it away.
+ */
+export function installGuide (userAgent = '', maxTouchPoints = 0) {
+  const ipad = /iPad/.test(userAgent) || (/Macintosh/.test(userAgent) && maxTouchPoints > 1);
+  const ios = ipad || /iPhone|iPod/.test(userAgent);
+
+  if (ios) {
+    if (/CriOS\//.test(userAgent)) {
+      return {
+        kind: 'ios-chrome',
+        lines: ['Tap Share, to the right of the address bar, then Add to Home Screen, then Add.'],
+        steps: [SHARE, ADD]
+      };
+    }
+    // Firefox and Edge on iOS, and any app's built-in browser (Gmail,
+    // Instagram, Messenger, the Google app...), which drop Safari's Version/.
+    const otherBrowser = /FxiOS|EdgiOS|OPiOS/.test(userAgent);
+    const inApp = /FBAN|FBAV|Instagram|GSA\/|LinkedInApp|Line\//.test(userAgent) || !/Version\/\d+.*Safari\//.test(userAgent);
+    if (otherBrowser || inApp) {
+      return {
+        kind: 'ios-open-safari',
+        lines: [
+          otherBrowser
+            ? 'This is easiest from Safari. Open cinemaroll.org in Safari and sign in there.'
+            : 'You\'re in another app\'s built-in browser, which can\'t add to the Home Screen. Open cinemaroll.org in Safari and sign in there.',
+          'Then replay this from Settings, Tutorial, for the steps.'
+        ],
+        steps: [step('bi-compass', 'Open in Safari'), SHARE, ADD]
+      };
+    }
+    const version = safariMajor(userAgent);
+    if (ipad) {
+      if (version >= 27) {
+        return {
+          kind: 'ipad-27',
+          lines: ['Tap Share, then View More, then Add to Home Screen.', WEB_APP_ON],
+          steps: [SHARE, step('bi-three-dots', 'View More'), ADD]
+        };
+      }
+      if (version === 26) {
+        return {
+          kind: 'ipad-26',
+          lines: ['Tap Share, then the More button (three dots), then Add to Home Screen.', WEB_APP_ON],
+          steps: [SHARE, step('bi-three-dots', 'More'), ADD]
+        };
+      }
+      return {
+        kind: 'ipad-18',
+        lines: ['Tap Share, then Add to Home Screen, then Add.', MISSING_ACTION],
+        steps: [SHARE, ADD]
+      };
+    }
+    if (version >= 27) {
+      return {
+        kind: 'iphone-27',
+        lines: ['Tap the menu button (three lines) next to the address, then Share, then Add to Home Screen.', IPHONE_SHARE_FALLBACK, WEB_APP_ON],
+        steps: [step('bi-list', 'Menu'), SHARE, ADD]
+      };
+    }
+    if (version === 26) {
+      return {
+        kind: 'iphone-26',
+        lines: ['Tap the More button (three dots) next to the address, then Share, then Add to Home Screen.', IPHONE_SHARE_FALLBACK, WEB_APP_ON],
+        steps: [step('bi-three-dots', 'More'), SHARE, ADD]
+      };
+    }
+    return {
+      kind: 'iphone-18',
+      lines: ['Tap Share at the bottom of the screen, then Add to Home Screen, then Add.', MISSING_ACTION],
+      steps: [SHARE, ADD]
+    };
+  }
+
+  if (/Android/.test(userAgent)) {
+    // Chrome itself, not a browser built on it (Samsung, Edge, Opera,
+    // Firefox) and not an app's web view ("; wv)").
+    const otherBrowser = /SamsungBrowser|EdgA|OPR|Firefox|; wv\)/.test(userAgent);
+    const version = chromeMajor(userAgent);
+    if (otherBrowser || version === null) {
+      return {
+        kind: 'android-open-chrome',
+        lines: [
+          'This is easiest from Chrome. Open cinemaroll.org in Chrome and sign in there.',
+          'Then replay this from Settings, Tutorial, for the steps.'
+        ],
+        steps: [step('bi-browser-chrome', 'Open in Chrome'), step('bi-download', 'Install')],
+        oneTap: true
+      };
+    }
+    return {
+      kind: version >= 150 ? 'android-chrome-150' : 'android-chrome',
+      lines: version >= 150
+        ? ['Tap the three-dot menu next to the address, then Install and create shortcut, then Install.', 'On some phones it\'s still called Add to Home screen.']
+        : ['Tap the three-dot menu next to the address, then Add to Home screen, then Install.'],
+      steps: [step('bi-three-dots-vertical', 'Menu'), step('bi-plus-square', version >= 150 ? 'Install and create shortcut' : 'Add to Home screen'), step('bi-download', 'Install')],
+      oneTap: true
+    };
+  }
+
+  return null;
+}
+
+export function installCard (guide) {
   return {
     key: 'install',
     title: 'Put it on your Home Screen',
-    lines: INSTALL_LINES[platform] || INSTALL_LINES.ios,
-    picture: platform === 'android' ? 'install-android' : 'install-ios',
-    // Chrome can raise its own install sheet from a button (installPrompt.js).
-    oneTap: platform === 'android'
+    lines: [...guide.lines, 'It opens full screen like an app, and can send you notifications.'],
+    picture: 'install',
+    steps: guide.steps,
+    oneTap: Boolean(guide.oneTap)
   };
 }
 
 // The cards for this device: the Home Screen card first when it applies.
-export function tourCards ({ platform = 'other', standalone = false } = {}) {
-  if (standalone || !INSTALL_LINES[platform]) return TOUR_CARDS;
-  return [installCard(platform), ...TOUR_CARDS];
+export function tourCards ({ guide = null, standalone = false } = {}) {
+  if (standalone || !guide) return TOUR_CARDS;
+  return [installCard(guide), ...TOUR_CARDS];
 }
 
 /**

@@ -4,7 +4,7 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import {
   setupItems, setupNoticeSignature, tourDue, shouldStartOnboarding, TOUR_CARDS, RAINBOW_CHIPS,
-  tourCards, phonePlatform
+  tourCards, installGuide
 } from '@/assets/javascript/onboarding.js';
 import AppTour from '@/components/AppTour.vue';
 import SettingsSection from '@/components/SettingsSection.vue';
@@ -113,30 +113,90 @@ describe('where Home mounts the tour', () => {
 });
 
 // Matt, 2026-11-14: "make sure that the tour at the beginning includes how to
-// add the app to your home screen".
-describe('the Home Screen card', () => {
-  const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1';
-  const IPAD = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15';
-  const ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36';
+// add the app to your home screen", then "Apple does make this sort of a
+// moving target ... make sure that the info we share is correct for that
+// person's system". Real user agents; each expectation is the vendor's own
+// wording for that system (sources in onboarding.js).
+const UA = {
+  iphone27: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Mobile/15E148 Safari/604.1',
+  iphone26: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1',
+  iphone18: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1',
+  ipad27: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15',
+  ipad26: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15',
+  chromeIos: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/142.0.7444.77 Mobile/15E148 Safari/604.1',
+  gmailWebview: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+  instagram: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 360.0.0.0',
+  firefoxIos: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/140.0 Mobile/15E148 Safari/605.1.15',
+  android150: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36',
+  android140: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36',
+  samsung: 'Mozilla/5.0 (Linux; Android 14; SM-S921U) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/28.0 Chrome/130.0.0.0 Mobile Safari/537.36',
+  androidWebview: 'Mozilla/5.0 (Linux; Android 14; Pixel 8; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/150.0.0.0 Mobile Safari/537.36',
+  mac: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15'
+};
+const said = (guide) => guide.lines.join(' ');
 
-  it('knows the phone', () => {
-    expect(phonePlatform(IPHONE, 5)).toBe('ios');
-    expect(phonePlatform(IPAD, 5)).toBe('ios');
-    expect(phonePlatform(IPAD, 0)).toBe('other');
-    expect(phonePlatform(ANDROID, 5)).toBe('android');
+describe('the Home Screen card, per system', () => {
+  it('iPhone on iOS 27: the Page Menu button, then Share', () => {
+    const guide = installGuide(UA.iphone27, 5);
+    expect(guide.kind).toBe('iphone-27');
+    expect(said(guide)).toMatch(/menu button \(three lines\).*then Share, then Add to Home Screen/);
+    expect(said(guide)).toMatch(/Open as Web App/);
   });
 
-  it('opens the tour on a phone that has not installed it, with that phone\'s steps', () => {
-    const ios = tourCards({ platform: 'ios', standalone: false });
-    expect(ios[0].key).toBe('install');
-    expect(ios[0].lines.join(' ')).toMatch(/Share.*Add to Home Screen/);
-    expect(tourCards({ platform: 'android' })[0].lines.join(' ')).toMatch(/Chrome.*Add to Home screen/);
-    expect(ios.slice(1)).toEqual(TOUR_CARDS);
+  it('iPhone on iOS 26: the More button, then Share', () => {
+    const guide = installGuide(UA.iphone26, 5);
+    expect(guide.kind).toBe('iphone-26');
+    expect(said(guide)).toMatch(/More button \(three dots\).*then Share/);
+    expect(said(guide)).toMatch(/bottom or top of the screen, tap it directly/);
   });
 
-  it('is left out once installed, and on a computer', () => {
-    expect(tourCards({ platform: 'ios', standalone: true })).toEqual(TOUR_CARDS);
-    expect(tourCards({ platform: 'other' })).toEqual(TOUR_CARDS);
+  it('reads Safari 26+ from Version/, not the frozen OS 18_x', () => {
+    expect(installGuide(UA.iphone26, 5).kind).toBe('iphone-26');
+    expect(installGuide(UA.iphone18, 5).kind).toBe('iphone-18');
+  });
+
+  it('iPhone on iOS 18: Share, no web-app switch', () => {
+    const guide = installGuide(UA.iphone18, 5);
+    expect(said(guide)).toMatch(/Tap Share.*Add to Home Screen, then Add/);
+    expect(said(guide)).not.toMatch(/Open as Web App/);
+  });
+
+  it('iPad on 27 and 26 (which call themselves Macs)', () => {
+    expect(said(installGuide(UA.ipad27, 5))).toMatch(/Tap Share, then View More, then Add to Home Screen/);
+    expect(said(installGuide(UA.ipad26, 5))).toMatch(/Tap Share, then the More button \(three dots\), then Add to Home Screen/);
+  });
+
+  it('Chrome on iPhone: Share beside the address', () => {
+    expect(said(installGuide(UA.chromeIos, 5))).toMatch(/Share, to the right of the address bar, then Add to Home Screen/);
+  });
+
+  it('sends app browsers and other iPhone browsers to Safari', () => {
+    expect(installGuide(UA.gmailWebview, 5).kind).toBe('ios-open-safari');
+    expect(said(installGuide(UA.instagram, 5))).toMatch(/built-in browser.*Safari/);
+    expect(said(installGuide(UA.firefoxIos, 5))).toMatch(/easiest from Safari/);
+  });
+
+  it('Android Chrome: the 150 name, with the old one mentioned, and the old name before 150', () => {
+    expect(said(installGuide(UA.android150, 5))).toMatch(/Install and create shortcut, then Install.*still called Add to Home screen/);
+    expect(said(installGuide(UA.android140, 5))).toMatch(/Add to Home screen, then Install/);
+    expect(installGuide(UA.android150, 5).oneTap).toBe(true);
+  });
+
+  it('sends other Android browsers and app web views to Chrome', () => {
+    expect(installGuide(UA.samsung, 5).kind).toBe('android-open-chrome');
+    expect(installGuide(UA.androidWebview, 5).kind).toBe('android-open-chrome');
+  });
+
+  it('has nothing to say on a computer', () => {
+    expect(installGuide(UA.mac, 0)).toBeNull();
+    expect(tourCards({ guide: null })).toEqual(TOUR_CARDS);
+  });
+
+  it('comes first in the tour, and not once installed', () => {
+    const guide = installGuide(UA.iphone26, 5);
+    expect(tourCards({ guide })[0].key).toBe('install');
+    expect(tourCards({ guide })[0].steps.map((s) => s.label)).toEqual(['More', 'Share', 'Add to Home Screen']);
+    expect(tourCards({ guide, standalone: true })).toEqual(TOUR_CARDS);
   });
 
   it('is on the setup list on a phone, ticked when running from the Home Screen', () => {
@@ -145,36 +205,18 @@ describe('the Home Screen card', () => {
     expect(setupItems({ phone: false }).map((item) => item.id)).not.toContain('install');
   });
 
-  it('opens straight at the card the setup row asks for', () => {
-    const cards = tourCards({ platform: 'ios' });
+  it('opens straight at the card the setup row asks for, drawing its steps', () => {
+    const cards = tourCards({ guide: installGuide(UA.iphone27, 5) });
     const wrapper = mount(AppTour, { props: { cards, startKey: 'install' }, global: { stubs: { Teleport: true } } });
     expect(wrapper.find('.tour-title').text()).toBe('Put it on your Home Screen');
-    expect(wrapper.find('.pic-install').exists()).toBe(true);
+    expect(wrapper.findAll('.pic-install-step').map((w) => w.text())).toEqual(['Menu', 'Share', 'Add to Home Screen']);
     wrapper.unmount();
   });
 });
 
-// Matt, 2026-11-14: "Is there anything we can do to streamline the process of
-// adding the home screen?" Android Chrome: one tap. iPhone: no shortcut
-// exists, but an app's built-in browser (Gmail, Instagram…) can't add to the
-// Home Screen at all, so the card says to open Safari first.
-describe('streamlining the install', () => {
-  const GMAIL_WEBVIEW = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148';
-  const INSTAGRAM = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Instagram 300.0';
-  const CHROME_IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 CriOS/130.0 Mobile/15E148 Safari/604.1';
-
-  it('tells an app\'s built-in browser to open Safari first', () => {
-    expect(phonePlatform(GMAIL_WEBVIEW, 5)).toBe('ios-inapp');
-    expect(phonePlatform(INSTAGRAM, 5)).toBe('ios-inapp');
-    expect(phonePlatform(CHROME_IOS, 5)).toBe('ios');
-    expect(tourCards({ platform: 'ios-inapp' })[0].lines[0]).toMatch(/Open cinemaroll\.org in Safari/);
-  });
-
-  it('offers one tap on Android only', () => {
-    expect(tourCards({ platform: 'android' })[0].oneTap).toBe(true);
-    expect(tourCards({ platform: 'ios' })[0].oneTap).toBe(false);
-  });
-
+// "Is there anything we can do to streamline the process of adding the home
+// screen?" Chrome (Android) can raise its own install sheet from a button.
+describe('one-tap install', () => {
   it('raises Chrome\'s own install sheet from the held event', async () => {
     const { startInstallPrompt, promptInstall, installState } = await import('@/utils/installPrompt.js');
     const target = new EventTarget();
@@ -191,15 +233,19 @@ describe('streamlining the install', () => {
     expect(await promptInstall()).toBe('unavailable');
   });
 
-  it('shows the Install button on the card when Chrome allows it', async () => {
+  it('shows the Install button on the card only while Chrome allows it', async () => {
     const { installState } = await import('@/utils/installPrompt.js');
     installState.available = true;
     installState.installed = false;
-    const wrapper = mount(AppTour, { props: { cards: tourCards({ platform: 'android' }) }, global: { stubs: { Teleport: true } } });
+    const wrapper = mount(AppTour, { props: { cards: tourCards({ guide: installGuide(UA.android150, 5) }) }, global: { stubs: { Teleport: true } } });
     expect(wrapper.find('.tour-install').exists()).toBe(true);
     installState.available = false;
     await wrapper.vm.$nextTick();
     expect(wrapper.find('.tour-install').exists()).toBe(false);
     wrapper.unmount();
+  });
+
+  it('never offers it on an iPhone, where Safari has no such sheet', () => {
+    expect(installGuide(UA.iphone27, 5).oneTap).toBeFalsy();
   });
 });

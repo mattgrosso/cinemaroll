@@ -16,21 +16,14 @@
         </div>
 
         <div class="tour-picture" aria-hidden="true">
-          <div v-if="card.picture === 'install-ios' || card.picture === 'install-android'" class="pic-install">
-            <div class="pic-install-step">
-              <span class="pic-install-key"><i class="bi" :class="card.picture === 'install-ios' ? 'bi-box-arrow-up' : 'bi-three-dots-vertical'"></i></span>
-              <span>{{ card.picture === 'install-ios' ? 'Share' : 'Menu' }}</span>
-            </div>
-            <i class="bi bi-arrow-right pic-install-arrow"></i>
-            <div class="pic-install-step">
-              <span class="pic-install-key"><i class="bi bi-plus-square"></i></span>
-              <span>Add to Home Screen</span>
-            </div>
-            <i class="bi bi-arrow-right pic-install-arrow"></i>
-            <div class="pic-install-step">
-              <img src="/icon.png" alt="" class="pic-install-icon">
-              <span>Cinema Roll</span>
-            </div>
+          <div v-if="card.picture === 'install'" class="pic-install">
+            <template v-for="(item, i) in card.steps" :key="item.label">
+              <div class="pic-install-step">
+                <span class="pic-install-key"><i class="bi" :class="item.icon"></i></span>
+                <span>{{ item.label }}</span>
+              </div>
+              <i v-if="i < card.steps.length - 1" class="bi bi-arrow-right pic-install-arrow"></i>
+            </template>
           </div>
 
           <div v-else-if="card.picture === 'parts'" class="pic-parts">

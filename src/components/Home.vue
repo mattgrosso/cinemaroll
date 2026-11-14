@@ -1807,7 +1807,7 @@ import { crowdRating, crowdLovesList, disagreeList, cultList } from '../assets/j
 import { letterboxdSyncState, syncLetterboxdNow, importLetterboxdReviews } from '../utils/letterboxdData.js';
 import { importState, importNoticeSignature, hasSavedImport } from '../utils/letterboxdImportState.js';
 import { installState, promptInstall } from '../utils/installPrompt.js';
-import { ONBOARDING_PATH, setupItems, setupNoticeSignature, tourDue, shouldStartOnboarding, tourCards, phonePlatform } from '../assets/javascript/onboarding.js';
+import { ONBOARDING_PATH, setupItems, setupNoticeSignature, tourDue, shouldStartOnboarding, tourCards, installGuide } from '../assets/javascript/onboarding.js';
 import { defineAsyncComponent } from 'vue';
 import { parseCsv, reviewsCsvToUpdates, relativeTimeFrom } from '../assets/javascript/letterboxdFormat.js';
 import { indexOfMovie, resultElementId, resultsNeededToReveal, scrollOffsetFor } from '../assets/javascript/revealInList.js';
@@ -4671,11 +4671,11 @@ export default {
         onboarding: this.onboarding
       });
     },
-    devicePlatform () {
-      return phonePlatform(navigator.userAgent, navigator.maxTouchPoints || 0);
+    installGuideHere () {
+      return installGuide(navigator.userAgent, navigator.maxTouchPoints || 0);
     },
     tourCardList () {
-      return tourCards({ platform: this.devicePlatform, standalone: this.pushSupportInfo.standalone });
+      return tourCards({ guide: this.installGuideHere, standalone: this.pushSupportInfo.standalone });
     },
     tourDueNow () {
       return this.$store.state.dbLoaded && tourDue(this.onboarding);
@@ -4696,7 +4696,7 @@ export default {
         theatersChosen: Boolean(state.theaterFollow?.theaters?.length),
         clubProfile: Boolean(social.enabled && social.displayName),
         awardsNamed: typeof settings.personalAwardName === 'string' && settings.personalAwardName.length > 0,
-        phone: this.devicePlatform !== 'other',
+        phone: Boolean(this.installGuideHere),
         standalone: this.pushSupportInfo.standalone
       });
     },
