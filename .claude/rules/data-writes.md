@@ -371,3 +371,15 @@ it through `console.error`, which CaptureConsole sends. `isOpaqueScriptError`
 (exactly "Script error." with no filename or line) logs it as a warning: it
 stays in the in-app log and never reaches Sentry. Anything with a file or line
 stays an error. `opaqueScriptError.test.js` guards it.
+
+## A "Large HTTP payload" on a friend's whole feed (Sentry, 2026-11-14)
+
+A Mac launch fetched three Movie Log friends' full `clubFeed/<owner>/<secret>.json`
+bodies at once (Brian's ~1.9 MB) with NO `clubFeedSync/.../meta` or `/revision` read
+before them. Today's reader (`refreshExternalFeed`, then the v1 body only after a
+fallback) always reads the head first, so a body fetch with no head reads before it is
+a build from before 2026-10-06 running from an old cached copy ("New content is
+downloading" in the same breadcrumbs). No film-club-sync fallback warnings in 30 days
+confirmed Movie Log's v2 feed was healthy. Archived Forever; no code change. Only treat
+it as real if the head reads precede the body in the breadcrumbs; then read the
+"Film Club feed fell back to v1" warning for its reason.
