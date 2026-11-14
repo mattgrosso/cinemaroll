@@ -37,6 +37,30 @@
 export const ONE_WEEK_MS = 604800000;
 export const SIX_MONTHS_MS = 15778476000;
 
+// A viewing brought in from Letterboxd and not yet rated by hand is never
+// asked about (Matt, 2026-11-14: someone who imports their whole Letterboxd
+// library mustn't be "bombarded" a week later, or six months later, with a
+// thousand stickiness checks). Its stickiness is just the stars; the "Rate
+// properly" card is how it gets a real one. The literal is
+// letterboxdImport.js's IMPORTED_FROM (stickinessImported.test.js holds the
+// two together), kept here so the push digest's import graph stays small.
+export const isImportedViewing = (rating) => rating?.importedFrom === 'letterboxd';
+
+/**
+ * The stickiness passes a viewing is already past when it is rated by hand
+ * out of the import: an old film re-rated today has nothing to "stick" over
+ * the next week, so the passes whose boundary has gone by are marked done.
+ * A viewing only days old keeps both checks.
+ */
+export function passesAlreadyPast (rating, now = Date.now()) {
+  const ratedAt = ratingDateOf(rating);
+  if (!Number.isFinite(ratedAt)) return {};
+  const done = {};
+  if (ratedAt < now - ONE_WEEK_MS) done.userAddedStickiness = true;
+  if (ratedAt < now - SIX_MONTHS_MS) done.userAddedSixMonthStickiness = true;
+  return done;
+}
+
 // A missing date reads as 2021 — i.e. "long ago, so it's due". Ratings
 // predate the field, and the alternative is a film that can never be asked
 // about.
@@ -77,7 +101,7 @@ export function ratingDateOf (rating) {
  * can be due for both at once (it is still a single entry in the queue).
  */
 export function ratingNeedsStickiness (rating, now = Date.now()) {
-  if (!rating) return false;
+  if (!rating || isImportedViewing(rating)) return false;
 
   const ratedAt = ratingDateOf(rating);
   if (!Number.isFinite(ratedAt)) return false;
@@ -96,7 +120,7 @@ export function ratingNeedsStickiness (rating, now = Date.now()) {
  * caller count the same film twice.
  */
 export function nextStickinessDueAt (rating, now = Date.now()) {
-  if (!rating) return null;
+  if (!rating || isImportedViewing(rating)) return null;
 
   const ratedAt = ratingDateOf(rating);
   if (!Number.isFinite(ratedAt)) return null;

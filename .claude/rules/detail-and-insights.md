@@ -578,6 +578,13 @@ After saving, stay on the form and advance to the next movie; only collapse the 
 the queue is genuinely empty. Build the `dbEntry` *before* dispatching, since the local
 commit is synchronous and `firstStickinessResult` already points at the next movie.
 
+**Imported viewings are never asked about (2026-11-14).** A viewing still marked
+`importedFrom: 'letterboxd'` is skipped by `ratingNeedsStickiness`, `nextStickinessDueAt`
+and the push digest's own loop (`isImportedViewing` in `stickinessCandidates.js`), so a
+whole imported library can't flood the prompt, badge or pushes a week or six months on.
+When RateMovie rates one properly, `passesAlreadyPast` marks the passes whose boundary
+has gone by as done; a days-old viewing keeps both. `stickinessImported.test.js` guards it.
+
 ## The Web (2026-09-09)
 
 `/web` draws the library as one picture: films and the people who appear in more than

@@ -371,6 +371,39 @@ describe('rating an imported Letterboxd viewing properly', () => {
     expect(written.medium).toBe('Theater')
   })
 
+  // An old film rated properly would otherwise come straight back asking for
+  // both stickiness passes (report 2026-11-14: no stickiness flood after a
+  // Letterboxd import). Passes already behind it count as done.
+  it('marks the stickiness passes already behind an old viewing as done', async () => {
+    const { wrapper } = mountEditing({ ratingToEdit: { dbKey: 'key-555', index: 0 }, ratings: [imported()] })
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.addRating()
+
+    const written = addRatingMock.mock.calls[0][0][0]
+    expect(written.userAddedStickiness).toBe(true)
+    expect(written.userAddedSixMonthStickiness).toBe(true)
+  })
+
+  it('a viewing only days old keeps both checks', async () => {
+    const recent = { ...imported(), date: Date.now() - 2 * 24 * 60 * 60 * 1000 }
+    const { wrapper } = mountEditing({ ratingToEdit: { dbKey: 'key-555', index: 0 }, ratings: [recent] })
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.addRating()
+
+    const written = addRatingMock.mock.calls[0][0][0]
+    expect(written.userAddedStickiness).toBeUndefined()
+    expect(written.userAddedSixMonthStickiness).toBeUndefined()
+  })
+
+  it('editing an ordinary viewing does not touch its stickiness flags', async () => {
+    const { wrapper } = mountEditing({ ratingToEdit: { dbKey: 'key-555', index: 0 } })
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.addRating()
+
+    const written = addRatingMock.mock.calls[0][0][0]
+    expect(written.userAddedStickiness).toBeUndefined()
+  })
+
   it("opens with a whole-step Stickiness, since the select has no halves", async () => {
     const { wrapper } = mountEditing({ ratingToEdit: { dbKey: 'key-555', index: 0 }, ratings: [imported()] })
     await wrapper.vm.$nextTick()

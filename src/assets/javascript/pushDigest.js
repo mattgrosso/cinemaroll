@@ -37,6 +37,7 @@ import { promptsPerDay, lastAwardsPromptAt, ONE_DAY_MS } from './promptQuota.js'
 import { GAME_NAMES, gameWinKey } from '../../mixins/gameData.js';
 import {
   ONE_WEEK_MS,
+  isImportedViewing,
   SIX_MONTHS_MS,
   mostRecentRatingOf,
   ratingDateOf
@@ -105,7 +106,8 @@ export function stickinessDigest (entries, settings, now = Date.now()) {
 
   (entries || []).forEach((entry) => {
     const rating = mostRecentRatingOf(entry);
-    if (!rating) return;
+    // Still only Letterboxd's stars: never asked about (stickinessCandidates.js).
+    if (!rating || isImportedViewing(rating)) return;
 
     const ratedAt = ratingDateOf(rating);
     if (!Number.isFinite(ratedAt)) return;

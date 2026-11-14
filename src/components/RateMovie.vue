@@ -365,6 +365,7 @@ import addRating from "../assets/javascript/AddRating.js";
 import { trackEvent } from "../utils/usage.js";
 import { trackWhenOnline } from "../assets/javascript/usageEvents.js";
 import { withoutImportMarks } from "../assets/javascript/letterboxdImport.js";
+import { isImportedViewing, passesAlreadyPast } from "../assets/javascript/stickinessCandidates.js";
 import { importedViewings } from "../assets/javascript/importedQueue.js";
 import { queueImportedRating } from "../utils/rateImported.js";
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
@@ -991,7 +992,15 @@ export default {
         // screen) would otherwise be dropped by the edit.
         // A viewing brought in from Letterboxd stops being one once it's
         // rated here: the marks go, and with them the film page's prompt.
-        ratings[editing.index] = { ...withoutImportMarks(ratings[editing.index]), ...rating };
+        // Its stickiness passes that are already behind it count as done,
+        // or every old film rated properly would come straight back asking
+        // for stickiness (stickinessCandidates.js).
+        const wasImported = isImportedViewing(ratings[editing.index]);
+        ratings[editing.index] = {
+          ...withoutImportMarks(ratings[editing.index]),
+          ...rating,
+          ...(wasImported ? passesAlreadyPast(rating) : {})
+        };
       } else {
         ratings.push(rating);
       }
