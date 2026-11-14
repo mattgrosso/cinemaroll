@@ -59,6 +59,11 @@ Use `setMovieLogEntries` (one spread, one freeze, one reactivity trigger) and
 `runTmdbBackfill` already implements the worker-pool + batched-flush shape — reuse it
 rather than copying it.
 
+The Letterboxd import (`utils/letterboxdImportRun.js`, 2026-11-14) is the other bulk
+writer built on `runTmdbBackfill`: it isn't queued durably because the export it reads from
+is kept on the device and a failed batch is simply re-run, and `planImportBatch` re-checks
+the library at write time so a re-run can't duplicate a film.
+
 ## Write leaf paths, not whole objects
 
 `set()` at `movieLog/<key>/movie` replaces it wholesale and can clobber

@@ -133,6 +133,16 @@
         <!-- Your viewings and the club are separate concepts (Matt, 2026-10-06:
              "too closely coupled"), so they are separate panels. -->
         <div v-if="getAllRatings(previousEntry)" class="you-panel">
+          <!-- A viewing brought in from Letterboxd scores the stars doubled
+               (2026-11-14): say so, and offer the real rating form. Rating
+               it by hand drops the mark (RateMovie), which ends this. -->
+          <div v-if="importedViewing" class="imported-note" role="note">
+            <p>
+              <span v-if="importedViewing.rating.letterboxdUnrated">Brought in from Letterboxd with no stars, so it sits in the middle for now.</span>
+              <span v-else>Brought in from Letterboxd at {{ starsFor(importedViewing.rating.letterboxdStars) }}, so every part of the score is the same.</span>
+            </p>
+            <button type="button" class="imported-rate" @click="editRating(importedViewing.index)">Rate it properly</button>
+          </div>
           <div class="ratings-and-comparison-wrapper">
           <div class="ratings-section">
             <div class="accordion">
@@ -772,6 +782,7 @@ import ErrorLogService from "../services/ErrorLogService.js";
 import LetterboxdUrlService from '../services/LetterboxdUrlService.js';
 import { normalizedRatingToStars } from '../assets/javascript/starRating.js';
 import { myLetterboxdReviews, letterboxdFilm } from '../utils/letterboxdData.js';
+import { importedViewingIndex } from '../assets/javascript/letterboxdImport.js';
 import { starsFor, compactCount, watchedDateLabel, letterboxdTileState, relogStarsChange } from '../assets/javascript/letterboxdFormat.js';
 import { computeFlatKeywords } from '../utils/keywords.js';
 import { buildTagSuggestions, canCreateNewTag } from '../utils/tags.js';
@@ -895,6 +906,11 @@ export default {
     }
   },
   computed: {
+    importedViewing () {
+      const ratings = this.previousEntry?.ratings;
+      const index = importedViewingIndex(ratings);
+      return index < 0 ? null : { index, rating: ratings[index] };
+    },
     // 'log' | 'log-again' | 'logged' — see letterboxdTileState.
     letterboxdTile () {
       const movie = this.topStructure(this.result);
@@ -2522,6 +2538,37 @@ export default {
 
 <style lang="scss" scoped>
 @import '@/assets/scss/detail-scale';
+.imported-note {
+  align-items: center;
+  background: #1b1b1b;
+  border: 1px solid #333;
+  border-radius: 8px;
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+  padding: 0.55rem 0.75rem;
+
+  p {
+    color: #ddd;
+    flex: 1;
+    font-size: ds(0.8rem);
+    margin: 0;
+  }
+}
+.imported-rate {
+  background: #1d4d63;
+  border: 1px solid #3a8db3;
+  border-radius: 8px;
+  color: #fff;
+  flex-shrink: 0;
+  font-size: ds(0.8rem);
+  min-height: 40px;
+  padding: 0.35rem 0.75rem;
+
+  &:active {
+    background: #26647f;
+  }
+}
 .movie-detail-page {
   @include detail-scale-root;
   background: #000;

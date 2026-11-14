@@ -18,6 +18,9 @@
 export const NOTICE_ORDER = [
   'friendRequest',
   'reconcile',
+  // A Letterboxd import running, stopped part way, or with films waiting
+  // for a match (2026-11-14): beside the offline matches it resembles.
+  'letterboxdImport',
   'update',
   'bugFix',
   'showtimes',

@@ -17,7 +17,7 @@ const TOMORROW = new Date(2026, 9, 26, 9).getTime();
 
 describe('picking the one notice', () => {
   it('follows the agreed order', () => {
-    expect(NOTICE_ORDER).toEqual(['friendRequest', 'reconcile', 'update', 'bugFix', 'showtimes', 'newsletter', 'stickiness', 'tieBreak', 'awards']);
+    expect(NOTICE_ORDER).toEqual(['friendRequest', 'reconcile', 'letterboxdImport', 'update', 'bugFix', 'showtimes', 'newsletter', 'stickiness', 'tieBreak', 'awards']);
     expect(pickNotice({ showtimes: 2, bugFix: 'a', stickiness: 'stickiness' }, {}, NOON)).toBe('bugFix');
     expect(pickNotice({ update: null, newsletter: '2026-W43' }, {}, NOON)).toBe('newsletter');
     expect(pickNotice({}, {}, NOON)).toBeNull();

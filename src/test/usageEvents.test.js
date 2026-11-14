@@ -122,7 +122,8 @@ describe('the actions Cinema Roll counts', () => {
     ['components/TweakInline.vue', "trackWhenOnline('tiebreak-finished')"],
     ['components/MovieDetail.vue', "trackEvent('letterboxd-open')"],
     ['components/WhereToWatch.vue', "trackEvent('where-to-watch')"],
-    ['components/UpdateAvailableBanner.vue', "trackEvent('update-tapped')"]
+    ['components/UpdateAvailableBanner.vue', "trackEvent('update-tapped')"],
+    ['components/LetterboxdImport.vue', "trackEvent('letterboxd-import')"]
   ];
   it.each(hooks)('%s counts %s', (file, call) => {
     expect(source(file)).toContain(call);

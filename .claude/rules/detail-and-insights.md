@@ -217,6 +217,31 @@ differently lands in the "not imported" list rather than on the wrong film. The 
 sources can describe one viewing twice; `reviewsFromNode` collapses same-date-same-text
 pairs, preferring the feed's copy (it has the URL).
 
+**The whole history as films (2026-11-14, report: "It'll be cool if a new user could import
+their letterbox data").** `LetterboxdImport.vue` is one panel shown in three places: the
+brand-new-account welcome, Settings → Letterboxd ("Import your Letterboxd history"), and
+Home's `letterboxdImport` notice card (after `reconcile` in `NOTICE_ORDER`) while a run
+goes or films wait for a match. It takes the export zip as it comes (`utils/zipReader.js`,
+the browser's own `DecompressionStream`, no library; a lone diary/ratings/reviews CSV works
+too). Pure deciding in `letterboxdImport.js`: diary rows are viewings, ratings.csv adds films
+never diaried (one viewing on the rating day) and fills unrated diary entries. **Stars become
+the score, Matt's call:** every 0–10 criterion (Love included, stored 0–10) is the stars
+doubled and Stickiness the stars, so the score is exactly 2× stars and the ranking matches
+Letterboxd; no stars anywhere → the middle (5s), `letterboxdUnrated`. Every imported viewing
+carries `importedFrom: 'letterboxd'` (+ `letterboxdStars`); the film page shows "Rate it
+properly" for the newest one, and saving an edit in RateMovie drops the marks
+(`withoutImportMarks`). Matching: the library's own title index first (no TMDB call), else
+TMDB search; **sure only when title (or original title) AND year agree**, else the film goes
+to "Find the match" with a suggestion (Yes / Search / Skip), never onto a guessed film. One
+details call per film (`append_to_response=credits,keywords`), shaped by AddRating's
+`shapeTmdbDataIntoMovie`. The runner (`utils/letterboxdImportRun.js`, state in
+`letterboxdImportState.js` so Home doesn't load it) is module-level so leaving a screen
+doesn't stop it, writes 20 films a batch through `updateDatabaseEntriesNow` (stamped) and only then
+`setMovieLogEntries` (a batch the server refused must not look already-imported to the resume), saves outcomes on the device after each landed batch,
+and re-checks the library at write time (`planImportBatch`), so a resumed run never makes a
+second entry. Films already in the library only gain viewings on days they don't have. The
+reviews.csv in the zip goes through the reviews import above afterwards.
+
 MovieDetail's Letterboxd section (`.letterboxd-section`, after Ratings) is the public
 line ("★ 4.32 · 1.3M ratings · 61K fans", linked) and ONE toggle, "Show your review(s)",
 whose pane is dates (linking to the entry) and review text, `white-space: pre-line`.

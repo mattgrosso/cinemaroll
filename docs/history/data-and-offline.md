@@ -467,3 +467,22 @@ queue operation is bounded, and a stall is a warning when the same write is
 going to the server anyway. Nothing was lost in the reported case - the
 server write went through; only the device copy underneath it was skipped.
 
+
+## Letterboxd import for new users (2026-11-14)
+
+Report from Matt: "It'll be cool if a new user could import their letterbox data from
+this." The old reviews.csv import only attached review text to films already in the
+library, so it did nothing for an empty account. Approved plan: take Letterboxd's export
+zip on the welcome screen and in Settings, read diary + ratings, match by TMDB search with
+title AND year agreeing (doubtful ones to a "Find the match" list), write in batches,
+resume after interruption, then run the reviews import. Stars → score was the open
+question; Matt approved "every criterion is the stars doubled" (score = 2× stars, ranking
+matches Letterboxd) with each viewing marked and a "Rate it properly" prompt.
+
+Choices made on the way: no zip library — `DecompressionStream('deflate-raw')` is in iOS
+16.4+ and Node, so `zipReader.js` is ~70 lines. Server write before local commit for this
+path only (a refused batch committed locally first looked "already imported" to the resume,
+which then never sent it — caught writing the test, proven by flipping the order back).
+Spot check against live TMDB search: Heat 1995, both Halloweens, Parasite, Amélie, Dune:
+Part Two, Possession 1981 and others all matched the right ids. Rules in
+`.claude/rules/detail-and-insights.md` (Letterboxd).

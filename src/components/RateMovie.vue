@@ -350,6 +350,7 @@ import ToggleableRating from './ToggleableRating.vue';
 import addRating from "../assets/javascript/AddRating.js";
 import { trackEvent } from "../utils/usage.js";
 import { trackWhenOnline } from "../assets/javascript/usageEvents.js";
+import { withoutImportMarks } from "../assets/javascript/letterboxdImport.js";
 import { getRating, getAllRatings } from "../assets/javascript/GetRating.js";
 import { ratingBreakdown } from "../assets/javascript/ratingMath.js";
 import ErrorLogService from "../services/ErrorLogService.js";
@@ -914,6 +915,9 @@ export default {
       RATING_FIELDS.forEach(({ key }) => {
         if (rating[key] !== undefined && rating[key] !== null) this[key] = rating[key];
       });
+      // An import's Stickiness is the stars, so it can be a half (3.5); the
+      // select only has whole steps, and a blank one would look unset.
+      if (rating.importedFrom && this.stickiness != null) this.stickiness = Math.round(Number(this.stickiness));
       this.medium = rating.medium || '';
       this.selectedViewingTags = Array.isArray(rating.tags) ? [...rating.tags] : [];
       this.chatGPTKeywords = Array.isArray(rating.chatGPTKeywords) ? [...rating.chatGPTKeywords] : [];
@@ -966,7 +970,9 @@ export default {
         // Merge rather than overwrite: fields this form doesn't collect
         // (anything a future rating shape adds, or data written by another
         // screen) would otherwise be dropped by the edit.
-        ratings[editing.index] = { ...ratings[editing.index], ...rating };
+        // A viewing brought in from Letterboxd stops being one once it's
+        // rated here: the marks go, and with them the film page's prompt.
+        ratings[editing.index] = { ...withoutImportMarks(ratings[editing.index]), ...rating };
       } else {
         ratings.push(rating);
       }

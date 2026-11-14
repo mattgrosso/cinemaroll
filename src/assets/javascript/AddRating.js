@@ -77,7 +77,7 @@ const stripOwnership = (ratings) => {
   });
 }
 
-const safeTitleKey = (title) => {
+export const safeTitleKey = (title) => {
   return `${new Date().getTime()}-${crypto.randomUUID()}-${title.replaceAll(/[-!$%@^&*()_+|~=`{}[\]:";'<>?,./#]/g, "-")}`;
 }
 
@@ -85,7 +85,7 @@ const safeTitleKey = (title) => {
 // `movie` sub-object AddRating stores. Pulled out of addMovieRating so the
 // reconciliation flow (matching an offline placeholder rating to a real
 // TMDB movie) can reuse the exact same shaping logic.
-const shapeTmdbDataIntoMovie = (tmdbData, ratings) => {
+export const shapeTmdbDataIntoMovie = (tmdbData, ratings) => {
   // TMDB returns every credit — ~91 people per film, including stunts and
   // "Thanks" — and storing all of them made crew half the entire database.
   // Only the job titles the app reads or searches on are kept.

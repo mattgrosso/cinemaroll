@@ -956,3 +956,51 @@ describe('MovieDetail — Letterboxd logged state comes from the synced diary', 
     }
   })
 })
+
+// A film brought in from Letterboxd (2026-11-14) says so, and offers the
+// real rating form for that viewing.
+describe('MovieDetail: a viewing imported from Letterboxd', () => {
+  const mountWithRatings = async (ratings) => {
+    const commit = vi.fn()
+    const push = vi.fn()
+    const w = shallowMount(MovieDetail, {
+      global: {
+        mocks: {
+          $store: {
+            state: { movieLog: {}, settings: { tags: { 'viewing-tags': {} } }, academyAwardWinners: {} },
+            getters: { allMoviesAsArray: [], allMediaAsArray: [] },
+            commit,
+            dispatch: vi.fn()
+          },
+          $route: { params: { tmdbId: '42' }, query: {} },
+          $router: { push }
+        },
+        stubs: { ToggleableRating: true, Modal: true }
+      }
+    })
+    const result = makeResult()
+    await w.setData({ result, movie: result.movie, previousEntry: { ...result, ratings } })
+    return { w, commit, push }
+  }
+
+  it('names the stars it came in at and opens that viewing to rate properly', async () => {
+    const { w, commit, push } = await mountWithRatings([
+      { date: 1, overall: 9 },
+      { date: 2, overall: 7, importedFrom: 'letterboxd', letterboxdStars: 3.5 }
+    ])
+    expect(w.find('.imported-note').text()).toContain('Brought in from Letterboxd at ★★★½')
+    await w.find('.imported-rate').trigger('click')
+    expect(commit).toHaveBeenCalledWith('setRatingToEdit', { dbKey: 'abc123', index: 1 })
+    expect(push).toHaveBeenCalledWith('/rate-movie')
+  })
+
+  it('says when there were no stars at all', async () => {
+    const { w } = await mountWithRatings([{ date: 2, overall: 5, importedFrom: 'letterboxd', letterboxdUnrated: true }])
+    expect(w.find('.imported-note').text()).toContain('with no stars')
+  })
+
+  it('stays quiet once every viewing is a real rating', async () => {
+    const { w } = await mountWithRatings([{ date: 1, overall: 9 }])
+    expect(w.find('.imported-note').exists()).toBe(false)
+  })
+})

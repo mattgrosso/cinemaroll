@@ -612,6 +612,20 @@
         <button type="button" class="notice-dismiss" aria-label="Hide this for today" title="Hide for today" @click="dismissCurrentNotice"><i class="bi bi-x-lg"></i></button>
       </div>
 
+      <!-- A Letterboxd import (2026-11-14): its progress while it runs (the
+           welcome panel that started it goes once films land), then the
+           films waiting for a match. The panel is the same one Settings has. -->
+      <div v-if="currentNotice === 'letterboxdImport'" class="notice-slot">
+        <div class="prompt-card letterboxd-import-prompt">
+          <span class="prompt-badge prompt-badge-app"><i class="bi bi-box-arrow-in-down"></i></span>
+          <span class="prompt-body">
+            <span class="prompt-label">Letterboxd import</span>
+            <LetterboxdImport variant="notice"/>
+          </span>
+        </div>
+        <button type="button" class="notice-dismiss" aria-label="Hide this for today" title="Hide for today" @click="dismissCurrentNotice"><i class="bi bi-x-lg"></i></button>
+      </div>
+
       <div v-show="currentNotice === 'update'" class="notice-slot">
         <UpdateAvailableBanner @notice="reportNotice('update', $event)"/>
         <button type="button" class="notice-dismiss" aria-label="Hide this for today" title="Hide for today" @click="dismissCurrentNotice"><i class="bi bi-x-lg"></i></button>
@@ -701,6 +715,9 @@
         Already have rated movies? They live under the account you first
         used — sign in with that one to see them.
       </p>
+      <!-- Coming from Letterboxd (2026-11-14): the whole diary in one go.
+           Once a run starts, Home's notice card carries it instead. -->
+      <LetterboxdImport v-if="!letterboxdImportNoticeDue" variant="welcome"/>
     </div>
 
     <NoResults
@@ -1089,6 +1106,9 @@
               </SettingsSection>
 
               <SettingsSection title="Letterboxd" hint="Link your account for deep links and imports" collapsible :startOpen="false">
+                <!-- The whole export, diary and ratings, as films (2026-11-14). -->
+                <h6 class="settings-subhead">Import your Letterboxd history</h6>
+                <LetterboxdImport variant="settings" class="mb-3"/>
                 <div class="mb-3">
                                 <label for="letterboxdUsername" class="form-label">Letterboxd Username:</label>
                                 <div class="input-group">
@@ -1752,6 +1772,8 @@ import { isStallError } from '../utils/networkHealth.js';
 import { scrollWindowTo } from '../utils/scrollWindowTo.js';
 import { crowdRating, crowdLovesList, disagreeList, cultList } from '../assets/javascript/letterboxdCompare.js';
 import { letterboxdSyncState, syncLetterboxdNow, importLetterboxdReviews } from '../utils/letterboxdData.js';
+import { importState, importNoticeSignature, hasSavedImport } from '../utils/letterboxdImportState.js';
+import { defineAsyncComponent } from 'vue';
 import { parseCsv, reviewsCsvToUpdates, relativeTimeFrom } from '../assets/javascript/letterboxdFormat.js';
 import { indexOfMovie, resultElementId, resultsNeededToReveal, scrollOffsetFor } from '../assets/javascript/revealInList.js';
 import { arrivedFromMovieDetail } from '../router/scrollBehavior.js';
@@ -1931,6 +1953,7 @@ export const LOADING_SPINNER_DELAY_MS = 700;
 
 export default {
   components: {
+    LetterboxdImport: defineAsyncComponent(() => import('./LetterboxdImport.vue')),
     DBGridLayoutSearchResult,
     InsetBrowserModal,
     TweakInline,
@@ -2063,6 +2086,7 @@ export default {
       libraryTrim: { status: 'idle', completed: 0, total: 0, failed: 0 },
       syncStampBackfill: { status: 'idle', completed: 0, total: 0, failed: 0 },
       quickLinksSortType: "count",
+      letterboxdImport: importState,
       letterboxdSync: {
         loading: false,
         state: null,
@@ -2133,6 +2157,12 @@ export default {
     '$store.state.dbLoaded': {
       immediate: true,
       handler (loaded) {
+        // An import stopped part way, or with films waiting for a match, on
+        // this device: load it so its notice card can show. Only then is the
+        // runner fetched at all.
+        if (loaded && !importState.loaded && hasSavedImport(this.$store.state.databaseTopKey)) {
+          import('../utils/letterboxdImportRun.js').then((runner) => runner.loadSavedImport()).catch(() => {});
+        }
         if (!loaded || this.noticesSettled || this.noticeSettleTimer) return;
         this.noticeSettleTimer = setTimeout(() => { this.noticeSettleTimedOut = true; }, NOTICE_SETTLE_MS);
       }
@@ -4154,6 +4184,7 @@ export default {
           ? this.friendRequestsOnCard.map((request) => request.key).sort().join(',')
           : null,
         reconcile: (this.pendingReconciliations.length && this.$store.state.isOnline) ? this.pendingReconciliations.length : null,
+        letterboxdImport: importNoticeSignature(this.letterboxdImport),
         showtimes: this.showtimesBadgeCount || null,
         ...this.noticeReports
       };
@@ -4561,6 +4592,9 @@ export default {
     userRatedMovieCount () {
       // Count the number of movies the user has rated (not TV shows)
       return this.allEntriesWithFlatKeywordsAdded.length;
+    },
+    letterboxdImportNoticeDue () {
+      return importNoticeSignature(this.letterboxdImport) !== null || this.letterboxdImport.phase === 'reading';
     },
     isBrandNewUser () {
       // dbLoaded is load-bearing, not belt-and-braces: until the library

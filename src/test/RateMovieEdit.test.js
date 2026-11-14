@@ -345,3 +345,35 @@ describe('the "Last time" values handed to each criterion', () => {
     expect(Object.values(previousProps(wrapper)).every((p) => p === null)).toBe(true)
   })
 })
+
+// A viewing brought in from Letterboxd (2026-11-14) is the stars doubled.
+// Rating it here makes it a real rating: the marks go, and with them the
+// film page's "Rate it properly" prompt.
+describe('rating an imported Letterboxd viewing properly', () => {
+  const imported = () => ({
+    ...firstViewing(),
+    direction: 7, imagery: 7, story: 7, performance: 7, soundtrack: 7, love: 7, overall: 7,
+    stickiness: 3.5,
+    importedFrom: 'letterboxd',
+    letterboxdStars: 3.5
+  })
+
+  it('drops the import marks and keeps the rest', async () => {
+    const { wrapper } = mountEditing({ ratingToEdit: { dbKey: 'key-555', index: 0 }, ratings: [imported()] })
+    await wrapper.vm.$nextTick()
+    await wrapper.setData({ love: 9 })
+    await wrapper.vm.addRating()
+
+    const written = addRatingMock.mock.calls[0][0][0]
+    expect(written.love).toBe(9)
+    expect(written.importedFrom).toBeUndefined()
+    expect(written.letterboxdStars).toBeUndefined()
+    expect(written.medium).toBe('Theater')
+  })
+
+  it("opens with a whole-step Stickiness, since the select has no halves", async () => {
+    const { wrapper } = mountEditing({ ratingToEdit: { dbKey: 'key-555', index: 0 }, ratings: [imported()] })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.vm.stickiness).toBe(4)
+  })
+})
