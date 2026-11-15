@@ -362,11 +362,13 @@ function enrichMusic (sheet, sound, wiki) {
     : playlist
       // Matt, 2026-11-07: Kill Bill: Vol. 1's album isn't on Spotify, but listeners' playlists rebuild it.
       ? {
-          notOnSpotifyAsAnAlbum: true,
+          noAlbumMatched: true,
           aListenersPlaylist: { name: playlist.name, followers: playlist.followers, tracks: playlist.totalTracks },
           ...(tracks.length ? { alreadyInYourLikedSongs: tracks.filter((t) => t.liked).map((t) => t.name), trackList: tracks.map((t) => ({ n: t.number, name: t.name, by: t.artists, minutes: t.minutes })) } : {})
         }
-      : { notFoundOnSpotify: true };
+      // Matt, 2026-11-15: "they always say they can't find it … and then I link and it goes right to it".
+      // A miss in our matching (or a lookup that failed) is not proof the album is missing, so the sheet never says so.
+      : { noAlbumMatched: true, aSpotifySearchLinkFollows: true };
   if (wiki?.extract) facts.aboutTheMusic = { source: `Wikipedia, "${wiki.title}"`, text: wiki.extract };
   const choices = order.filter((t) => t.liked !== true);
   return { ...sheet, facts, sound: sound || null, wiki: wiki || null, choices: choices.map((t) => t.name).slice(0, 40) };
@@ -457,7 +459,7 @@ const KIND_NOTES = {
   milestone: 'A round number was just crossed. Mark it the way a paper marks a milestone: the film that crossed it, the distance travelled since the first entry, a sense of scale.',
   unfinished: 'Directors he has nearly finished. Choose one or two and make the case, in a line each, for the film left; it is fine to name the rest in passing.',
   anniversary: 'A favourite of his turns a round age this week. Tie the film\'s age to when he saw it and what he gave it. If several, pick the best one and mention the others in a sentence.',
-  music: 'He gave this film\'s soundtrack a high score last night. Write about the film\'s music: the composer and his history with them, where this score sits among his soundtrack scores, and, when the sheet has `aboutTheMusic`, what it says (that text is the only source for anything about how the music was made or received; attribute it lightly). Then suggest two or three tracks from `tryFrom` (they are not yet in his Liked Songs, most played first) for his playlists, a short reason each drawn from the sheet (its place on the album, its length, that it is among the most played, what aboutTheMusic says of it). Do not describe how a track sounds unless aboutTheMusic does. If the album was not found on Spotify, say so in a line; when the sheet has `aListenersPlaylist`, add that a listener\'s playlist rebuilds the soundtrack (its link is below; mention its followers only if given). Picks come only from `tryFrom`; leave picks empty when it is empty. The links are added below your text; do not write URLs.',
+  music: 'He gave this film\'s soundtrack a high score last night. Write about the film\'s music: the composer and his history with them, where this score sits among his soundtrack scores, and, when the sheet has `aboutTheMusic`, what it says (that text is the only source for anything about how the music was made or received; attribute it lightly). Then suggest two or three tracks from `tryFrom` (they are not yet in his Liked Songs, most played first) for his playlists, a short reason each drawn from the sheet (its place on the album, its length, that it is among the most played, what aboutTheMusic says of it). Do not describe how a track sounds unless aboutTheMusic does. Never say or suggest the soundtrack is missing from Spotify, can\'t be found, or isn\'t available: when the sheet has `noAlbumMatched`, that only means no album was matched, and the album may well be there. In that case, when the sheet has `aListenersPlaylist`, say in a line that a listener\'s playlist gathers the soundtrack on Spotify (its link is below; mention its followers only if given); otherwise say nothing about Spotify at all (a search link is added below). Picks come only from `tryFrom`; leave picks empty when it is empty. The links are added below your text; do not write URLs.',
   numbers: 'One pattern in his data. Answer the question plainly with the figures, say what it suggests about him as a viewer, and admit what the numbers cannot tell.'
 };
 
@@ -505,9 +507,12 @@ function musicLinks (sheet, story) {
     const byName = new Map((sound.tracks || []).map((t) => [t.name, t]));
     const picks = musicPicks(sheet, story.picks).map((n) => byName.get(n)).filter(Boolean);
     if (picks.length) parts.push(`<p><strong>Try these</strong></p><ul>${picks.map((t) => `<li><a href="${escapeHtml(t.url)}">${escapeHtml(t.name)}</a>${t.artists?.length ? ` · ${escapeHtml(t.artists.join(', '))}` : ''}</li>`).join('')}</ul>`);
-    parts.push(`<p><a href="${escapeHtml(sound.playlist.url)}">Open ${escapeHtml(sound.playlist.name)} on Spotify</a> <small>(a listener's playlist of the soundtrack; the album itself isn't on Spotify)</small></p>`);
-  } else if (sound?.search) {
-    parts.push(`<p><a href="${escapeHtml(sound.search)}">Look for the soundtrack on Spotify</a></p>`);
+    parts.push(`<p><a href="${escapeHtml(sound.playlist.url)}">Open ${escapeHtml(sound.playlist.name)} on Spotify</a> <small>(a listener's playlist of the soundtrack)</small></p>`);
+    if (sound.search) parts.push(`<p><a href="${escapeHtml(sound.search)}">Search Spotify for the soundtrack</a></p>`);
+  } else {
+    // No album matched, or the lookup failed (sound null): a search, which Spotify's own app answers well.
+    const search = sound?.search || `https://open.spotify.com/search/${encodeURIComponent(`${sheet.title} soundtrack`)}`;
+    parts.push(`<p><a href="${escapeHtml(search)}">Find the soundtrack on Spotify</a></p>`);
   }
   if (sheet.wiki?.url) parts.push(`<p><small>Background: <a href="${escapeHtml(sheet.wiki.url)}">${escapeHtml(sheet.wiki.title)}</a>, Wikipedia</small></p>`);
   return parts.join('');

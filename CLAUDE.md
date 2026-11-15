@@ -370,6 +370,11 @@ loosens in rounds (main title before the colon, Vol./Volume alike, the composer'
 and saying soundtrack) and last answers with the most-followed listener's playlist rebuilding the soundtrack
 (`sound.playlist`); the sheet says `aListenersPlaylist` and the item links "Open <playlist> on Spotify". Its tracks
 come only if Spotify lets Matt's token read the playlist (the app token can't), so picks may be empty.
+**Never "not on Spotify"** (Matt, 2026-11-15: the stories said they couldn't find it and the link went right to
+it): the matcher had missed Lost Highway (an album named just the film, by Various Artists) and Club Kid ("Music From
+& Inspired by the Film"), both now taken in Twelve Months' `albumScore`. A miss or a failed lookup is only
+`noAlbumMatched`; the writer never says the soundtrack is missing, a playlist is "a listener's playlist" plus a
+Spotify search link, and no playlist means a plain "Find the soundtrack on Spotify" search.
 **Shorts** (Matt, 2026-11-08: "brings your log to 1,600 viewings" counted his short films): the morning run reads
 `settings/includeShorts` and, unless it is explicitly on, drops shorts from the log before anything counts (`logAsSet`,
 the app's rule: 40 minutes or under, unknown runtime kept; the archive top-up gets the same log). `forgetUnreached`

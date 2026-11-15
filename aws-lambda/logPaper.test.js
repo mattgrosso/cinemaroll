@@ -187,19 +187,24 @@ describe('the music', () => {
   it('falls back to a Spotify search when the album is not found', () => {
     const [dune] = musicSheets(flatten(mlog), since, now);
     const sheet = enrichMusic(dune, { found: false, search: 'https://open.spotify.com/search/dune' }, null);
-    expect(sheet.facts.album).toEqual({ notFoundOnSpotify: true });
-    expect(storyItem(sheet, { headline: 'H', angle: 'a', paragraphs: ['P'], picks: [] }, now).content_html).toContain('Look for the soundtrack on Spotify');
+    expect(sheet.facts.album).toEqual({ noAlbumMatched: true, aSpotifySearchLinkFollows: true });
+    expect(storyItem(sheet, { headline: 'H', angle: 'a', paragraphs: ['P'], picks: [] }, now).content_html).toContain('Find the soundtrack on Spotify');
+    // A lookup that failed still links a search and never says the album is missing.
+    const failed = enrichMusic(dune, null, null);
+    expect(failed.facts.album).toEqual({ noAlbumMatched: true, aSpotifySearchLinkFollows: true });
+    expect(storyItem(failed, { headline: 'H', angle: 'a', paragraphs: ['P'], picks: [] }, now).content_html).toContain('https://open.spotify.com/search/');
   });
 
   it('points to a listener\'s playlist when the album itself is not on Spotify', () => {
     const [dune] = musicSheets(flatten(mlog), since, now);
     const playlist = { name: 'Kill Bill: Vol. 1 & 2 (Original Soundtrack)', url: 'https://open.spotify.com/playlist/p', followers: 172835, totalTracks: 50 };
     const bare = enrichMusic(dune, { found: false, playlist, tracks: [], search: 'https://open.spotify.com/search/x' }, null);
-    expect(bare.facts.album).toEqual({ notOnSpotifyAsAnAlbum: true, aListenersPlaylist: { name: playlist.name, followers: 172835, tracks: 50 } });
+    expect(bare.facts.album).toEqual({ noAlbumMatched: true, aListenersPlaylist: { name: playlist.name, followers: 172835, tracks: 50 } });
     expect(bare.choices).toEqual([]);
     const html = storyItem(bare, { headline: 'H', angle: 'a', paragraphs: ['P'], picks: [] }, now).content_html;
     expect(html).toContain('<a href="https://open.spotify.com/playlist/p">Open Kill Bill: Vol. 1 &amp; 2 (Original Soundtrack) on Spotify</a>');
-    expect(html).not.toContain('Look for the soundtrack');
+    expect(html).not.toContain("isn't on Spotify");
+    expect(html).toContain('Search Spotify for the soundtrack');
     const tracks = [{ name: 'Bang Bang', artists: ['Nancy Sinatra'], number: 1, minutes: 2.7, url: 'https://open.spotify.com/track/b', liked: false }, { name: 'Twisted Nerve', artists: ['Bernard Herrmann'], number: 2, minutes: 1.2, url: 'https://open.spotify.com/track/t', liked: true }];
     const full = enrichMusic(dune, { found: false, playlist, tracks, search: 'x' }, null);
     expect(full.facts.album.alreadyInYourLikedSongs).toEqual(['Twisted Nerve']);
