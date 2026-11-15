@@ -43,7 +43,8 @@ const stars = (n) => {
 const CATEGORIES = [
   ['bestPicture', 'Best Picture', 'movie'], ['bestDirector', 'Best Director', 'person'], ['bestActor', 'Best Actor', 'person'],
   ['bestActress', 'Best Actress', 'person'], ['bestSupportingActor', 'Best Supporting Actor', 'person'],
-  ['bestSupportingActress', 'Best Supporting Actress', 'person'], ['bestScreenplay', 'Best Screenplay or Writing', 'movie'],
+  ['bestSupportingActress', 'Best Supporting Actress', 'person'], ['bestCasting', 'Best Casting', 'movie'],
+  ['bestScreenplay', 'Best Screenplay or Writing', 'movie'],
   ['bestCinematography', 'Best Cinematography', 'movie'], ['bestEditing', 'Best Editing', 'movie'], ['bestScore', 'Best Score or Music', 'movie'],
   ['bestVisualEffects', 'Best Visual Effects or Production Design', 'movie'], ['bestAnimatedFeature', 'Best Animated Feature', 'movie'],
   ['bestDocumentaryFeature', 'Best Documentary Feature', 'movie'], ['bestInternationalFeature', 'Best International Feature', 'movie'],

@@ -1870,6 +1870,7 @@ export default {
         bestActress: 'performance',
         bestSupportingActor: 'performance',
         bestSupportingActress: 'performance',
+        bestCasting: 'performance',
         bestScreenplay: 'story',
         bestCinematography: 'imagery',
         bestEditing: 'direction',
@@ -2539,6 +2540,7 @@ export default {
         bestActress: 'performance',
         bestSupportingActor: 'performance',
         bestSupportingActress: 'performance',
+        bestCasting: 'performance',
         bestScreenplay: 'story',
         bestCinematography: 'imagery',
         bestEditing: 'direction', // Close to direction

@@ -328,3 +328,11 @@ Cannes and whatever else… the history of any award that we have access to."
   year. Ungated (any film rated that year), sorted by overall score through the
   `'rating'` fallback in the modal's sort maps. Like International Feature,
   completed years show it undecided without reopening.
+- **Best Casting** (2026-11-14): sixteenth standard category, right after the
+  acting awards. Matt: "Matching the Oscars, I want to add ... a best casting
+  award" (the Academy's first, for films of 2025; our name matches its board).
+  A film category like Editing and Cinematography; nominees sort by
+  Performance (`bestCasting: 'performance'` in BOTH modal sort maps).
+  Completed years show it undecided without reopening; he fills past years by
+  hand. `aws-lambda/clubPaper.js` keeps its copy of the list in order
+  (`clubPaper.test.js`), so the newsletter Lambda redeploys with it.

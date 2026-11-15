@@ -9,6 +9,11 @@ export const PERSONAL_AWARD_CATEGORIES = [
   { key: 'bestActress', name: 'Best Actress', type: 'person' },
   { key: 'bestSupportingActor', name: 'Best Supporting Actor', type: 'person' },
   { key: 'bestSupportingActress', name: 'Best Supporting Actress', type: 'person' },
+  // Matt, 2026-11-14: "matching the Oscars ... a best casting award" (the
+  // Academy's first was for films of 2025). A film category, like Editing and
+  // Cinematography, whose Oscars also go to people; nominees sort by
+  // Performance. Finished years show it undecided and don't reopen.
+  { key: 'bestCasting', name: 'Best Casting', type: 'movie' },
   { key: 'bestScreenplay', name: 'Best Screenplay or Writing', type: 'movie' },
   { key: 'bestCinematography', name: 'Best Cinematography', type: 'movie' },
   { key: 'bestEditing', name: 'Best Editing', type: 'movie' },
