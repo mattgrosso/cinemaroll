@@ -41,6 +41,15 @@
 // window says nothing, and the fault has only ever been seen on phones. The
 // phantom keyboard is still handled everywhere.
 //
+// A VISIBLE VIEW OF NO SIZE AT ALL (2026-11-15, Movie Hat, iOS 18.7 /
+// Safari 27.2, installed): iOS reported the visible view as -33554432 tall
+// (minus 2 to the 25th, a junk number, not a measurement). Read as a
+// phantom keyboard 33 million pixels deep, it ran the cures every second for
+// as long as it lasted, each one letting go of focus and nudging the scroll:
+// Matt's request screen bounced up and down while he tried to type. A view
+// that is not a positive, finite height is now no view at all (`realView`):
+// no phantom, no cure.
+//
 // A pinned thing inside another pinned thing (a bug button in a pinned tab
 // bar) rides along with its parent and is not slid again.
 //
@@ -108,13 +117,18 @@ export function looksWhole ({ height, screenHeight = 0, standalone = true }) {
   return !(standalone && screenHeight && height < screenHeight * SHORT)
 }
 
+/** Is this a height iOS could really mean? Not junk like -33554432, NaN or 0. */
+export function realView (h) {
+  return typeof h === 'number' && Number.isFinite(h) && h > 0 && h < 100000
+}
+
 /**
  * The phantom keyboard: is iOS's visible view a keyboard short with no text
  * box focused (and not pinch-zoomed)? `band` is how much of the page lies
  * below that view's bottom: how far up iOS has hung the pinned things.
  */
 export function phantomBand ({ innerHeight, vvHeight, vvTop = 0, scale = 1, typingNow = false }) {
-  if (typingNow || scale > 1.01 || vvHeight == null) return 0
+  if (typingNow || scale > 1.01 || !realView(vvHeight)) return 0
   if (innerHeight - vvHeight < STUCK_MIN) return 0
   const band = Math.round(innerHeight - vvTop - vvHeight)
   return band >= STUCK_MIN ? band : 0
