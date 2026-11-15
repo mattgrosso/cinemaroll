@@ -870,7 +870,7 @@ describe('MovieDetail — Letterboxd logged state comes from the synced diary', 
     const w = shallowMount(MovieDetail, {
       global: {
         mocks: { $store: store, $route: { params: { tmdbId: '42' }, query: {} }, $router: { push: vi.fn() } },
-        stubs: { ToggleableRating: true, Modal: true, DetailSection: true }
+        stubs: { ToggleableRating: true, Modal: true, DetailSection: { template: '<div class="detail-section-stub" :id="$attrs.id"><slot /></div>' } }
       }
     })
     await w.setData({ result: makeResult(), movie: makeResult().movie })
@@ -905,14 +905,32 @@ describe('MovieDetail — Letterboxd logged state comes from the synced diary', 
     logMovie.mockRestore()
   })
 
-  it('a film already logged for its latest viewing keeps a small Log again link under the tile', async () => {
+  // Report 2026-11-15: the small "Log again" link under the action tiles
+  // read as a mystery and dropped onto a row of its own. It lives inside the
+  // Letterboxd tile now, saying what it does.
+  it('a film already logged for its latest viewing offers Log another viewing inside the Letterboxd tile, not under the actions', async () => {
     const LetterboxdUrlService = (await import('@/services/LetterboxdUrlService.js')).default
     const logMovie = vi.spyOn(LetterboxdUrlService, 'logMovie').mockReturnValue(true)
     const today = LetterboxdUrlService.todayLocalISODate()
-    const w = await mountWithDiary({ 42: { r1: { review: 'Yes.', watchedDate: today } } })
+    const w = await mountWithDiary({ 42: { r1: { watchedDate: today } } })
     expect(w.find('.action-letterboxd').text()).toBe('On Letterboxd')
-    await w.find('.letterboxd-relog').trigger('click')
+    expect(w.find('.details-actions .letterboxd-relog').exists()).toBe(false)
+    const relog = w.find('#letterboxd .letterboxd-relog')
+    expect(relog.text()).toBe('Log another viewing on Letterboxd')
+    await relog.trigger('click')
     expect(logMovie).toHaveBeenCalledTimes(1)
+    logMovie.mockRestore()
+  })
+
+  it('Log another viewing with new stars shows the stars card inside the Letterboxd tile', async () => {
+    const LetterboxdUrlService = (await import('@/services/LetterboxdUrlService.js')).default
+    const logMovie = vi.spyOn(LetterboxdUrlService, 'logMovie').mockReturnValue(true)
+    const today = LetterboxdUrlService.todayLocalISODate()
+    const w = await mountWithDiary({ 42: { r1: { rating: 2.5, watchedDate: today } } })
+    await w.find('#letterboxd .letterboxd-relog').trigger('click')
+    expect(logMovie).not.toHaveBeenCalled()
+    expect(w.findAll('.letterboxd-stars-card')).toHaveLength(1)
+    expect(w.find('#letterboxd .letterboxd-stars-card').exists()).toBe(true)
     logMovie.mockRestore()
   })
 

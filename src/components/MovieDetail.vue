@@ -77,19 +77,10 @@
           <button type="button" class="action-tile action-primary" @click="rateMedia(topStructure(result))">
             <i class="bi bi-plus-circle"></i><span>Add rating</span>
           </button>
-          <!-- Report 2026-10-10: a rewatch the diary can't tell apart (a manual
-               override, a second viewing the same day) still needs a way in. -->
-          <button
-            v-if="$store.state.settings.letterboxdConnected && letterboxdTile === 'logged'"
-            type="button"
-            class="letterboxd-relog"
-            @click="relogOnLetterboxd">
-            Log again
-          </button>
         </div>
         <!-- Report 2026-10-11: the log link carries the new stars, but
              Letterboxd's log screen keeps the stars a film already has. -->
-        <div v-if="relogStars" class="letterboxd-stars-card" role="status">
+        <div v-if="relogStars && relogStars.from !== 'section'" class="letterboxd-stars-card" role="status">
           <p>
             New rating: <strong>{{ starsFor(relogStars.newStars) }}</strong>.
             Letterboxd keeps your old {{ starsFor(relogStars.oldStars) }}, so change the stars there.
@@ -209,7 +200,7 @@
         <!-- Letterboxd and Critics are tiles, two across, like the film band:
              the outside voices, under your own lines and the club's. -->
         <div class="detail-tiles">
-        <DetailSection v-if="letterboxdWrittenReviews.length || letterboxdFilmLine" id="letterboxd" tile label="Letterboxd" tone="you" :summary="letterboxdSummary" class="letterboxd-section">
+        <DetailSection v-if="letterboxdWrittenReviews.length || letterboxdFilmLine || canRelog" id="letterboxd" tile label="Letterboxd" tone="you" :summary="letterboxdSummary" class="letterboxd-section">
           <p v-if="letterboxdFilmLine" class="letterboxd-film mb-1">
             <a :href="letterboxdFilmUrl" target="_blank" rel="noopener" @click="trackLetterboxdOpen">{{ letterboxdFilmLine }}</a>
           </p>
@@ -218,6 +209,24 @@
               <a v-if="review.url" :href="review.url" target="_blank" rel="noopener" class="letterboxd-review-date">{{ watchedDateLabel(review.watchedDate) }}</a>
               <span v-else class="letterboxd-review-date">{{ watchedDateLabel(review.watchedDate) }}</span>
               <p class="letterboxd-review-text mb-0">{{ review.review }}</p>
+            </div>
+          </div>
+          <!-- Report 2026-10-10: a rewatch the diary can't tell apart (a manual
+               override, a second viewing the same day) still needs a way in.
+               It lived as a small "Log again" link under the action tiles
+               until 2026-11-15 ("I don't know what it's for and it looks
+               bad"); here it can say what it does. -->
+          <button v-if="canRelog" type="button" class="letterboxd-relog" @click="relogOnLetterboxd('section')">
+            Log another viewing on Letterboxd
+          </button>
+          <div v-if="relogStars && relogStars.from === 'section'" class="letterboxd-stars-card in-section" role="status">
+            <p>
+              New rating: <strong>{{ starsFor(relogStars.newStars) }}</strong>.
+              Letterboxd keeps your old {{ starsFor(relogStars.oldStars) }}, so change the stars there.
+            </p>
+            <div class="letterboxd-stars-actions">
+              <button type="button" class="letterboxd-stars-open" @click="openLetterboxdLog">Open Letterboxd</button>
+              <button type="button" class="letterboxd-stars-cancel" @click="relogStars = null">Cancel</button>
             </div>
           </div>
         </DetailSection>
@@ -928,13 +937,20 @@ export default {
       return { log: 'Log on Letterboxd', 'log-again': 'Log this viewing on Letterboxd', logged: 'View movie on Letterboxd' }[this.letterboxdTile];
     },
 
+    // The film's latest viewing is already in the diary, but dates can't
+    // see everything (a manual override, two viewings one day), so the
+    // Letterboxd tile keeps a way to log another.
+    canRelog () {
+      return Boolean(this.$store.state.settings.letterboxdConnected) && this.letterboxdTile === 'logged';
+    },
+
     letterboxdWrittenReviews () {
       return this.letterboxdReviews.filter((review) => review.review);
     },
     // One-line summaries for the folded sections (DetailSection).
     letterboxdSummary () {
       const reviews = this.letterboxdWrittenReviews;
-      if (!reviews.length) return this.letterboxdFilmLine || '';
+      if (!reviews.length) return this.letterboxdFilmLine || (this.canRelog ? 'In your diary' : '');
       const latest = reviews[0];
       const when = latest.watchedDate ? watchedDateLabel(latest.watchedDate) : '';
       return reviews.length === 1 ? `Your review${when ? `, ${when}` : ''}` : `${reviews.length} reviews${when ? `, latest ${when}` : ''}`;
@@ -1879,12 +1895,15 @@ export default {
       }
     },
 
-    relogOnLetterboxd () {
+    // `from` says where the stars card shows: under the action tiles, or
+    // inside the Letterboxd tile where its button was tapped.
+    relogOnLetterboxd (from = 'tiles') {
       const movie = this.topStructure(this.result);
-      this.relogStars = relogStarsChange({
+      const change = relogStarsChange({
         diaryNode: this.$store.state.letterboxdReviews?.[movie?.id],
         newStars: normalizedRatingToStars(this.normalizedRatingForMedia(this.result))
       });
+      this.relogStars = change ? { ...change, from } : null;
       if (!this.relogStars) this.openLetterboxdLog();
     },
 
@@ -2794,20 +2813,6 @@ export default {
     .action-letterboxd.logged { color: #6fd39b; }
     .action-letterboxd.log-again { color: #ff8000; } /* Letterboxd's orange: something to do */
 
-    .letterboxd-relog {
-      background: none;
-      border: 0;
-      color: #ccc;
-      font-size: ds(0.7rem);
-      letter-spacing: 0.04em;
-      margin-top: -2px;
-      min-height: 40px;
-      text-decoration: underline;
-      text-transform: uppercase;
-
-      &:active { color: #fff; }
-    }
-
     .action-letterboxd-icon {
       height: ds(1.15rem);
       width: auto;
@@ -3183,6 +3188,24 @@ export default {
 
       &:active { color: #fff; }
     }
+
+    .letterboxd-relog {
+      display: block;
+      width: 100%;
+      min-height: 40px;
+      margin-top: 8px;
+      border: 1px solid #ff8000; /* Letterboxd's orange */
+      border-radius: 6px;
+      background: rgba(255, 128, 0, 0.1);
+      color: #fff;
+      font-size: ds(0.75rem);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+
+      &:active { background: rgba(255, 128, 0, 0.25); }
+    }
+
+    .letterboxd-stars-card.in-section { margin: 8px 0 0; }
 
     .letterboxd-review-text {
       margin-top: 4px;

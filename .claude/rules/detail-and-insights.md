@@ -305,15 +305,19 @@ are silent no-ops (this dropped new users' typed usernames).
 only open the film page).** `letterboxdTileState` (`letterboxdFormat.js`, tested):
 "Log it" when the film isn't in the synced diary; **"Log again"** (orange) when the
 newest Cinema Roll viewing's local day is later than the newest diary `watchedDate` —
-it opens the same log deep link; otherwise "On Letterboxd" opens the film page, with a
-small `.letterboxd-relog` "Log again" link under it for what dates can't see (manual
-overrides, a second viewing the same day). The diary syncs every six hours, so a fresh
+it opens the same log deep link; otherwise "On Letterboxd" opens the film page. For what dates can't see (manual
+overrides, a second viewing the same day) the Letterboxd tile further down holds a
+full-width `.letterboxd-relog` "Log another viewing on Letterboxd" button (`canRelog`;
+the tile shows for it alone, summary "In your diary"). Until 2026-11-15 it was a small
+"Log again" link under the action tiles; Matt: "I don't know what it's for and it looks
+bad" — it fell onto a grid row of its own. Never put it back in `.details-actions`. The diary syncs every six hours, so a fresh
 log can still read "Log again" until then.
 
 **Letterboxd keeps a film's existing stars on a re-log (2026-10-11 report).** The log
 link carries the new stars (`rating=`), and a first log takes them, but on a film that
 already has stars Letterboxd's log screen shows the old ones. Both "Log again" paths go
-through `relogOnLetterboxd`: when `relogStarsChange` (`letterboxdFormat.js`) finds the
+through `relogOnLetterboxd(from)`, and the card shows where the tap was (under the
+tiles, or inside the Letterboxd tile for `'section'`): when `relogStarsChange` (`letterboxdFormat.js`) finds the
 new stars differ from the newest rated diary entry, a `.letterboxd-stars-card` under the
 tiles says "New rating ★★★½ — Letterboxd keeps your old ★★★" with Open Letterboxd /
 Cancel; when they match or the diary has no stars, the log screen opens at once.
