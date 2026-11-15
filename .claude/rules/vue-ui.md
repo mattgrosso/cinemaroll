@@ -264,11 +264,17 @@ joins `screenTopGap.test.js`. Games keep their own padding (their banner differs
 - **Never tie a fixed bottom control to `env(safe-area-inset-bottom)`.** iOS Safari
   changes the inset while its toolbar collapses mid-scroll, so the control jumps (the
   bug button, 2026-10-28). Use a fixed distance that already clears the home indicator.
-- **The bug button lives in the bottom-LEFT corner** (Matt, 2026-10-29, after a
-  day as a slim right-edge tab: "I'd rather we just put it back on the left bottom
-  left corner"). On the right it kept landing on the rating page's pin button and
-  whatever scrolled past that corner. Don't move it right again without asking.
-  `BugReportButton.test.js` pins the side and the round shape.
+- **The bug button lives in the TOP-RIGHT corner** (Matt, 2026-11-15, after it rode
+  up off the bottom yet again: "find another place to put the bug button"). It sits
+  under the status bar (`--safe-top`), in the 75px the scroll-to-top strip leaves free,
+  and BELOW every pop-up (z-index 990, under PersonModal's 1000) so it can never cover
+  a dialog's close button; its own report box stays at 1200. Bottom-pinned buttons are
+  what iOS's phantom keyboard moves, and screenPin can't always tell (it judged the
+  button "already at the bottom" 293 times while it floated mid-screen). History: it
+  was bottom-right, bottom-left (2026-10-29), briefly a right-edge tab; don't move it
+  back to the bottom without asking. A new screen with something in its top-right
+  corner must leave room (the Web screen's head pads 60px on the right).
+  `BugReportButton.test.js` pins the corner and the stacking.
 
 ## Mid-drag state and animation
 

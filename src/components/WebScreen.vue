@@ -910,9 +910,10 @@ export default {
 
   .web-head {
     /* Room on the left for BackLink, which sits in the top corner now that
-       there is no header above it. */
+       there is no header above it, and on the right for the bug button
+       (top-right since 2026-11-15). */
     flex: 0 0 auto;
-    padding: calc(10px + var(--safe-top, 0px)) 16px 6px 56px;
+    padding: calc(10px + var(--safe-top, 0px)) 60px 6px 56px;
   }
   .web-title {
     font-size: 1.15rem;

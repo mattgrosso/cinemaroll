@@ -809,3 +809,17 @@ he wanted the "what else was playing" fact kept anywhere, he took the plan to dr
 it: the line, its helpers and the per-year calendar download are gone; the tile's
 own opening rank (for films the archive knows) is unchanged. Offered and not yet
 answered: a "Not in Box Office History yet" note in the tile for films too new.
+
+## The bug button moves to the top-right (2026-11-15)
+
+Matt's iPhone (iOS 18.7 / Safari 27.2, installed), Insights' Awards tab: the
+bottom-left bug button had ridden up the screen again, and snapped back the moment
+he tapped it. The report's screenPin scene showed the phantom keyboard up (visible
+view 511 of 812, pushed 159 down) and `leftAlone` at 293: each time, the button's
+drawn position read as already at the page's bottom, so screenPin didn't slide it,
+while on screen it floated. The tap's focus change ran a cure, which is why it locked
+back. Rather than another round on a fault iOS keeps varying, the button left the
+bottom: top-right, under the status bar, as Thunder and Space Base already do (a
+top-half pinned thing is never slid and doesn't ride up). It sits under every pop-up
+(z-index 990) so a dialog's top-right close button stays reachable, and the Web
+screen's head got right padding for it. screenPin is unchanged (house module).

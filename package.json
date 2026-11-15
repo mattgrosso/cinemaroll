@@ -1,6 +1,6 @@
 {
   "name": "cinema-roll",
-  "version": "1.136.2",
+  "version": "1.136.3",
   "private": true,
   "scripts": {
     "update-version": "node src/assets/javascript/version.js",

@@ -83,27 +83,31 @@ describe('BugReportButton', () => {
     expect(wrapper.vm.transcript).toBe('');
   });
 
-  // Matt's call (2026-10-29, report: "I'd rather we just put it back on the
-  // left bottom left corner"): a round button in the bottom-LEFT corner, not
-  // the slim right-edge tab tried earlier that day. jsdom loads no scoped
-  // CSS, so this reads the rule from the source.
-  it('is a round button in the bottom-left corner', () => {
+  // Matt, 2026-11-15 (after the bottom-left button rode up the screen once
+  // more on iOS's phantom keyboard): move it off the bottom. A round button
+  // in the TOP-RIGHT corner, below the status bar. jsdom loads no scoped CSS,
+  // so this reads the rule from the source.
+  it('is a round button in the top-right corner, never pinned to the bottom', () => {
     const rule = triggerRule();
-    expect(rule).toMatch(/^\s*left:\s*1rem;/m);
-    expect(rule).not.toMatch(/^\s*right:/m);
+    expect(rule).toMatch(/^\s*right:\s*0\.75rem;/m);
+    expect(rule).toMatch(/^\s*top:\s*calc\(0\.5rem \+ var\(--safe-top, 0px\)\);/m);
+    expect(rule).not.toMatch(/^\s*left:/m);
+    expect(rule).not.toMatch(/^\s*bottom:/m);
     expect(rule).toMatch(/^\s*border-radius:\s*50%;/m);
     expect(rule).toMatch(/^\s*width:\s*2\.75rem;/m);
     expect(rule).toMatch(/^\s*height:\s*2\.75rem;/m);
   });
 
-  // Report 2026-10-28, "the bug button is coming unhinged on scroll": iOS
-  // Safari changes env(safe-area-inset-bottom) while its toolbar collapses
-  // mid-scroll, so a bottom tied to it moved. A fixed distance can't.
-  it('sits a fixed distance from the bottom, not one tied to the safe-area inset', () => {
-    const rule = triggerRule();
-    expect(rule).toMatch(/^\s*bottom:\s*3\.125rem;/m);
-    expect(rule).not.toMatch(/env\(/);
-    expect(rule).not.toMatch(/var\(/);
+  // Up there it shares the top of the screen with pop-ups whose close
+  // buttons sit top-right (PersonModal's, a tall one starts ~6vh down). It
+  // must sit under every overlay, while its own report box stays on top.
+  it('sits under every pop-up, its own report box over everything', () => {
+    const z = Number(triggerRule().match(/z-index:\s*(\d+)/)[1]);
+    const person = readFileSync(resolve(process.cwd(), 'src/components/PersonModal.vue'), 'utf8');
+    const overlayZ = Number(person.match(/\.person-modal-overlay\s*\{[^}]*z-index:\s*(\d+)/)[1]);
+    expect(z).toBeLessThan(overlayZ);
+    const src = readFileSync(resolve(process.cwd(), 'src/components/BugReportButton.vue'), 'utf8');
+    expect(Number(src.match(/\.bug-report-backdrop\s*\{[^}]*z-index:\s*(\d+)/)[1])).toBe(1200);
   });
 });
 

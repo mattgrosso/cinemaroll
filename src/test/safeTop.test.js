@@ -22,6 +22,7 @@ const PINNED_TOP = [
   ['../components/RateMovie.vue', '.home-link', 'top'],
   ['../components/games/BackLink.vue', '.back-link', 'top'],
   ['../components/WebScreen.vue', '.web-head', 'padding'],
+  ['../components/BugReportButton.vue', '.bug-report-trigger', 'top'],
 ];
 
 describe('things pinned to the top clear the status bar', () => {

@@ -90,23 +90,24 @@ export default {
 </script>
 
 <style scoped>
-/* Fixed bottom-LEFT. It was moved left on 2026-08-01 by request, back to
-   the right on 2026-10-27, squeezed into a slim right-edge tab on
-   2026-10-29, and back to the left the same day ("I'd rather we just put
-   it back on the left bottom left corner"). On the right it sat on the
-   rating page's pin button and on things scrolling past that corner; on
-   the left nothing clashes. Sized and positioned as an always-visible tap
-   target, no hover state, per the project's mobile-first UI rule.
-   A FIXED distance from the bottom, not 1rem + env(safe-area-inset-bottom):
-   iOS Safari changes that inset while its toolbar shrinks and grows during a
-   scroll, so the button jumped (report 2026-10-28, "coming unhinged on
-   scroll"). 3.125rem is where the old formula put it on a home-indicator
-   iPhone (16px + 34px), so it still clears the indicator and never moves. */
+/* Fixed TOP-RIGHT, just under the status bar (Matt, 2026-11-15, after it
+   rode up the screen once more: "I want us to find another place to put the
+   bug button"). It lived in the bottom-left corner from 2026-10-29, and
+   before that bottom-right and a right-edge tab. Bottom-pinned things are
+   what iOS keeps moving: its "phantom keyboard" shrinks the visible view
+   and hangs fixed things from that view's bottom, and screenPin can't always
+   tell (that day it judged the button "already at the bottom" 293 times while
+   it floated mid-screen). Top-pinned things don't ride up; Thunder and Space
+   Base keep theirs top-right. Clear of the header's scroll-to-top strip
+   (which leaves 75px free at each end), of the top-LEFT back links, and it
+   sits UNDER every pop-up (z-index below PersonModal's 1000) so no dialog's
+   close button can be covered. Its own report box stays on top (1200).
+   Sized as an always-visible tap target, no hover state. */
 .bug-report-trigger {
   position: fixed;
-  left: 1rem;
-  bottom: 3.125rem;
-  z-index: 1200;
+  right: 0.75rem;
+  top: calc(0.5rem + var(--safe-top, 0px));
+  z-index: 990;
   width: 2.75rem;
   height: 2.75rem;
   border-radius: 50%;
