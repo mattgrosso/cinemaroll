@@ -384,6 +384,7 @@ isn't swallowed by Newsprinted's never-twice ids (2026-11-09: the pre-fix 1,500 
 year stories, written that morning before the fix, had been held by Newsprinted's pacing and let out after it).
 The newsletter profile and the people list (`buildNewsletterProfile` / `buildPeopleList`) take `includeShorts`
 too, so the library count and the three-films rule leave shorts out unless the setting is on.
+**Actor counts** (Matt, 2026-11-16: a story had Edward Norton at 12 while the app showed 13): a `sits` sheet counts an actor's films over the whole cast (not the top 12 billed), by TMDB person id when both have one, and a rewatch counts its film once (`filmsWith`).
 By hand: `{"logPaper":true,"musicFor":<tmdb id>}` writes just that film's music story now, under a fresh id so Newsprinted shows it again. Adding to Liked Songs from the story would need `user-library-modify` in Twelve Months and a reconnect.
 
 ## From the archive for Newsprinted (2026-10-28)

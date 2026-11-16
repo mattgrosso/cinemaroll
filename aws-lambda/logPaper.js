@@ -96,6 +96,14 @@ const dateWords = (t) => new Date(t).toLocaleDateString('en-US', { timeZone: TZ,
 
 // --- 1. Where this sits --------------------------------------------------------
 
+// Matt, 2026-11-16: "puts Edward Norton and Philip Seymour Hoffman level at twelve" while the app showed
+// Norton at 13. Only a film's top 12 billed counted, and a rewatch counted its film twice. The app counts
+// every role, so the whole cast counts here too, by TMDB person id when both sides have one, else by name;
+// and the films are a set, this one included once.
+const samePerson = (a, b) => (a?.id != null && b?.id != null ? a.id === b.id : Boolean(a?.name) && a.name === b?.name);
+const filmsWith = (rows, person) => new Set(rows.filter((x) => (x.movie?.cast || []).some((y) => samePerson(y, person))).map((x) => x.film));
+
+
 /** A sheet per film logged after `since` (and not after `now`). */
 function sitsSheets (rows, since, now) {
   const fresh = rows.filter((r) => r.date > since && r.date <= now);
@@ -119,7 +127,7 @@ function sitsSheets (rows, since, now) {
         newCountry: (r.movie?.production_countries || []).map((c) => c.name).filter((c) => !before.some((x) => (x.movie?.production_countries || []).some((y) => y.name === c))),
         newDecade: r.year && !before.some((x) => x.year && Math.floor(x.year / 10) === Math.floor(r.year / 10)) ? `${Math.floor(r.year / 10) * 10}s` : null
       },
-      actors: (r.movie?.cast || []).slice(0, 8).map((c) => ({ name: c.name, filmsSeenWithThem: new Set(before.filter((x) => (x.movie?.cast || []).slice(0, 12).some((y) => y.name === c.name)).map((x) => x.film)).size + 1 })).filter((a) => a.filmsSeenWithThem >= 5),
+      actors: (r.movie?.cast || []).slice(0, 8).filter((c) => c?.name).map((c) => ({ name: c.name, filmsSeenWithThem: filmsWith(before, c).add(r.film).size })).filter((a) => a.filmsSeenWithThem >= 5),
       counts: {
         filmsLoggedAllTime: seenFilms.size + (seenFilms.has(r.film) ? 0 : 1),
         thisYearSoFar: before.filter((x) => local(x.date).y === local(r.date).y).length + 1,

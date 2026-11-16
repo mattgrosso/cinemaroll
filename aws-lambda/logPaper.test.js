@@ -28,6 +28,16 @@ describe('the log, flattened', () => {
 });
 
 describe('where this sits', () => {
+  it('counts an actor\'s films across the whole cast, by person id, and a rewatch once', () => {
+    const cast = (n) => [...Array.from({ length: n }, (_, i) => ({ id: 100 + i, name: `Extra ${i}` })), { id: 819, name: 'Edward Norton' }];
+    const films = {};
+    for (let i = 0; i < 5; i++) films[`f${i}`] = { movie: film(50 + i, `Film ${i}`, 2000 + i, { cast: cast(i === 0 ? 20 : 1) }), ratings: [{ date: t(`2025-0${i + 1}-10T20:00:00-05:00`), rating: 7 }] };
+    films.f0.movie.cast.at(-1).name = 'Ed Norton';
+    films.f1.ratings.push({ date: t('2026-10-27T21:00:00-04:00'), rating: 8 });
+    const sheet = sitsSheets(flatten(films), t('2026-10-27T06:00:00-04:00'), now).find((s) => s.facts.film.title === 'Film 1');
+    expect(sheet.facts.actors.find((a) => a.name === 'Edward Norton')).toEqual({ name: 'Edward Norton', filmsSeenWithThem: 5 });
+  });
+
   it('places last night\'s film among the director\'s, the year\'s and the rest', () => {
     const [sheet] = sitsSheets(flatten(log), t('2026-10-27T06:00:00-04:00'), now);
     expect(sheet.kind).toBe('sits');
