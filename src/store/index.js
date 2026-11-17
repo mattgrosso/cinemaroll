@@ -262,6 +262,7 @@ function reportRefusedRead (label, error) {
   else console.warn(`Failed to load ${label} with no sign-in:`, error?.message);
 }
 let letterboxdLoadInFlight = null;
+let friendLetterboxdInFlight = null;
 // One external friend's feed, v2 first. True when the feed answered (changed
 // or not), false when it could not be read — a caller holding a pending
 // notice keeps it then. Updates the friend's profile and error in the store.
@@ -633,6 +634,10 @@ export default createStore({
     letterboxdFilms: null,
     letterboxdReviews: null,
     letterboxdLoadedAt: 0,
+    // Friends' written Letterboxd reviews, copied into my own account by the
+    // sweep (<topKey>/letterboxd/friends; friendReviews.js). Null until loaded.
+    friendLetterboxd: null,
+    friendLetterboxdLoadedAt: 0,
     socialFriendProfiles: {},
     // When fetchFriendProfiles last STARTED. Profiles are one-shot reads, so
     // this is the only measure of how old they are (see clubFetchesNeeded).
@@ -1106,6 +1111,10 @@ export default createStore({
     },
     setSocialFriendProfile (state, { key, profile }) {
       state.socialFriendProfiles = { ...state.socialFriendProfiles, [key]: profile };
+    },
+    setFriendLetterboxd (state, { value, at }) {
+      state.friendLetterboxd = value || {};
+      if (at) state.friendLetterboxdLoadedAt = at;
     },
     setLetterboxdData (state, { films, reviews, at }) {
       // Frozen like movieLog: thousands of small objects nobody edits.
@@ -2802,6 +2811,31 @@ export default createStore({
         }
       })();
       return letterboxdLoadInFlight;
+    },
+    // Friends' Letterboxd reviews: the phone's copy at once, then one read of
+    // my own letterboxd/friends node (only reviews with words, so small).
+    async ensureFriendLetterboxd (context, { maxAgeMs = 10 * 60 * 1000, force = false } = {}) {
+      const topKey = context.getters.databaseTopKey;
+      if (!topKey) return;
+      if (!force && context.state.friendLetterboxdLoadedAt && Date.now() - context.state.friendLetterboxdLoadedAt < maxAgeMs) return;
+      if (friendLetterboxdInFlight) return friendLetterboxdInFlight;
+      friendLetterboxdInFlight = (async () => {
+        try {
+          if (!context.state.friendLetterboxdLoadedAt && context.state.friendLetterboxd === null) {
+            const cached = await loadSnapshot(topKey, 'friendLetterboxd');
+            if (cached && !context.state.friendLetterboxdLoadedAt) context.commit('setFriendLetterboxd', { value: cached, at: 0 });
+          }
+          if (!context.state.isOnline) return;
+          const value = await get(ref(db, `${topKey}/letterboxd/friends`)).then((snapshot) => snapshot.val());
+          context.commit('setFriendLetterboxd', { value, at: Date.now() });
+          saveSnapshot(topKey, 'friendLetterboxd', value || {});
+        } catch (error) {
+          console.warn('Friends\' Letterboxd reviews unavailable:', error?.message);
+        } finally {
+          friendLetterboxdInFlight = null;
+        }
+      })();
+      return friendLetterboxdInFlight;
     },
     ensureClubData (context, { maxAgeMs = Infinity } = {}) {
       context.dispatch('attachSocialListeners');

@@ -18,9 +18,31 @@
       <!-- No stars published yet: their app assigns those, and an older
            profile simply doesn't carry them. The composite is worth less as a
            comparison but it's what we have, and it beats a blank line. -->
-      <span v-else class="friend-score">{{ formatScore(friend.score) }}</span>
+      <span v-else-if="friend.score !== null" class="friend-score">{{ formatScore(friend.score) }}</span>
+      <!-- Their written Letterboxd review(s), when the sweep has any for this
+           film (2026-11-17, "is there any way to get their actual written
+           reviews"). The pane opens under the rows, one friend at a time. -->
+      <button
+        v-if="friend.reviews && friend.reviews.length"
+        type="button"
+        class="friend-review-toggle"
+        :class="{ open: openReviewKey === friend.key }"
+        :aria-expanded="openReviewKey === friend.key ? 'true' : 'false'"
+        @click="toggleReview(friend.key)"
+      >Review<template v-if="friend.reviews.length > 1">s</template></button>
       <i class="bi bi-chevron-down friend-row-spacer" aria-hidden="true"></i>
     </div>
+    </div>
+    <div v-if="openFriend" class="friend-review-pane">
+      <div v-for="review in openFriend.reviews" :key="review.id" class="friend-review">
+        <div class="friend-review-head">
+          <span class="friend-review-name">{{ openFriend.name }}</span>
+          <a v-if="review.url" :href="review.url" target="_blank" rel="noopener" class="friend-review-date">{{ dateLabel(review.watchedDate) }}</a>
+          <span v-else class="friend-review-date">{{ dateLabel(review.watchedDate) }}</span>
+          <span v-if="review.spoilers" class="friend-review-flag">Spoilers</span>
+        </div>
+        <p class="friend-review-text">{{ review.review }}</p>
+      </div>
     </div>
   </div>
 </template>
@@ -37,7 +59,8 @@
 // assign them (see starRating.js), so they travel in the profile rather than
 // being worked out here.
 import { formatScore } from '../assets/javascript/formatScore.js';
-import { friendsWhoRated } from '../assets/javascript/friendViewings.js';
+import { clubLinesFor } from '../assets/javascript/friendReviews.js';
+import { watchedDateLabel } from '../assets/javascript/letterboxdFormat.js';
 
 // How old a copy of a friend's profile these pills will show. Profiles are
 // one-shot reads, so an app left open holds whatever it fetched at launch;
@@ -69,9 +92,15 @@ export default {
       default: false
     }
   },
+  data () {
+    return { openReviewKey: null };
+  },
   computed: {
     friends () {
-      return friendsWhoRated(this.$store.getters.filmClubFriends, this.tmdbId);
+      return clubLinesFor(this.$store.getters.filmClubFriends, this.$store.state.friendLetterboxd, this.tmdbId);
+    },
+    openFriend () {
+      return this.friends.find((friend) => friend.key === this.openReviewKey && friend.reviews.length) || null;
     },
     // Everything this component needs fetched, as one string cheap to watch.
     //
@@ -109,11 +138,21 @@ export default {
       immediate: true,
       handler () {
         this.$store.dispatch('ensureClubData', { maxAgeMs: FRIEND_PROFILE_MAX_AGE_MS });
+        this.$store.dispatch('ensureFriendLetterboxd');
       }
+    },
+    tmdbId () {
+      this.openReviewKey = null;
     }
   },
   methods: {
     formatScore,
+    toggleReview (key) {
+      this.openReviewKey = this.openReviewKey === key ? null : key;
+    },
+    dateLabel (date) {
+      return date ? watchedDateLabel(date) : 'On Letterboxd';
+    },
     fullStars (friend) {
       return Math.floor(friend.stars);
     },
@@ -177,6 +216,72 @@ export default {
       visibility: hidden;
     }
 
+    .friend-review-toggle {
+      background: rgba(255, 128, 0, 0.1);
+      border: 1px solid #ff8000; /* Letterboxd's orange */
+      border-radius: 4px;
+      color: #fff;
+      flex: 0 0 auto;
+      font-size: ds(0.62rem);
+      letter-spacing: 0.04em;
+      line-height: 1.2;
+      padding: 2px 6px;
+      text-transform: uppercase;
+
+      &.open,
+      &:active { background: rgba(255, 128, 0, 0.3); }
+    }
+
+    /* Styled like the Letterboxd tile's "your review" pane on the movie page. */
+    .friend-review-pane {
+      grid-column: 1 / -1;
+      padding: 0 0.6rem 0.35rem;
+    }
+
+    .friend-review {
+      background: rgba(255, 255, 255, 0.05);
+      border-left: 2px solid #ff8000;
+      margin-top: 6px;
+      padding: 6px 8px;
+      text-align: left;
+    }
+
+    .friend-review-head {
+      align-items: baseline;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+    }
+
+    .friend-review-name {
+      color: #fff;
+      font-size: ds(0.75rem);
+      font-weight: 600;
+    }
+
+    .friend-review-date {
+      color: #ccc;
+      font-size: ds(0.75rem);
+      text-decoration: none;
+
+      &:active { color: #fff; }
+    }
+
+    .friend-review-flag {
+      color: #ffb366;
+      font-size: ds(0.62rem);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .friend-review-text {
+      color: #fff;
+      font-size: ds(0.85rem);
+      line-height: 1.4;
+      margin: 4px 0 0;
+      white-space: pre-line;
+    }
+
     &--compact {
       align-items: baseline;
       border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -191,6 +296,8 @@ export default {
       .friend-name { color: #ddd; flex: 0 0 auto; }
       .friend-stars { font-size: ds(0.6rem); }
       .friend-score { font-size: ds(0.7rem); }
+      .friend-review-toggle { font-size: ds(0.55rem); padding: 1px 5px; }
+      .friend-review-pane { padding: 0; }
       .friend-row-spacer { display: none; }
     }
   }

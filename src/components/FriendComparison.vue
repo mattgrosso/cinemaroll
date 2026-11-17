@@ -228,6 +228,34 @@
         <p class="fc-empty">{{ profile.ratings ? "No overlap yet — you haven't rated any of the same movies." : `${profile.name} isn't sharing movie-by-movie scores, so there's nothing to compare directly — their shelf above is what they've made public.` }}</p>
       </section>
 
+      <!-- Their written Letterboxd reviews (2026-11-17). The sweep reads the
+           friend's public feed into my own account; this is where the name
+           comes from when they haven't connected one themselves (and the only
+           way for a friend on another app). friendReviews.js. -->
+      <section class="fc-section fc-letterboxd">
+        <h2 class="fc-section-title">Letterboxd reviews</h2>
+        <p class="fc-caption">
+          <template v-if="linkedFromAccount">Linked from {{ profile.name }}'s own Cinema Roll account as <strong>{{ letterboxdStatus.username }}</strong>. Type another name only to override it.</template>
+          <template v-else>Type {{ profile.name }}'s Letterboxd username and their written reviews show on each film's page, beside their rating.</template>
+        </p>
+        <form class="fc-letterboxd-row" @submit.prevent="saveLetterboxd">
+          <input
+            v-model="letterboxdDraft"
+            type="text"
+            class="form-control fc-library-search fc-letterboxd-input"
+            :placeholder="linkedFromAccount ? letterboxdStatus.username : 'Letterboxd username'"
+            aria-label="Their Letterboxd username"
+            autocapitalize="none"
+            autocorrect="off"
+            spellcheck="false"
+          >
+          <button type="submit" class="fc-letterboxd-save" :disabled="letterboxdBusy">Save</button>
+        </form>
+        <p v-if="letterboxdNote" class="fc-caption" role="status">{{ letterboxdNote }}</p>
+        <p v-else-if="letterboxdStatus && letterboxdStatus.error" class="fc-caption" role="status">Letterboxd: {{ letterboxdStatus.error }}</p>
+        <p v-else-if="letterboxdStatus && letterboxdStatus.username" class="fc-caption">{{ reviewCountLine(letterboxdStatus.count) }} New ones arrive every six hours.</p>
+      </section>
+
       <div class="fc-remove">
         <button type="button" class="btn btn-outline-danger btn-sm" @click="unfriend">Remove friend</button>
       </div>
@@ -254,6 +282,8 @@ import { compareWithFriend, CRITERIA } from '../assets/javascript/social.js';
 import { logScoreSettings } from '../assets/javascript/logScore.js';
 import { formatScore, formatScoreGap } from '../assets/javascript/formatScore.js';
 import { includeShortsSetting } from '../assets/javascript/shorts.js';
+import { friendLetterboxdStatus, normalizeLetterboxdUsername } from '../assets/javascript/friendReviews.js';
+import { syncFriendLetterboxdNow } from '../utils/letterboxdData.js';
 import { friendLibraryRows, filterFriendLibrary, filmsWithUnknownFacts, facetOptions, facetValueLabel, FACETS, SORTS } from '../assets/javascript/friendLibrary.js';
 
 const LIBRARY_PAGE = 40;
@@ -274,7 +304,10 @@ export default {
       libraryShown: LIBRARY_PAGE,
       openFacet: null,
       facets: FACETS,
-      sorts: SORTS
+      sorts: SORTS,
+      letterboxdDraft: '',
+      letterboxdBusy: false,
+      letterboxdNote: ''
     };
   },
   computed: {
@@ -285,6 +318,15 @@ export default {
     },
     friendKey () {
       return this.$route.params.friendKey;
+    },
+    typedLetterboxd () {
+      return this.$store.state.settings?.friendLetterboxd?.[this.friendKey] || '';
+    },
+    letterboxdStatus () {
+      return friendLetterboxdStatus(this.$store.state.friendLetterboxd, this.friendKey);
+    },
+    linkedFromAccount () {
+      return Boolean(!this.typedLetterboxd && this.letterboxdStatus?.source === 'account' && this.letterboxdStatus.username);
     },
     profile () {
       // Native friend or a friend on another app — same shape either way.
@@ -367,6 +409,8 @@ export default {
     }
   },
   created () {
+    this.letterboxdDraft = this.typedLetterboxd;
+    this.$store.dispatch('ensureFriendLetterboxd');
     this.$store.dispatch('attachSocialListeners');
     if (!this.profile) {
       this.$store.dispatch('fetchFriendProfiles');
@@ -374,6 +418,10 @@ export default {
     }
   },
   watch: {
+    friendKey () {
+      this.letterboxdDraft = this.typedLetterboxd;
+      this.letterboxdNote = '';
+    },
     libraryQuery () { this.restartLibraryList(); },
     libraryChips () { this.restartLibraryList(); },
     librarySort () { this.restartLibraryList(); }
@@ -479,6 +527,36 @@ export default {
       this.previewing = null;
       this.$store.commit('setMovieToRate', media);
       this.$router.push('/rate-movie');
+    },
+    reviewCountLine (count) {
+      if (!count) return 'No written reviews in their recent diary yet.';
+      return `${count} written ${count === 1 ? 'review' : 'reviews'} so far.`;
+    },
+    async saveLetterboxd () {
+      const typed = this.letterboxdDraft.trim();
+      const username = typed ? normalizeLetterboxdUsername(typed) : null;
+      if (typed && !username) {
+        this.letterboxdNote = "That doesn't look like a Letterboxd username.";
+        return;
+      }
+      this.letterboxdDraft = username || '';
+      this.letterboxdBusy = true;
+      this.letterboxdNote = 'Saved. Checking Letterboxd…';
+      try {
+        await this.$store.dispatch('writeDurably', { path: `settings/friendLetterboxd/${this.friendKey}`, value: username });
+        if (this.$store.state.isOnline === false) {
+          this.letterboxdNote = 'Saved. Their reviews come in once you are back online.';
+          return;
+        }
+        await syncFriendLetterboxdNow();
+        await this.$store.dispatch('ensureFriendLetterboxd', { force: true });
+        this.letterboxdNote = '';
+      } catch (error) {
+        console.warn('Friend Letterboxd check failed:', error?.message);
+        this.letterboxdNote = 'Saved. Their reviews will arrive within six hours.';
+      } finally {
+        this.letterboxdBusy = false;
+      }
     },
     unfriend () {
       this.$store.dispatch('removeFriend', this.friendKey);
@@ -765,6 +843,27 @@ export default {
 
 /* Same height as the other scroll list; the box itself is the scroller. */
 .fc-library-list { margin-top: 0.25rem; overscroll-behavior: contain; }
+
+.fc-letterboxd-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.fc-letterboxd-input { flex: 1 1 auto; min-width: 0; }
+
+.fc-letterboxd-save {
+  background: rgba(255, 128, 0, 0.12);
+  border: 1px solid #ff8000; /* Letterboxd's orange */
+  border-radius: 6px;
+  color: #fff;
+  flex: 0 0 auto;
+  margin-bottom: 0.5rem;
+  min-height: 38px;
+  padding: 0 1rem;
+
+  &:active { background: rgba(255, 128, 0, 0.3); }
+  &:disabled { opacity: 0.6; }
+}
 
 .fc-remove {
   display: flex;

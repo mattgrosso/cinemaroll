@@ -993,6 +993,12 @@ exports.handler = async (event, context) => {
         });
         return response(200, { count: synced.count, films });
       }
+      // Friends' written reviews, now, after a username is typed on a
+      // friend's page (the sweep does the same every six hours).
+      if (path === '/letterboxd/friends') {
+        const friends = await letterboxd.syncFriends({ topKey, db: letterboxdDb, now, deadline: now + 22000, margin: 3000, log: console.log });
+        return response(200, friends);
+      }
       if (path === '/letterboxd/film') {
         let body = {};
         try { body = JSON.parse(event.body || '{}'); } catch { body = {}; }

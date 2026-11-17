@@ -205,6 +205,95 @@ const libraryTmdbIds = (movieLog) => {
   return [...ids];
 };
 
+// --- friends' reviews (2026-11-17) --------------------------------------------
+//
+// Matt: "I have their star ratings from their app, but ... is there any way to
+// get their actual written reviews". Friends' own letterboxd branches are
+// private, so the sweep copies what a friend has PUBLISHED on Letterboxd into
+// the reader's own account, `<topKey>/letterboxd/friends/<friendKey>`:
+//   { username, source: 'account' | 'typed', syncedAt, error?, reviews: { <tmdbId>: { <reviewId>: {...} } } }
+// Only entries with words; no stars (the club line already shows theirs) and
+// no publish time (a friend who shares at the end of the day doesn't want the
+// hour known; the watched DAY is on their public diary anyway).
+
+// "letterboxd.com/Name/", "@name" or "name" -> "name"; null when it can't be one.
+const normalizeLetterboxdUsername = (text) => {
+  let value = String(text || '').trim();
+  const fromUrl = /letterboxd\.com\/([^/?#\s]+)/i.exec(value);
+  if (fromUrl) value = fromUrl[1];
+  value = value.replace(/^@/, '').toLowerCase();
+  return /^[a-z0-9_]{1,40}$/.test(value) ? value : null;
+};
+
+const friendReview = (entry) => {
+  const review = String(entry?.review || '').trim();
+  if (!review) return null;
+  const value = {
+    review,
+    spoilers: entry.spoilers || null,
+    watchedDate: entry.watchedDate || null,
+    rewatch: entry.rewatch || null,
+    url: entry.url || null
+  };
+  for (const key of Object.keys(value)) if (value[key] === null) delete value[key];
+  return value;
+};
+
+// Parsed feed items -> { "<tmdbId>/<reviewId>": review }, words only.
+const friendReviewsFromItems = (items) => {
+  const out = {};
+  for (const item of items || []) {
+    const value = friendReview(item);
+    if (value && item.tmdbId && item.reviewId) out[`${item.tmdbId}/${item.reviewId}`] = value;
+  }
+  return out;
+};
+
+// A Cinema Roll friend's own synced node (feed + CSV history) -> the same map,
+// so linking a friend who connected their account brings their back catalogue
+// once, not just the feed's last ~50 entries.
+const friendReviewsFromNode = (node) => {
+  const out = {};
+  for (const [tmdbId, entries] of Object.entries(node || {})) {
+    if (!/^\d+$/.test(tmdbId) || !entries || typeof entries !== 'object') continue;
+    for (const [reviewId, entry] of Object.entries(entries)) {
+      const value = friendReview(entry);
+      if (value) out[`${tmdbId}/${reviewId}`] = value;
+    }
+  }
+  return out;
+};
+
+// Whose feeds to read for one account. Mutual Cinema Roll friends use the
+// username they connected themselves unless the reader typed one for them;
+// friends on other apps (settings/externalFriends) only ever have a typed one.
+// A typed name for someone no longer a friend is ignored.
+const friendLetterboxdTargets = ({ mutualKeys = [], externalIds = [], typed = {}, ownUsernames = {} }) => {
+  const targets = [];
+  for (const friendKey of mutualKeys) {
+    const typedName = normalizeLetterboxdUsername(typed[friendKey]);
+    const own = normalizeLetterboxdUsername(ownUsernames[friendKey]);
+    if (typedName) targets.push({ friendKey, username: typedName, source: 'typed' });
+    else if (own) targets.push({ friendKey, username: own, source: 'account' });
+  }
+  for (const friendKey of externalIds) {
+    const typedName = normalizeLetterboxdUsername(typed[friendKey]);
+    if (typedName) targets.push({ friendKey, username: typedName, source: 'typed' });
+  }
+  return targets;
+};
+
+// { "a/b": v } -> { a: { b: v } }, for a whole-node PUT.
+const nestReviews = (flat) => {
+  const out = {};
+  for (const [path, value] of Object.entries(flat || {})) {
+    const [tmdbId, reviewId] = path.split('/');
+    out[tmdbId] = out[tmdbId] || {};
+    out[tmdbId][reviewId] = value;
+  }
+  return out;
+};
+
 module.exports = {
   parseRss,
   reviewsUpdate,
@@ -214,5 +303,10 @@ module.exports = {
   libraryTmdbIds,
   reviewFromDescription,
   FILM_MAX_AGE_MS,
-  FILM_RETRY_MS
+  FILM_RETRY_MS,
+  normalizeLetterboxdUsername,
+  friendReviewsFromItems,
+  friendReviewsFromNode,
+  friendLetterboxdTargets,
+  nestReviews
 };

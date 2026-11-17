@@ -925,3 +925,19 @@ They do now (`appState.screenPin`, with `atTap`: the scene the moment the button
 touched, before the report's keyboard). `bugReports.test.js` guards it. The fix to
 screenPin itself waits for the next report from a ridden-up button, and then goes
 into every app's copy.
+
+## Friends' written Letterboxd reviews (2026-11-17)
+
+Report: "Is there any way to get my friends reviews from letterbox? I have their star
+ratings from their app, but ... is there any way to get their actual written reviews".
+Plan approved as proposed. The constraint that shaped it: a friend's `letterboxd/`
+branch is private to them, and opening it to friends would have meant a rules change
+and a deploy of the rules. Instead the Letterboxd sweep, which already reads each
+member's public feed, reads friends' feeds too and keeps the reviews with words in the
+READER's account. A Cinema Roll friend who connected Letterboxd is picked up with no
+setup (and brings their CSV-imported history once); anyone else — including Movie Log
+friends — gets a username typed on their Film Club page. The movie page's club lines
+gain a "Review" toggle, styled like "Show your review(s)", and a friend who reviewed a
+film without rating it in their app now gets a line too. Limit: Letterboxd's feed holds
+only the last ~50 diary entries, so older reviews of a typed-in friend never arrive —
+the member's review pages are behind Cloudflare's challenge, and no headless browser.

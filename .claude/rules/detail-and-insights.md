@@ -209,6 +209,23 @@ robots.txt and fetched with an identifying User-Agent and a pause between reques
   `/films/reviews/` pages — all behind Cloudflare's JS challenge. Don't add a headless
   browser for them.
 
+**Friends' written reviews (2026-11-17, report: "is there any way to get their actual
+written reviews").** Friends' `letterboxd/` branches are private, so the sweep
+(`syncFriends` in `aws-lambda/letterboxd.js`, pure half in `letterboxdSync.js`) copies
+their PUBLIC feeds into the reader's own `<topKey>/letterboxd/friends/<friendKey>`
+(`{ username, source, syncedAt, error?, reviews }`, words only — no stars, no publish
+time, for the end-of-day sharers) — database rules unchanged. Whose feed: a mutual
+Cinema Roll friend's own `settings/letterboxdUsername` (`source: 'account'`; the first
+sighting also copies their synced CSV history, once), unless the reader typed one on the
+friend's page (`settings/friendLetterboxd/<friendKey>`, `'typed'`) — the only way for a
+Movie Log friend. Every account, every six hours; a feed is fetched once per sweep
+(`feeds` map, shared with the member's own sync); `POST /letterboxd/friends` runs it now
+after a save on `FriendComparison`. The client loads the node once per session
+(`ensureFriendLetterboxd`, snapshot `friendLetterboxd`); `clubLinesFor`
+(`friendReviews.js`) gives the movie page's club lines a "Review" toggle and adds friends
+who only reviewed it. Reach: the feed's last ~50 diary entries, so reviews arrive from
+linking on; older ones are behind the bot wall (above).
+
 The sweep stops after three consecutive failures and never retries hot. The history
 older than the feed arrives through Letterboxd's own CSV export (Settings → Import &
 Export → reviews.csv), parsed and matched by title+year in `letterboxdFormat.js` and

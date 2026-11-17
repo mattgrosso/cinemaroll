@@ -5,6 +5,7 @@
 //
 //   <topKey>/letterboxd/reviews/<tmdbId>/<reviewId>   my own diary entries
 //   <topKey>/letterboxd/sync                          when the feed was last read
+//   <topKey>/letterboxd/friends/<friendKey>           friends' reviews (friendReviews.js)
 //   letterboxdFilms/<tmdbId>                          the film's public stats
 import { getDatabase, ref, get, update } from 'firebase/database';
 import { postToLetterboxd } from './letterboxdRequest.js';
@@ -80,6 +81,13 @@ export function letterboxdFilm (tmdbId, { online = true, now = Date.now() } = {}
 
 export async function syncLetterboxdNow () {
   const { data } = await postToLetterboxd('/sync');
+  return data;
+}
+
+// Friends' reviews now, after a username is typed on a friend's page; the
+// sweep does the same every six hours. Resolves to the Lambda's summary.
+export async function syncFriendLetterboxdNow () {
+  const { data } = await postToLetterboxd('/friends');
   return data;
 }
 

@@ -143,3 +143,46 @@ describe('FriendsWhoSaw', () => {
     expect(options.maxAgeMs).toBeGreaterThan(0)
   })
 })
+
+// 2026-11-17: "is there any way to get their actual written reviews". The
+// sweep copies friends' Letterboxd reviews into my own letterboxd/friends.
+describe('FriendsWhoSaw, Letterboxd reviews', () => {
+  const withReviews = (friends, friendLetterboxd) => {
+    const store = mockStore(friends)
+    store.state.friendLetterboxd = friendLetterboxd
+    return store
+  }
+  const benReview = {
+    ben: { username: 'benfilms', source: 'typed', reviews: { 42: { 'review-1': { review: 'Loved the ending.\nTwice.', watchedDate: '2026-11-01', url: 'https://letterboxd.com/benfilms/film/x/', spoilers: true } } } }
+  }
+
+  it('gives a friend with a review a Review toggle that opens their text', async () => {
+    const wrapper = mountPills([rated('Ben', 9.2, 4), rated('Ada', 8, 3)], {}, withReviews([rated('Ben', 9.2, 4), rated('Ada', 8, 3)], benReview))
+    const toggles = wrapper.findAll('.friend-review-toggle')
+    expect(toggles).toHaveLength(1)
+    expect(wrapper.find('.friend-review-pane').exists()).toBe(false)
+    await toggles[0].trigger('click')
+    const pane = wrapper.find('.friend-review-pane')
+    expect(pane.find('.friend-review-name').text()).toBe('Ben')
+    expect(pane.find('.friend-review-text').text()).toContain('Loved the ending.')
+    expect(pane.find('a.friend-review-date').attributes('href')).toBe('https://letterboxd.com/benfilms/film/x/')
+    expect(pane.find('.friend-review-flag').text()).toBe('Spoilers')
+    expect(toggles[0].attributes('aria-expanded')).toBe('true')
+    await toggles[0].trigger('click')
+    expect(wrapper.find('.friend-review-pane').exists()).toBe(false)
+  })
+
+  it('lists a friend who only reviewed it on Letterboxd, with no score', () => {
+    const ben = { key: 'ben', name: 'Ben', profile: { name: 'Ben', ratings: {} } }
+    const wrapper = mountPills([ben], {}, withReviews([ben], benReview))
+    expect(wrapper.find('.friend-name').text()).toBe('Ben')
+    expect(wrapper.find('.friend-score').exists()).toBe(false)
+    expect(wrapper.find('.friend-review-toggle').exists()).toBe(true)
+  })
+
+  it('asks the store for friends\' reviews', () => {
+    const store = mockStore([rated('Ben', 9.2, 4)])
+    mountPills([rated('Ben', 9.2, 4)], {}, store)
+    expect(store.dispatch).toHaveBeenCalledWith('ensureFriendLetterboxd')
+  })
+})

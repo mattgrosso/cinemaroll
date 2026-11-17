@@ -3,7 +3,7 @@ import { getAuth } from 'firebase/auth';
 
 // The Letterboxd routes live in the newsletter Lambda (aws-lambda/letterboxd.js
 // explains why), behind the same Firebase-ID-token gate as every other
-// endpoint. `route` is '/sync' or '/film'.
+// endpoint. `route` is '/sync', '/film' or '/friends'.
 export async function postToLetterboxd (route, payload = {}) {
   const user = getAuth().currentUser;
   if (!user) {

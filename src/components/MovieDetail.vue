@@ -775,7 +775,7 @@ import { formatScore } from '../assets/javascript/formatScore.js';
 import axios from 'axios';
 import ToggleableRating from './ToggleableRating.vue';
 import FriendsWhoSaw, { FRIEND_PROFILE_MAX_AGE_MS } from './FriendsWhoSaw.vue';
-import { friendsWhoRated } from '../assets/javascript/friendViewings.js';
+import { clubLinesFor } from '../assets/javascript/friendReviews.js';
 import DetailSection from './DetailSection.vue';
 import { criticRoleLabel, criticByline, criticsSummary } from '../assets/javascript/criticReviews.js';
 import { fetchCriticReviews, criticErrorMessage } from '../utils/criticReviewsRequest.js';
@@ -899,6 +899,9 @@ export default {
       immediate: true,
       handler () {
         this.$store.dispatch('ensureClubData', { maxAgeMs: FRIEND_PROFILE_MAX_AGE_MS });
+        // Here too, not only in FriendsWhoSaw: a friend who only REVIEWED the
+        // film is what makes the club panel (and FriendsWhoSaw) mount.
+        this.$store.dispatch('ensureFriendLetterboxd');
       }
     },
     '$route.params.tmdbId': {
@@ -1419,8 +1422,9 @@ export default {
       return [this.$route?.params?.tmdbId || '', me, ...native, ...external].join('|');
     },
     // Only to decide whether the panel shows; FriendsWhoSaw draws the lines.
+    // Friends with a Letterboxd review of it count too (friendReviews.js).
     clubFriends () {
-      return friendsWhoRated(this.$store.getters.filmClubFriends, this.movie && this.movie.id);
+      return clubLinesFor(this.$store.getters.filmClubFriends, this.$store.state.friendLetterboxd, this.movie && this.movie.id);
     },
     bestSinceSpan () {
       if (!this.lastHigherRatedMovie) return '';
