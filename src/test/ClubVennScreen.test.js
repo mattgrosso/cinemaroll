@@ -122,7 +122,7 @@ describe('ClubVenn (a section of Club Charts, fed by the page picker)', () => {
     expect(wrapper.vm.selectedSignature).toBe(null);
   });
 
-  it('navigates only for films in your own library; the rest get a hat ribbon', async () => {
+  it('navigates only for films in your own library; the rest get a hat ribbon and the preview sheet', async () => {
     const { wrapper, push } = factory({
       profiles: PROFILES,
       myEntries: [movie(1, 'Heat', 8)],
@@ -135,6 +135,10 @@ describe('ClubVenn (a section of Club Charts, fed by the page picker)', () => {
     expect(wrapper.findComponent({ name: 'SendToHat' }).exists()).toBe(true);
     await wrapper.find('.cv-poster-card').trigger('click');
     expect(push).not.toHaveBeenCalled();
+    // A film only a friend rated opens the preview sheet (2026-11-17); it
+    // used to do nothing at all.
+    expect(wrapper.vm.previewing).toMatchObject({ id: 3, title: 'Ronin', poster_path: '/3.jpg' });
+    wrapper.vm.previewing = null;
 
     wrapper.vm.selectRegion('you|seth|nat');
     await wrapper.vm.$nextTick();

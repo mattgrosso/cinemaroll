@@ -740,6 +740,13 @@ device last published an older format (Home stores `cinemaRoll.social.lastPublis
 page says "N more films might fit, but <name>'s app hasn't sent their genre yet"
 (`.fc-library-unknown`). Each row I've rated reads "You: 7.85" (`.fc-library-mine`).
 **Taps open my page only for films I have (report, 2026-11-14):** MovieDetail is a lookup in MY library and bounces any other id to `/film-club`, so tapping one of a friend's films I hadn't rated "just took me back to the friends list". Every friend-film tap on this page (library rows, recently watched, loves-these, top shelf) goes through `openFilm`: in my library (`allMediaAsArray` ids) → `/movie/<id>`, otherwise the `MoviePreview` sheet, as the Film Club feed does. Never point a friend's film straight at `/movie/<id>`.
+**The Film Club screen too (report, 2026-11-17: "Tapping the option flickers instead of
+bringing you to the page of the film"):** its Awards and Taste rows (club awards, awards
+compared, club favorites, most divisive, club vs the crowd) pushed `/movie/<id>` for any
+film, so a film you hadn't rated flickered back to `/film-club`. They go through `goToTitle`
+→ `openFeedItem` now (awards maps key films by STRING id, so it takes `Number()` first).
+Club Charts' and the Venn's posters open their own `MoviePreview` for unrated films; they
+used to do nothing. `FilmClubScreen.test.js`, `ClubVennScreen.test.js`, `ClubChartsPicker.test.js`.
 
 ## Friend requests outside Film Club (2026-10-09)
 

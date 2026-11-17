@@ -90,4 +90,18 @@ describe('ClubCharts people picker', () => {
 
     expect(wrapper.vm.colorFor('nat')).toBe(before);
   });
+
+  // 2026-11-17: a film you haven't rated did nothing on tap (MovieDetail
+  // would bounce it back to Film Club); it opens the preview sheet now.
+  it('opens your page for a film you have rated and the preview sheet for one you have not', () => {
+    const wrapper = factory();
+    wrapper.vm.openMovie({ id: 1, title: 'Heat', poster: '/1.jpg' });
+    expect(wrapper.vm.$router.push).toHaveBeenCalledWith('/movie/1');
+    expect(wrapper.vm.previewing).toBeNull();
+
+    wrapper.vm.$router.push.mockClear();
+    wrapper.vm.openMovie({ id: 3, title: 'Ronin', poster: '/3.jpg' });
+    expect(wrapper.vm.$router.push).not.toHaveBeenCalled();
+    expect(wrapper.vm.previewing).toMatchObject({ id: 3, title: 'Ronin', poster_path: '/3.jpg' });
+  });
 });

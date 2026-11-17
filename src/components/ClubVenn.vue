@@ -104,6 +104,7 @@
         <p v-else class="cv-hint">Tap a region — in the picture or the list — to see what's in it.</p>
       </template>
     </template>
+    <MoviePreview :movie="previewing" @close="previewing = null" @rate="rateFromPreview"/>
   </div>
 </template>
 
@@ -116,6 +117,7 @@
 // component keeps the lens, the diagram, and the region lists. All set math
 // and geometry is pure in clubVenn.js.
 import SendToHat from './SendToHat.vue';
+import MoviePreview from './MoviePreview.vue';
 import { getRating } from '../assets/javascript/GetRating.js';
 import { formatScore } from '../assets/javascript/formatScore.js';
 import { memberColors, YOU_COLOR } from '../assets/javascript/clubCharts.js';
@@ -131,7 +133,7 @@ import {
 
 export default {
   name: 'ClubVenn',
-  components: { SendToHat },
+  components: { SendToHat, MoviePreview },
   props: {
     // Ordered member keys from the page-wide picker ('you' plus friend
     // keys). The Venn draws the first three, in pick order.
@@ -141,7 +143,8 @@ export default {
     return {
       lenses: LENSES,
       lens: 'all',
-      selectedSignature: null
+      selectedSignature: null,
+      previewing: null
     };
   },
   computed: {
@@ -255,10 +258,21 @@ export default {
       return `https://image.tmdb.org/t/p/w185${path}`;
     },
     openMovie (movie) {
-      // Same rule as Club Charts: MovieDetail is a local lookup, so don't
-      // send anyone to an empty page for a film only a friend has rated.
-      if (!this.inMyLibrary(movie)) return;
-      this.$router.push(`/movie/${movie.id}`);
+      // Same rule as Club Charts: MovieDetail is a local lookup (it bounces
+      // any other id back to /film-club), so a film only a friend has rated
+      // opens the preview sheet. It used to do nothing at all (2026-11-17).
+      if (movie?.id == null) return;
+      if (this.inMyLibrary(movie)) {
+        this.$router.push(`/movie/${movie.id}`);
+        return;
+      }
+      const source = this.hatMovieFor(movie);
+      this.previewing = { id: source.id, title: source.title, poster_path: source.poster_path, source };
+    },
+    rateFromPreview (media) {
+      this.previewing = null;
+      this.$store.commit('setMovieToRate', media);
+      this.$router.push('/rate-movie');
     },
     hatMovieFor (movie) {
       return { id: movie.id, title: movie.t, poster_path: movie.p, release_date: '', overview: '' };

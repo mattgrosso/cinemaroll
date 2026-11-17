@@ -214,7 +214,7 @@
             class="cc-poster-card"
             role="button"
             :aria-label="moment.title"
-            @click="openMovie(moment.id)"
+            @click="openMovie(moment)"
           >
             <img v-if="moment.poster" :src="poster(moment.poster)" :alt="moment.title" class="cc-poster">
             <div v-else class="cc-poster cc-poster-blank">{{ moment.title }}</div>
@@ -235,7 +235,7 @@
             class="cc-poster-card"
             role="button"
             :aria-label="moment.title"
-            @click="openMovie(moment.id)"
+            @click="openMovie(moment)"
           >
             <img v-if="moment.poster" :src="poster(moment.poster)" :alt="moment.title" class="cc-poster">
             <div v-else class="cc-poster cc-poster-blank">{{ moment.title }}</div>
@@ -312,6 +312,7 @@
       </section>
     </template>
     </template>
+    <MoviePreview :movie="previewing" @close="previewing = null" @rate="rateFromPreview"/>
   </div>
 </template>
 <script>
@@ -321,6 +322,7 @@ import { afterFrame, SKELETON_FIRST } from '../utils/nextFrame.js';
 import { memoByIdentity } from '../utils/memoByIdentity.js';
 import SendToHat from './SendToHat.vue';
 import ClubVenn from './ClubVenn.vue';
+import MoviePreview from './MoviePreview.vue';
 import { getRating } from '../assets/javascript/GetRating.js';
 import { CRITERIA } from '../assets/javascript/social.js';
 import { formatScore, formatScoreGap } from '../assets/javascript/formatScore.js';
@@ -346,7 +348,7 @@ const joinedMemo = memoByIdentity((entries, profiles) => buildOverlaps(entries, 
 
 export default {
   name: 'ClubCharts',
-  components: { SkeletonBlock, BackLink, SendToHat, ClubVenn },
+  components: { SkeletonBlock, BackLink, SendToHat, ClubVenn, MoviePreview },
   props: {
     embedded: { type: Boolean, default: false }
   },
@@ -356,7 +358,8 @@ export default {
       // Ordered picker state: 'you' plus friend keys, in pick order (the
       // Venn draws the first three). Seeded to everyone once profiles load.
       selectedKeys: [],
-      seeded: false
+      seeded: false,
+      previewing: null
     };
   },
   computed: {
@@ -491,11 +494,22 @@ export default {
     poster (path) {
       return `https://image.tmdb.org/t/p/w185${path}`;
     },
-    openMovie (id) {
-      // Same rule as the Film Club feed: MovieDetail is a local lookup, so
-      // don't send anyone to an empty page.
-      if (!this.joined.mine.has(id)) return;
-      this.$router.push(`/movie/${id}`);
+    openMovie (moment) {
+      // Same rule as the Film Club feed: MovieDetail is a local lookup (it
+      // bounces any other id back to /film-club), so a film you haven't rated
+      // opens the preview sheet. It used to do nothing at all (2026-11-17).
+      if (moment?.id == null) return;
+      if (this.joined.mine.has(moment.id)) {
+        this.$router.push(`/movie/${moment.id}`);
+        return;
+      }
+      const source = this.hatMovieFor(moment);
+      this.previewing = { id: source.id, title: source.title, poster_path: source.poster_path, source };
+    },
+    rateFromPreview (media) {
+      this.previewing = null;
+      this.$store.commit('setMovieToRate', media);
+      this.$router.push('/rate-movie');
     },
     hatMovieFor (spot) {
       return { id: spot.id, title: spot.title, poster_path: spot.poster, release_date: '', overview: '' };

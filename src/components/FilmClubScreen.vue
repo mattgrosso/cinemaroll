@@ -258,7 +258,7 @@
         <div ref="awardList" class="cs-award-list">
         <div v-for="category in awardsForYear" :key="category.label" class="cs-award-category" :class="{ agreed: category.agreed }">
           <span class="cs-award-label">{{ category.label }}<span v-if="category.agreed" class="cs-award-agreed">agreed</span></span>
-          <div v-for="row in category.choices" :key="`${row.movieId}-${row.name || ''}`" class="cs-award-row" :class="{ shared: row.who.length > 1 }" @click="goToTitle({ id: row.movieId, t: row.title })">
+          <div v-for="row in category.choices" :key="`${row.movieId}-${row.name || ''}`" class="cs-award-row" :class="{ shared: row.who.length > 1 }" @click="goToTitle({ id: row.movieId, t: row.title, p: row.poster })">
             <img v-if="row.poster" :src="poster(row.poster)" :alt="row.title || ''" class="cs-award-thumb">
             <span v-else class="cs-award-thumb cs-award-thumb--blank"></span>
             <span class="cs-award-text">
@@ -290,7 +290,7 @@
         </div>
 
         <h3 class="cs-compare-heading">Most decorated films</h3>
-        <div v-for="film in awardsCompared.films" :key="`df-${film.movieId}`" class="cs-award-row" @click="goToTitle({ id: film.movieId, t: film.title })">
+        <div v-for="film in awardsCompared.films" :key="`df-${film.movieId}`" class="cs-award-row" @click="goToTitle({ id: film.movieId, t: film.title, p: film.poster })">
           <img v-if="film.poster" :src="poster(film.poster)" :alt="film.title || ''" class="cs-award-thumb">
           <span v-else class="cs-award-thumb cs-award-thumb--blank"></span>
           <span class="cs-award-text">
@@ -301,7 +301,7 @@
         </div>
 
         <h3 v-if="awardsCompared.people.length" class="cs-compare-heading">Most honoured people</h3>
-        <div v-for="person in awardsCompared.people" :key="`hp-${person.name}`" class="cs-award-row" @click="person.films[0] && goToTitle({ id: person.films[0].movieId, t: person.films[0].title })">
+        <div v-for="person in awardsCompared.people" :key="`hp-${person.name}`" class="cs-award-row" @click="person.films[0] && goToTitle({ id: person.films[0].movieId, t: person.films[0].title, p: person.films[0].poster })">
           <span class="cs-award-text">
             <span class="cs-award-title">{{ person.name }}</span>
             <span class="cs-award-for">{{ person.films.map((f) => f.title).filter(Boolean).join(', ') }}</span>
@@ -883,8 +883,17 @@ export default {
       const score = item.r != null ? ` (${formatScore(item.r)})` : '';
       return `${item.friendName} watched this${score}`;
     },
+    // Every Awards and Taste row lands here. MovieDetail is a lookup in YOUR
+    // library and bounces any other id straight back to /film-club, so a
+    // friend's film you haven't rated used to flicker and stay put (report,
+    // 2026-11-17: "Tapping the option flickers instead of bringing you to the
+    // page of the film"). Same rule as the feed: your page, or the preview
+    // sheet. Ids from awards maps are Firebase keys (strings), the library's
+    // are numbers, hence Number().
     goToTitle (movie) {
-      this.goToMovie(movie.id);
+      const id = Number(movie?.id);
+      if (movie?.id == null || !Number.isFinite(id)) return;
+      this.openFeedItem({ id, t: movie.t, p: movie.p });
     },
     setTab (key) {
       if (key === this.tab) return;

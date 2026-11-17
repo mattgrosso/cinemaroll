@@ -512,3 +512,49 @@ describe('FilmClubScreen — "Has anybody seen…"', () => {
     });
   });
 });
+
+// Report, 2026-11-17: "Tapping the option flickers instead of bringing you to
+// the page of the film." The Awards and Taste rows pushed /movie/<id> for any
+// film; MovieDetail bounces a film you haven't rated straight back to
+// /film-club, so the tap flickered and stayed put. A reporter with two films
+// in their library hit it on nearly every row.
+describe('FilmClubScreen Taste and Awards rows (films you have not rated)', () => {
+  const twoFriends = {
+    seth: { name: 'Seth', counts: { titles: 2 }, ratings: { 1: { r: 9, t: 'Heat', p: '/1.jpg' }, 7: { r: 9, t: 'Unseen By Me', p: '/7.jpg' } } },
+    nat: { name: 'Nat', counts: { titles: 1 }, ratings: { 7: { r: 3, t: 'Unseen By Me', p: '/7.jpg' } } }
+  };
+
+  function tasteScreen () {
+    return factory({ profiles: twoFriends, myEntries: [myMovie(1, 'Heat', 8)], tab: 'taste' });
+  }
+
+  function rowFor (wrapper, title) {
+    return wrapper.findAll('.cs-consensus-row').find((row) => row.text().includes(title));
+  }
+
+  it('opens the preview sheet, not the movie page, for a club favourite you have not rated', async () => {
+    const wrapper = tasteScreen();
+    await rowFor(wrapper, 'Unseen By Me').trigger('click');
+
+    expect(wrapper.vm.$router.push).not.toHaveBeenCalled();
+    expect(wrapper.vm.previewing).toMatchObject({ id: 7, title: 'Unseen By Me', poster_path: '/7.jpg' });
+  });
+
+  it('still opens your own page for a club favourite you have rated', async () => {
+    const wrapper = tasteScreen();
+    await rowFor(wrapper, 'Heat').trigger('click');
+
+    expect(wrapper.vm.$router.push).toHaveBeenCalledWith('/movie/1');
+    expect(wrapper.vm.previewing).toBeNull();
+  });
+
+  // Awards maps are Firebase-keyed, so their movie ids arrive as strings.
+  it('treats a string id from an awards map as the same film as your library\'s number', () => {
+    const wrapper = tasteScreen();
+    wrapper.vm.goToTitle({ id: '1', t: 'Heat' });
+    expect(wrapper.vm.$router.push).toHaveBeenCalledWith('/movie/1');
+
+    wrapper.vm.goToTitle({ id: '7', t: 'Unseen By Me', p: '/7.jpg' });
+    expect(wrapper.vm.previewing).toMatchObject({ id: 7, title: 'Unseen By Me' });
+  });
+});
