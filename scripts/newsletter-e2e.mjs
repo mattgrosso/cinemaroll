@@ -22,7 +22,7 @@ import { loadEnvLocal } from './loadEnvLocal.mjs';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getDatabase } from 'firebase-admin/database';
-import { buildNewsletterProfile } from '../src/assets/javascript/newsletterProfile.js';
+import { buildNewsletterProfile, buildPeopleList } from '../src/assets/javascript/newsletterProfile.js';
 
 loadEnvLocal();
 
@@ -130,6 +130,9 @@ console.log(`  loved genres:  ${profile.genres.loved.map((g) => g.name).join(', 
 
 // 2. Hand it to the tester, and opt the tester in.
 await db.ref(`${TESTER_KEY}/newsletter/profile`).set(profile);
+// The performer spotlight reads the people list (2026-11-20), so the tester
+// gets the source's too.
+await db.ref(`${TESTER_KEY}/newsletter/people`).set(buildPeopleList({ entries, getRating: makeScorer(settings) }));
 await db.ref(`${TESTER_KEY}/newsletter/prefs`).update({ newsletter: true });
 console.log(`\nProfile written to ${TESTER_KEY}, opted in.`);
 
