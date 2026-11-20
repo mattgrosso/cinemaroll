@@ -647,7 +647,7 @@ function previouslyIssued (issues = {}, currentWeekKey = null, now = Date.now())
 // as stop_reason rather than as a syntax error.
 const ISSUE_TOOL = {
   name: 'publish_issue',
-  description: "Publish this week's issue: the intro, the picks and the feature.",
+  description: "Publish this week's issue: the intro, the picks, the feature and whichever other stories the brief has facts for.",
   input_schema: {
     type: 'object',
     properties: {
@@ -670,9 +670,41 @@ const ISSUE_TOOL = {
           id: { type: 'integer', description: "The chosen feature film's id from the brief." },
           headline: { type: 'string', description: 'A title for the piece.' },
           hook: { type: 'string', description: 'One sentence on why this film, this week.' },
-          article: { type: 'string', description: '500-700 words. Paragraphs separated by blank lines.' }
+          article: { type: 'string', description: '500-700 words. Paragraphs separated by blank lines.' },
+          pullQuote: { type: 'string', description: 'One striking sentence copied WORD FOR WORD from your own article, 30-200 characters, set large beside the piece. Never new text.' }
         },
         required: ['id', 'headline', 'hook', 'article']
+      },
+      // The magazine's other stories (2026-11-20). Each is written only when
+      // its facts are in the brief; a section without facts is left out.
+      spotlight: {
+        type: 'object',
+        description: 'The performer spotlight. Only if the brief has a "spotlight".',
+        properties: {
+          headline: { type: 'string' },
+          hook: { type: 'string', description: 'One sentence: why this performer, this week.' },
+          article: { type: 'string', description: '300-450 words. Paragraphs separated by blank lines.' },
+          pullQuote: { type: 'string', description: 'One sentence copied WORD FOR WORD from this article, 30-200 characters.' }
+        },
+        required: ['headline', 'hook', 'article']
+      },
+      boxOffice: {
+        type: 'object',
+        description: 'The box office story. Only if the brief has a "boxOffice".',
+        properties: {
+          headline: { type: 'string' },
+          article: { type: 'string', description: '200-300 words. Paragraphs separated by blank lines.' }
+        },
+        required: ['headline', 'article']
+      },
+      fromYourLog: {
+        type: 'object',
+        description: "A short column on the reader's own week. Only if the brief has a \"yourWeek\".",
+        properties: {
+          headline: { type: 'string' },
+          article: { type: 'string', description: '120-220 words. Paragraphs separated by blank lines.' }
+        },
+        required: ['headline', 'article']
       }
     },
     required: ['intro', 'picks', 'feature']

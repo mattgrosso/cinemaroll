@@ -53,6 +53,11 @@ import { buildNewsletterProfile, buildPeopleList } from "../assets/javascript/ne
 import { includeShortsSetting } from "../assets/javascript/shorts.js";
 const PEOPLE_PUBLISH_EVERY_MS = 6 * 60 * 60 * 1000;
 let peoplePublishedAt = 0;
+// The newsletter profile now carries the reader's last fortnight (its "From
+// your log" column, 2026-11-20), so it is refreshed after library syncs too,
+// not only on opt-in and rebuild; at most every three hours.
+const PROFILE_REFRESH_EVERY_MS = 3 * 60 * 60 * 1000;
+let profileRefreshedAt = 0;
 import { postToNewsletter } from "../utils/newsletterRequest.js";
 import { fetchArchiveIndex } from "../utils/boxOfficeHistoryRequest.js";
 import { announceFriendRequest , closeNotificationsWhere } from "../utils/push.js";
@@ -3613,6 +3618,12 @@ export default createStore({
       } catch (error) {
         console.error('Failed to publish the newsletter profile:', error);
       }
+    },
+    async refreshNewsletterProfile (context) {
+      if (!context.state.newsletterPrefs?.newsletter) return;
+      if (Date.now() - profileRefreshedAt < PROFILE_REFRESH_EVERY_MS) return;
+      profileRefreshedAt = Date.now();
+      await context.dispatch('publishNewsletterProfile');
     },
     // devMode only (the screen gates the button). Rebuilds THIS week's issue
     // now rather than waiting for Friday — Matt's testing switch.

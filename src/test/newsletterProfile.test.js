@@ -197,3 +197,38 @@ describe('buildPeopleList', () => {
     expect(PEOPLE_N.directors).toBeGreaterThan(TOP_N);
   });
 });
+
+// The newsletter's "From your log" column (2026-11-20) reads the reader's own
+// fortnight from the profile, so the profile has to carry it.
+describe('buildNewsletterProfile: recentLog', () => {
+  const now = Date.parse('2026-11-20T12:00:00Z');
+  const entry = (id, title, score, dates, medium = 'Theater') => ({
+    score,
+    ratings: dates.map((date) => ({ date, medium })),
+    movie: { id, title, release_date: '2026-03-01', crew: [{ name: 'A. Director', job: 'Director' }], genres: [] }
+  });
+
+  it('lists every viewing of the last fortnight, rewatches marked, oldest first', () => {
+    const profile = buildNewsletterProfile({
+      entries: [
+        entry(1, 'Old', 7, ['2026-10-01T20:00:00Z']),
+        entry(2, 'Twice', 8.456, ['2025-01-01T20:00:00Z', '2026-11-18T20:00:00Z']),
+        entry(3, 'Fresh', 6.1, ['2026-11-12T20:00:00Z'], 'Netflix')
+      ],
+      getRating,
+      now
+    });
+    expect(profile.recentLog.map((r) => r.title)).toEqual(['Fresh', 'Twice']);
+    expect(profile.recentLog[1]).toMatchObject({ id: 2, score: 8.46, rewatch: true, medium: 'Theater', director: 'A. Director', year: 2026 });
+    expect(profile.recentLog[0].rewatch).toBe(false);
+  });
+
+  it('counts every viewing this year', () => {
+    const profile = buildNewsletterProfile({
+      entries: [entry(2, 'Twice', 8, ['2025-01-01T20:00:00Z', '2026-11-18T20:00:00Z']), entry(3, 'Fresh', 6, ['2026-02-12T20:00:00Z'])],
+      getRating,
+      now
+    });
+    expect(profile.loggedThisYear).toBe(2);
+  });
+});

@@ -54,7 +54,22 @@
 
       <p v-if="issue.intro" class="newsletter-intro">{{ issue.intro }}</p>
 
-      <section v-if="picks.length" class="newsletter-section">
+      <!-- "In this issue", once there is more than one story to find. -->
+      <nav v-if="contents.length > 1" class="newsletter-contents" aria-label="In this issue">
+        <p class="newsletter-contents-title">In this issue</p>
+        <button
+          v-for="item in contents"
+          :key="item.id"
+          type="button"
+          class="newsletter-contents-item"
+          @click="jumpTo(item.id)"
+        >
+          <span class="newsletter-contents-kicker">{{ item.kicker }}</span>
+          <span class="newsletter-contents-headline">{{ item.headline }}</span>
+        </button>
+      </nav>
+
+      <section v-if="picks.length" id="newsletter-picks" class="newsletter-section">
         <h2 class="newsletter-section-title">New this week</h2>
         <div v-for="pick in picks" :key="pick.id" class="newsletter-pick">
           <img
@@ -103,26 +118,109 @@
         </div>
       </section>
 
-      <section v-if="issue.feature" class="newsletter-section newsletter-feature">
-        <h2 class="newsletter-section-title">{{ featureTitle }}</h2>
-        <!-- "How did you pick that movie?" (Matt, 2026-09-20) should be
-             answerable on the page, not only in the prose — so the occasion
-             is stated as a fact, from the same data that did the choosing. -->
-        <p class="newsletter-feature-why">{{ featureWhy }}</p>
-        <h3 class="newsletter-feature-headline">{{ issue.feature.headline }}</h3>
-        <p v-if="issue.feature.hook" class="newsletter-hook">{{ issue.feature.hook }}</p>
-        <p v-if="issue.feature.letterboxdRating != null || issue.feature.yourReviewDate" class="newsletter-feature-crowd">
-          <span v-if="issue.feature.letterboxdRating != null">★ {{ issue.feature.letterboxdRating.toFixed(2) }} on Letterboxd</span>
-          <span v-if="issue.feature.letterboxdRating != null && issue.feature.yourReviewDate"> · </span>
-          <span v-if="issue.feature.yourReviewDate">you reviewed it {{ reviewDateLabel(issue.feature.yourReviewDate) }}</span>
-        </p>
-        <p v-for="(para, index) in featureParagraphs" :key="index" class="newsletter-para">
-          {{ para }}
-        </p>
+      <!-- The feature, set as a magazine piece (2026-11-20). -->
+      <NewsletterStory
+        v-if="issue.feature"
+        id="newsletter-feature"
+        class="newsletter-feature"
+        :kicker="featureTitle"
+        :headline="issue.feature.headline"
+        :hook="issue.feature.hook"
+        :article="issue.feature.article"
+        :hero="issue.feature.hero"
+        :hero-caption="filmCaption(issue.feature.title, issue.feature.year)"
+        :stills="issue.feature.stills || []"
+        :still-caption="filmCaption(issue.feature.title, issue.feature.year)"
+        :pull-quote="issue.feature.pullQuote"
+      >
+        <template #before>
+          <!-- "How did you pick that movie?" (Matt, 2026-09-20) should be
+               answerable on the page, not only in the prose — so the occasion
+               is stated as a fact, from the same data that did the choosing. -->
+          <p class="newsletter-feature-why">{{ featureWhy }}</p>
+        </template>
+        <template #meta>
+          <p v-if="issue.feature.letterboxdRating != null || issue.feature.yourReviewDate" class="newsletter-feature-crowd">
+            <span v-if="issue.feature.letterboxdRating != null">★ {{ issue.feature.letterboxdRating.toFixed(2) }} on Letterboxd</span>
+            <span v-if="issue.feature.letterboxdRating != null && issue.feature.yourReviewDate"> · </span>
+            <span v-if="issue.feature.yourReviewDate">you reviewed it {{ reviewDateLabel(issue.feature.yourReviewDate) }}</span>
+          </p>
+        </template>
         <div v-if="issue.feature.tmdb" class="newsletter-feature-actions">
           <SendToHat :movies="issue.feature.tmdb" :note="hatNote" label="Add to a hat"/>
         </div>
-      </section>
+      </NewsletterStory>
+
+      <!-- A performer the reader rates (2026-11-20). -->
+      <NewsletterStory
+        v-if="spotlight"
+        id="newsletter-spotlight"
+        class="newsletter-spotlight"
+        kicker="Spotlight"
+        :headline="spotlight.headline"
+        :hook="spotlight.hook"
+        :article="spotlight.article"
+        :hero="spotlight.hero"
+        :hero-caption="spotlight.heroTitle ? `${spotlight.name} in ${spotlight.heroTitle}` : ''"
+        :stills="spotlight.stills || []"
+        :still-caption="spotlight.heroTitle ? `${spotlight.heroTitle}` : ''"
+        :pull-quote="spotlight.pullQuote"
+        :headshot="spotlight.headshot"
+        :headshot-alt="spotlight.name"
+      >
+        <template #before>
+          <p class="newsletter-feature-why">{{ spotlightWhy }}</p>
+        </template>
+      </NewsletterStory>
+
+      <!-- Last weekend's box office, from Box Office History (2026-11-20). -->
+      <NewsletterStory
+        v-if="boxOffice"
+        id="newsletter-box-office"
+        class="newsletter-box-office"
+        kicker="The box office"
+        :headline="boxOffice.headline"
+        :article="boxOffice.article"
+        :hero="boxOffice.hero"
+        :hero-caption="boxOffice.heroTitle ? `${boxOffice.heroTitle}, number one last weekend` : ''"
+      >
+        <template #before>
+          <p class="newsletter-feature-why">{{ boxOffice.weekend }}</p>
+        </template>
+        <ol v-if="boxOffice.chart && boxOffice.chart.length" class="newsletter-chart">
+          <li v-for="row in boxOffice.chart" :key="row.rank" class="newsletter-chart-row">
+            <span class="newsletter-chart-rank">{{ row.rank }}</span>
+            <span class="newsletter-chart-title">
+              <router-link v-if="row.tmdbId" :to="`/movie/${row.tmdbId}`">{{ row.title }}</router-link>
+              <template v-else>{{ row.title }}</template>
+            </span>
+            <span class="newsletter-chart-gross">{{ money(row.gross) }}</span>
+            <span class="newsletter-chart-change">{{ row.isNew ? 'New' : percent(row.change) }}</span>
+          </li>
+        </ol>
+        <p v-if="boxOffice.url" class="newsletter-source">
+          <a :href="boxOffice.url" target="_blank" rel="noopener">The full chart on Box Office History</a>
+        </p>
+      </NewsletterStory>
+
+      <!-- The reader's own week (2026-11-20). -->
+      <NewsletterStory
+        v-if="fromYourLog"
+        id="newsletter-your-log"
+        class="newsletter-your-log"
+        kicker="From your log"
+        :headline="fromYourLog.headline"
+        :article="fromYourLog.article"
+        :hero="fromYourLog.hero"
+        :hero-caption="fromYourLog.heroTitle || ''"
+      >
+        <ul v-if="fromYourLog.viewings && fromYourLog.viewings.length" class="newsletter-viewings">
+          <li v-for="(v, index) in fromYourLog.viewings" :key="index">
+            <span>{{ v.title }}<span v-if="v.year" class="newsletter-year">{{ v.year }}</span></span>
+            <span class="newsletter-viewing-score">{{ score(v.score) }}</span>
+          </li>
+        </ul>
+      </NewsletterStory>
 
       <footer class="newsletter-footer">
         <button class="btn btn-sm newsletter-optout" @click="toggleOptIn">
@@ -165,11 +263,14 @@
 //
 // The one thing it may do is ask for a REBUILD, and only in devMode.
 import SendToHat from './SendToHat.vue';
+import NewsletterStory from './NewsletterStory.vue';
 import { posterUrl } from '../assets/javascript/offlinePosterCache.js';
+import { formatScore } from '../assets/javascript/formatScore.js';
+import { formatMoneyShort } from '../assets/javascript/formatMoney.js';
 
 export default {
   name: 'NewsletterScreen',
-  components: { SendToHat },
+  components: { SendToHat, NewsletterStory },
   data () {
     return {
       rebuilding: false,
@@ -195,14 +296,36 @@ export default {
     picks () {
       return this.issue?.picks || [];
     },
-    // Paragraphs come across as one string with blank lines between them —
-    // rendered as separate <p>s rather than with v-html, which would hand a
-    // model's output the ability to inject markup.
-    featureParagraphs () {
-      return String(this.issue?.feature?.article || '')
-        .split(/\n\s*\n/)
-        .map((p) => p.trim())
-        .filter(Boolean);
+    // The magazine's other stories (2026-11-20). Absent on older issues, and
+    // on any week whose facts weren't there; each section shows only if written.
+    spotlight () {
+      return this.issue?.spotlight?.article ? this.issue.spotlight : null;
+    },
+    boxOffice () {
+      return this.issue?.boxOffice?.article ? this.issue.boxOffice : null;
+    },
+    fromYourLog () {
+      return this.issue?.fromYourLog?.article ? this.issue.fromYourLog : null;
+    },
+    contents () {
+      const items = [];
+      if (this.picks.length) items.push({ id: 'newsletter-picks', kicker: 'New this week', headline: this.picks.map((p) => p.title).slice(0, 3).join(', ') });
+      if (this.issue?.feature) items.push({ id: 'newsletter-feature', kicker: 'The feature', headline: this.issue.feature.headline || this.issue.feature.title });
+      if (this.spotlight) items.push({ id: 'newsletter-spotlight', kicker: 'Spotlight', headline: this.spotlight.headline || this.spotlight.name });
+      if (this.boxOffice) items.push({ id: 'newsletter-box-office', kicker: 'The box office', headline: this.boxOffice.headline });
+      if (this.fromYourLog) items.push({ id: 'newsletter-your-log', kicker: 'From your log', headline: this.fromYourLog.headline });
+      return items;
+    },
+    // Why this performer, from the data that chose them.
+    spotlightWhy () {
+      const s = this.spotlight;
+      if (!s) return '';
+      const parts = [];
+      if (s.reason === 'new-release' && s.inRelease) parts.push(`in ${s.inRelease.title}, new this week`);
+      if (s.reason === 'birthday' && s.years) parts.push(`turns ${s.years} this week`);
+      if (s.reason === 'death' && s.years) parts.push(`died ${s.years} years ago this week`);
+      if (s.readerFilms) parts.push(`you've rated ${s.readerFilms} of their films`);
+      return [s.name, ...parts].join(' \u00b7 ');
     },
     // "X turns 40" only works for an anniversary; a film that is simply back
     // in circulation has no number.
@@ -259,6 +382,26 @@ export default {
     this.$store.dispatch('loadPushState')?.catch?.(() => {});
   },
   methods: {
+    filmCaption (title, year) {
+      return title ? `${title}${year ? ` (${year})` : ''}` : '';
+    },
+    score (value) {
+      return formatScore(value);
+    },
+    money (value) {
+      return formatMoneyShort(value);
+    },
+    percent (value) {
+      if (!Number.isFinite(value)) return '';
+      return `${value > 0 ? '+' : ''}${Math.round(value)}%`;
+    },
+    // Scrolls to a story, clear of the header. An explicit behavior, or the
+    // inherited smooth scroll makes it a silent no-op (vue-ui.md).
+    jumpTo (id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 70, behavior: 'smooth' });
+    },
     reviewDateLabel (value) {
       const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
       if (!match) return '';
@@ -334,9 +477,10 @@ export default {
 }
 
 .newsletter-kicker {
-  font-size: 1.6rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+  font-family: 'Iowan Old Style', 'Palatino', 'Charter', 'Georgia', 'Times New Roman', serif;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   margin: 0;
 }
 
@@ -492,13 +636,6 @@ export default {
   margin-top: 1.25rem;
 }
 
-.newsletter-feature-headline {
-  font-size: 1.35rem;
-  font-weight: 800;
-  line-height: 1.25;
-  margin: 0.4rem 0 0.5rem;
-}
-
 .newsletter-score--crowd { color: #00e054; }
 
 .newsletter-feature-crowd {
@@ -507,17 +644,122 @@ export default {
   margin: -0.25rem 0 0.75rem;
 }
 
-.newsletter-hook {
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 0.95rem;
-  font-style: italic;
-  margin-bottom: 1.1rem;
+// "In this issue": a magazine's contents box.
+.newsletter-contents {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 0.3rem;
+  margin: 0 0 2.25rem;
+  padding: 0.75rem 0.9rem 0.4rem;
 }
 
-.newsletter-para {
-  font-size: 1rem;
-  line-height: 1.65;
-  margin-bottom: 1rem;
+.newsletter-contents-title {
+  color: #f0d68a;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin: 0 0 0.35rem;
+  text-transform: uppercase;
+}
+
+.newsletter-contents-item {
+  background: none;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: white;
+  display: block;
+  min-height: 44px;
+  padding: 0.45rem 0;
+  text-align: left;
+  width: 100%;
+}
+
+.newsletter-contents-item:first-of-type { border-top: 0; }
+.newsletter-contents-item:active { background: rgba(255, 255, 255, 0.08); }
+
+.newsletter-contents-kicker {
+  color: #ccc;
+  display: block;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.newsletter-contents-headline {
+  display: block;
+  font-family: 'Iowan Old Style', 'Palatino', 'Charter', 'Georgia', 'Times New Roman', serif;
+  font-size: 1.02rem;
+  line-height: 1.3;
+}
+
+// The box office story's top five.
+.newsletter-chart {
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  list-style: none;
+  margin: 1.25rem 0 0.5rem;
+  padding: 0;
+}
+
+.newsletter-chart-row {
+  align-items: baseline;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  font-size: 0.9rem;
+  gap: 0.6rem;
+  padding: 0.45rem 0;
+}
+
+.newsletter-chart-rank {
+  color: #f0d68a;
+  font-weight: 700;
+  width: 1.2rem;
+}
+
+.newsletter-chart-title {
+  flex: 1 1 auto;
+  min-width: 0;
+
+  a { color: white; text-decoration: none; }
+  a:active { color: #9ec5fe; }
+}
+
+.newsletter-chart-gross { font-variant-numeric: tabular-nums; }
+
+.newsletter-chart-change {
+  color: #ccc;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  width: 3.2rem;
+}
+
+.newsletter-source {
+  font-size: 0.82rem;
+  margin: 0.5rem 0 0;
+
+  a { color: #9ec5fe; }
+}
+
+// The reader's own week, under the column.
+.newsletter-viewings {
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  list-style: none;
+  margin: 1.25rem 0 0;
+  padding: 0;
+
+  li {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    font-size: 0.9rem;
+    gap: 0.6rem;
+    justify-content: space-between;
+    padding: 0.45rem 0;
+  }
+}
+
+.newsletter-viewing-score {
+  color: #f0d68a;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
 }
 
 .newsletter-footer {

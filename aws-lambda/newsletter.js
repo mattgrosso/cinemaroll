@@ -67,8 +67,13 @@ const { buildClubFeed } = require('./clubPaper.js');
 const { fitNotification } = require('./pushFit.js');
 const {
   discoverReleases, enrichCandidate, anniversaryPool, trendingThisWeek, filmCard,
-  personWithSignatureFilm, olderNamesake
+  personWithSignatureFilm, olderNamesake,
+  filmImages, personByName, personCredits, tmdbByTitle, boxOffice
 } = require('./newsletterSources.js');
+const {
+  storyPictures, verifiedPullQuote, previouslySpotlighted, chooseSpotlight, spotlightBrief,
+  spotlightFilm, latestWeekend, boxOfficeBrief, logColumnBrief, logColumnFilm
+} = require('./newsletterMagazine.js');
 
 const FIREBASE_PROJECT_ID = 'movie-log-8c4d5';
 const DATABASE_URL = 'https://movie-log-8c4d5-default-rtdb.firebaseio.com';
@@ -365,19 +370,54 @@ the ONE quotation you are permitted: quote a line of it verbatim, in
 quotation marks, attributed to the reader ("you wrote at the time..."), and
 let the article answer or build on it. Never paraphrase it as a critic's view.
 
-Answer by calling ${ISSUE_TOOL.name} — never with prose.
+${brief.spotlight ? `THE PERFORMER SPOTLIGHT (write "spotlight")
+An actor the reader rates highly, and the occasion. "reason" is one of:
+"new-release" (they are in one of this week's new releases, named in
+"inThisWeeksRelease"), "birthday" ("years" is the age they turn this week),
+"death" ("years" since they died, this week), or "favourite" (no occasion:
+simply someone whose work this reader keeps rating well; say so plainly, do not
+invent an occasion). "readerRatesThem" is how many of their films the reader
+has rated and the average score (out of 10); "readerHasSeen" marks the films
+already in the reader's library. Write a short profile: the shape of the
+career, what they bring to a film, and a way in for the films the reader
+hasn't seen yet. "biography" is background from a community-written source:
+use it for facts, never quote it.
+${JSON.stringify(brief.spotlight, null, 1)}
+
+` : ''}${brief.boxOffice ? `THE BOX OFFICE (write "boxOffice")
+Last weekend's domestic chart from Box Office History, plus the same weekend in
+past years. Every dollar figure and percentage you mention must be one of these
+(round it the way a trade paper would: "$19.0 million"). What's the story of
+the weekend: what opened, what held, what fell, and how it compares with the
+same weekend in history. "readerHasSeen" marks films the reader has logged.
+${JSON.stringify(brief.boxOffice, null, 1)}
+
+` : ''}${brief.yourWeek ? `THE READER'S OWN WEEK (write "fromYourLog")
+What the reader logged in the last seven days. "score" is their score out of
+10 (their library averages "libraryAverage"); "where" is how they watched it.
+A short, warm, observant column addressed to them: what the week added up to,
+a connection between the films if there is a real one, the high point. Use
+only these facts about their viewing.
+${JSON.stringify(brief.yourWeek, null, 1)}
+
+` : ''}Answer by calling ${ISSUE_TOOL.name} — never with prose.
 
 - "intro": one or two sentences opening the issue. Warm, dry, not breathless.
 - "picks": 4-6, best first, each { "id": the film's id from the brief, "why": 2-3 sentences on why THIS reader specifically might want it. Name the concrete reason — a director they rate, a genre they reach for, a resemblance to something they recently loved. If the honest answer is that it is simply very well reviewed, say that instead of inventing a personal connection. }
   If fewer than four releases are worth recommending, return fewer — a short honest issue beats a padded one.
-- "feature": { "id": the chosen film's id, "headline": a title for the piece, "hook": one sentence on why this film, this week — name the actual occasion (the anniversary, or that it is back in circulation), "article": 500-700 words. Its making, how it landed at the time, what it influenced, why it still matters. Paragraphs separated by blank lines. }`;
+- "feature": { "id": the chosen film's id, "headline": a title for the piece, "hook": one sentence on why this film, this week — name the actual occasion (the anniversary, or that it is back in circulation), "article": 500-700 words. Its making, how it landed at the time, what it influenced, why it still matters. Paragraphs separated by blank lines. "pullQuote": one sentence copied word for word from the article. }
+- "spotlight", "boxOffice", "fromYourLog": only for the sections whose facts appear above; leave the others out entirely.
+- Every article's "pullQuote" (where asked for) is set in large type beside the piece, so it must be copied exactly from that article, never written fresh.`;
 
   // A forced tool call, not JSON in prose — see ISSUE_TOOL in
   // newsletterCompose.js for the Friday it cost. 700 words of article plus
   // six blurbs is ~2,500 tokens of answer, so 4,000 left little margin;
   // a reply that still runs out of room gets one retry with twice the room
   // rather than publishing half an issue.
-  for (const maxTokens of [8000, 16000]) {
+  // Four stories now, not one (2026-11-20): ~4,000 words of answer at most,
+  // so 12,000 with one retry at 20,000. Kept under ~21,000, past which the
+  // SDK refuses a non-streaming call outright.
+  for (const maxTokens of [12000, 20000]) {
     const message = await client.messages.create({
       model: MODEL,
       max_tokens: maxTokens,
@@ -430,6 +470,86 @@ const myReviewsFor = async (topKey, ids) => {
     result[id] = { review: String(entries[0].review).slice(0, 1200), watchedDate: entries[0].watchedDate || null };
   }
   return result;
+};
+
+// The performer spotlight's facts and pictures (newsletterMagazine.js
+// chooses). The reader's actors come from newsletter/people, the longer list
+// the app publishes for Newsprinted; TMDB records are fetched only when no
+// actor they rate is in this week's releases.
+const spotlightFor = async ({ topKey, tmdbKey, shortlist, enriched, pastIssues, seenIds, now }) => {
+  const actors = ((await dbGet(`${topKey}/newsletter/people`).catch(() => null))?.actors || []).slice(0, 40);
+  if (!actors.length) return null;
+  const recent = previouslySpotlighted(pastIssues, weekKey(now), now);
+  const releaseCasts = shortlist.slice(0, 10).map((r) => ({ id: r.id, title: r.title, year: r.year, cast: enriched.get(r.id)?.cast || [] }));
+  let choice = chooseSpotlight({ actors, releaseCasts, recent, now });
+  if (!choice) {
+    const people = (await Promise.all(actors.slice(0, 15).map((a) => personByName(tmdbKey, a.name)))).filter(Boolean);
+    choice = chooseSpotlight({ actors, people, recent, now });
+  }
+  if (!choice) return null;
+  const details = (await personByName(tmdbKey, choice.name)) || {};
+  if (details.id && details.id !== choice.personId) return null;   // a namesake; skip rather than profile the wrong person
+  const credits = await personCredits(tmdbKey, choice.personId);
+  const film = spotlightFilm(credits, seenIds);
+  const pictures = film ? storyPictures(film.backdrop_path, await filmImages(tmdbKey, film.id), { stills: 1 }) : { hero: null, stills: [] };
+  return {
+    brief: spotlightBrief(choice, { details, credits, seenIds }),
+    story: {
+      personId: choice.personId,
+      name: choice.name,
+      reason: choice.reason,
+      years: choice.years ?? null,
+      inRelease: choice.inRelease || null,
+      readerFilms: choice.reader?.films ?? null,
+      readerAverage: choice.reader?.average ?? null,
+      headshot: details.profile_path || null,
+      hero: pictures.hero,
+      heroTitle: film ? film.title : null,
+      heroId: film ? film.id : null,
+      stills: pictures.stills
+    }
+  };
+};
+
+// Last weekend's box office, from Box Office History (Matt's own archive).
+const boxOfficeFor = async ({ tmdbKey, seenIds, now }) => {
+  const year = new Date(now).getUTCFullYear();
+  let weekend = latestWeekend(await boxOffice(`calendar/${year}.json`), now);
+  if (!weekend) weekend = latestWeekend(await boxOffice(`calendar/${year - 1}.json`), now);
+  if (!weekend) return null;
+  // A chart more than ten days old is not "last weekend" (the archive lags).
+  if (now - Date.parse(`${weekend.e}T23:59:59Z`) > 10 * 86400000) return null;
+  const chart = await boxOffice(`weekends/${weekend.k}.json`);
+  if (!chart?.rows?.length) return null;
+  const pastCalendars = {};
+  for (const ago of [1, 10, 25]) {
+    const cal = await boxOffice(`calendar/${chart.year - ago}.json`);
+    if (cal) pastCalendars[ago] = cal;
+  }
+  const rows = chart.rows.filter((r) => r?.title).sort((a, b) => a.rank - b.rank).slice(0, 10);
+  const matched = await Promise.all(rows.map((r) => tmdbByTitle(tmdbKey, r.title, chart.year)));
+  const seenRows = new Set(rows.filter((r, i) => matched[i] && seenIds.has(matched[i].id)).map((r) => r.id));
+  const brief = boxOfficeBrief({ chart, pastCalendars, seenRows });
+  if (!brief) return null;
+  const leader = matched[0];
+  return {
+    brief,
+    story: {
+      weekend: brief.weekend,
+      hero: leader?.backdrop_path || null,
+      heroTitle: leader ? rows[0].title : null,
+      heroId: leader ? leader.id : null,
+      chart: rows.slice(0, 5).map((r, i) => ({
+        rank: r.rank,
+        title: r.title,
+        gross: r.gross,
+        change: Number.isFinite(r.change) ? r.change : null,
+        isNew: r.lastRank === 'new',
+        tmdbId: matched[i]?.id || null
+      })),
+      url: `https://boxofficehistory.com/weekend/${encodeURIComponent(chart.key)}`
+    }
+  };
 };
 
 const buildIssue = async ({ topKey, profile, pastIssues = null, now, alwaysOn }) => {
@@ -502,6 +622,19 @@ const buildIssue = async ({ topKey, profile, pastIssues = null, now, alwaysOn })
   const myReviews = await myReviewsFor(topKey, features.map((f) => f.id));
 
   const brief = issueBrief({ shortlist, features, profile, weekOf: weekKey(now), letterboxd: letterboxdStats, myReviews });
+
+  // The magazine's other stories (2026-11-20). Each is facts-or-nothing and
+  // none can cost the issue: a failure leaves its section out.
+  const seenIds = new Set(profile?.seenIds || []);
+  const spotlightFacts = await spotlightFor({ topKey, tmdbKey, shortlist, enriched, pastIssues, seenIds, now })
+    .catch((error) => { console.error('Spotlight failed:', error.message); return null; });
+  const boxOfficeFacts = await boxOfficeFor({ tmdbKey, seenIds, now })
+    .catch((error) => { console.error('Box office failed:', error.message); return null; });
+  const yourWeek = logColumnBrief(profile, now);
+  if (spotlightFacts) brief.spotlight = spotlightFacts.brief;
+  if (boxOfficeFacts) brief.boxOffice = boxOfficeFacts.brief;
+  if (yourWeek) brief.yourWeek = yourWeek;
+
   const written = await writeIssue({ brief, profile });
 
   // Re-attach the facts to the model's judgement by id. The model returns an
@@ -575,9 +708,45 @@ const buildIssue = async ({ topKey, profile, pastIssues = null, now, alwaysOn })
         letterboxdCount: letterboxdStats[chosen.id]?.ratingCount ?? null,
         yourReview: myReviews[chosen.id]?.review || null,
         yourReviewDate: myReviews[chosen.id]?.watchedDate || null,
+        pullQuote: verifiedPullQuote(written.feature.article, written.feature.pullQuote),
+        // The pictures: the film's own backdrop at the top and its best
+        // textless stills between paragraphs, chosen here, never by the model.
+        ...storyPictures(featureCard?.backdrop_path || null, await filmImages(tmdbKey, chosen.id), { stills: 3 }),
         tmdb: featureCard
       }
     : null;
+
+  const spotlight = spotlightFacts && written.spotlight?.article
+    ? {
+        ...spotlightFacts.story,
+        headline: String(written.spotlight.headline || '').trim(),
+        hook: String(written.spotlight.hook || '').trim(),
+        article: String(written.spotlight.article || '').trim(),
+        pullQuote: verifiedPullQuote(written.spotlight.article, written.spotlight.pullQuote)
+      }
+    : null;
+
+  const boxOfficeStory = boxOfficeFacts && written.boxOffice?.article
+    ? {
+        ...boxOfficeFacts.story,
+        headline: String(written.boxOffice.headline || '').trim(),
+        article: String(written.boxOffice.article || '').trim()
+      }
+    : null;
+
+  let fromYourLog = null;
+  if (yourWeek && written.fromYourLog?.article) {
+    const top = logColumnFilm(profile, now);
+    const card = top?.id ? await filmCard(tmdbKey, top.id).catch(() => null) : null;
+    fromYourLog = {
+      headline: String(written.fromYourLog.headline || '').trim(),
+      article: String(written.fromYourLog.article || '').trim(),
+      hero: card?.backdrop_path || null,
+      heroTitle: card ? card.title : null,
+      heroId: card ? card.id : null,
+      viewings: yourWeek.viewings.map((v) => ({ title: v.title, year: v.year, score: v.score }))
+    };
+  }
 
   return {
     weekKey: weekKey(now),
@@ -586,6 +755,9 @@ const buildIssue = async ({ topKey, profile, pastIssues = null, now, alwaysOn })
     intro: String(written.intro || '').trim(),
     picks,
     feature,
+    spotlight,
+    boxOffice: boxOfficeStory,
+    fromYourLog,
     counts: {
       considered: candidates.length,
       shortlisted: shortlist.length,
@@ -626,12 +798,18 @@ const paperFeed = async (topKey) => {
   const issues = Object.values(node.issues || {}).filter((i) => i && !i.testing).sort((a, b) => (b.builtAt || 0) - (a.builtAt || 0)).slice(0, 4);
   for (const issue of issues) {
     const picks = (issue.picks || []).map((p) => `<h3>${escapeHtml(p.headline || p.title)}</h3>${p.hook ? `<p><i>${escapeHtml(p.hook)}</i></p>` : ''}${String(p.article || '').split(/\n\s*\n/).filter(Boolean).map((para) => `<p>${escapeHtml(para)}</p>`).join('')}`).join('');
-    const feature = issue.feature ? `<h3>${escapeHtml(issue.feature.headline || issue.feature.title)}</h3>${String(issue.feature.article || issue.feature.body || '').split(/\n\s*\n/).filter(Boolean).map((para) => `<p>${escapeHtml(para)}</p>`).join('')}` : '';
+    // The magazine's stories, pictures included (2026-11-20).
+    const img = (path, size = 'w1280') => (path ? `<p><img src="https://image.tmdb.org/t/p/${size}${escapeHtml(path)}" alt=""></p>` : '');
+    const paras = (text) => String(text || '').split(/\n\s*\n/).filter(Boolean).map((para) => `<p>${escapeHtml(para)}</p>`).join('');
+    const story = (s, kicker) => (s && s.article ? `<h2>${escapeHtml(kicker)}</h2>${img(s.hero)}<h3>${escapeHtml(s.headline || s.title || '')}</h3>${s.hook ? `<p><i>${escapeHtml(s.hook)}</i></p>` : ''}${paras(s.article)}${(s.stills || []).map((p) => img(p)).join('')}` : '');
+    const feature = issue.feature ? story({ ...issue.feature, body: undefined, article: issue.feature.article || issue.feature.body }, 'The feature') : '';
+    const extras = story(issue.spotlight, 'Spotlight') + story(issue.boxOffice, 'The box office') + story(issue.fromYourLog, 'From your log');
     items.push({
       id: `issue-${issue.weekKey}`,
       url: 'https://www.cinemaroll.org/newsletter',
       title: `This week in film: ${(issue.picks || []).map((p) => p.title).filter(Boolean).slice(0, 3).join(', ')}`,
-      content_html: `${issue.intro ? `<p>${escapeHtml(issue.intro)}</p>` : ''}${picks}${feature}`,
+      content_html: `${issue.intro ? `<p>${escapeHtml(issue.intro)}</p>` : ''}${picks}${feature}${extras}`,
+      image: issue.feature?.hero ? `https://image.tmdb.org/t/p/w1280${issue.feature.hero}` : undefined,
       date_published: new Date(issue.builtAt || Date.now()).toISOString()
     });
   }

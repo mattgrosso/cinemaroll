@@ -136,6 +136,53 @@ function recentHighs (entries, scoreOf, dateOf, limit = 10, now = Date.now()) {
     .filter((row) => row.title);
 }
 
+// The reader's own fortnight, for the newsletter's "From your log" column
+// (Matt, 2026-11-20: a fuller issue, "several articles"). Every viewing in the
+// window, a rewatch included, newest last. Fourteen days rather than seven so
+// a profile published on Wednesday still covers Friday's week; the Lambda
+// cuts it to the issue's own seven.
+const RECENT_LOG_DAYS = 14;
+
+function recentLog (entries, scoreOf, now = Date.now()) {
+  const since = now - RECENT_LOG_DAYS * 86400000;
+  const rows = [];
+  for (const entry of entries) {
+    const movie = entry?.movie;
+    if (!movie?.title) continue;
+    const viewings = (Array.isArray(entry?.ratings) ? entry.ratings : [])
+      .map((r) => ({ at: new Date(r?.date ?? NaN).getTime(), medium: r?.medium || null }))
+      .filter((v) => Number.isFinite(v.at))
+      .sort((a, b) => a.at - b.at);
+    viewings.forEach((v, i) => {
+      if (v.at <= since || v.at > now + 86400000) return;
+      const score = scoreOf(entry);
+      rows.push({
+        id: typeof movie.id === 'number' ? movie.id : null,
+        title: movie.title,
+        year: parseInt(String(movie.release_date || '').slice(0, 4), 10) || null,
+        score: score == null ? null : Number(score.toFixed(2)),
+        date: new Date(v.at).toISOString(),
+        medium: v.medium,
+        rewatch: i > 0,
+        director: (movie.crew || []).find((c) => c?.job === 'Director')?.name || null
+      });
+    });
+  }
+  return rows.sort((a, b) => a.date.localeCompare(b.date)).slice(-20);
+}
+
+function loggedThisYear (entries, now = Date.now()) {
+  const year = new Date(now).getFullYear();
+  let count = 0;
+  for (const entry of entries) {
+    for (const r of Array.isArray(entry?.ratings) ? entry.ratings : []) {
+      const at = new Date(r?.date ?? NaN);
+      if (Number.isFinite(at.getTime()) && at.getFullYear() === year) count += 1;
+    }
+  }
+  return count;
+}
+
 /**
  * The whole profile, published to `{topKey}/newsletter/profile`.
  *
@@ -166,7 +213,9 @@ export function buildNewsletterProfile ({ entries: all = [], getRating, now = Da
     libraryCount: entries.length,
     libraryAverage: Number(libraryAverage.toFixed(2)),
     genres: rankGenres(entries, scoreOf, libraryAverage),
-    recentHighs: recentHighs(entries, scoreOf, dateOf, 10, now)
+    recentHighs: recentHighs(entries, scoreOf, dateOf, 10, now),
+    recentLog: recentLog(entries, scoreOf, now),
+    loggedThisYear: loggedThisYear(entries, now)
   };
 
   for (const role of CREW_ROLES) {
@@ -241,4 +290,4 @@ export function buildPeopleList ({ entries: all = [], getRating, now = Date.now(
   return people;
 }
 
-export { MIN_FILMS, TOP_N, RECENT_WINDOW_MS, PEOPLE_N, shrunkAverage };
+export { MIN_FILMS, TOP_N, RECENT_WINDOW_MS, RECENT_LOG_DAYS, PEOPLE_N, shrunkAverage };

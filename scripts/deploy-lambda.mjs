@@ -75,6 +75,7 @@ export const LAMBDAS = {
       'aws-lambda/newsletter.js': 'index.js',
       'aws-lambda/newsletterCompose.js': 'newsletterCompose.js',
       'aws-lambda/newsletterSources.js': 'newsletterSources.js',
+      'aws-lambda/newsletterMagazine.js': 'newsletterMagazine.js',
       'aws-lambda/cinemaScore.js': 'cinemaScore.js',
       'aws-lambda/letterboxd.js': 'letterboxd.js',
       'aws-lambda/letterboxdSync.js': 'letterboxdSync.js',

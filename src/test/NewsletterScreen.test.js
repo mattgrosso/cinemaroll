@@ -400,3 +400,50 @@ describe('NewsletterScreen — Letterboxd', () => {
     expect(wrapper.text()).toContain('No score yet');
   });
 });
+
+// The newsletter as a magazine (Matt, 2026-11-20): pictures, a pull quote,
+// and more than one story.
+describe('NewsletterScreen — the magazine', () => {
+  const longArticle = ['One.', 'Two is the line worth pulling out in big type.', 'Three.', 'Four.', 'Five.', 'Six.'].join('\n\n');
+  const magazine = () => issue({
+    feature: { ...issue().feature, article: longArticle, hero: '/hero.jpg', stills: ['/s1.jpg', '/s2.jpg'], pullQuote: 'Two is the line worth pulling out in big type.' },
+    spotlight: { personId: 3, name: 'Penélope Cruz', reason: 'birthday', years: 52, readerFilms: 4, headline: 'The volcano', hook: 'She turns 52.', article: 'A.\n\nB.', headshot: '/pc.jpg', hero: '/vb.jpg', heroTitle: 'Volver', stills: [] },
+    boxOffice: { weekend: 'November 13-15, 2026', headline: 'A Dickens of a weekend', article: 'It opened.', hero: '/eb.jpg', heroTitle: 'Ebenezer', chart: [{ rank: 1, title: 'Ebenezer', gross: 19012017, change: null, isNew: true, tmdbId: 77 }, { rank: 2, title: 'The Cat in the Hat', gross: 11300531, change: -43.5, isNew: false, tmdbId: null }], url: 'https://boxofficehistory.com/weekend/2026W46' },
+    fromYourLog: { headline: 'Your week', article: 'You went out twice.', hero: '/w.jpg', heroTitle: 'Better', viewings: [{ title: 'Better', year: 2026, score: 9.1 }] }
+  });
+
+  it('opens the feature on the film’s own picture, with stills and the pull quote inside', () => {
+    const feature = mountScreen({ state: { newsletterIssue: magazine() } }).find('.newsletter-feature');
+    expect(feature.find('.newsletter-hero img').attributes('src')).toBe('https://image.tmdb.org/t/p/w1280/hero.jpg');
+    expect(feature.findAll('.newsletter-still img').map((i) => i.attributes('src'))).toEqual([
+      'https://image.tmdb.org/t/p/w1280/s1.jpg', 'https://image.tmdb.org/t/p/w1280/s2.jpg'
+    ]);
+    expect(feature.find('.newsletter-pullquote').text()).toBe('Two is the line worth pulling out in big type.');
+    expect(feature.find('.newsletter-para--lead').text()).toBe('One.');
+  });
+
+  it('runs the spotlight, the box office and the reader’s own week, with a contents box', () => {
+    const wrapper = mountScreen({ state: { newsletterIssue: magazine() } });
+    expect(wrapper.find('.newsletter-spotlight .newsletter-headshot').attributes('src')).toBe('https://image.tmdb.org/t/p/w185/pc.jpg');
+    expect(wrapper.find('.newsletter-spotlight .newsletter-feature-why').text()).toBe('Penélope Cruz · turns 52 this week · you’ve rated 4 of their films'.replace('’', "'"));
+    const rows = wrapper.findAll('.newsletter-chart-row');
+    expect(rows[0].text()).toContain('New');
+    expect(rows[1].text()).toContain('-43%');
+    expect(wrapper.find('.newsletter-source a').attributes('href')).toBe('https://boxofficehistory.com/weekend/2026W46');
+    expect(wrapper.find('.newsletter-viewings').text()).toContain('9.10');
+    const contents = wrapper.findAll('.newsletter-contents-item').map((b) => b.text());
+    expect(contents).toHaveLength(5);
+    expect(contents[3]).toContain('A Dickens of a weekend');
+  });
+
+  // Older issues have none of it, and must read exactly as they did.
+  it('leaves out every new section, and the contents box, on an older issue', () => {
+    const wrapper = mountScreen({ state: { newsletterIssue: issue({ picks: [] }) } });
+    expect(wrapper.find('.newsletter-spotlight').exists()).toBe(false);
+    expect(wrapper.find('.newsletter-box-office').exists()).toBe(false);
+    expect(wrapper.find('.newsletter-your-log').exists()).toBe(false);
+    expect(wrapper.find('.newsletter-contents').exists()).toBe(false);
+    expect(wrapper.find('.newsletter-hero').exists()).toBe(false);
+    expect(wrapper.findAll('.newsletter-para')).toHaveLength(2);
+  });
+});

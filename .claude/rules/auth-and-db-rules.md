@@ -1008,6 +1008,27 @@ Infra (all `--profile personal`, us-east-1): Lambda `cinemaroll-newsletter`
 `cron(0 13 ? * FRI *)`. Env: `FIREBASE_SA`, `TMDB_API_KEY`, `OMDB_API_KEY`,
 `ANTHROPIC_API_KEY`, `VAPID_*`. Redeploy with `yarn deploy:newsletter` (`scripts/deploy-lambda.mjs newsletter`, the same checked deploy as push and ai; `--dry` to stop before the upload).
 
+**The issue is a magazine (2026-11-20, Matt: "look more like an article in a magazine ...
+some pictures", "several articles ... a performer or ... the box office").** Three more
+stories beside the picks and the feature, all in the ONE Opus call (max_tokens 12000, retry
+20000; keep under ~21000 or the SDK refuses a non-streaming call), each facts-or-nothing and
+optional in `ISSUE_TOOL`: `spotlight` (an actor from `newsletter/people` the reader rates:
+in one of this week's releases, else a birthday or round death anniversary this week, else
+a favourite not featured in 26 weeks), `boxOffice` (last weekend's chart from Box Office
+History's `calendar/<year>.json` + `weekends/<key>.json`, plus the same weekend 1/10/25
+years ago matched by DATE, since older calendars key weekends "2016-1"), and `fromYourLog`
+(the profile's `recentLog`, last 14 days, cut to the issue's 7; the profile is now also
+refreshed after library syncs, every 3h at most, `refreshNewsletterProfile`). All the
+choosing is pure in `aws-lambda/newsletterMagazine.js` (`newsletterMagazine.test.js`).
+**Pictures are chosen in code, never by the model:** the film's backdrop as the hero and
+its best textless stills (`include_image_language=null`, width ≥ 1280) between paragraphs.
+A `pullQuote` is kept only if it is verbatim in its own article (`verifiedPullQuote`); a
+line that isn't is an invented quotation in big type. The screen sets each story with
+`NewsletterStory.vue` (serif stack borrowed from Newsprinted, drop cap, full-bleed
+pictures on a phone); placement rules are `newsletterStory.js`. Older issues lack every
+new field and render as before. A new module in the Lambda must join
+`scripts/deploy-lambda.mjs`'s file list (a test checks this one).
+
 **`.env` must end with a newline.** Appending a line to it with `>>` when it
 did not glued `VUE_APP_NEWSLETTER_API_URL` onto the end of
 `VUE_APP_VAPID_PUBLIC_KEY`'s value, and `version.js`'s `dotenv.parse` rewrite

@@ -94,7 +94,10 @@ const enrichCandidate = async (key, omdbKey, movie) => {
       usReleases: (details.release_dates?.results || [])
         .find((r) => r.iso_3166_1 === 'US')?.release_dates
         ?.map((r) => ({ type: r.type, date: r.release_date })) || [],
-      genres: (details.genres || []).map((g) => g.name)
+      genres: (details.genres || []).map((g) => g.name),
+      // Top-billed cast, for the performer spotlight: an actor the reader
+      // rates who is IN one of this week's releases is its best hook.
+      cast: (details.credits?.cast || []).slice(0, 8).map((c) => ({ id: c.id, name: c.name, character: c.character || null }))
     };
   } catch (error) {
     console.error(`Enrichment failed for ${movie.id} (${movie.title}):`, error.message);
@@ -244,8 +247,86 @@ const olderNamesake = async (key, title, newYear, { minGap = 8, minVotes = 800 }
   }
 };
 
+// --- The magazine's pictures and its other stories (2026-11-20) --------------
+
+/** A film's textless stills (newsletterMagazine.js pickStills chooses among them). */
+const filmImages = async (key, id) => {
+  try {
+    return await json(`${TMDB}/movie/${id}/images?api_key=${key}&include_image_language=null`);
+  } catch {
+    return { backdrops: [] };
+  }
+};
+
+/** A person's TMDB record by name: what the spotlight needs to pick and to write. */
+const personByName = async (key, name) => {
+  try {
+    const found = await json(`${TMDB}/search/person?api_key=${key}&query=${encodeURIComponent(name)}`);
+    const norm = (n) => String(n || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+    const hit = (found.results || []).find((p) => norm(p.name) === norm(name) && p.known_for_department === 'Acting')
+      || (found.results || []).find((p) => norm(p.name) === norm(name));
+    if (!hit?.id) return null;
+    const person = await json(`${TMDB}/person/${hit.id}?api_key=${key}`);
+    return {
+      id: person.id,
+      name: person.name,
+      birthday: person.birthday || null,
+      deathday: person.deathday || null,
+      place_of_birth: person.place_of_birth || null,
+      biography: person.biography || '',
+      profile_path: person.profile_path || null
+    };
+  } catch {
+    return null;
+  }
+};
+
+const personCredits = async (key, id) => {
+  try {
+    return await json(`${TMDB}/person/${id}/movie_credits?api_key=${key}`);
+  } catch {
+    return { cast: [] };
+  }
+};
+
+/**
+ * A new film's TMDB record by title, for a box office chart row (Box Office
+ * History doesn't bridge a film to TMDB until its run is archived). Exact
+ * title only, released within a year of the weekend: a near miss would put
+ * the wrong film's picture on the story.
+ */
+const tmdbByTitle = async (key, title, year) => {
+  try {
+    const found = await json(`${TMDB}/search/movie?api_key=${key}&query=${encodeURIComponent(title)}`);
+    const norm = (t) => String(t || '').toLowerCase().replace(/^the /, '').replace(/[^a-z0-9]/g, '');
+    return (found.results || [])
+      .filter((m) => norm(m.title) === norm(title))
+      .filter((m) => Math.abs((Number(String(m.release_date || '').slice(0, 4)) || 0) - year) <= 1)
+      .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))[0] || null;
+  } catch {
+    return null;
+  }
+};
+
+// Box Office History, Matt's own archive (boxofficehistory.com, static JSON).
+const BOX_OFFICE_API = 'https://boxofficehistory.com/api/v1';
+const boxOffice = async (path) => {
+  try {
+    const res = await fetch(`${BOX_OFFICE_API}/${path}`, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+};
+
 module.exports = {
   json,
+  filmImages,
+  personByName,
+  personCredits,
+  tmdbByTitle,
+  boxOffice,
   discoverReleases,
   enrichCandidate,
   anniversaryPool,
